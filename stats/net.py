@@ -1,0 +1,374 @@
+"""Talking to the host: a step-per-frame HTTP client, and request signing.
+
+The client is a generator advanced a slice at a time from the draw loop, so a poll
+never blocks a frame. Measured against a server that writes each response in one go:
+9ms a request warm, and the worst single step is 0.6ms. See NETWORKING.md - the
+firmware's own `fetch.py` is not used because it is broken on this build and wedges
+permanently on the first socket error.
+
+Signing is HMAC-SHA256 over method, path, a counter and a digest of the body. The
+counter only ever goes up, and the host refuses anything it has already seen, so a
+captured command cannot be replayed.
+"""
+
+import binascii
+import hashlib
+import json
+import socket
+import time
+
+STATE_FILE = "/state/stats.json"
+
+# How long to wait on a whole request before giving up and dropping the socket.
+REQUEST_TIMEOUT_MS = 6000
+# Time budget per step. Several short reads per frame beats one per frame without
+# risking the frame, and a frame at 90Hz is 11ms.
+STEP_BUDGET_US = 2500
+
+IDLE, BUSY, DONE, FAILED = 0, 1, 2, 3
+
+
+def _hmac_sha256(key, message):
+    """HMAC-SHA256. MicroPython has hashlib but no hmac, and this is all it takes."""
+    block = 64
+    if len(key) > block:
+        key = hashlib.sha256(key).digest()
+    key = key + b"\x00" * (block - len(key))
+    outer = bytes(b ^ 0x5C for b in key)
+    inner = bytes(b ^ 0x36 for b in key)
+    return hashlib.sha256(outer + hashlib.sha256(inner + message).digest()).digest()
+
+
+def sign(secret_hex, method, path, seq, body=b""):
+    key = binascii.unhexlify(secret_hex)
+    digest = binascii.hexlify(hashlib.sha256(body or b"").digest()).decode()
+    message = "\n".join((method.upper(), path, str(seq), digest))
+    return binascii.hexlify(_hmac_sha256(key, message.encode("utf-8"))).decode()
+
+
+class Config:
+    """Where the host is and what to sign with, persisted in /state.
+
+    The counter is written back every time it advances past a margin, not on every
+    request: flash is finite and a badge polls once a second all day.
+    """
+
+    SEQ_FLUSH = 64
+
+    def __init__(self):
+        self.host = None
+        self.port = 8420
+        self.secret = None
+        self.badge_id = None
+        self.seq = 0
+        self._flushed = 0
+        self.load()
+
+    def load(self):
+        try:
+            with open(STATE_FILE) as handle:
+                data = json.load(handle)
+        except (OSError, ValueError):
+            return False
+        self.host = data.get("host")
+        self.port = int(data.get("port", 8420))
+        self.secret = data.get("secret")
+        self.badge_id = data.get("badge_id")
+        # Start above whatever was last written, since anything in flight when the
+        # badge lost power was never persisted.
+        self.seq = int(data.get("seq", 0)) + self.SEQ_FLUSH
+        self._flushed = self.seq
+        return self.paired
+
+    def save(self):
+        try:
+            try:
+                import os
+                os.mkdir("/state")
+            except OSError:
+                pass
+            with open(STATE_FILE, "w") as handle:
+                json.dump({
+                    "host": self.host, "port": self.port, "secret": self.secret,
+                    "badge_id": self.badge_id, "seq": self.seq,
+                }, handle)
+            self._flushed = self.seq
+            return True
+        except OSError:
+            return False
+
+    @property
+    def paired(self):
+        return bool(self.host and self.secret and self.badge_id)
+
+    def next_seq(self):
+        self.seq += 1
+        if self.seq - self._flushed >= self.SEQ_FLUSH:
+            self.save()
+        return self.seq
+
+
+class Client:
+    """One keep-alive connection to the host, advanced a step at a time."""
+
+    def __init__(self, config):
+        self.config = config
+        self.sock = None
+        self.status = IDLE
+        self.http_status = None
+        self.body = None
+        self.error = None
+        self.headers = {}
+        self.round_trip_ms = 0
+        self.failures = 0
+        self._gen = None
+        self._started = 0
+        self._buf = bytearray(2048)
+
+    # -- connection ---------------------------------------------------------
+
+    def close(self):
+        if self.sock is not None:
+            try:
+                self.sock.close()
+            except OSError:
+                pass
+            self.sock = None
+
+    def _connect(self):
+        info = socket.getaddrinfo(self.config.host, self.config.port,
+                                 0, socket.SOCK_STREAM)[0]
+        sock = socket.socket(info[0], info[1], info[2])
+        sock.setblocking(True)
+        sock.connect(info[4])
+        self.sock = sock
+
+    # -- requests -----------------------------------------------------------
+
+    def get(self, path):
+        self._begin("GET", path, None)
+
+    def post(self, path, payload):
+        self._begin("POST", path, json.dumps(payload).encode("utf-8"))
+
+    def _begin(self, method, path, body):
+        self.status = BUSY
+        self.error = None
+        self.http_status = None
+        self.body = None
+        self._started = time.ticks_ms()
+        self._gen = self._exchange(method, path, body or b"")
+
+    def _exchange(self, method, path, body):
+        if self.sock is None:
+            self._connect()
+            yield
+
+        seq = self.config.next_seq()
+        signature = sign(self.config.secret, method, path, seq, body)
+        request = (
+            f"{method} {path} HTTP/1.1\r\n"
+            f"Host: {self.config.host}\r\n"
+            f"Connection: keep-alive\r\n"
+            f"X-Badge-Id: {self.config.badge_id}\r\n"
+            f"X-Badge-Seq: {seq}\r\n"
+            f"X-Badge-Sig: {signature}\r\n"
+        )
+        if body:
+            request += f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n"
+        request += "\r\n"
+
+        self.sock.setblocking(True)
+        self.sock.write(request.encode("utf-8"))
+        if body:
+            self.sock.write(body)
+        self.sock.setblocking(False)
+
+        self.headers = {}
+        while True:
+            yield
+            line = self.sock.readline()
+            if line is None:
+                continue
+            if line in (b"\r\n", b"\n"):
+                break
+            if line.startswith(b"HTTP/"):
+                try:
+                    self.http_status = int(line.split(b" ")[1])
+                except (IndexError, ValueError):
+                    raise OSError("bad status line") from None
+            elif b":" in line:
+                key, _, value = line.decode("utf-8").partition(":")
+                self.headers[key.strip().lower()] = value.strip()
+
+        length = int(self.headers.get("content-length", 0))
+        if length > len(self._buf):
+            self._buf = bytearray(length)
+        view = memoryview(self._buf)
+        got = 0
+        while got < length:
+            yield
+            read = self.sock.readinto(view[got:length])
+            if read:
+                got += read
+        self.body = bytes(view[:got])
+
+        if self.headers.get("connection", "").lower() == "close":
+            self.close()
+
+    def step(self):
+        """Advance the current request. True when it has finished, either way.
+
+        Drains for a short budget rather than exactly one yield, because a response
+        needs a handful of reads and a frame has time for them.
+        """
+        if self._gen is None:
+            return True
+        deadline = time.ticks_add(time.ticks_us(), STEP_BUDGET_US)
+        while True:
+            try:
+                next(self._gen)
+            except StopIteration:
+                self._gen = None
+                self.round_trip_ms = time.ticks_diff(time.ticks_ms(), self._started)
+                self.status = DONE if self.http_status == 200 else FAILED
+                if self.status == FAILED:
+                    self.failures += 1
+                    self.error = f"HTTP {self.http_status}"
+                    if self.http_status == 401:
+                        self._resync()
+                else:
+                    self.failures = 0
+                return True
+            except OSError as exc:
+                self._gen = None
+                self.close()
+                self.status = FAILED
+                self.failures += 1
+                self.error = f"net {exc.args[0] if exc.args else exc}"
+                return True
+            except Exception as exc:  # noqa: BLE001
+                # Nothing from a socket may reach the draw loop: a surprise here has
+                # to end as a failed request, not a crash dialog.
+                self._gen = None
+                self.close()
+                self.status = FAILED
+                self.failures += 1
+                self.error = str(exc)[:40]
+                return True
+
+            if time.ticks_diff(time.ticks_ms(), self._started) > REQUEST_TIMEOUT_MS:
+                self._gen = None
+                self.close()
+                self.status = FAILED
+                self.failures += 1
+                self.error = "timeout"
+                return True
+            if time.ticks_diff(time.ticks_us(), deadline) >= 0:
+                return False
+
+    def _resync(self):
+        """Take the counter the host says to use next.
+
+        A 401 over a counter means the two ends disagree - the badge rebooted and
+        lost count, or it was provisioned against a different starting point. The
+        host only offers `next_seq` once the signature has checked out, so it is the
+        authority, and one request puts them back in step. Without this the counter
+        has to be guessed at, which fails in whichever direction was not guessed.
+        """
+        payload = self.json() or {}
+        wanted = payload.get("next_seq")
+        if wanted is None:
+            self.error = payload.get("error") or self.error
+            return
+        try:
+            # next_seq() pre-increments, so sit one below what the host asked for.
+            self.config.seq = int(wanted) - 1
+        except (TypeError, ValueError):
+            return
+        self.config.save()
+        self.error = f"resynced to {int(wanted)}"
+
+    def json(self):
+        try:
+            return json.loads(self.body)
+        except (ValueError, TypeError):
+            return None
+
+
+def discover(timeout_ms=4000):
+    """Listen for the host's UDP beacon, so nobody has to type an IP address.
+
+    `statsbadge serve` broadcasts a small JSON beacon; this collects whatever
+    answers within the timeout. Returns a list of (host, port, name).
+    """
+    found = []
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setblocking(False)
+        sock.bind(("0.0.0.0", 8421))
+        deadline = time.ticks_add(time.ticks_ms(), timeout_ms)
+        while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+            try:
+                packet, address = sock.recvfrom(256)
+            except OSError:
+                time.sleep_ms(50)
+                continue
+            try:
+                beacon = json.loads(packet)
+            except ValueError:
+                continue
+            if beacon.get("statsbadge"):
+                entry = (address[0], int(beacon.get("port", 8420)),
+                         beacon.get("host", address[0]))
+                if entry not in found:
+                    found.append(entry)
+    except OSError:
+        pass
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except OSError:
+                pass
+    return found
+
+
+def pair(host, port, code, badge_id, timeout_ms=8000):
+    """Trade a pairing code for a secret. Blocking: it happens once, in a menu."""
+    body = json.dumps({"code": code, "badge_id": badge_id}).encode("utf-8")
+    request = (
+        f"POST /v1/pair HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n"
+        f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n"
+    )
+    sock = None
+    try:
+        info = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0]
+        sock = socket.socket(info[0], info[1], info[2])
+        sock.settimeout(timeout_ms / 1000)
+        sock.connect(info[4])
+        sock.write(request.encode("utf-8"))
+        sock.write(body)
+        raw = b""
+        while True:
+            chunk = sock.read(512)
+            if not chunk:
+                break
+            raw += chunk
+            if len(raw) > 4096:
+                break
+        head, _, payload = raw.partition(b"\r\n\r\n")
+        if b" 200 " not in head.split(b"\r\n")[0]:
+            return None, "refused"
+        data = json.loads(payload)
+        return data.get("secret"), None
+    except (OSError, ValueError) as exc:
+        return None, str(exc)[:40]
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except OSError:
+                pass

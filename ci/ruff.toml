@@ -1,0 +1,147 @@
+# Vendored from ../tufty2350/ci/ruff.toml so CI needs no sibling checkout, with UP
+# added (f-strings over percent formatting) and the per-file ignores below.
+
+builtins = [
+# micropython
+    "micropython",
+    "const",
+    "ptr8",
+    "ptr32",
+
+# picovector
+    "algorithm",
+    "brush",
+    "color",
+    "font",
+    "image",
+    "mat3",
+    "pen",
+    "pixel_font",
+    "vector_font",
+    "vec2",
+    "rect",
+    "shape",
+    "screen",
+# image text align / overflow constants (hoisted in badgeware.py)
+    "LEFT",
+    "CENTER",
+    "RIGHT",
+    "TOP",
+    "MIDDLE",
+    "BOTTOM",
+    "CLIP",
+    "ELLIPSES",
+
+# badgeware.py
+    "display",
+    "launch",
+    "run",
+    "loop",
+    "reset",
+    "fatal_error",
+    "wait_for_button_or_alarm",
+
+# math.py
+    "clamp",
+    "rnd",
+    "frnd",
+
+# text.py
+    "text",
+    "add_glyph",
+    "add_sprite",
+
+# filesystem.py
+    "file_exists",
+    "is_dir",
+
+# rtc.py
+    "rtc",
+
+# state.py
+    "State",
+
+# badge.py
+    "badge",
+    "HIRES",
+    "LORES",
+    "VSYNC",
+    "FAST_UPDATE",
+    "FULL_UPDATE",
+    "MEDIUM_UPDATE",
+    "NON_BLOCKING",
+    "DITHER",
+    "BUTTON_A",
+    "BUTTON_B",
+    "BUTTON_C",
+    "BUTTON_UP",
+    "BUTTON_DOWN",
+    "BUTTON_HOME"
+]
+
+# Include:
+# F = Pyflakes
+# Q = Quotes
+# E/W = pycodestyle (Whitespace, Line lengths etc)
+# B - flake8-bugbear = Unused loop variables, sloppy code
+# COM - flake8-commas
+# BLE - flake8-blind-except
+# C4  - flake8-comprehensions
+# ISC - flake8-implicit-str-concat = Implicit string concat, eg: `"hello" "world"` on one line
+# ICN - flake8-import-conventions = Import conventions
+# PIE - flake8-pie = Misc silliness, catches range with a 0 start argument
+# RET - flake8-return = Enforces straight-forward code around return statements
+# SLF - flake8-self
+# ARG - flake8-unused-arguments
+
+lint.select = [
+    "F",
+    "Q",
+    "W",
+    "E",
+    "B",
+    "COM",
+    "BLE",
+    "C4",
+    "ISC",
+    "ICN",
+    "PIE",
+    "RSE",
+    "RET",
+    "SLF",
+    "ARG"
+]
+
+# Ignore:
+# E501 - "line too long". How narrow is your screen!?
+# E402 - "module level import not at top of file". Needs must!
+# COM812 - "Add trailing comma". These are a little obnoxious and weird.
+# ICN001 - "numpy should be imported as np". No. No it should not.
+
+lint.ignore = [
+    "E501",
+    "E402",
+    "COM812",
+    "ICN001"
+]
+
+# UP - pyupgrade. Mostly for UP031/UP032: f-strings, not "..." % value.
+lint.extend-select = ["UP"]
+
+[lint.per-file-ignores]
+# A source wraps every sensor read, because a flaky sensor has to degrade to a missing
+# field rather than take the collector down - that is the contract in sources/base.py.
+# `dt` is part of the sample() signature whether or not a source needs a rate.
+"server/statsbadge/sources/*.py" = ["BLE001", "ARG002"]
+"server/statsbadge/collect.py" = ["BLE001"]
+"server/statsbadge/extensions.py" = ["BLE001"]
+"server/statsbadge/beacon.py" = ["BLE001"]
+"server/statsbadge/install.py" = ["BLE001"]
+"server/statsbadge/server.py" = ["BLE001"]
+"extensions/*/statsbadge_*/__init__.py" = ["BLE001", "ARG002"]
+
+# The CLI reports the addresses a badge should use, which the server module works out.
+"server/statsbadge/__main__.py" = ["SLF001"]
+
+# The test harness prints its own results and pokes at internals on purpose.
+"server/tests/*.py" = ["BLE001", "SLF001"]

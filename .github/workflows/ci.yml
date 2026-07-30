@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install ./server
+          pip install ./extensions/statsbadge-clock
+          pip install ruff
+
+      # The badge compiles these from source on launch, where a syntax error is a
+      # crash dialog and nothing else.
+      - name: Check the app is whole and parses
+        run: python3 tools/check_app.py stats
+
+      - name: Lint
+        run: ruff check --config ci/ruff.toml stats tools server extensions
+
+      - name: Server, auth and framing tests
+        run: python3 server/tests/test_core.py
+
+      # Catches a source that cannot even be imported on a clean machine.
+      - name: Probe this host
+        run: python3 -m statsbadge probe
+
+  package:
+    name: Pack the app
+    runs-on: ubuntu-latest
+    needs: check
+    permissions:
+      contents: write # to attach the zip to a release
+
+    env:
+      NAME: stats-${{ github.event.release.tag_name || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the app is whole and parses
+        run: python3 tools/check_app.py stats
+
+      - name: Zip it
+        run: |
+          zip -r "$NAME.zip" stats README.md \
+            -x '*__pycache__*' -x '*.pyc' -x '*.DS_Store' -x 'stats/ext/*'
+          unzip -l "$NAME.zip"
+
+      # Two paths, so the zip holds the stats directory rather than its contents: an
+      # artifact is rooted at the least common ancestor of the paths it is given. The
+      # README comes along because it is where the install steps are.
+      - name: Upload the app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: |
+            stats
+            README.md
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.NAME }}.zip

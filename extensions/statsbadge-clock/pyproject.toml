@@ -1,0 +1,18 @@
+[project]
+name = "statsbadge-clock"
+version = "0.1.0"
+description = "A clock and weather page for statsbadge"
+requires-python = ">=3.9"
+dependencies = ["stats-badge"]
+
+# This one line is the whole extension mechanism: the server finds the class, runs it
+# as a source, and can push its badge-side module to the badge.
+[project.entry-points."statsbadge.sources"]
+clock = "statsbadge_clock:Clock"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+statsbadge_clock = ["badge/*.py"]

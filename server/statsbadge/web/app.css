@@ -1,0 +1,148 @@
+/* The config UI. Dark, because it sits next to a badge that is. */
+
+:root {
+  --bg: #0e0e11;
+  --panel: #17171c;
+  --panel2: #1f1f26;
+  --ink: #ecebe8;
+  --dim: #8b8b96;
+  --line: #2b2b34;
+  --accent: #ff8a00;
+  --good: #78e65a;
+  --bad: #ff4530;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 2px solid var(--accent);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+h1 { font-size: 17px; margin: 0; letter-spacing: 0.06em; text-transform: uppercase; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+     color: var(--dim); margin: 22px 0 8px; }
+h2:first-child { margin-top: 0; }
+
+header .host { color: var(--dim); font-variant-numeric: tabular-nums; flex: 1; }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.3fr) minmax(260px, 1fr) minmax(240px, 1fr);
+  gap: 20px;
+  padding: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+.col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+       padding: 16px; }
+
+.hint { color: var(--dim); font-size: 12px; margin: -4px 0 10px; }
+
+button {
+  background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 12px; font: inherit; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: var(--accent); color: #16100a; border-color: var(--accent);
+                 font-weight: 600; }
+button.small { padding: 3px 7px; font-size: 12px; }
+button.danger:hover { border-color: var(--bad); color: var(--bad); }
+
+select, input[type=text] {
+  background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; font: inherit; min-width: 0;
+}
+
+label { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+label > select, label > input[type=text] { flex: 1; }
+label.check { justify-content: flex-start; }
+input[type=range] { flex: 1; accent-color: var(--accent); }
+output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
+         text-align: right; font-size: 12px; }
+
+/* -- pages ------------------------------------------------------------- */
+
+.pages { list-style: none; margin: 0; padding: 0; }
+
+.page {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px; margin-bottom: 8px;
+}
+.page.dragging { opacity: 0.4; }
+.page.over { border-color: var(--accent); }
+
+.page .top { display: flex; align-items: center; gap: 8px; }
+.page .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
+.page .kind {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--accent); border: 1px solid var(--line); border-radius: 4px;
+  padding: 2px 6px;
+}
+.page .title { flex: 1; }
+.page .fields { margin-top: 8px; display: grid; gap: 6px; }
+.page .fieldrow { display: flex; gap: 6px; align-items: center; }
+.page .fieldrow select { flex: 1; }
+
+.warn { color: var(--accent); font-size: 12px; margin-top: 10px;
+        border-left: 2px solid var(--accent); padding-left: 8px; }
+.hidden { display: none; }
+
+/* -- theme swatches ---------------------------------------------------- */
+
+.swatches { display: flex; gap: 4px; margin: 4px 0 12px; height: 18px; }
+.swatches i { flex: 1; border-radius: 3px; }
+
+/* -- badges and pairing ------------------------------------------------ */
+
+.badge-row { display: flex; align-items: center; gap: 8px; padding: 6px 0;
+             border-bottom: 1px solid var(--line); font-size: 13px; }
+.badge-row code { color: var(--dim); font-size: 11px; }
+.badge-row .name { flex: 1; }
+
+.pairing { margin-top: 10px; padding: 12px; background: var(--panel2);
+           border: 1px solid var(--accent); border-radius: 8px; }
+.pairing .code { font: 700 28px/1.2 ui-monospace, monospace; letter-spacing: 0.14em;
+                 color: var(--accent); text-align: center; margin: 6px 0; }
+.pairing .where { text-align: center; color: var(--dim); font-size: 12px; }
+
+/* -- sources and live -------------------------------------------------- */
+
+.sources { font-size: 12px; color: var(--dim); }
+.sources div { padding: 3px 0; }
+.sources .faulty { color: var(--bad); }
+
+.live { display: grid; gap: 8px; }
+.live .group { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.live .group h3 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase;
+                  letter-spacing: 0.08em; color: var(--accent); }
+.live .kv { display: flex; justify-content: space-between; gap: 8px;
+            font-size: 12px; padding: 1px 0; }
+.live .kv span:last-child { font-variant-numeric: tabular-nums; }
+.live .kv .none { color: var(--dim); }
+.live .bar { height: 3px; background: var(--line); border-radius: 2px; margin-top: 3px; }
+.live .bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: #16100a; padding: 9px 18px; border-radius: 8px;
+  font-weight: 600; box-shadow: 0 6px 20px #0009;
+}
+.toast.bad { background: var(--bad); color: #fff; }
