@@ -21,7 +21,7 @@ const THEME_COLOURS = {
   afterburner: ["#0a0a0c", "#ff8a00", "#00beff", "#78e65a", "#ffbe00", "#ff3020"],
   mono: ["#080808", "#ebebeb", "#6e6e6e", "#9a9a9a", "#cccccc", "#ffffff"],
   amber: ["#0e0800", "#ffb000", "#8c5000", "#c07800", "#ffb000", "#fff0b4"],
-  blueprint: ["#06102 2", "#5ab4ff", "#3c82dc", "#78d2ff", "#b4e4ff", "#ffffff"],
+  blueprint: ["#061022", "#5ab4ff", "#3c82dc", "#78d2ff", "#b4e4ff", "#ffffff"],
   vapor: ["#12081e", "#ff5ac8", "#5adcff", "#be82ff", "#e65ad2", "#ff50be"],
 };
 
@@ -289,7 +289,7 @@ function swatches() {
   node.innerHTML = "";
   for (const colour of THEME_COLOURS[config.theme] || []) {
     const chip = document.createElement("i");
-    chip.style.background = colour.replace(/\s/g, "");
+    chip.style.background = colour;
     node.appendChild(chip);
   }
 }
@@ -327,26 +327,72 @@ async function renderBadges() {
   }
 }
 
+// A server is not in pairing mode unless it is put there, so the panel reflects the
+// real window: it counts down, it can be closed early, and it survives a page reload.
+let pairingPoll = null;
+
 async function startPairing() {
-  const offer = await api("/api/pair", { method: "POST" });
+  await api("/api/pair", { method: "POST" });
+  await watchPairing(true);
+}
+
+async function stopPairing() {
+  await api("/api/pair", { method: "DELETE" });
+  await watchPairing();
+  toast("Pairing closed");
+}
+
+async function watchPairing(announce) {
+  if (pairingPoll) {
+    clearInterval(pairingPoll);
+    pairingPoll = null;
+  }
   const node = $("pairing");
-  node.classList.remove("hidden");
-  node.innerHTML = `<div class="where">On the badge: launch Stats, then enter</div>
-    <div class="code">${offer.code}</div>
-    <div class="where">${(offer.hosts || []).join(" / ")}:${offer.port}
-    &middot; expires in ${offer.expires_in}s</div>`;
-  const before = Object.keys(await api("/api/badges")).length;
-  const started = Date.now();
-  const poll = setInterval(async () => {
-    const now = Object.keys(await api("/api/badges")).length;
-    if (now > before) {
-      clearInterval(poll);
+  const button = $("pair");
+
+  const paint = (state, badgeCount) => {
+    if (!state.active) {
       node.classList.add("hidden");
-      toast("Badge paired");
-      renderBadges();
-    } else if (Date.now() - started > offer.expires_in * 1000) {
-      clearInterval(poll);
-      node.classList.add("hidden");
+      button.textContent = "Pair a badge\u2026";
+      button.onclick = () => startPairing().catch((e) => toast(e.message, true));
+      return false;
+    }
+    button.textContent = "Stop pairing";
+    button.onclick = () => stopPairing().catch((e) => toast(e.message, true));
+    node.classList.remove("hidden");
+    node.innerHTML = `<div class="where">On the badge: launch Stats, then enter</div>
+      <div class="code">${state.code}</div>
+      <div class="where">${(state.hosts || []).join(" / ")}:${state.port}</div>
+      <div class="where countdown">closes in ${state.expires_in}s${
+        state.strikes ? ` \u00b7 ${state.strikes} wrong so far` : ""}</div>`;
+    return true;
+  };
+
+  let state = await api("/api/pair");
+  let before = Object.keys(await api("/api/badges")).length;
+  if (!paint(state)) return;
+  if (announce) toast(`Pairing open for ${state.expires_in}s`);
+
+  pairingPoll = setInterval(async () => {
+    try {
+      state = await api("/api/pair");
+      const count = Object.keys(await api("/api/badges")).length;
+      if (count > before) {
+        before = count;
+        clearInterval(pairingPoll);
+        pairingPoll = null;
+        paint({ active: false });
+        toast("Badge paired");
+        renderBadges();
+        return;
+      }
+      if (!paint(state)) {
+        clearInterval(pairingPoll);
+        pairingPoll = null;
+      }
+    } catch (error) {
+      clearInterval(pairingPoll);
+      pairingPoll = null;
     }
   }, 1000);
 }
@@ -465,7 +511,8 @@ async function boot() {
     markDirty();
     renderPages();
   };
-  $("pair").onclick = () => startPairing().catch((e) => toast(e.message, true));
+  // Picks up a window opened by `statsbadge pair` or a previous page load.
+  watchPairing().catch(() => {});
 
   setInterval(renderLive, 1000);
   window.onbeforeunload = () => (dirty ? "You have unsaved changes." : undefined);

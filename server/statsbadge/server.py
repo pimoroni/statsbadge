@@ -28,6 +28,7 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "web")
 REASONS = {
     200: "OK", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
     404: "Not Found", 405: "Method Not Allowed", 413: "Payload Too Large",
+    429: "Too Many Requests",
     500: "Internal Server Error",
 }
 
@@ -197,6 +198,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": service.identity["name"],
                 "host": service.collector.latest().get("sys", {}).get("host"),
                 "pairing": service.badges.pairing_active(),
+                # So the badge's entry screen need not duplicate these constants.
+                "code_length": auth.CODE_LENGTH,
+                "code_alphabet": auth.CODE_ALPHABET,
                 "layout_rev": service.config.rev,
                 "interval_ms": service.config.snapshot().get("interval_ms", 1000),
             })
@@ -273,6 +277,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/preview" and method == "GET":
             # What the badge would be sent, so the UI can show pruning.
             return self._json(200, service.config.for_badge(service.capabilities()))
+
+        if path == "/api/pair" and method == "GET":
+            state = service.badges.pairing_state()
+            state["hosts"] = _local_addresses()
+            state["port"] = self.server.server_address[1]
+            return self._json(200, state)
 
         if path == "/api/pair" and method == "POST":
             code = service.badges.begin_pairing()

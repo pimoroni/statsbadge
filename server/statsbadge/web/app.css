@@ -122,6 +122,7 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 .pairing .code { font: 700 28px/1.2 ui-monospace, monospace; letter-spacing: 0.14em;
                  color: var(--accent); text-align: center; margin: 6px 0; }
 .pairing .where { text-align: center; color: var(--dim); font-size: 12px; }
+.pairing .countdown { margin-top: 6px; font-variant-numeric: tabular-nums; }
 
 /* -- sources and live -------------------------------------------------- */
 

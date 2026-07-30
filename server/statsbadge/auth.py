@@ -19,10 +19,32 @@ import secrets
 import threading
 import time
 
-# A pairing code the user can read off a screen and type on a badge. No vowels and
-# no 0/O/1/I, so nothing in it can be misread or spell anything.
-CODE_ALPHABET = "23456789BCDFGHJKLMNPQRSTVWXYZ"
-CODE_LENGTH = 8
+# A pairing code the user reads off a screen and enters on a badge, six buttons and no
+# keyboard. Digits, because entry is a cursor cycled with UP/DOWN: ten symbols averages
+# 3.5 presses a character where twenty-nine averages 8.25, so 21 presses instead of 66.
+#
+# The keyspace is only a million, which is fine *because* of the attempt limit below and
+# not otherwise. Measured on this machine, an attacker on the LAN manages ~2700 guesses
+# a second, so an unlimited 300-second window is ~800k guesses - enough to walk a
+# six-digit space outright. Five tries takes that to 5e-6, which is where a six-digit
+# code and an eight-character one end up equivalent. Length was doing the attempt
+# limit's job, and charging the user for it.
+CODE_ALPHABET = "0123456789"
+CODE_LENGTH = 6
+
+# Wrong guesses are rate limited rather than counted out. A hard cap would be something
+# an attacker could exhaust on purpose to stop the owner pairing at all, and it has to be
+# global to the window rather than per badge, since the badge id is just a field in the
+# request and a guesser picks a fresh one each time.
+#
+# Doubling from 1s to a 30s ceiling fits ~13 guesses into a 300s window against 5 for a
+# hard cap of five - the same order of safety, 1 in 77,000 for a six-digit code - while
+# a user who mistypes once waits a second, which is less than retyping takes.
+PAIRING_BACKOFF_BASE = 1.0
+PAIRING_BACKOFF_CAP = 30.0
+# A strike is forgiven per this many seconds of quiet, so one early slip does not still
+# be costing the user minutes later.
+PAIRING_FORGIVE_AFTER = 30.0
 
 SIGNED_HEADER_ID = "x-badge-id"
 SIGNED_HEADER_SEQ = "x-badge-seq"
@@ -135,7 +157,9 @@ class Store:
         """Open a pairing window and return the code to show the user."""
         code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
         with self._lock:
-            self.pairing = {"code": code, "expires": time.monotonic() + ttl}
+            self.pairing = {"code": code, "expires": time.monotonic() + ttl,
+                            "strikes": 0, "not_before": 0.0,
+                            "last_attempt": time.monotonic()}
         return code
 
     def cancel_pairing(self):
@@ -150,6 +174,23 @@ class Store:
                 return False
             return offer is not None
 
+    def pairing_state(self):
+        """The open window, for the config UI. Includes the code, because the UI is
+        loopback-only and showing the code is the whole point of it."""
+        with self._lock:
+            offer = self.pairing
+            if offer and offer["expires"] < time.monotonic():
+                self.pairing = None
+                offer = None
+            if offer is None:
+                return {"active": False, "expires_in": 0, "code": None}
+            return {
+                "active": True,
+                "expires_in": max(0, int(offer["expires"] - time.monotonic())),
+                "code": offer["code"],
+                "strikes": offer.get("strikes", 0),
+            }
+
     def claim(self, code, badge_id, name=None):
         """Trade a correct pairing code for a fresh shared secret."""
         with self._lock:
@@ -159,8 +200,33 @@ class Store:
             if offer["expires"] < time.monotonic():
                 self.pairing = None
                 raise AuthError("pairing expired", 403)
+            now = time.monotonic()
+
+            # Forgive strikes for quiet time before deciding anything, so a user who
+            # comes back later starts from a shorter delay than they left off with.
+            idle = now - offer.get("last_attempt", now)
+            if idle > PAIRING_FORGIVE_AFTER and offer.get("strikes"):
+                offer["strikes"] = max(0, offer["strikes"]
+                                       - int(idle // PAIRING_FORGIVE_AFTER))
+
+            # Checked and set inside the lock, so concurrent guesses cannot all slip
+            # through the moment the gate opens.
+            wait = offer.get("not_before", 0.0) - now
+            if wait > 0:
+                # Deliberately no strike here: otherwise anyone spamming the endpoint
+                # could ratchet the delay up and keep the owner waiting.
+                raise AuthError(f"too many attempts, try again in {wait:.0f}s", 429,
+                                detail={"retry_after": round(wait, 1)})
+
+            offer["last_attempt"] = now
             if not hmac.compare_digest(code.strip().upper(), offer["code"]):
-                raise AuthError("wrong pairing code", 403)
+                offer["strikes"] = offer.get("strikes", 0) + 1
+                delay = min(PAIRING_BACKOFF_BASE * (2 ** (offer["strikes"] - 1)),
+                            PAIRING_BACKOFF_CAP)
+                offer["not_before"] = now + delay
+                raise AuthError(
+                    f"wrong pairing code, wait {delay:.0f}s", 403,
+                    detail={"retry_after": round(delay, 1)})
             secret = secrets.token_hex(32)
             self.badges[badge_id] = {
                 "secret": secret,

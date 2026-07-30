@@ -453,11 +453,52 @@ def discover(timeout_ms=4000):
     return found
 
 
+def hello(host, port, timeout_ms=4000):
+    """Ask an unpaired host who it is and what its pairing code looks like.
+
+    Unauthenticated on purpose: a badge needs this before it holds a secret. Returns a
+    dict or None. Knowing the code's length and alphabet from the host means the entry
+    screen does not carry a second copy of those constants to drift out of step with.
+    """
+    request = (
+        f"GET /v1/hello HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+    )
+    sock = None
+    try:
+        info = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0]
+        sock = socket.socket(info[0], info[1], info[2])
+        sock.settimeout(timeout_ms / 1000)
+        sock.connect(info[4])
+        sock.write(request.encode())
+        raw = b""
+        while True:
+            chunk = sock.read(512)
+            if not chunk:
+                break
+            raw += chunk
+            if len(raw) > 4096:
+                break
+        head, _, payload = raw.partition(b"\r\n\r\n")
+        if b" 200 " not in head.split(b"\r\n")[0]:
+            return None
+        return json.loads(payload)
+    except (OSError, ValueError):
+        return None
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except OSError:
+                pass
+
+
 def pair(host, port, code, badge_id, timeout_ms=8000):
     """Trade a pairing code for a secret and the host's id.
 
-    Blocking, because it happens once, in a menu. Returns (payload, error) where the
-    payload carries `secret`, `id` and `name`.
+    Blocking, because it happens once, in a menu. Returns (payload, error): on success
+    the payload carries `secret`, `id` and `name`; on failure `error` is whatever the
+    host said, as a dict, so a caller reads `retry_after` instead of scraping a
+    sentence for a number.
     """
     body = json.dumps({"code": code, "badge_id": badge_id}).encode("utf-8")
     request = (
@@ -482,13 +523,16 @@ def pair(host, port, code, badge_id, timeout_ms=8000):
                 break
         head, _, payload = raw.partition(b"\r\n\r\n")
         if b" 200 " not in head.split(b"\r\n")[0]:
-            return None, "refused"
+            try:
+                return None, json.loads(payload)
+            except ValueError:
+                return None, {"error": "refused"}
         data = json.loads(payload)
         if not data.get("secret"):
-            return None, "no secret returned"
+            return None, {"error": "no secret returned"}
         return data, None
     except (OSError, ValueError) as exc:
-        return None, str(exc)[:40]
+        return None, {"error": str(exc)[:40]}
     finally:
         if sock:
             try:

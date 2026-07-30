@@ -434,6 +434,169 @@ def test_hello_and_pairing_carry_the_identity(h):
 
 
 @check
+def test_wrong_codes_are_rate_limited_not_counted_out(h):
+    """Guessing is slowed, never locked out.
+
+    A hard attempt cap would be something an attacker could exhaust deliberately to stop
+    the owner pairing, so the window stays open and the delay grows instead.
+    """
+    h.service.badges.begin_pairing(ttl=120)
+    wrong = json.dumps({"code": "000000", "badge_id": "attacker"}).encode()
+    headers = {"Content-Type": "application/json"}
+
+    status, body = h.raw("POST", "/v1/pair", wrong, headers)
+    assert status == 403, (status, body)
+    assert body.get("retry_after"), body
+    first_delay = body["retry_after"]
+
+    # An immediate retry is refused without spending a strike, so spamming cannot
+    # ratchet the delay up and keep the owner waiting.
+    for _ in range(5):
+        status, body = h.raw("POST", "/v1/pair", wrong, headers)
+        assert status == 429, (status, body)
+        assert body.get("retry_after") is not None, body
+
+    # The window is still open, which is the whole point.
+    assert h.service.badges.pairing_active(), "rate limiting closed the window"
+
+    # And the delay doubles per genuine strike rather than growing per spam attempt.
+    offer = h.service.badges.pairing
+    offer["not_before"] = 0.0
+    status, body = h.raw("POST", "/v1/pair", wrong, headers)
+    assert status == 403, (status, body)
+    assert body["retry_after"] > first_delay, (first_delay, body)
+
+
+@check
+def test_backoff_is_capped_and_global(h):
+    """The ceiling bounds how long an owner can be made to wait...
+
+    ...and the limit keys on the window, not the badge id, which is just a field in the
+    request that a guesser varies.
+    """
+    h.service.badges.begin_pairing(ttl=600)
+    offer = h.service.badges.pairing
+    headers = {"Content-Type": "application/json"}
+    delays = []
+    for i in range(9):
+        offer["not_before"] = 0.0
+        offer["last_attempt"] = __import__("time").monotonic()
+        status, body = h.raw("POST", "/v1/pair",
+                             json.dumps({"code": "000000",
+                                         "badge_id": f"attacker{i}"}).encode(), headers)
+        assert status == 403, (status, body)
+        delays.append(body["retry_after"])
+    assert max(delays) <= auth.PAIRING_BACKOFF_CAP, delays
+    assert delays[-1] == auth.PAIRING_BACKOFF_CAP, delays
+    # Varying the badge id did not reset anything.
+    assert delays == sorted(delays), delays
+
+
+@check
+def test_quiet_time_forgives_strikes(h):
+    """An early slip should not still be costing the user minutes later."""
+    h.service.badges.begin_pairing(ttl=600)
+    offer = h.service.badges.pairing
+    headers = {"Content-Type": "application/json"}
+    wrong = json.dumps({"code": "000000", "badge_id": "clumsy"}).encode()
+
+    for _ in range(4):
+        offer["not_before"] = 0.0
+        status, body = h.raw("POST", "/v1/pair", wrong, headers)
+        assert status == 403, (status, body)
+    grown = body["retry_after"]
+    assert grown > auth.PAIRING_BACKOFF_BASE, grown
+
+    # Pretend the user walked away for a while.
+    import time as _time
+    offer["not_before"] = 0.0
+    offer["last_attempt"] = _time.monotonic() - auth.PAIRING_FORGIVE_AFTER * 4
+    status, body = h.raw("POST", "/v1/pair", wrong, headers)
+    assert status == 403, (status, body)
+    assert body["retry_after"] < grown, (grown, body)
+
+
+@check
+def test_a_correct_code_works_after_waiting_out_a_wrong_one(h):
+    """Fat-fingering a digit costs a short wait and nothing more."""
+    code = h.service.badges.begin_pairing(ttl=60)
+    wrong = "".join("0" if c != "0" else "1" for c in code)
+    headers = {"Content-Type": "application/json"}
+
+    status, body = h.raw("POST", "/v1/pair",
+                         json.dumps({"code": wrong, "badge_id": "clumsy"}).encode(),
+                         headers)
+    assert status == 403, (status, body)
+    delay = body["retry_after"]
+    assert delay <= 2.0, f"a first mistake should be cheap, got {delay}s"
+
+    # Straight away is refused, which is the rate limit doing its job.
+    status, _ = h.raw("POST", "/v1/pair",
+                      json.dumps({"code": code, "badge_id": "clumsy"}).encode(),
+                      headers)
+    assert status == 429, status
+
+    # After the wait, the right code goes through.
+    time.sleep(delay + 0.2)
+    status, body = h.raw("POST", "/v1/pair",
+                         json.dumps({"code": code, "badge_id": "clumsy"}).encode(),
+                         headers)
+    assert status == 200, (status, body)
+    assert len(body["secret"]) == 64
+
+
+@check
+def test_hello_describes_the_code(h):
+    """The badge takes the code's shape from here rather than duplicating it."""
+    status, body = h.raw("GET", "/v1/hello")
+    assert status == 200
+    assert body["code_length"] == auth.CODE_LENGTH
+    assert body["code_alphabet"] == auth.CODE_ALPHABET
+    assert set(auth.CODE_ALPHABET) <= set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+@check
+def test_pairing_is_off_until_asked_for(h):
+    """A server must not sit in pairing mode: it is opened deliberately and closed
+    again, from the UI or by running out of time."""
+    h.service.badges.cancel_pairing()
+    state = h.raw("GET", "/api/pair")[1]
+    assert state["active"] is False and state["code"] is None, state
+    assert h.raw("GET", "/v1/hello")[1]["pairing"] is False
+
+    # A badge cannot pair while it is shut.
+    status, body = h.raw("POST", "/v1/pair",
+                         json.dumps({"code": "000000", "badge_id": "early"}).encode(),
+                         {"Content-Type": "application/json"})
+    assert status == 403 and "no pairing" in body["error"], body
+
+    opened = h.raw("POST", "/api/pair", b"")[1]
+    assert len(opened["code"]) == auth.CODE_LENGTH
+    state = h.raw("GET", "/api/pair")[1]
+    assert state["active"] is True
+    assert state["code"] == opened["code"]
+    assert 0 < state["expires_in"] <= 300
+    assert h.raw("GET", "/v1/hello")[1]["pairing"] is True
+
+    # Closing it early is the other half of the control.
+    h.raw("DELETE", "/api/pair")
+    assert h.raw("GET", "/api/pair")[1]["active"] is False
+    assert h.raw("GET", "/v1/hello")[1]["pairing"] is False
+
+
+@check
+def test_pairing_state_reports_strikes(h):
+    """So the UI can show that something is guessing at it."""
+    h.service.badges.begin_pairing(ttl=60)
+    assert h.raw("GET", "/api/pair")[1]["strikes"] == 0
+    h.raw("POST", "/v1/pair",
+          json.dumps({"code": "000000", "badge_id": "guesser"}).encode(),
+          {"Content-Type": "application/json"})
+    assert h.raw("GET", "/api/pair")[1]["strikes"] == 1
+    h.service.badges.cancel_pairing()
+
+
+@check
 def test_config_api_is_loopback_only(_h):
     """The config API can mint secrets, so it must not answer off-box.
 
