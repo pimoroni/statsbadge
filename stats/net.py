@@ -47,22 +47,29 @@ def sign(secret_hex, method, path, seq, body=b""):
 
 
 class Config:
-    """Where the host is and what to sign with, persisted in /state.
+    """Every host this badge is paired with, persisted in /state.
 
-    The counter is written back every time it advances past a margin, not on every
-    request: flash is finite and a badge polls once a second all day.
+    Credentials are keyed on the server's id, not its address, so a host that gets a
+    new DHCP lease is still the same host: the beacon carries the id, and the address
+    is just the latest place it was seen. Several hosts can be paired at once and the
+    badge uses whichever is reachable, which is what makes a desk with two machines
+    work without re-pairing.
+
+    Each host keeps its own counter, because the counter is a conversation between one
+    badge and one server. The counter is written back once it has advanced past a
+    margin, not on every request: flash is finite and a badge polls all day.
     """
 
     SEQ_FLUSH = 64
 
     def __init__(self):
-        self.host = None
-        self.port = 8420
-        self.secret = None
         self.badge_id = None
-        self.seq = 0
+        self.hosts = {}          # server id -> {host, port, secret, name, seq}
+        self.active = None       # the server id in use
         self._flushed = 0
         self.load()
+
+    # -- persistence --------------------------------------------------------
 
     def load(self):
         try:
@@ -70,13 +77,31 @@ class Config:
                 data = json.load(handle)
         except (OSError, ValueError):
             return False
-        self.host = data.get("host")
-        self.port = int(data.get("port", 8420))
-        self.secret = data.get("secret")
+
         self.badge_id = data.get("badge_id")
-        # Start above whatever was last written, since anything in flight when the
-        # badge lost power was never persisted.
-        self.seq = int(data.get("seq", 0)) + self.SEQ_FLUSH
+        if "hosts" in data:
+            self.hosts = data["hosts"]
+            self.active = data.get("active")
+        elif data.get("secret"):
+            # One flat host, as older installs and `--state-only` wrote it. Keep it
+            # under a placeholder id until a beacon or /v1/hello tells us the real one.
+            self.hosts = {
+                "unknown": {
+                    "host": data.get("host"),
+                    "port": int(data.get("port", 8420)),
+                    "secret": data.get("secret"),
+                    "name": data.get("host"),
+                    "seq": int(data.get("seq", 0)),
+                }
+            }
+            self.active = "unknown"
+
+        if self.active not in self.hosts:
+            self.active = next(iter(self.hosts), None)
+        # Start above whatever was last written: anything in flight when the badge lost
+        # power never made it to flash.
+        for entry in self.hosts.values():
+            entry["seq"] = int(entry.get("seq", 0)) + self.SEQ_FLUSH
         self._flushed = self.seq
         return self.paired
 
@@ -88,24 +113,106 @@ class Config:
             except OSError:
                 pass
             with open(STATE_FILE, "w") as handle:
-                json.dump({
-                    "host": self.host, "port": self.port, "secret": self.secret,
-                    "badge_id": self.badge_id, "seq": self.seq,
-                }, handle)
+                json.dump({"badge_id": self.badge_id, "active": self.active,
+                           "hosts": self.hosts}, handle)
             self._flushed = self.seq
             return True
         except OSError:
             return False
+
+    # -- the host in use ----------------------------------------------------
+
+    @property
+    def entry(self):
+        return self.hosts.get(self.active) or {}
+
+    @property
+    def host(self):
+        return self.entry.get("host")
+
+    @property
+    def port(self):
+        return int(self.entry.get("port") or 8420)
+
+    @property
+    def secret(self):
+        return self.entry.get("secret")
+
+    @property
+    def name(self):
+        return self.entry.get("name") or self.host
+
+    @property
+    def seq(self):
+        return int(self.entry.get("seq", 0))
+
+    @seq.setter
+    def seq(self, value):
+        if self.active in self.hosts:
+            self.hosts[self.active]["seq"] = int(value)
 
     @property
     def paired(self):
         return bool(self.host and self.secret and self.badge_id)
 
     def next_seq(self):
-        self.seq += 1
-        if self.seq - self._flushed >= self.SEQ_FLUSH:
+        value = self.seq + 1
+        self.seq = value
+        if value - self._flushed >= self.SEQ_FLUSH:
             self.save()
-        return self.seq
+        return value
+
+    # -- adding and switching -----------------------------------------------
+
+    def remember(self, server_id, host, port, secret, name=None, seq=0):
+        """Store credentials for a host and make it the active one."""
+        server_id = server_id or "unknown"
+        self.hosts[server_id] = {
+            "host": host, "port": int(port), "secret": secret,
+            "name": name or host, "seq": int(seq),
+        }
+        self.active = server_id
+        self._flushed = self.hosts[server_id]["seq"]
+        return self.save()
+
+    def switch(self, server_id):
+        if server_id not in self.hosts or server_id == self.active:
+            return False
+        self.active = server_id
+        self._flushed = self.seq
+        self.save()
+        return True
+
+    def note_address(self, server_id, host, port, name=None):
+        """Update where a known host lives, after a beacon reports it elsewhere.
+
+        This is the DHCP case: same server, new address. Nothing else changes, so the
+        secret and the counter carry over untouched.
+        """
+        entry = self.hosts.get(server_id)
+        if entry is None:
+            return False
+        if entry.get("host") == host and int(entry.get("port", 0)) == int(port):
+            return False
+        entry["host"] = host
+        entry["port"] = int(port)
+        if name:
+            entry["name"] = name
+        self.save()
+        return True
+
+    def adopt_id(self, server_id, name=None):
+        """Move credentials stored under the placeholder id onto the real one."""
+        if not server_id or server_id in self.hosts or "unknown" not in self.hosts:
+            return False
+        entry = self.hosts.pop("unknown")
+        if name:
+            entry["name"] = name
+        self.hosts[server_id] = entry
+        if self.active == "unknown":
+            self.active = server_id
+        self.save()
+        return True
 
 
 class Client:
@@ -297,10 +404,12 @@ class Client:
 
 
 def discover(timeout_ms=4000):
-    """Listen for the host's UDP beacon, so nobody has to type an IP address.
+    """Listen for host beacons, so nobody has to type an IP address.
 
-    `statsbadge serve` broadcasts a small JSON beacon; this collects whatever
-    answers within the timeout. Returns a list of (host, port, name).
+    `statsbadge serve` broadcasts a small JSON beacon; this collects whatever answers
+    within the timeout. Returns a list of dicts with `id`, `host`, `port` and `name` -
+    the id being what credentials are keyed on, so a host that changed address is
+    still recognised.
     """
     found = []
     sock = None
@@ -320,11 +429,19 @@ def discover(timeout_ms=4000):
                 beacon = json.loads(packet)
             except ValueError:
                 continue
-            if beacon.get("statsbadge"):
-                entry = (address[0], int(beacon.get("port", 8420)),
-                         beacon.get("host", address[0]))
-                if entry not in found:
-                    found.append(entry)
+            if not beacon.get("statsbadge"):
+                continue
+            entry = {
+                "id": beacon.get("id"),
+                # Trust the packet's source address over anything in the payload: it
+                # is where replies will actually reach.
+                "host": address[0],
+                "port": int(beacon.get("port", 8420)),
+                "name": beacon.get("host") or address[0],
+            }
+            if not any(e["host"] == entry["host"] and e["port"] == entry["port"]
+                       for e in found):
+                found.append(entry)
     except OSError:
         pass
     finally:
@@ -337,7 +454,11 @@ def discover(timeout_ms=4000):
 
 
 def pair(host, port, code, badge_id, timeout_ms=8000):
-    """Trade a pairing code for a secret. Blocking: it happens once, in a menu."""
+    """Trade a pairing code for a secret and the host's id.
+
+    Blocking, because it happens once, in a menu. Returns (payload, error) where the
+    payload carries `secret`, `id` and `name`.
+    """
     body = json.dumps({"code": code, "badge_id": badge_id}).encode("utf-8")
     request = (
         f"POST /v1/pair HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n"
@@ -363,7 +484,9 @@ def pair(host, port, code, badge_id, timeout_ms=8000):
         if b" 200 " not in head.split(b"\r\n")[0]:
             return None, "refused"
         data = json.loads(payload)
-        return data.get("secret"), None
+        if not data.get("secret"):
+            return None, "no secret returned"
+        return data, None
     except (OSError, ValueError) as exc:
         return None, str(exc)[:40]
     finally:

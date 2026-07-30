@@ -98,6 +98,7 @@ class App:
         self._history_due = 0
         self._last_ok = 0
         self._was_stale = False
+        self._next_hunt = 0
 
         # State.load merges into the dict it is given and returns whether a file was
         # there, so the defaults are what to read afterwards.
@@ -152,6 +153,9 @@ class App:
             interval = min(15000, interval * (1 << min(self.client.failures, 4)))
         self._next_poll = time.ticks_add(now, interval)
 
+        if self.client.failures >= 3:
+            self.hunt()
+
         if self.layout is None or self.layout_rev != (
                 self.frame.get("layout_rev", self.layout_rev)):
             self._start("layout", "/v1/layout")
@@ -162,6 +166,47 @@ class App:
             self._start("history", f"/v1/history?keys={keys}&points={points}")
         else:
             self._start("stats", "/v1/stats")
+
+    def hunt(self):
+        """Look for a paired host on the network after the current one went quiet.
+
+        Covers the two ways an address goes stale: the host got a new DHCP lease, or
+        the badge moved to a desk with a different machine on it. Credentials are keyed
+        on the server's id, so a beacon is enough to recognise a host we already know
+        and follow it to its new address without re-pairing.
+        """
+        now = time.ticks_ms()
+        if time.ticks_diff(now, self._next_hunt) < 0:
+            return
+        # Listening costs a frame's worth of time, so not on every failed poll.
+        self._next_hunt = time.ticks_add(now, 20000)
+
+        for beacon in net.discover(timeout_ms=1200):
+            server_id = beacon.get("id")
+            if not server_id:
+                continue
+            if server_id == self.config.active:
+                if self.config.note_address(server_id, beacon["host"], beacon["port"],
+                                            beacon.get("name")):
+                    self.client.close()
+                    self.note(f"moved to {beacon['host']}")
+                    self.dirty = True
+                return
+            if server_id in self.config.hosts:
+                self.config.note_address(server_id, beacon["host"], beacon["port"],
+                                         beacon.get("name"))
+                if self.config.switch(server_id):
+                    self.client.close()
+                    self.layout = None
+                    self.history = {}
+                    draw.clear_cache()
+                    self.note(self.config.name or "switched host")
+                    self.dirty = True
+                return
+            # An unpaired host we can see but cannot talk to. Adopt the id if this is
+            # a flat install that has never learned it.
+            if self.config.adopt_id(server_id, beacon.get("name")):
+                return
 
     def _start(self, what, path):
         self._pending = what
@@ -280,11 +325,11 @@ class App:
         page = self.current_page()
         if page is None:
             draw.banner(theme, "Connecting",
-                        f"{self.config.host}:{self.config.port}",
+                        f"{self.config.name or self.config.host}:{self.config.port}",
                         self.detail)
             return
 
-        subtitle = self.frame.get("sys", {}).get("host")
+        subtitle = self.frame.get("sys", {}).get("host") or self.config.name
         if self._was_stale:
             subtitle = self.detail or "offline"
         pages_module.render(page, self.frame, self.history, theme,

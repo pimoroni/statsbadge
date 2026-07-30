@@ -20,7 +20,7 @@ import socketserver
 import threading
 import traceback
 
-from . import auth, commands, extensions, layout
+from . import auth, commands, extensions, identity, layout
 from .collect import Collector
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "web")
@@ -48,6 +48,7 @@ class Service:
         self.config_dir = config_dir
         self.config = layout.Config(os.path.join(config_dir, "layout.json"))
         self.badges = auth.Store(os.path.join(config_dir, "badges.json"))
+        self.identity = identity.load(config_dir)
         self.collector = Collector(interval=interval, config=source_config or {})
         self.started = threading.Event()
 
@@ -192,6 +193,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {
                 "server": "statsbadge",
                 "version": 1,
+                "id": service.identity["id"],
+                "name": service.identity["name"],
                 "host": service.collector.latest().get("sys", {}).get("host"),
                 "pairing": service.badges.pairing_active(),
                 "layout_rev": service.config.rev,
@@ -205,7 +208,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._fail(400, "badge_id required")
             secret = service.badges.claim(
                 str(payload.get("code") or ""), badge_id, payload.get("name"))
-            return self._json(200, {"secret": secret, "badge_id": badge_id})
+            return self._json(200, {
+                "secret": secret,
+                "badge_id": badge_id,
+                "id": service.identity["id"],
+                "name": service.identity["name"],
+            })
 
         # Everything past here is signed. Over `self.path`, not the routing path:
         # the query string changes the response, so it has to be covered too.

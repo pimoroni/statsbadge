@@ -38,8 +38,8 @@ def cmd_serve(args):
 
     announcer = None
     if not args.no_beacon:
-        announcer = beacon.Beacon(
-            args.port, service.collector.latest().get("sys", {}).get("host", "host"))
+        announcer = beacon.Beacon(args.port, service.identity["name"],
+                                  service.identity["id"])
         announcer.start()
 
     caps = service.capabilities()
@@ -85,8 +85,8 @@ def cmd_pair(args):
     thread.start()
     announcer = None
     if not args.no_beacon:
-        announcer = beacon.Beacon(
-            args.port, service.collector.latest().get("sys", {}).get("host", "host"))
+        announcer = beacon.Beacon(args.port, service.identity["name"],
+                                  service.identity["id"])
         announcer.start()
 
     code = service.badges.begin_pairing(ttl=args.ttl)
@@ -192,15 +192,25 @@ def cmd_install(args):
     elif not args.state_only:
         print("  app already installed, use --force-app to overwrite")
 
-    install.write_state(port, host, args.port, secret, info["uid"], seq=start_seq)
-    print(f"  wrote {install.STATE_FILE} pointing at {host}:{args.port}")
+    service = build_service(args)
+    server_id = service.identity["id"]
+    server_name = service.identity["name"]
+    service.collector.stop()
+
+    install.write_state(port, host, args.port, secret, info["uid"], seq=start_seq,
+                        server_id=server_id, name=server_name)
+    print(f"  wrote {install.STATE_FILE}: {server_name} at {host}:{args.port}")
 
     # Read it back: this is the write that must have survived.
     written = install.read_state(port)
-    if not written or written.get("secret") != secret:
+    if install.secret_in_state(written, server_id) != secret:
         print("error: the credentials did not stick. Try again, or reset the badge.",
               file=sys.stderr)
         return 1
+    others = [k for k in (written.get("hosts") or {}) if k != server_id]
+    if others:
+        names = ", ".join((written["hosts"][k].get("name") or k) for k in others)
+        print(f"  also still paired with: {names}")
 
     if args.state_only:
         print("\nDone. Credentials only; the app itself was not touched.")

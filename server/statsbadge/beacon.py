@@ -14,9 +14,10 @@ INTERVAL = 2.0
 
 
 class Beacon:
-    def __init__(self, http_port, name, port=PORT, interval=INTERVAL):
+    def __init__(self, http_port, name, server_id=None, port=PORT, interval=INTERVAL):
         self.http_port = http_port
         self.name = name
+        self.server_id = server_id
         self.port = port
         self.interval = interval
         self._stop = threading.Event()
@@ -37,6 +38,8 @@ class Beacon:
             "statsbadge": 1,
             "port": self.http_port,
             "host": self.name,
+            # The badge keys its credentials on this, not on the address.
+            "id": self.server_id,
         }).encode("utf-8")
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)

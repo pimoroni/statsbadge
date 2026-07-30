@@ -33,32 +33,34 @@ def run(app):
     if code is None:
         return False
 
-    host, port, _ = chosen
+    host, port = chosen["host"], chosen["port"]
     draw.banner(app.theme, "Pairing", f"{host}:{port}")
     badge.update()
 
-    secret, error = net.pair(host, port, code, badge.uid)
-    if not secret:
+    reply, error = net.pair(host, port, code, badge.uid)
+    if not reply:
         draw.banner(app.theme, "Refused", error or "wrong code", "press A to retry")
         badge.update()
         if _wait_for(BUTTON_A, BUTTON_HOME) == BUTTON_A:
             return run(app)
         return False
 
-    app.config.host = host
-    app.config.port = port
-    app.config.secret = secret
     app.config.badge_id = badge.uid
-    # A fresh pairing starts the server's counter at 0, so start level with it.
-    app.config.seq = 0
-    if not app.config.save():
+    # Keyed on the server's id, not its address, and added rather than replacing: a
+    # badge can be paired with several machines and follow whichever is up. A fresh
+    # pairing starts the server's counter at 0, so start level with it.
+    app.config.remember(reply.get("id") or chosen.get("id"), host, port,
+                        reply["secret"], reply.get("name") or chosen.get("name"),
+                        seq=0)
+    if not app.config.paired:
         draw.banner(app.theme, "Paired", "but could not save", "/state is not writable")
         badge.update()
         time.sleep(2)
         return True
-    draw.banner(app.theme, "Paired", host)
+    draw.banner(app.theme, "Paired", app.config.name or host,
+                f"{len(app.config.hosts)} host(s) known")
     badge.update()
-    time.sleep_ms(900)
+    time.sleep_ms(1200)
     return True
 
 
@@ -102,14 +104,17 @@ def _choose_host(app, hosts):
         screen.rectangle(rect(0, 0, look.W, look.H))
         draw.blit_label("CHOOSE A HOST", look.SIZE_TITLE, theme.ink,
                         look.W // 2, 16, align=1)
-        for i, (address, port, name) in enumerate(hosts[:5]):
+        for i, found in enumerate(hosts[:5]):
             y = 56 + i * 30
             selected = i == index
             screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
             screen.shape(shape.rounded_rectangle(rect(24, y, look.W - 48, 26), 5))
             ink = theme.bg if selected else theme.ink
-            draw.blit_label(name, look.SIZE_VALUE, ink, 34, y + 4)
-            draw.blit_label(f"{address}:{port}", look.SIZE_SMALL,
+            known = found.get("id") in app.config.hosts
+            label = found.get("name") or found["host"]
+            draw.blit_label(f"{label} (paired)" if known else label,
+                            look.SIZE_VALUE, ink, 34, y + 4)
+            draw.blit_label(f"{found['host']}:{found['port']}", look.SIZE_SMALL,
                             ink, look.W - 34, y + 7, align=2)
         draw.blit_label("UP/DOWN choose    A select    HOME quit", look.SIZE_SMALL,
                         theme.dim, look.W // 2, look.H - 18, align=1)

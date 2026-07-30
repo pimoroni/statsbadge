@@ -117,28 +117,54 @@ def badge_info(port):
 
 # -- credentials ------------------------------------------------------------
 
-def write_state(port, host, http_port, secret, badge_uid, seq=0):
-    """Write the app's config to /state, which MicroPython can write directly.
+def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
+                name=None):
+    """Add this host to the app's config in /state, which MicroPython can write.
 
-    This is the whole of pairing from the badge's side: where the host is and what
-    key to sign with. `seq` has to match the counter the server recorded for this
-    badge, or the badge's first request is outside the replay window.
+    Credentials are keyed on the server's id rather than its address, so the badge can
+    follow a host that changes address, and this *merges* rather than replacing: a
+    badge paired with two machines keeps both. `seq` has to match the counter the
+    server recorded, or the badge's first request lands outside the replay window.
     """
-    payload = json.dumps({
-        "host": host,
-        "port": http_port,
-        "secret": secret,
-        "badge_id": badge_uid,
-        "seq": seq,
+    entry = json.dumps({
+        "host": host, "port": http_port, "secret": secret,
+        "name": name or host, "seq": seq,
     })
+    key = server_id or "unknown"
+    # Read-modify-write on the badge, so an existing pairing with another host
+    # survives and an older flat file is upgraded in place.
     script = (
         "import os, json\n"
         "try:\n"
         "    os.mkdir('/state')\n"
         "except OSError:\n"
         "    pass\n"
-        f"open({STATE_FILE!r}, 'w').write({payload!r})\n"
-        f"print('wrote', {STATE_FILE!r})\n"
+        f"path = {STATE_FILE!r}\n"
+        "try:\n"
+        "    data = json.load(open(path))\n"
+        "except (OSError, ValueError):\n"
+        "    data = {}\n"
+        "hosts = data.get('hosts')\n"
+        "if hosts is None:\n"
+        "    hosts = {}\n"
+        "    if data.get('secret'):\n"
+        "        hosts['unknown'] = {'host': data.get('host'),\n"
+        "                            'port': data.get('port', 8420),\n"
+        "                            'secret': data['secret'],\n"
+        "                            'name': data.get('host'),\n"
+        "                            'seq': data.get('seq', 0)}\n"
+        f"entry = json.loads({entry!r})\n"
+        # A placeholder entry holding the same secret is this host before it was
+        # identified, so fold it in and keep the higher counter rather than leaving a
+        # duplicate that would look like a second machine.
+        "old = hosts.get('unknown')\n"
+        "if old and old.get('secret') == entry['secret']:\n"
+        "    entry['seq'] = max(entry.get('seq', 0), old.get('seq', 0))\n"
+        "    del hosts['unknown']\n"
+        f"hosts[{key!r}] = entry\n"
+        f"data = {{'badge_id': {badge_uid!r}, 'active': {key!r}, 'hosts': hosts}}\n"
+        "open(path, 'w').write(json.dumps(data))\n"
+        "print('wrote', path, len(hosts), 'host(s)')\n"
     )
     out = _run(port, "exec", script)
     if "wrote" not in out:
@@ -156,6 +182,18 @@ def read_state(port):
         return json.loads(text.splitlines()[-1])
     except ValueError:
         return None
+
+
+def secret_in_state(state, server_id=None):
+    """The secret a read-back state holds for a host, whatever format it is in."""
+    if not state:
+        return None
+    hosts = state.get("hosts")
+    if hosts:
+        key = server_id or state.get("active")
+        entry = hosts.get(key) or {}
+        return entry.get("secret")
+    return state.get("secret")
 
 
 # -- the app itself ---------------------------------------------------------

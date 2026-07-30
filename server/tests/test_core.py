@@ -16,7 +16,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from statsbadge import auth, layout, server  # noqa: E402
+from statsbadge import auth, identity, layout, server  # noqa: E402
 
 
 class Harness:
@@ -404,6 +404,33 @@ def test_counter_is_persisted(h):
             raise AssertionError("a restarted server accepted a used counter")
     finally:
         restarted.collector.stop()
+
+
+@check
+def test_server_identity_is_stable(h):
+    """A badge keys credentials on this, so it must survive a restart."""
+    first = identity.load(h.dir)
+    again = identity.load(h.dir)
+    assert first["id"] == again["id"], "the id changed between loads"
+    assert len(first["id"]) >= 16
+    assert first["name"]
+
+
+@check
+def test_hello_and_pairing_carry_the_identity(h):
+    """The badge cannot key credentials on the host unless it is told the id."""
+    status, body = h.raw("GET", "/v1/hello")
+    assert status == 200
+    assert body["id"] == h.service.identity["id"], body
+    assert body["name"] == h.service.identity["name"], body
+
+    code = h.service.badges.begin_pairing(ttl=30)
+    status, body = h.raw("POST", "/v1/pair",
+                         json.dumps({"code": code, "badge_id": "identified001"}).encode(),
+                         {"Content-Type": "application/json"})
+    assert status == 200, (status, body)
+    assert body["id"] == h.service.identity["id"], body
+    assert body["name"], body
 
 
 @check
