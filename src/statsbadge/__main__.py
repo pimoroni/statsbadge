@@ -216,7 +216,9 @@ def cmd_install(args):
     # A precompiled build is verified against this badge before the volume is touched:
     # the wrong bytecode version fails at import, after the launcher has started the app.
     source = None
-    if args.mpy:
+    if args.mpy and args.state_only:
+        print("  note: --mpy does nothing with --state-only, which writes credentials only")
+    if args.mpy and not args.state_only:
         try:
             built, count = install.check_precompiled(args.mpy, info["mpy"])
         except install.InstallError as exc:
@@ -408,10 +410,12 @@ def main(argv=None):
     inst.add_argument("--new-secret", action="store_true", help="mint a fresh secret")
     inst.add_argument("--with-extensions", action="store_true",
                      help="also push badge-side modules from installed extensions")
-    inst.add_argument("--mpy", metavar="DIR",
-                     help="install a precompiled build from DIR (see ci/build-mpy.sh) "
-                          "instead of the source. Checked against the badge's own "
-                          "bytecode version before anything is written")
+    inst.add_argument("--mpy", metavar="DIR", nargs="?", const="build/mpy",
+                     help="install a precompiled app instead of the source. DIR is "
+                          "either build/mpy, as left by ci/build-mpy.sh, or the stats/ "
+                          "directory from an unzipped -mpy release. Defaults to "
+                          "build/mpy if you give --mpy on its own. The bytecode version "
+                          "is checked against the badge before anything is written")
     inst.add_argument("-y", "--yes", action="store_true", help="do not ask")
     inst.set_defaults(func=cmd_install)
 

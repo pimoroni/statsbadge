@@ -132,7 +132,11 @@ def check_precompiled(directory, badge_mpy):
     The header is 'M', version, reserved, flags, and (flags << 8) | version is exactly
     what the firmware reports as sys.implementation._mpy.
     """
-    found = sorted(pathlib.Path(directory).glob("*.mpy"))
+    path = pathlib.Path(directory)
+    if not path.is_dir():
+        raise InstallError(f"no such directory: {directory}. Build one with "
+                           f"ci/build-mpy.sh, or unzip a -mpy release.")
+    found = sorted(path.glob("*.mpy"))
     if not found:
         raise InstallError(f"no .mpy files in {directory}")
     versions = set()
