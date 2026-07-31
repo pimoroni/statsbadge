@@ -327,8 +327,8 @@ async function renderBadges() {
   }
 }
 
-// A server is not in pairing mode unless it is put there, so the panel reflects the
-// real window: it counts down, it can be closed early, and it survives a page reload.
+// Pairing is off until asked for. Badges then ask to be let in and show a code; approving
+// one here is what pairs it.
 let pairingPoll = null;
 
 async function startPairing() {
@@ -342,6 +342,46 @@ async function stopPairing() {
   toast("Pairing closed");
 }
 
+async function answer(requestId, approve) {
+  await api(`/api/enrol/${requestId}/${approve ? "approve" : "deny"}`, { method: "POST" });
+  toast(approve ? "Badge paired" : "Denied");
+  renderBadges();
+  watchPairing();
+}
+
+function paintPending(node, pending) {
+  if (!pending.length) return;
+  const list = document.createElement("div");
+  list.className = "pending";
+  for (const request of pending) {
+    const row = document.createElement("div");
+    row.className = "ask";
+    const left = document.createElement("div");
+    left.innerHTML = `<div class="askname">${request.name}</div>`
+      + `<code>${request.badge_id}</code>`;
+    const code = document.createElement("div");
+    code.className = "askcode";
+    code.textContent = request.code;
+    const buttons = document.createElement("div");
+    buttons.className = "askbuttons";
+    const yes = document.createElement("button");
+    yes.className = "primary small";
+    yes.textContent = "Approve";
+    yes.onclick = () => answer(request.request_id, true).catch((e) => toast(e.message, true));
+    const no = document.createElement("button");
+    no.className = "small danger";
+    no.textContent = "Deny";
+    no.onclick = () => answer(request.request_id, false).catch((e) => toast(e.message, true));
+    buttons.append(yes, no);
+    row.append(left, code, buttons);
+    list.appendChild(row);
+  }
+  const hint = document.createElement("div");
+  hint.className = "where";
+  hint.textContent = "Approve the one whose code matches the badge.";
+  node.append(hint, list);
+}
+
 async function watchPairing(announce) {
   if (pairingPoll) {
     clearInterval(pairingPoll);
@@ -350,7 +390,7 @@ async function watchPairing(announce) {
   const node = $("pairing");
   const button = $("pair");
 
-  const paint = (state, badgeCount) => {
+  const paint = (state, pending) => {
     if (!state.active) {
       node.classList.add("hidden");
       button.textContent = "Pair a badge\u2026";
@@ -360,33 +400,23 @@ async function watchPairing(announce) {
     button.textContent = "Stop pairing";
     button.onclick = () => stopPairing().catch((e) => toast(e.message, true));
     node.classList.remove("hidden");
-    node.innerHTML = `<div class="where">On the badge: launch Stats, then enter</div>
-      <div class="code">${state.code}</div>
-      <div class="where">${(state.hosts || []).join(" / ")}:${state.port}</div>
-      <div class="where countdown">closes in ${state.expires_in}s${
-        state.strikes ? ` \u00b7 ${state.strikes} wrong so far` : ""}</div>`;
+    node.innerHTML = `<div class="where">On the badge: launch Stats, press B to set up,`
+      + ` and pick ${(state.hosts || []).join(" / ")}:${state.port}</div>`
+      + `<div class="where countdown">closes in ${state.expires_in}s</div>`;
+    paintPending(node, pending || []);
     return true;
   };
 
   let state = await api("/api/pair");
-  let before = Object.keys(await api("/api/badges")).length;
-  if (!paint(state)) return;
+  let pending = (await api("/api/enrol")).pending;
+  if (!paint(state, pending)) return;
   if (announce) toast(`Pairing open for ${state.expires_in}s`);
 
   pairingPoll = setInterval(async () => {
     try {
       state = await api("/api/pair");
-      const count = Object.keys(await api("/api/badges")).length;
-      if (count > before) {
-        before = count;
-        clearInterval(pairingPoll);
-        pairingPoll = null;
-        paint({ active: false });
-        toast("Badge paired");
-        renderBadges();
-        return;
-      }
-      if (!paint(state)) {
+      pending = (await api("/api/enrol")).pending;
+      if (!paint(state, pending)) {
         clearInterval(pairingPoll);
         pairingPoll = null;
       }

@@ -198,26 +198,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": service.identity["name"],
                 "host": service.collector.latest().get("sys", {}).get("host"),
                 "pairing": service.badges.pairing_active(),
-                # So the badge's entry screen need not duplicate these constants.
-                "code_length": auth.CODE_LENGTH,
-                "code_alphabet": auth.CODE_ALPHABET,
                 "layout_rev": service.config.rev,
                 "interval_ms": service.config.snapshot().get("interval_ms", 1000),
             })
 
-        if path == "/v1/pair" and method == "POST":
+        # Unauthenticated: the badge has no secret yet. Gated on a human approving it.
+        if path == "/v1/enrol" and method == "POST":
             payload = json.loads(body or b"{}")
             badge_id = str(payload.get("badge_id") or "").strip()
             if not badge_id:
                 return self._fail(400, "badge_id required")
-            secret = service.badges.claim(
-                str(payload.get("code") or ""), badge_id, payload.get("name"))
+            asked = service.badges.request_enrolment(badge_id, payload.get("name"))
             return self._json(200, {
-                "secret": secret,
-                "badge_id": badge_id,
+                "request_id": asked["request_id"],
+                "code": asked["code"],
                 "id": service.identity["id"],
                 "name": service.identity["name"],
             })
+
+        # Polled by the badge. The request id collects the secret, once.
+        if path.startswith("/v1/enrol/") and method == "GET":
+            outcome = service.badges.enrolment(path[len("/v1/enrol/"):])
+            if outcome.get("status") == "approved":
+                outcome["id"] = service.identity["id"]
+                outcome["name"] = service.identity["name"]
+            return self._json(200, outcome)
 
         # Everything past here is signed. Over `self.path`, not the routing path:
         # the query string changes the response, so it has to be covered too.
@@ -285,10 +290,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, state)
 
         if path == "/api/pair" and method == "POST":
-            code = service.badges.begin_pairing()
-            return self._json(200, {"code": code, "expires_in": 300,
+            service.badges.begin_pairing()
+            return self._json(200, {"active": True, "expires_in": 300,
                                     "hosts": _local_addresses(),
                                     "port": self.server.server_address[1]})
+
+        if path == "/api/enrol" and method == "GET":
+            return self._json(200, {"pending": service.badges.pending_enrolments()})
+
+        if path.startswith("/api/enrol/") and method == "POST":
+            rest = path[len("/api/enrol/"):]
+            request_id, _, action = rest.partition("/")
+            if action == "approve":
+                badge_id = service.badges.approve_enrolment(request_id)
+                return self._json(200, {"approved": badge_id})
+            if action == "deny":
+                return self._json(200, {"denied": service.badges.deny_enrolment(request_id)})
+            return self._fail(400, "expected /approve or /deny")
 
         if path == "/api/pair" and method == "DELETE":
             service.badges.cancel_pairing()

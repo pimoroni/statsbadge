@@ -64,6 +64,13 @@ class Harness:
         })
 
 
+def _clear_pending(h):
+    """Waiting requests count against the cap, so tests must not leave any behind."""
+    for request in h.service.badges.pending_enrolments():
+        h.service.badges.deny_enrolment(request["request_id"])
+    h.service.badges.cancel_pairing()
+
+
 def _headers(badge_id, seq, secret, method="GET", path="/v1/stats", body=b""):
     return {
         auth.SIGNED_HEADER_ID: badge_id,
@@ -213,27 +220,6 @@ def test_layout_rev_moves_on_change(h):
     _, after = h.signed("GET", "/v1/layout")
     assert after["rev"] > before["rev"], (before["rev"], after["rev"])
     assert after["theme"] == "amber"
-
-
-@check
-def test_pairing_flow(h):
-    code = h.service.badges.begin_pairing(ttl=30)
-    status, body = h.raw("POST", "/v1/pair",
-                         json.dumps({"code": "WRONGCOD", "badge_id": "newbadge"}).encode(),
-                         {"Content-Type": "application/json"})
-    assert status == 403, (status, body)
-
-    code = h.service.badges.begin_pairing(ttl=30)
-    status, body = h.raw("POST", "/v1/pair",
-                         json.dumps({"code": code, "badge_id": "newbadge"}).encode(),
-                         {"Content-Type": "application/json"})
-    assert status == 200, (status, body)
-    assert len(body["secret"]) == 64
-    # A pairing code is single use.
-    status, _ = h.raw("POST", "/v1/pair",
-                      json.dumps({"code": code, "badge_id": "another"}).encode(),
-                      {"Content-Type": "application/json"})
-    assert status == 403
 
 
 @check
@@ -417,164 +403,24 @@ def test_server_identity_is_stable(h):
 
 
 @check
-def test_hello_and_pairing_carry_the_identity(h):
-    """The badge cannot key credentials on the host unless it is told the id."""
-    status, body = h.raw("GET", "/v1/hello")
-    assert status == 200
-    assert body["id"] == h.service.identity["id"], body
-    assert body["name"] == h.service.identity["name"], body
-
-    code = h.service.badges.begin_pairing(ttl=30)
-    status, body = h.raw("POST", "/v1/pair",
-                         json.dumps({"code": code, "badge_id": "identified001"}).encode(),
-                         {"Content-Type": "application/json"})
-    assert status == 200, (status, body)
-    assert body["id"] == h.service.identity["id"], body
-    assert body["name"], body
-
-
-@check
-def test_wrong_codes_are_rate_limited_not_counted_out(h):
-    """Guessing is slowed, never locked out.
-
-    A hard attempt cap would be something an attacker could exhaust deliberately to stop
-    the owner pairing, so the window stays open and the delay grows instead.
-    """
-    h.service.badges.begin_pairing(ttl=120)
-    wrong = json.dumps({"code": "000000", "badge_id": "attacker"}).encode()
-    headers = {"Content-Type": "application/json"}
-
-    status, body = h.raw("POST", "/v1/pair", wrong, headers)
-    assert status == 403, (status, body)
-    assert body.get("retry_after"), body
-    first_delay = body["retry_after"]
-
-    # An immediate retry is refused without spending a strike, so spamming cannot
-    # ratchet the delay up and keep the owner waiting.
-    for _ in range(5):
-        status, body = h.raw("POST", "/v1/pair", wrong, headers)
-        assert status == 429, (status, body)
-        assert body.get("retry_after") is not None, body
-
-    # The window is still open, which is the whole point.
-    assert h.service.badges.pairing_active(), "rate limiting closed the window"
-
-    # And the delay doubles per genuine strike rather than growing per spam attempt.
-    offer = h.service.badges.pairing
-    offer["not_before"] = 0.0
-    status, body = h.raw("POST", "/v1/pair", wrong, headers)
-    assert status == 403, (status, body)
-    assert body["retry_after"] > first_delay, (first_delay, body)
-
-
-@check
-def test_backoff_is_capped_and_global(h):
-    """The ceiling bounds how long an owner can be made to wait...
-
-    ...and the limit keys on the window, not the badge id, which is just a field in the
-    request that a guesser varies.
-    """
-    h.service.badges.begin_pairing(ttl=600)
-    offer = h.service.badges.pairing
-    headers = {"Content-Type": "application/json"}
-    delays = []
-    for i in range(9):
-        offer["not_before"] = 0.0
-        offer["last_attempt"] = __import__("time").monotonic()
-        status, body = h.raw("POST", "/v1/pair",
-                             json.dumps({"code": "000000",
-                                         "badge_id": f"attacker{i}"}).encode(), headers)
-        assert status == 403, (status, body)
-        delays.append(body["retry_after"])
-    assert max(delays) <= auth.PAIRING_BACKOFF_CAP, delays
-    assert delays[-1] == auth.PAIRING_BACKOFF_CAP, delays
-    # Varying the badge id did not reset anything.
-    assert delays == sorted(delays), delays
-
-
-@check
-def test_quiet_time_forgives_strikes(h):
-    """An early slip should not still be costing the user minutes later."""
-    h.service.badges.begin_pairing(ttl=600)
-    offer = h.service.badges.pairing
-    headers = {"Content-Type": "application/json"}
-    wrong = json.dumps({"code": "000000", "badge_id": "clumsy"}).encode()
-
-    for _ in range(4):
-        offer["not_before"] = 0.0
-        status, body = h.raw("POST", "/v1/pair", wrong, headers)
-        assert status == 403, (status, body)
-    grown = body["retry_after"]
-    assert grown > auth.PAIRING_BACKOFF_BASE, grown
-
-    # Pretend the user walked away for a while.
-    import time as _time
-    offer["not_before"] = 0.0
-    offer["last_attempt"] = _time.monotonic() - auth.PAIRING_FORGIVE_AFTER * 4
-    status, body = h.raw("POST", "/v1/pair", wrong, headers)
-    assert status == 403, (status, body)
-    assert body["retry_after"] < grown, (grown, body)
-
-
-@check
-def test_a_correct_code_works_after_waiting_out_a_wrong_one(h):
-    """Fat-fingering a digit costs a short wait and nothing more."""
-    code = h.service.badges.begin_pairing(ttl=60)
-    wrong = "".join("0" if c != "0" else "1" for c in code)
-    headers = {"Content-Type": "application/json"}
-
-    status, body = h.raw("POST", "/v1/pair",
-                         json.dumps({"code": wrong, "badge_id": "clumsy"}).encode(),
-                         headers)
-    assert status == 403, (status, body)
-    delay = body["retry_after"]
-    assert delay <= 2.0, f"a first mistake should be cheap, got {delay}s"
-
-    # Straight away is refused, which is the rate limit doing its job.
-    status, _ = h.raw("POST", "/v1/pair",
-                      json.dumps({"code": code, "badge_id": "clumsy"}).encode(),
-                      headers)
-    assert status == 429, status
-
-    # After the wait, the right code goes through.
-    time.sleep(delay + 0.2)
-    status, body = h.raw("POST", "/v1/pair",
-                         json.dumps({"code": code, "badge_id": "clumsy"}).encode(),
-                         headers)
-    assert status == 200, (status, body)
-    assert len(body["secret"]) == 64
-
-
-@check
-def test_hello_describes_the_code(h):
-    """The badge takes the code's shape from here rather than duplicating it."""
-    status, body = h.raw("GET", "/v1/hello")
-    assert status == 200
-    assert body["code_length"] == auth.CODE_LENGTH
-    assert body["code_alphabet"] == auth.CODE_ALPHABET
-    assert set(auth.CODE_ALPHABET) <= set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-
-@check
 def test_pairing_is_off_until_asked_for(h):
     """A server must not sit in pairing mode: it is opened deliberately and closed
     again, from the UI or by running out of time."""
     h.service.badges.cancel_pairing()
     state = h.raw("GET", "/api/pair")[1]
-    assert state["active"] is False and state["code"] is None, state
+    assert state["active"] is False, state
     assert h.raw("GET", "/v1/hello")[1]["pairing"] is False
 
-    # A badge cannot pair while it is shut.
-    status, body = h.raw("POST", "/v1/pair",
-                         json.dumps({"code": "000000", "badge_id": "early"}).encode(),
+    # A badge cannot ask while it is shut.
+    status, body = h.raw("POST", "/v1/enrol",
+                         json.dumps({"badge_id": "early"}).encode(),
                          {"Content-Type": "application/json"})
-    assert status == 403 and "no pairing" in body["error"], body
+    assert status == 403 and "not open" in body["error"], body
 
     opened = h.raw("POST", "/api/pair", b"")[1]
-    assert len(opened["code"]) == auth.CODE_LENGTH
+    assert opened["active"] is True
     state = h.raw("GET", "/api/pair")[1]
     assert state["active"] is True
-    assert state["code"] == opened["code"]
     assert 0 < state["expires_in"] <= 300
     assert h.raw("GET", "/v1/hello")[1]["pairing"] is True
 
@@ -585,15 +431,125 @@ def test_pairing_is_off_until_asked_for(h):
 
 
 @check
-def test_pairing_state_reports_strikes(h):
-    """So the UI can show that something is guessing at it."""
-    h.service.badges.begin_pairing(ttl=60)
-    assert h.raw("GET", "/api/pair")[1]["strikes"] == 0
-    h.raw("POST", "/v1/pair",
-          json.dumps({"code": "000000", "badge_id": "guesser"}).encode(),
-          {"Content-Type": "application/json"})
-    assert h.raw("GET", "/api/pair")[1]["strikes"] == 1
+def test_hello_carries_the_identity(h):
+    """The badge keys credentials on this."""
+    status, body = h.raw("GET", "/v1/hello")
+    assert status == 200
+    assert body["id"] == h.service.identity["id"], body
+    assert body["name"] == h.service.identity["name"], body
+
+
+@check
+def test_enrolment_needs_an_open_window(h):
     h.service.badges.cancel_pairing()
+    status, body = h.raw("POST", "/v1/enrol",
+                         json.dumps({"badge_id": "asker0001"}).encode(),
+                         {"Content-Type": "application/json"})
+    assert status == 403 and "not open" in body["error"], body
+
+
+@check
+def test_enrolment_needs_a_human(h):
+    """A request alone pairs nothing; approving it does."""
+    h.service.badges.begin_pairing(ttl=60)
+    status, asked = h.raw("POST", "/v1/enrol",
+                          json.dumps({"badge_id": "asker0002", "name": "tufty"}).encode(),
+                          {"Content-Type": "application/json"})
+    assert status == 200, (status, asked)
+    assert len(asked["code"]) == auth.ENROL_CODE_HEX, asked
+    assert asked["id"] == h.service.identity["id"]
+
+    # Nothing yet.
+    status, outcome = h.raw("GET", f"/v1/enrol/{asked['request_id']}")
+    assert status == 200 and outcome["status"] == "pending", outcome
+    assert "asker0002" not in h.service.badges.list_badges()
+
+    # It shows up for a human, with the code the badge is displaying.
+    pending = h.raw("GET", "/api/enrol")[1]["pending"]
+    mine = [p for p in pending if p["badge_id"] == "asker0002"]
+    assert len(mine) == 1 and mine[0]["code"] == asked["code"], pending
+
+    h.raw("POST", f"/api/enrol/{asked['request_id']}/approve", b"")
+    status, outcome = h.raw("GET", f"/v1/enrol/{asked['request_id']}")
+    assert status == 200 and outcome["status"] == "approved", outcome
+    assert len(outcome["secret"]) == 64
+    assert "asker0002" in h.service.badges.list_badges()
+
+    # The secret is handed over once.
+    assert h.raw("GET", f"/v1/enrol/{asked['request_id']}")[1]["status"] == "gone"
+
+    # And it actually works.
+    seq = 50
+    signature = auth.sign(outcome["secret"], "GET", "/v1/stats", seq, b"")
+    status, _ = h.raw("GET", "/v1/stats", None, {
+        auth.SIGNED_HEADER_ID: "asker0002",
+        auth.SIGNED_HEADER_SEQ: str(seq),
+        auth.SIGNED_HEADER_SIG: signature,
+    })
+    assert status == 200, status
+
+
+@check
+def test_denied_enrolment_pairs_nothing(h):
+    h.service.badges.begin_pairing(ttl=60)
+    asked = h.raw("POST", "/v1/enrol",
+                  json.dumps({"badge_id": "asker0003"}).encode(),
+                  {"Content-Type": "application/json"})[1]
+    h.raw("POST", f"/api/enrol/{asked['request_id']}/deny", b"")
+    assert h.raw("GET", f"/v1/enrol/{asked['request_id']}")[1]["status"] == "gone"
+    assert "asker0003" not in h.service.badges.list_badges()
+
+
+@check
+def test_codes_are_unique_per_request(h):
+    """Two badges waiting must be distinguishable, or approving is a coin toss."""
+    h.service.badges.begin_pairing(ttl=120)
+    codes = set()
+    for i in range(3):
+        h.service.badges.pairing["not_before"] = 0.0
+        asked = h.raw("POST", "/v1/enrol",
+                      json.dumps({"badge_id": f"unique{i}"}).encode(),
+                      {"Content-Type": "application/json"})[1]
+        codes.add(asked["code"])
+    assert len(codes) == 3, codes
+    # And not derived from the badge id, which is public.
+    for i, code in enumerate(codes):
+        assert f"unique{i}" not in code.lower()
+    _clear_pending(h)
+
+
+@check
+def test_enrolment_is_rate_limited(h):
+    h.service.badges.begin_pairing(ttl=120)
+    body = json.dumps({"badge_id": "flooder"}).encode()
+    headers = {"Content-Type": "application/json"}
+    first = h.raw("POST", "/v1/enrol", body, headers)
+    assert first[0] == 200, first
+    # The same badge asking again gets its existing request, not a new one.
+    again = h.raw("POST", "/v1/enrol", body, headers)
+    assert again[1]["request_id"] == first[1]["request_id"], (first, again)
+    # A different badge, straight away, is throttled.
+    status, throttled = h.raw("POST", "/v1/enrol",
+                              json.dumps({"badge_id": "flooder2"}).encode(), headers)
+    assert status == 429, (status, throttled)
+    assert throttled.get("retry_after") is not None, throttled
+    _clear_pending(h)
+
+
+@check
+def test_pending_requests_are_capped(h):
+    _clear_pending(h)
+    h.service.badges.begin_pairing(ttl=300)
+    headers = {"Content-Type": "application/json"}
+    accepted = 0
+    for i in range(auth.MAX_PENDING + 3):
+        h.service.badges.pairing["not_before"] = 0.0
+        status, _ = h.raw("POST", "/v1/enrol",
+                          json.dumps({"badge_id": f"crowd{i}"}).encode(), headers)
+        if status == 200:
+            accepted += 1
+    assert accepted == auth.MAX_PENDING, accepted
+    _clear_pending(h)
 
 
 @check

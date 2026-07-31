@@ -124,6 +124,20 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 .pairing .where { text-align: center; color: var(--dim); font-size: 12px; }
 .pairing .countdown { margin-top: 6px; font-variant-numeric: tabular-nums; }
 
+.pending { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.ask {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px 10px;
+}
+.ask .askname { font-size: 13px; color: var(--ink); }
+.ask code { font-size: 11px; color: var(--dim); }
+.ask .askcode {
+  font: 700 22px/1 ui-monospace, monospace; letter-spacing: 0.14em;
+  color: var(--accent); text-align: right;
+}
+.ask .askbuttons { grid-column: 1 / -1; display: flex; gap: 6px; }
+
 /* -- sources and live -------------------------------------------------- */
 
 .sources { font-size: 12px; color: var(--dim); }

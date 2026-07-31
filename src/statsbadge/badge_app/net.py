@@ -454,15 +454,41 @@ def discover(timeout_ms=4000):
 
 
 def hello(host, port, timeout_ms=4000):
-    """Ask an unpaired host who it is and what its pairing code looks like.
+    """Ask an unpaired host who it is. Returns a dict or None."""
+    reply, _ = _get_json(host, port, "/v1/hello", timeout_ms)
+    return reply
 
-    Unauthenticated on purpose: a badge needs this before it holds a secret. Returns a
-    dict or None. Knowing the code's length and alphabet from the host means the entry
-    screen does not carry a second copy of those constants to drift out of step with.
-    """
+
+def enrol(host, port, badge_id, name=None, timeout_ms=8000):
+    """Ask a host to be let in. Returns (reply, error); reply has `code` to display and
+    `request_id` to poll with."""
+    return _post_json(host, port, "/v1/enrol",
+                      {"badge_id": badge_id, "name": name or badge_id}, timeout_ms)
+
+
+def enrol_status(host, port, request_id, timeout_ms=6000):
+    """Poll a request. Returns (reply, error); reply has `status`, and on approval the
+    `secret`, the host `id` and `name`."""
+    return _get_json(host, port, f"/v1/enrol/{request_id}", timeout_ms)
+
+
+def _post_json(host, port, path, payload, timeout_ms):
+    body = json.dumps(payload).encode("utf-8")
     request = (
-        f"GET /v1/hello HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+        f"POST {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n"
+        f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n"
     )
+    return _exchange_once(host, port, request, body, timeout_ms)
+
+
+def _get_json(host, port, path, timeout_ms):
+    request = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+    return _exchange_once(host, port, request, b"", timeout_ms)
+
+
+def _exchange_once(host, port, request, body, timeout_ms):
+    """One blocking request on its own socket. Setup screens only, where blocking is
+    fine."""
     sock = None
     try:
         info = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0]
@@ -470,6 +496,8 @@ def hello(host, port, timeout_ms=4000):
         sock.settimeout(timeout_ms / 1000)
         sock.connect(info[4])
         sock.write(request.encode())
+        if body:
+            sock.write(body)
         raw = b""
         while True:
             chunk = sock.read(512)
@@ -479,58 +507,13 @@ def hello(host, port, timeout_ms=4000):
             if len(raw) > 4096:
                 break
         head, _, payload = raw.partition(b"\r\n\r\n")
+        try:
+            parsed = json.loads(payload)
+        except ValueError:
+            parsed = {}
         if b" 200 " not in head.split(b"\r\n")[0]:
-            return None
-        return json.loads(payload)
-    except (OSError, ValueError):
-        return None
-    finally:
-        if sock:
-            try:
-                sock.close()
-            except OSError:
-                pass
-
-
-def pair(host, port, code, badge_id, timeout_ms=8000):
-    """Trade a pairing code for a secret and the host's id.
-
-    Blocking, because it happens once, in a menu. Returns (payload, error): on success
-    the payload carries `secret`, `id` and `name`; on failure `error` is whatever the
-    host said, as a dict, so a caller reads `retry_after` instead of scraping a
-    sentence for a number.
-    """
-    body = json.dumps({"code": code, "badge_id": badge_id}).encode("utf-8")
-    request = (
-        f"POST /v1/pair HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n"
-        f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n"
-    )
-    sock = None
-    try:
-        info = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0]
-        sock = socket.socket(info[0], info[1], info[2])
-        sock.settimeout(timeout_ms / 1000)
-        sock.connect(info[4])
-        sock.write(request.encode("utf-8"))
-        sock.write(body)
-        raw = b""
-        while True:
-            chunk = sock.read(512)
-            if not chunk:
-                break
-            raw += chunk
-            if len(raw) > 4096:
-                break
-        head, _, payload = raw.partition(b"\r\n\r\n")
-        if b" 200 " not in head.split(b"\r\n")[0]:
-            try:
-                return None, json.loads(payload)
-            except ValueError:
-                return None, {"error": "refused"}
-        data = json.loads(payload)
-        if not data.get("secret"):
-            return None, {"error": "no secret returned"}
-        return data, None
+            return None, parsed or {"error": "refused"}
+        return parsed, None
     except (OSError, ValueError) as exc:
         return None, {"error": str(exc)[:40]}
     finally:

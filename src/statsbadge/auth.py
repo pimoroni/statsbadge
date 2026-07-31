@@ -19,18 +19,16 @@ import secrets
 import threading
 import time
 
-# A pairing code the user reads off a screen and enters on a badge, six buttons and no
-# keyboard. Digits, because entry is a cursor cycled with UP/DOWN: ten symbols averages
-# 3.5 presses a character where twenty-nine averages 8.25, so 21 presses instead of 66.
+# A badge asks to be let in and shows a short code; a human approves it at the host.
 #
-# The keyspace is only a million, which is fine *because* of the attempt limit below and
-# not otherwise. Measured on this machine, an attacker on the LAN manages ~2700 guesses
-# a second, so an unlimited 300-second window is ~800k guesses - enough to walk a
-# six-digit space outright. Five tries takes that to 5e-6, which is where a six-digit
-# code and an eight-character one end up equivalent. Length was doing the attempt
-# limit's job, and charging the user for it.
-CODE_ALPHABET = "0123456789"
-CODE_LENGTH = 6
+# The code is minted here per request and returned for the badge to display. Not derived
+# from badge.uid or anything else predictable: uid travels as X-Badge-Id over plain HTTP,
+# so an attacker could show a matching code and be approved by mistake. Six hex digits;
+# it is compared, not entered.
+ENROL_CODE_HEX = 6
+# Waiting requests allowed at once, so a flood cannot bury the real one.
+MAX_PENDING = 6
+ENROL_TTL = 180.0
 
 # Wrong guesses are rate limited rather than counted out. A hard cap would be something
 # an attacker could exhaust on purpose to stop the owner pairing at all, and it has to be
@@ -82,7 +80,8 @@ class Store:
         self.path = path
         self._lock = threading.Lock()
         self.badges = {}
-        self.pairing = None       # a live pairing offer, or None
+        self.pairing = None       # a live pairing window, or None
+        self.enrolments = {}      # request id -> a badge waiting to be approved
         self._mtime = None
         self._persisted = {}      # badge_id -> counter last written to disk
         self.load()
@@ -154,13 +153,12 @@ class Store:
     # -- pairing ------------------------------------------------------------
 
     def begin_pairing(self, ttl=300):
-        """Open a pairing window and return the code to show the user."""
-        code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+        """Open a window during which badges may ask to be let in."""
         with self._lock:
-            self.pairing = {"code": code, "expires": time.monotonic() + ttl,
+            self.pairing = {"expires": time.monotonic() + ttl,
                             "strikes": 0, "not_before": 0.0,
                             "last_attempt": time.monotonic()}
-        return code
+        return True
 
     def cancel_pairing(self):
         with self._lock:
@@ -175,68 +173,135 @@ class Store:
             return offer is not None
 
     def pairing_state(self):
-        """The open window, for the config UI. Includes the code, because the UI is
-        loopback-only and showing the code is the whole point of it."""
+        """The open window, for the config UI."""
         with self._lock:
-            offer = self.pairing
-            if offer and offer["expires"] < time.monotonic():
-                self.pairing = None
-                offer = None
+            offer = self._live_window()
             if offer is None:
-                return {"active": False, "expires_in": 0, "code": None}
+                return {"active": False, "expires_in": 0}
             return {
                 "active": True,
                 "expires_in": max(0, int(offer["expires"] - time.monotonic())),
-                "code": offer["code"],
-                "strikes": offer.get("strikes", 0),
+                "asked": offer.get("strikes", 0),
             }
 
-    def claim(self, code, badge_id, name=None):
-        """Trade a correct pairing code for a fresh shared secret."""
+    def request_enrolment(self, badge_id, name=None):
+        """A badge asking to be let in. Returns the request, or raises AuthError.
+
+        Rate limited on the same backoff as the rest of pairing: reachable by anyone on
+        the network.
+        """
         with self._lock:
-            offer = self.pairing
-            if not offer:
-                raise AuthError("no pairing in progress", 403)
-            if offer["expires"] < time.monotonic():
-                self.pairing = None
-                raise AuthError("pairing expired", 403)
+            offer = self._live_window()
+            if offer is None:
+                raise AuthError("pairing is not open on this host", 403)
+
             now = time.monotonic()
+            self._expire_enrolments(now)
 
-            # Forgive strikes for quiet time before deciding anything, so a user who
-            # comes back later starts from a shorter delay than they left off with.
-            idle = now - offer.get("last_attempt", now)
-            if idle > PAIRING_FORGIVE_AFTER and offer.get("strikes"):
-                offer["strikes"] = max(0, offer["strikes"]
-                                       - int(idle // PAIRING_FORGIVE_AFTER))
+            # Checked before the rate limit: a badge retrying after a dropped reply is
+            # not a new attempt, and must not be throttled out of its own code.
+            for request_id, entry in self.enrolments.items():
+                if entry["badge_id"] == badge_id and entry["status"] == "pending":
+                    return {"request_id": request_id, "code": entry["code"]}
 
-            # Checked and set inside the lock, so concurrent guesses cannot all slip
-            # through the moment the gate opens.
             wait = offer.get("not_before", 0.0) - now
             if wait > 0:
-                # Deliberately no strike here: otherwise anyone spamming the endpoint
-                # could ratchet the delay up and keep the owner waiting.
                 raise AuthError(f"too many attempts, try again in {wait:.0f}s", 429,
                                 detail={"retry_after": round(wait, 1)})
 
+            if len(self.enrolments) >= MAX_PENDING:
+                raise AuthError("too many badges waiting; approve or deny one first", 429)
+
+            # Each request extends the delay, so a flood slows itself down.
+            offer["strikes"] = offer.get("strikes", 0) + 1
+            offer["not_before"] = now + min(
+                PAIRING_BACKOFF_BASE * (2 ** (offer["strikes"] - 1)),
+                PAIRING_BACKOFF_CAP)
             offer["last_attempt"] = now
-            if not hmac.compare_digest(code.strip().upper(), offer["code"]):
-                offer["strikes"] = offer.get("strikes", 0) + 1
-                delay = min(PAIRING_BACKOFF_BASE * (2 ** (offer["strikes"] - 1)),
-                            PAIRING_BACKOFF_CAP)
-                offer["not_before"] = now + delay
-                raise AuthError(
-                    f"wrong pairing code, wait {delay:.0f}s", 403,
-                    detail={"retry_after": round(delay, 1)})
-            secret = secrets.token_hex(32)
-            self.badges[badge_id] = {
-                "secret": secret,
+
+            request_id = secrets.token_hex(16)
+            self.enrolments[request_id] = {
+                "badge_id": badge_id,
                 "name": name or badge_id,
+                "code": secrets.token_hex(ENROL_CODE_HEX // 2).upper(),
+                "status": "pending",
+                "asked_at": now,
+                "secret": None,
+            }
+            return {"request_id": request_id, "code": self.enrolments[request_id]["code"]}
+
+    def enrolment(self, request_id):
+        """What became of a request. The secret is handed over once."""
+        with self._lock:
+            self._expire_enrolments(time.monotonic())
+            entry = self.enrolments.get(request_id)
+            if entry is None:
+                return {"status": "gone"}
+            if entry["status"] != "approved":
+                return {"status": entry["status"]}
+            secret = entry.pop("secret", None)
+            if secret is None:
+                return {"status": "gone"}      # already collected
+            del self.enrolments[request_id]
+            return {"status": "approved", "secret": secret}
+
+    def pending_enrolments(self):
+        """Requests waiting on a human."""
+        with self._lock:
+            now = time.monotonic()
+            self._expire_enrolments(now)
+            return [
+                {
+                    "request_id": request_id,
+                    "badge_id": entry["badge_id"],
+                    "name": entry["name"],
+                    "code": entry["code"],
+                    "waiting_s": int(now - entry["asked_at"]),
+                    "expires_in": max(0, int(ENROL_TTL - (now - entry["asked_at"]))),
+                }
+                for request_id, entry in self.enrolments.items()
+                if entry["status"] == "pending"
+            ]
+
+    def approve_enrolment(self, request_id, name=None):
+        """Let a badge in, minting its secret."""
+        with self._lock:
+            self._expire_enrolments(time.monotonic())
+            entry = self.enrolments.get(request_id)
+            if entry is None or entry["status"] != "pending":
+                raise AuthError("no such request", 404)
+            secret = secrets.token_hex(32)
+            self.badges[entry["badge_id"]] = {
+                "secret": secret,
+                "name": name or entry["name"],
                 "seq": 0,
                 "paired_at": int(time.time()),
             }
-            self.pairing = None
+            entry["status"] = "approved"
+            entry["secret"] = secret
             self.save()
-            return secret
+            return entry["badge_id"]
+
+    def deny_enrolment(self, request_id):
+        with self._lock:
+            entry = self.enrolments.pop(request_id, None)
+            return entry is not None
+
+    def _live_window(self):
+        """The open window, or None. Caller holds the lock."""
+        offer = self.pairing
+        if offer and offer["expires"] < time.monotonic():
+            self.pairing = None
+            return None
+        return offer
+
+    def _expire_enrolments(self, now):
+        """Drop unanswered requests. Caller holds the lock."""
+        for request_id in [
+            rid for rid, entry in self.enrolments.items()
+            if entry["status"] == "pending" and now - entry["asked_at"] > ENROL_TTL
+        ]:
+            del self.enrolments[request_id]
 
     def provision(self, badge_id, name=None, start_seq=0):
         """Mint a secret directly, for the USB installer where possession of the

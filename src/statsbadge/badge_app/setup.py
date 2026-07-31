@@ -1,15 +1,12 @@
-"""Pairing from the badge, for when the app was installed without the USB flow.
+"""Pairing from the badge. Nothing is typed on it.
 
-Typing an IP address on six buttons is miserable, so the host broadcasts a beacon and
-this listens for it. All that leaves is the short numeric code the host shows, spun in
-one digit at a time - the host reports the code's length and alphabet in /v1/hello, so
-this does not carry its own copy of them.
+Finds hosts by beacon, asks the one you pick to let it in, and shows a short code. Check
+it against the host and approve it there, in the config UI or the terminal.
 
-The three buttons along the bottom are used in the order they sit in: A back, B select,
-C next. UP/DOWN change a value. HOME quits, and is the only key that abandons anything -
-moving around the code wraps rather than deleting, so no press can lose work.
+The host mints the code per request. Not derived from badge.uid: that travels as
+X-Badge-Id over plain HTTP, so anyone on the network could show a matching code.
 
-Returns True to carry on into the app, False if the user backed all the way out.
+A back, B select, C next. HOME quits. Returns True to carry on into the app.
 """
 
 import time
@@ -18,10 +15,7 @@ import draw
 import look
 import net
 
-# Fallbacks only. The host reports the real values in /v1/hello, so there is one
-# source of truth and this cannot drift out of step with the server.
-ALPHABET = "0123456789"
-CODE_LENGTH = 6
+POLL_INTERVAL_MS = 1200
 
 
 def run(app):
@@ -31,66 +25,23 @@ def run(app):
     if not hosts:
         return _no_host(app)
 
-    chosen = _choose_host(app, hosts)
-    if chosen is None:
-        return False
-
-    # Ask the host what its code looks like, so the entry screen matches whatever the
-    # server is actually generating.
-    greeting = net.hello(chosen["host"], chosen["port"]) or {}
-    alphabet = greeting.get("code_alphabet") or ALPHABET
-    length = int(greeting.get("code_length") or CODE_LENGTH)
-    if greeting.get("name"):
-        chosen["name"] = greeting["name"]
-    if greeting.get("id"):
-        chosen["id"] = greeting["id"]
-
-    host, port = chosen["host"], chosen["port"]
-
-    # Keep the digits and the chosen host across a refusal. One mistyped digit should
-    # cost one digit, not the whole code and a walk back through host discovery.
-    digits = None
     while True:
-        digits = _enter_code(app, chosen, alphabet, length, digits)
-        if digits is None:
+        chosen = _choose_host(app, hosts) if len(hosts) > 1 else hosts[0]
+        if chosen is None:
             return False
-
-        draw.banner(app.theme, "Pairing", chosen.get("name") or host)
-        badge.update()
-        reply, error = net.pair(host, port, "".join(digits), badge.uid)
-        if reply:
-            break
-
-        # The host rate limits guesses and says how long to wait, so sit the wait out
-        # here: the alternative is the next attempt being refused for being early.
-        error = error or {}
-        if not _after_refusal(app, error.get("error"),
-                              float(error.get("retry_after") or 0)):
-            return False
-
-    app.config.badge_id = badge.uid
-    # Keyed on the server's id, not its address, and added rather than replacing: a
-    # badge can be paired with several machines and follow whichever is up. A fresh
-    # pairing starts the server's counter at 0, so start level with it.
-    app.config.remember(reply.get("id") or chosen.get("id"), host, port,
-                        reply["secret"], reply.get("name") or chosen.get("name"),
-                        seq=0)
-    if not app.config.paired:
-        draw.banner(app.theme, "Paired", "but could not save", "/state is not writable")
-        badge.update()
-        time.sleep(2)
-        return True
-    draw.banner(app.theme, "Paired", app.config.name or host,
-                f"{len(app.config.hosts)} host(s) known")
-    badge.update()
-    time.sleep_ms(1200)
-    return True
+        outcome = _ask_to_join(app, chosen)
+        if outcome is None:
+            return False          # HOME
+        if outcome:
+            return True           # approved and saved
+        if len(hosts) == 1:
+            return False          # backed out, and nowhere else to try
 
 
 # -- steps ------------------------------------------------------------------
 
 def _find_hosts(app):
-    """Listen for the host's beacon, with a visible countdown."""
+    """Listen for beacons, with a visible countdown."""
     draw.banner(app.theme, "Looking", "for a host on the network",
                 "start: statsbadge pair")
     badge.update()
@@ -118,7 +69,7 @@ def _no_host(app):
 
 
 def _choose_host(app, hosts):
-    """Pick from what answered. Usually one, so this is normally a single press."""
+    """Pick from what answered. Skipped when only one host replied."""
     index = 0
     while True:
         theme = app.theme
@@ -152,123 +103,97 @@ def _choose_host(app, hosts):
             return None
 
 
-HOLD_DELAY_MS = 320
-HOLD_INTERVAL_MS = 110
+def _ask_to_join(app, chosen):
+    """Ask the host to let us in, show its code, and wait. True if approved and saved,
+    False to go back, None to quit."""
+    host, port = chosen["host"], chosen["port"]
+    label = chosen.get("name") or host
 
+    draw.banner(app.theme, "Asking", label)
+    badge.update()
+    reply, error = net.enrol(host, port, badge.uid, badge.model)
+    if not reply:
+        message = (error or {}).get("error") or "refused"
+        draw.banner(app.theme, "Refused", message, "B retry   A back   HOME quit")
+        badge.update()
+        pressed = _wait_for(BUTTON_B, BUTTON_A, BUTTON_HOME)
+        if pressed is BUTTON_B:
+            return _ask_to_join(app, chosen)
+        return False if pressed is BUTTON_A else None
 
-class _Scroller:
-    """UP/DOWN as a spinner: one press steps once, holding repeats.
-
-    Without the repeat, entering a code is a press per step - about 27 for six digits,
-    and three times that for an alphabet of twenty-nine. Holding turns the whole thing
-    into a couple of seconds and is why the code does not need to be short enough to
-    tap out one press at a time.
-    """
-
-    def __init__(self):
-        self.held_button = None
-        self.next_at = 0
-
-    def delta(self):
-        for button, step in ((BUTTON_UP, -1), (BUTTON_DOWN, 1)):
-            if badge.pressed(button):
-                self.held_button = button
-                self.next_at = badge.ticks + HOLD_DELAY_MS
-                return step
-        if self.held_button is not None:
-            step = -1 if self.held_button is BUTTON_UP else 1
-            if not badge.held(self.held_button):
-                self.held_button = None
-            elif badge.ticks >= self.next_at:
-                self.next_at = badge.ticks + HOLD_INTERVAL_MS
-                return step
-        return 0
-
-
-def _enter_code(app, chosen, alphabet=ALPHABET, length=CODE_LENGTH, digits=None):
-    """Edit the code in place. UP/DOWN spin the slot, A back, C next, B sends.
-
-    A field of slots rather than an append-only list, so moving is navigation and never
-    deletion: go back to fix one digit and the ones after it are still there, and a
-    refused code comes back with everything in it. A and C wrap around, so there is no
-    press that discards the code - only HOME does that, and it says so.
-    """
-    if digits and len(digits) == length:
-        slots = list(digits)
-    else:
-        slots = [alphabet[0]] * length
-    position = 0
-    scroller = _Scroller()
+    code = reply.get("code") or "??????"
+    request_id = reply.get("request_id")
+    next_poll = time.ticks_ms()
 
     while True:
-        theme = app.theme
-        screen.pen = color.rgb(*theme.bg)
-        screen.rectangle(rect(0, 0, look.W, look.H))
-        draw.blit_label("ENTER THE CODE", look.SIZE_TITLE, theme.ink,
-                        look.W // 2, 10, align=1)
-        draw.blit_label(chosen.get("name") or chosen["host"], look.SIZE_SMALL,
-                        theme.dim, look.W // 2, 34, align=1)
-
-        slot_w = 30 if length > 6 else 36
-        gap = 5
-        span = length * slot_w + (length - 1) * gap
-        left = (look.W - span) // 2
-        top = 62
-        cursor = alphabet.index(slots[position]) if slots[position] in alphabet else 0
-        for i in range(length):
-            x = left + i * (slot_w + gap)
-            active = i == position
-            screen.pen = color.rgb(*(theme.accent if active else theme.panel))
-            screen.shape(shape.rounded_rectangle(rect(x, top, slot_w, 52), 4))
-            middle = x + slot_w // 2
-            if active:
-                # The neighbours, so which way to spin is visible rather than a guess.
-                draw.blit_label(alphabet[(cursor - 1) % len(alphabet)],
-                                look.SIZE_SMALL, theme.bg, middle, top + 1, align=1)
-                draw.blit_label(slots[i], look.SIZE_BIG, theme.bg,
-                                middle, top + 12, align=1)
-                draw.blit_label(alphabet[(cursor + 1) % len(alphabet)],
-                                look.SIZE_SMALL, theme.bg, middle, top + 40, align=1)
-            else:
-                draw.blit_label(slots[i], look.SIZE_BIG, theme.ink,
-                                middle, top + 12, align=1)
-
-        draw.blit_label("UP/DOWN spin (hold to run)   A back   B send   C next",
-                        look.SIZE_SMALL, theme.dim, look.W // 2, look.H - 18, align=1)
+        _draw_code(app.theme, code, label)
         badge.update()
 
-        step = scroller.delta()
-        if step:
-            slots[position] = alphabet[(cursor + step) % len(alphabet)]
-        if badge.pressed(BUTTON_A):
-            position = (position - 1) % length
-        if badge.pressed(BUTTON_C):
-            position = (position + 1) % length
-        if badge.pressed(BUTTON_B):
-            return slots
         if badge.pressed(BUTTON_HOME):
             return None
-
-
-def _after_refusal(app, error, wait):
-    """Show why a code was refused and sit out any rate-limit wait.
-
-    Returns True to go back to the editor with the digits intact, False to give up.
-    """
-    theme = app.theme
-    deadline = time.ticks_add(time.ticks_ms(), int(wait * 1000))
-    while wait > 0:
-        remaining = time.ticks_diff(deadline, time.ticks_ms())
-        if remaining <= 0:
-            break
-        draw.banner(theme, "Refused", error or "wrong code",
-                    f"retry in {remaining // 1000 + 1}s   HOME quit")
-        badge.update()
-        if badge.pressed(BUTTON_HOME):
+        if badge.pressed(BUTTON_A):
             return False
-    draw.banner(theme, "Refused", error or "wrong code", "B edit the code   HOME quit")
+
+        if time.ticks_diff(time.ticks_ms(), next_poll) < 0:
+            continue
+        next_poll = time.ticks_add(time.ticks_ms(), POLL_INTERVAL_MS)
+
+        outcome, error = net.enrol_status(host, port, request_id)
+        if error:
+            continue                # transient; the code on screen is still valid
+        status = (outcome or {}).get("status")
+        if status == "approved":
+            return _remember(app, chosen, outcome, host, port)
+        if status == "gone":
+            draw.banner(app.theme, "Expired", "nobody answered in time",
+                        "B ask again   A back")
+            badge.update()
+            pressed = _wait_for(BUTTON_B, BUTTON_A, BUTTON_HOME)
+            if pressed is BUTTON_B:
+                return _ask_to_join(app, chosen)
+            return False if pressed is BUTTON_A else None
+
+
+def _remember(app, chosen, outcome, host, port):
+    app.config.badge_id = badge.uid
+    # Keyed on the host id and added, not replaced, so a badge can hold several. Both
+    # counters start at 0.
+    app.config.remember(outcome.get("id") or chosen.get("id"), host, port,
+                        outcome["secret"], outcome.get("name") or chosen.get("name"),
+                        seq=0)
+    if not app.config.paired:
+        draw.banner(app.theme, "Approved", "but could not save",
+                    "/state is not writable")
+        badge.update()
+        time.sleep(2)
+        return True
+    draw.banner(app.theme, "Paired", app.config.name or host,
+                f"{len(app.config.hosts)} host(s) known")
     badge.update()
-    return _wait_for(BUTTON_B, BUTTON_HOME) is BUTTON_B
+    time.sleep_ms(1200)
+    return True
+
+
+def _draw_code(theme, code, label):
+    """Draw the code and what to do with it."""
+    screen.pen = color.rgb(*theme.bg)
+    screen.rectangle(rect(0, 0, look.W, look.H))
+    draw.blit_label("APPROVE ON THE HOST", look.SIZE_TITLE, theme.ink,
+                    look.W // 2, 12, align=1)
+    draw.blit_label(label, look.SIZE_SMALL, theme.dim, look.W // 2, 36, align=1)
+
+    screen.pen = color.rgb(*theme.accent)
+    screen.shape(shape.rounded_rectangle(rect(34, 60, look.W - 68, 64), 8))
+    # Spaced for readability, unless that overflows the box.
+    spaced = " ".join(code)
+    if screen.measure_text(spaced, font_size=look.SIZE_HUGE)[0] > look.W - 90:
+        spaced = code
+    draw.blit_label(spaced, look.SIZE_HUGE, theme.bg, look.W // 2, 66, align=1)
+
+    draw.blit_label("check it matches, then approve there", look.SIZE_SMALL, theme.dim,
+                    look.W // 2, 136, align=1)
+    draw.blit_label("A back    HOME quit", look.SIZE_SMALL, theme.dim,
+                    look.W // 2, look.H - 18, align=1)
 
 
 def _wait_for(*buttons):

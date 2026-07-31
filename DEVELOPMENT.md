@@ -39,7 +39,9 @@ Every `/v1/*` request carries `X-Badge-Id`, `X-Badge-Seq` and an HMAC-SHA256 ove
 
 The counter only goes up and the host refuses anything it has already seen. The badge cannot write flash per request, so it persists in batches of 64 and jumps forward on boot, which means the two ends can be far apart. Guessing fails either way - too low is a replay, too high is out of window - so a refusal carries `next_seq` and the badge resyncs in one request. That is safe because the signature is verified *before* the counter is checked. The host persists its counter too, or a restart would rewind it and make older captured requests replayable.
 
-Pairing is off until asked for. Wrong codes are rate limited rather than counted out, because a hard cap is something an attacker can exhaust deliberately to stop the owner pairing; the limit is global to the window, since `badge_id` is just a field a guesser varies. An attempt arriving early is refused *without* a strike, so spamming cannot ratchet the delay up.
+Pairing is off until asked for. A badge then asks at `/v1/enrol` and is given a short code to show; approving that request at the host is what pairs it, and until then nothing is stored. The code is minted per request by the host, never derived from `badge.uid` - that travels as `X-Badge-Id` over plain HTTP, so a badge that has talked to any server on the network has leaked it, and an attacker could show a matching code and be approved by mistake.
+
+Requests are rate limited on a doubling backoff and capped at `MAX_PENDING`, so a flood cannot bury the real one. A badge re-asking gets its existing request back rather than a throttle, because it retries after a dropped reply. The secret is handed over exactly once, to whoever holds the request id.
 
 The app ships its own HTTP client because the firmware's `fetch.py` did not work on this build. [pimoroni/fetch](https://github.com/pimoroni/fetch) is the better choice for anything talking to arbitrary hosts - it spreads the TLS handshake across calls, handles chunked bodies and verifies keep-alive - but this app talks only to its own server, over plain HTTP, always with `Content-Length`.
 

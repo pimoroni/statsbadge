@@ -105,12 +105,10 @@ def cmd_serve(args):
 # -- pair -------------------------------------------------------------------
 
 def cmd_pair(args):
-    """Serve, with a pairing window open from the start.
+    """Serve with a pairing window open from the start.
 
-    Pairing is not a separate mode. A badge needs a server to pair *to*, and the same
-    server to talk to immediately afterwards - opening a window, taking the pairing and
-    then exiting strands the badge on a host that has gone away, which looks to the user
-    like the pairing failed.
+    Keeps serving afterwards: exiting once paired would strand the badge on a host that
+    has gone away.
     """
     service = build_service(args)
     service.start()
@@ -121,40 +119,20 @@ def cmd_pair(args):
                                   service.identity["id"])
         announcer.start()
 
-    code = service.badges.begin_pairing(ttl=args.ttl)
+    service.badges.begin_pairing(ttl=args.ttl)
     addresses = server._local_addresses()
     print(f"Pairing is open for {args.ttl} seconds, and this keeps serving afterwards.")
     print()
-    print("  On the badge: launch Stats, press B to set up, then enter")
+    print("  On the badge: launch Stats, press B to set up, and pick this host")
+    print(f"    ({addresses[0] if addresses else 'this machine'}"
+          f":{args.port} - the badge should find it by itself)")
     print()
-    print("      host:  %s   (or let the badge find it)" % (
-        addresses[0] if addresses else "this machine's IP"))
-    print(f"      port:  {args.port}")
-    print(f"      code:  {code}")
-    print()
-    print(f"  config UI: http://127.0.0.1:{args.port}/")
+    print("  The badge will show a code. Check it matches what appears here, then")
+    print(f"  approve it - or use the config UI at http://127.0.0.1:{args.port}/")
     print("  Ctrl-C to stop.")
     print()
 
-    # Announce the pairing when it lands, without stopping the server.
-    def watch():
-        before = set(service.badges.list_badges())
-        deadline = time.time() + args.ttl
-        while True:
-            now = set(service.badges.list_badges())
-            for badge_id in now - before:
-                record = service.badges.list_badges()[badge_id]
-                print(f"paired: {record.get('name') or badge_id} ({badge_id})")
-                print("  still serving; the badge should start drawing.")
-            if now - before:
-                return
-            if time.time() > deadline and not service.badges.pairing_active():
-                print("The pairing window has closed. Still serving - reopen one from the")
-                print(f"config UI at http://127.0.0.1:{args.port}/ or restart this.")
-                return
-            time.sleep(0.5)
-
-    threading.Thread(target=watch, daemon=True).start()
+    threading.Thread(target=_approve_loop, args=(service, args.yes), daemon=True).start()
 
     try:
         httpd.serve_forever()
@@ -166,6 +144,39 @@ def cmd_pair(args):
             announcer.stop()
         service.stop()
     return 0
+
+
+def _approve_loop(service, auto):
+    """Show badges as they ask and take a yes or no. --yes skips the prompt."""
+    seen = set()
+    while True:
+        try:
+            pending = service.badges.pending_enrolments()
+        except Exception:  # noqa: BLE001
+            # This runs on a thread beside the server; if it dies the server should not.
+            return
+        for request in pending:
+            if request["request_id"] in seen:
+                continue
+            seen.add(request["request_id"])
+            print()
+            print(f"  A badge wants to pair: {request['name']} ({request['badge_id']})")
+            print(f"  It should be showing:  {request['code']}")
+            if auto:
+                service.badges.approve_enrolment(request["request_id"])
+                print("  --yes given, approved.")
+                continue
+            try:
+                answer = input("  Does that match the badge? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                return
+            if answer in ("y", "yes"):
+                badge_id = service.badges.approve_enrolment(request["request_id"])
+                print(f"  approved {badge_id}; the badge should start drawing.")
+            else:
+                service.badges.deny_enrolment(request["request_id"])
+                print("  denied.")
+        time.sleep(0.5)
 
 
 # -- install ----------------------------------------------------------------
@@ -382,6 +393,8 @@ def main(argv=None):
     pair = subs.add_parser("pair", parents=[common],
                            help="show a pairing code for a badge on the network")
     pair.add_argument("--ttl", type=int, default=300)
+    pair.add_argument("-y", "--yes", action="store_true",
+                      help="approve without asking, for a scripted setup")
     pair.set_defaults(func=cmd_pair)
 
     inst = subs.add_parser("install", parents=[common],

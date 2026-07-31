@@ -40,9 +40,9 @@ statsbadge install              # copies the app and pairs it
 
 That writes the pairing secret over the serial REPL and, if the app is not already there, offers to reset the badge into USB mass storage mode to copy it. Answer no and you get credentials only.
 
-No cable? `statsbadge pair` shows a 6-digit code, or open the config UI and press **Pair a badge**. Launch **Stats** on the badge, which finds the host from its broadcast, and spin the code in: UP/DOWN change a digit (hold to run), **A** back, **B** send, **C** next. Moving never erases, so one wrong digit costs one digit.
+No cable? Run `statsbadge pair`, or open the config UI and press **Pair a badge**. Launch **Stats** on the badge and press **B** to set up; it finds the host by itself and shows a six-character code. Check that code matches the one the host shows, and approve it there. Nothing is typed on the badge.
 
-A server is not in pairing mode until you put it there, and the window closes on its own after five minutes or when you press **Stop pairing**. Wrong codes are rate limited rather than counted out, so nothing can lock you out of your own badge.
+A server is not in pairing mode until you put it there, and the window closes on its own after five minutes or when you press **Stop pairing**. Requests are rate limited and capped, and one only pairs a badge when you approve it.
 
 Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings.
 
