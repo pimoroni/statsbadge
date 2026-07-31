@@ -86,11 +86,12 @@ class Theme:
 
 
 THEMES = {
-    # The one this exists to replace: dark, orange, hot at the top.
+    # The one this exists to replace: dark, hot at the top. The accent is dots' teal,
+    # so the two projects on this badge agree on one colour.
     "afterburner": Theme(
         "afterburner",
         bg=(10, 10, 12), panel=(22, 22, 26), ink=(240, 238, 235), dim=(96, 96, 104),
-        accent=(255, 138, 0),
+        accent=(56, 232, 209),
         ramp=((0.0, (0, 190, 255)), (0.45, (120, 230, 90)),
               (0.72, (255, 190, 0)), (1.0, (255, 48, 32))),
         grid=(40, 40, 46), case=0.22,

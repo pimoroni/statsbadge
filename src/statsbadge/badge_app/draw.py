@@ -315,13 +315,22 @@ def graph(theme, series, labels, maximum=None):
 
 
 def _series_colour(theme, index):
-    """Colours for the two graph series, taken from opposite ends of the ramp.
+    """Colours for the two graph series: the accent, and whichever end of the ramp is
+    furthest from it.
 
-    Both ends rather than two points near the hot end: the accent and the ramp at 0.85
-    are the same orange in the default theme, which made a two-series graph and its
-    legend unreadable.
+    The two areas overlap and are drawn semi-transparent, so a near miss reads as one
+    series and takes the legend with it. Which end is further depends on the theme:
+    afterburner's teal accent takes the hot end, mono's near-white takes the cold one.
     """
-    return theme.accent if index == 0 else theme.at(0.0)
+    if index == 0:
+        return theme.accent
+    cold, hot = theme.at(0.0), theme.at(1.0)
+    return cold if _apart(theme.accent, cold) >= _apart(theme.accent, hot) else hot
+
+
+def _apart(a, b):
+    """How far apart two colours are, as squared RGB distance."""
+    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
 
 
 def grid(theme, entries):

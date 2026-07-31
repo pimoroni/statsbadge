@@ -7,7 +7,7 @@
   --ink: #ecebe8;
   --dim: #8b8b96;
   --line: #2b2b34;
-  --accent: #ff8a00;
+  --accent: #38e8d1;
   --good: #78e65a;
   --bad: #ff4530;
 }
@@ -61,7 +61,7 @@ button {
 }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: 0.45; cursor: default; }
-button.primary { background: var(--accent); color: #16100a; border-color: var(--accent);
+button.primary { background: var(--accent); color: #0a1614; border-color: var(--accent);
                  font-weight: 600; }
 button.small { padding: 3px 7px; font-size: 12px; }
 button.danger:hover { border-color: var(--bad); color: var(--bad); }
@@ -157,7 +157,7 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 
 .toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: var(--accent); color: #16100a; padding: 9px 18px; border-radius: 8px;
+  background: var(--accent); color: #0a1614; padding: 9px 18px; border-radius: 8px;
   font-weight: 600; box-shadow: 0 6px 20px #0009;
 }
 .toast.bad { background: var(--bad); color: #fff; }
