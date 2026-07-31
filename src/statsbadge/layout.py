@@ -22,10 +22,12 @@ import time
 #   graph   one or two fields over time, from the server's history ring
 #   grid    up to six fields as big numbers
 #   text    labelled lines, for names and versions
-KINDS = ("dial", "dials", "bars", "graph", "grid", "text")
+KINDS = ("dial", "dials", "bars", "graph", "grid", "text",
+         "rings", "spark", "radar", "trend", "waterfall")
 
 # How many fields a kind can draw. What is left out is the badge's own layout table.
-_FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7}
+_FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
+              "rings": 4, "spark": 6, "radar": 6}
 
 THEMES = ("dark", "light", "frost", "mono", "red", "green", "cyan",
           "amber", "blueprint", "vapor")
@@ -267,12 +269,12 @@ def _validate_page(page, seen, extra_kinds=()):
         clean["field"] = field
         readouts = page.get("readouts") or []
         clean["readouts"] = [r for r in readouts if _is_ref(r)][:3]
-    elif kind == "bars":
+    elif kind in ("bars", "trend", "waterfall"):
         field = page.get("field")
         if not _is_ref(field):
             raise ValueError(f"page {page_id} needs a field")
         clean["field"] = field
-    elif kind in ("dials", "graph", "grid", "text"):
+    elif kind in ("dials", "graph", "grid", "text", "rings", "spark", "radar"):
         fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
         if not fields:
             raise ValueError(f"page {page_id} needs at least one field")
@@ -318,7 +320,7 @@ def prune(pages, capabilities):
             if fields or page.get("from_extension"):
                 kept.append(page)
             continue
-        if page.get("kind") == "bars":
+        if page.get("kind") in ("bars", "trend", "waterfall"):
             if has(page["field"]):
                 kept.append(page)
         elif page.get("kind") == "dial":

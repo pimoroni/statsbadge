@@ -68,7 +68,15 @@ def ramp(n, peak=100.0):
             for i in range(n)]
 
 
+def core_ramp(cores, n):
+    """A ring of per-core samples, the shape the host's history sends for a list field."""
+    import math
+    return [[max(0.0, min(100.0, 50 + 45 * math.sin(i / 5.0 + c * 0.8)))
+             for c in range(cores)] for i in range(n)]
+
+
 HISTORY = {
+    "cpu.cores": core_ramp(12, 40),
     "cpu.pct": ramp(48), "gpu.pct": ramp(48, 90),
     "cpu.temp": ramp(48, 80), "gpu.temp": ramp(48, 70),
     "net.down_bps": ramp(48, 11534336), "net.up_bps": ramp(48, 1258291),
@@ -97,6 +105,15 @@ PAGES = [
     {"id": "host", "kind": "text", "title": "Host",
      "fields": ["sys.host", "sys.os", "sys.cpu_name", "sys.uptime_s",
                 "power.battery_pct", "power.package_w"]},
+    {"id": "rings", "kind": "rings", "title": "Load",
+     "fields": ["cpu.pct", "mem.pct", "gpu.pct", "disk.pct"]},
+    {"id": "spark", "kind": "spark", "title": "At a glance",
+     "fields": ["cpu.pct", "cpu.temp", "mem.pct", "gpu.pct", "net.down_bps",
+                "disk.read_bps"]},
+    {"id": "radar", "kind": "radar", "title": "Shape",
+     "fields": ["cpu.pct", "mem.pct", "gpu.pct", "disk.pct", "gpu.temp"]},
+    {"id": "trend", "kind": "trend", "title": "CPU", "field": "cpu.pct"},
+    {"id": "waterfall", "kind": "waterfall", "title": "Cores", "field": "cpu.cores"},
     # The clock extension's page. The id names the shot the README shows.
     {"id": "swiss_clock", "kind": "clockface", "title": "Clock",
      "fields": ["clock.time", "clock.date", "weather.temp", "weather.condition"]},

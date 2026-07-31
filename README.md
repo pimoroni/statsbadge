@@ -110,9 +110,21 @@ A field the host cannot measure is `null`, and pages that need it are dropped ra
 
 ## Page kinds and themes
 
-Six kinds - `dial`, `dials`, `bars`, `graph`, `grid`, `text` - and any field can go in any of them. Ten themes: `dark`, `light`, `frost`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images.
+Eleven kinds and any field can go in any of them. Six show readings as they are: `dial`, `dials`, `bars`, `graph`, `grid`, `text`. Five say something a single number cannot:
+
+| Kind | What it is for |
+| ---- | -------------- |
+| `rings` | up to four readings as concentric gauges, each coloured by its own value |
+| `spark` | six readings at once, name, current value and recent history a row each |
+| `radar` | three to six readings as a polygon: the shape of the load rather than its size |
+| `trend` | one big reading, which way it is going, and where it has been |
+| `waterfall` | a list field as lanes over time, interpolated between polls |
+
+`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Ten themes: `dark`, `light`, `frost`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images.
 
 ![Cores](shots/live_cores.png) ![Network](shots/live_net.png) ![Disk](shots/live_disk.png) ![Processor](shots/gauges2.png) ![Host](shots/live_host.png) ![Vapor](shots/theme_vapor.png)
+
+![Waterfall](shots/waterfall.png) ![Rings](shots/rings.png) ![Sparklines](shots/spark.png) ![Radar](shots/radar.png) ![Trend](shots/trend.png)
 
 ## Extensions
 

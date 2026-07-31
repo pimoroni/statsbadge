@@ -15,6 +15,11 @@ const SHAPE = {
   graph: { one: null, many: "fields", max: 2, label: "Series" },
   grid: { one: null, many: "fields", max: 6, label: "Values" },
   text: { one: null, many: "fields", max: 7, label: "Lines" },
+  rings: { one: null, many: "fields", max: 4, label: "Rings" },
+  spark: { one: null, many: "fields", max: 6, label: "Rows" },
+  radar: { one: null, many: "fields", max: 6, label: "Axes" },
+  trend: { one: "field", many: null, max: 0, label: "" },
+  waterfall: { one: "field", many: null, max: 0, label: "" },
 };
 
 // Theme swatches, mirroring stats/look.py so the UI shows what the badge will do.

@@ -98,6 +98,18 @@ class Collector:
             if len(ring) > self.history_len:
                 del ring[0 : len(ring) - self.history_len]
 
+        for group, field in _GRAPHED_SERIES:
+            values = _dig(frame, group, field)
+            if not isinstance(values, list) or not values:
+                continue
+            key = f"{group}.{field}"
+            ring = self._history.get(key)
+            if ring is None:
+                ring = self._history[key] = []
+            ring.append([int(round(float(v or 0.0))) for v in values])
+            if len(ring) > SERIES_LEN:
+                del ring[0 : len(ring) - SERIES_LEN]
+
     # -- reading ------------------------------------------------------------
 
     def latest(self):
@@ -151,6 +163,14 @@ _GRAPHED = (
     ("disk", "read_bps"), ("disk", "write_bps"),
     ("power", "package_w"),
 )
+
+# Fields whose value is already a list, kept as a ring of lists so a page can plot one
+# lane per element over time. Rounded to whole numbers and held shorter than the scalar
+# rings: a ring of twelve-core samples is twelve times the wire cost of a scalar one.
+_GRAPHED_SERIES = (
+    ("cpu", "cores"),
+)
+SERIES_LEN = 64
 
 
 def _dig(frame, group, field):
