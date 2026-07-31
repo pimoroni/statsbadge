@@ -20,6 +20,7 @@ const SHAPE = {
 const THEME_COLOURS = {
   dark: ["#12141c", "#38e8d1", "#7ed375", "#ec9f07", "#d71908"],
   light: ["#faf7f2", "#10919d", "#51924a", "#bc670c", "#8a0316"],
+  frost: ["#f4f8fc", "#0064b9", "#008eb6", "#007d78", "#7d4b00", "#880001"],
   mono: ["#080808", "#ebebeb", "#6e6e6e", "#9a9a9a", "#cccccc", "#ffffff"],
   red: ["#1c1210", "#ff523e", "#a50000", "#ff523e", "#ffc7bc"],
   green: ["#10160f", "#02b900", "#006900", "#02b900", "#4bff39"],

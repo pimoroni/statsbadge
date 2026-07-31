@@ -110,7 +110,7 @@ A field the host cannot measure is `null`, and pages that need it are dropped ra
 
 ## Page kinds and themes
 
-Five kinds - `dial`, `bars`, `graph`, `grid`, `text` - and any field can go in any of them. Nine themes: `dark`, `light`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images.
+Five kinds - `dial`, `bars`, `graph`, `grid`, `text` - and any field can go in any of them. Ten themes: `dark`, `light`, `frost`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images.
 
 ![Memory](shots/live_mem.png) ![Network](shots/live_net.png) ![Disk](shots/live_disk.png) ![Vapor](shots/theme_vapor.png)
 
