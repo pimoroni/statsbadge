@@ -195,6 +195,10 @@ class App:
         if self.client.failures >= 3:
             self.hunt()
 
+        # One the badge has never had, or one the host has revised: the rev rides in every
+        # stats frame, so a config change is picked up on the next poll. What is on screen
+        # stays there until the new layout lands, which is a page swapping rather than the
+        # display dropping out for a second.
         if self.layout is None or self.layout_rev != (
                 self.frame.get("layout_rev", self.layout_rev)):
             self._start("layout", "/v1/layout")
@@ -274,10 +278,6 @@ class App:
         self.rejected = False
         if what == "stats":
             self.frame = payload
-            rev = payload.get("layout_rev")
-            if rev is not None and rev != self.layout_rev and self.layout is not None:
-                # The host's config changed; pick it up on the next poll.
-                self.layout = None
         elif what == "layout":
             self.layout = payload
             self.layout_rev = payload.get("rev", 0)
