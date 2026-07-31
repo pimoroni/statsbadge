@@ -2,7 +2,7 @@
 
 Your PC's vitals on a Badgeware badge, paged with UP and DOWN. An Afterburner-style panel that is not welded to a keyboard.
 
-![CPU](shots/live_cpu.png) ![Cores](shots/live_cores.png)
+![CPU](shots/live_cpu.png) ![Load](shots/gauges.png)
 
 A server on the host measures things and serves them; the badge fetches and draws them. The host also serves a web page for choosing which screens appear, so rearranging the display needs no reinstall.
 
@@ -112,7 +112,7 @@ A field the host cannot measure is `null`, and pages that need it are dropped ra
 
 Six kinds - `dial`, `dials`, `bars`, `graph`, `grid`, `text` - and any field can go in any of them. Ten themes: `dark`, `light`, `frost`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images.
 
-![Memory](shots/live_mem.png) ![Network](shots/live_net.png) ![Disk](shots/live_disk.png) ![Vapor](shots/theme_vapor.png)
+![Cores](shots/live_cores.png) ![Network](shots/live_net.png) ![Disk](shots/live_disk.png) ![Processor](shots/gauges2.png) ![Host](shots/live_host.png) ![Vapor](shots/theme_vapor.png)
 
 ## Extensions
 
