@@ -766,6 +766,77 @@ def test_extensions_describe_finds_the_clock(_h):
 
 
 @check
+def test_extension_settings_are_declared_stored_and_applied(h):
+    """The UI can only offer what an extension declares, and a save has to reach it."""
+    status, caps = h.raw("GET", "/api/capabilities")
+    assert status == 200, status
+    schema = caps.get("extension_settings") or {}
+    if "clock" not in schema:
+        return              # the clock extension is not pip installed here
+    keys = {entry["key"] for entry in schema["clock"]}
+    assert {"latitude", "longitude"} <= keys, keys
+
+    _status, config = h.raw("GET", "/api/config")
+    config["settings"] = {"clock": {"latitude": "52.4", "longitude": "-1.9",
+                                    "units": "fahrenheit"}}
+    status, _body = h.raw("PUT", "/api/config", json.dumps(config).encode(),
+                          {"Content-Type": "application/json"})
+    assert status == 200, status
+
+    # Coerced to the declared type, not stored as the strings a form sends
+    _status, stored = h.raw("GET", "/api/config")
+    assert stored["settings"]["clock"]["latitude"] == 52.4, stored["settings"]
+    assert stored["settings"]["clock"]["units"] == "fahrenheit", stored["settings"]
+
+    # and handed to the running source, not left for the next restart
+    clock = next(s for s in h.service.collector.extensions if s.name == "clock")
+    assert clock.latitude == 52.4, clock.latitude
+    assert clock.units == "fahrenheit", clock.units
+
+    # Host-side only: a location is no business of the badge's
+    _status, sent = h.raw("GET", "/api/preview")
+    assert "settings" not in sent, sorted(sent)
+
+
+@check
+def test_undeclared_settings_are_dropped_but_absent_extensions_are_kept(_h):
+    """A key nothing asked for goes; a whole block for an extension that is not loaded
+    stays, or disabling one would be what deletes its configuration."""
+    schema = {"clock": [{"key": "latitude", "type": "number"}]}
+    incoming = {**layout.DEFAULT_CONFIG, "settings": {
+        "clock": {"latitude": "1.5", "sneaky": "no"},
+        "notloaded": {"token": "keep me"},
+    }}
+    stored = layout.validate(incoming, (), schema)["settings"]
+    assert stored["clock"] == {"latitude": 1.5}, stored
+    assert stored["notloaded"] == {"token": "keep me"}, stored
+
+    # An empty field clears a setting rather than reading as zero
+    incoming["settings"]["clock"] = {"latitude": ""}
+    cleared = layout.validate(incoming, (), schema)["settings"]
+    assert cleared["clock"]["latitude"] is None, cleared
+
+
+@check
+def test_stored_settings_beat_the_command_line(_h):
+    merged = layout.merge_settings({"clock": {"latitude": 1.0, "units": "celsius"}},
+                                   {"clock": {"latitude": 52.4}})
+    assert merged["clock"] == {"latitude": 52.4, "units": "celsius"}, merged
+
+
+@check
+def test_every_field_has_a_name_for_the_ui(_h):
+    """The pickers show these, so a field with none shows a column name instead."""
+    from statsbadge import model
+
+    described = model.describe()
+    for group, fields in model.GROUPS.items():
+        assert group in described["group_labels"], group
+        for field in fields:
+            assert described["field_labels"].get(group, {}).get(field), (group, field)
+
+
+@check
 def test_caselights_take_a_field_or_a_flag(_h):
     """Three settings in one value: off, the theme's level, or a reading to follow."""
     base = dict(layout.DEFAULT_CONFIG)

@@ -20,6 +20,46 @@ GROUPS = {
     "sys": ("host", "os", "arch", "uptime_s", "cpu_name"),
 }
 
+# What to call a group and a field in the config UI. Terse enough to fit a dropdown and
+# explicit about the unit, because "mem_used_mb" tells a reader neither what it measures
+# nor what a useful value looks like. The badge has its own, shorter set in pages.NAMES:
+# these are read at a desk, those are read at arm's length on a 320px screen.
+GROUP_LABELS = {
+    "cpu": "Processor",
+    "mem": "Memory",
+    "gpu": "Graphics",
+    "net": "Network",
+    "disk": "Disk",
+    "power": "Power",
+    "fans": "Fans",
+    "sys": "System",
+}
+
+FIELD_LABELS = {
+    "cpu": {"pct": "Load", "temp": "Temperature", "freq": "Clock speed",
+            "load": "Load average", "cores": "Per-core load", "procs": "Processes"},
+    "mem": {"pct": "Used", "used_mb": "Used (GB)", "total_mb": "Total (GB)",
+            "swap_pct": "Swap used", "swap_used_mb": "Swap used (GB)"},
+    "gpu": {"name": "Name", "pct": "Load", "temp": "Temperature",
+            "mem_pct": "VRAM used", "mem_used_mb": "VRAM used (GB)",
+            "power": "Power draw", "fan_pct": "Fan", "clock": "Clock speed"},
+    "net": {"iface": "Interface", "up_bps": "Upload", "down_bps": "Download",
+            "up_total_mb": "Sent (GB)", "down_total_mb": "Received (GB)"},
+    "disk": {"pct": "Used", "used_mb": "Used (GB)", "total_mb": "Total (GB)",
+             "read_bps": "Read", "write_bps": "Write"},
+    "power": {"battery_pct": "Battery", "charging": "Charging",
+              "secs_left": "Time left", "package_w": "Package draw"},
+    "fans": {"name": "Name", "rpm": "Speed", "pct": "Speed"},
+    "sys": {"host": "Hostname", "os": "OS", "arch": "Architecture",
+            "uptime_s": "Uptime", "cpu_name": "Processor model"},
+}
+
+
+def label(group, field):
+    """What the UI calls one field. Falls back to the raw name for anything new."""
+    return FIELD_LABELS.get(group, {}).get(field, field.replace("_", " ").capitalize())
+
+
 # Fields whose natural range is 0-100, so a gauge needs no scale hint.
 PERCENT_FIELDS = frozenset(
     ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct")
@@ -91,4 +131,7 @@ def describe():
         "groups": {name: list(fields) for name, fields in GROUPS.items()},
         "percent_fields": sorted(PERCENT_FIELDS),
         "units": dict(UNITS),
+        "group_labels": dict(GROUP_LABELS),
+        "field_labels": {group: dict(fields)
+                         for group, fields in FIELD_LABELS.items()},
     }

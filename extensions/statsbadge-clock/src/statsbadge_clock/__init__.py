@@ -45,6 +45,17 @@ class Clock(Source):
     # the app so its page kind is available.
     badge_module = os.path.join(HERE, "badge", "clockface.py")
 
+    # Offered in the config UI, which stores them and hands them back through
+    # configure(). Weather is off until a location is set, which is why latitude comes
+    # first and carries the explanation.
+    settings = (
+        {"key": "latitude", "label": "Latitude", "type": "number",
+         "hint": "Weather stays off until a location is set"},
+        {"key": "longitude", "label": "Longitude", "type": "number"},
+        {"key": "units", "label": "Temperature", "type": "choice",
+         "options": ["celsius", "fahrenheit"], "default": "celsius"},
+    )
+
     # Offered in the config UI's page list.
     badge_page = {
         "kind": "clockface",
@@ -65,6 +76,20 @@ class Clock(Source):
         self._next_weather = 0.0
         # Open-Meteo asks for no more than a request every few minutes per location.
         self._interval = float(config.get("weather_interval", 900))
+
+    def configure(self, settings):
+        """Take a location while running.
+
+        The values are copied out in __init__, so they have to be copied again here. The
+        next sample refetches rather than waiting out the rest of the interval, because a
+        location typed in the browser should show up on the badge and not in a quarter of
+        an hour.
+        """
+        super().configure(settings)
+        self.latitude = self.config.get("latitude")
+        self.longitude = self.config.get("longitude")
+        self.units = self.config.get("units", "celsius")
+        self._next_weather = 0.0
 
     def sample(self, frame, dt):
         now = time.localtime()

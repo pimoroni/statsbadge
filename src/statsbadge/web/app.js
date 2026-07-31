@@ -70,16 +70,40 @@ function numericRefs() {
   });
 }
 
+/** What to call a group, and one of its fields, in a picker. */
+function groupLabel(group) {
+  return (caps.group_labels || {})[group] || group;
+}
+
+function fieldLabel(ref) {
+  const [group, field] = ref.split(".");
+  const labels = (caps.field_labels || {})[group] || {};
+  return labels[field] || field.replace(/_/g, " ");
+}
+
+/** One dropdown, grouped by category, so a field can be found rather than hunted for. */
 function refSelect(value, refs, onChange) {
   const select = document.createElement("select");
   const options = refs.slice();
   if (value && !options.includes(value)) options.unshift(value);
+
+  const byGroup = new Map();
   for (const ref of options) {
-    const option = document.createElement("option");
-    option.value = ref;
-    option.textContent = ref;
-    if (ref === value) option.selected = true;
-    select.appendChild(option);
+    const group = ref.split(".")[0];
+    if (!byGroup.has(group)) byGroup.set(group, []);
+    byGroup.get(group).push(ref);
+  }
+  for (const [group, groupRefs] of byGroup) {
+    const holder = document.createElement("optgroup");
+    holder.label = groupLabel(group);
+    for (const ref of groupRefs) {
+      const option = document.createElement("option");
+      option.value = ref;
+      option.textContent = fieldLabel(ref);
+      if (ref === value) option.selected = true;
+      holder.appendChild(option);
+    }
+    select.appendChild(holder);
   }
   select.onchange = () => { onChange(select.value); markDirty(); };
   return select;
@@ -248,6 +272,74 @@ async function refreshPruned() {
   } catch (error) { /* preview is advisory */ }
 }
 
+// -- extension settings ----------------------------------------------------
+
+/** Fields for whatever the installed extensions say they can be told. */
+function renderSettings() {
+  const node = $("settings");
+  node.innerHTML = "";
+  const schema = caps.extension_settings || {};
+  const names = Object.keys(schema).sort();
+  if (!names.length) {
+    node.innerHTML = '<p class="hint">Nothing installed asks to be configured.</p>';
+    return;
+  }
+  config.settings = config.settings || {};
+  for (const name of names) {
+    config.settings[name] = config.settings[name] || {};
+    const stored = config.settings[name];
+    const heading = document.createElement("h3");
+    heading.textContent = name;
+    node.appendChild(heading);
+    for (const setting of schema[name]) {
+      node.appendChild(settingRow(stored, setting));
+      if (setting.hint) {
+        const hint = document.createElement("p");
+        hint.className = "hint";
+        hint.textContent = setting.hint;
+        node.appendChild(hint);
+      }
+    }
+  }
+}
+
+function settingRow(stored, setting) {
+  const label = document.createElement("label");
+  label.textContent = setting.label || setting.key;
+  const current = stored[setting.key] !== undefined
+    ? stored[setting.key] : setting.default;
+
+  let input;
+  if (setting.type === "bool") {
+    input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = !!current;
+    input.onchange = () => { stored[setting.key] = input.checked; markDirty(); };
+  } else if (setting.type === "choice") {
+    input = document.createElement("select");
+    for (const option of setting.options || []) {
+      const node = document.createElement("option");
+      node.value = option;
+      node.textContent = option;
+      if (option === current) node.selected = true;
+      input.appendChild(node);
+    }
+    input.onchange = () => { stored[setting.key] = input.value; markDirty(); };
+  } else {
+    input = document.createElement("input");
+    input.type = "text";
+    input.value = current === null || current === undefined ? "" : current;
+    // Empty means unset, which is not the same as zero: a latitude of 0 is the equator.
+    input.oninput = () => {
+      stored[setting.key] = input.value === "" ? null : input.value;
+      markDirty();
+    };
+  }
+  label.appendChild(input);
+  return label;
+}
+
+
 // -- look and buttons ------------------------------------------------------
 
 function renderLook() {
@@ -272,13 +364,15 @@ function renderLook() {
   const caselights = $("caselights");
   caselights.innerHTML = "";
   const options = [["off", "Off"], ["theme", "Follow the theme"]];
-  for (const ref of numericRefs()) options.push([ref, `Follow ${ref}`]);
+  for (const ref of numericRefs()) {
+    options.push([ref, `${groupLabel(ref.split(".")[0])} - ${fieldLabel(ref)}`]);
+  }
   const current = config.caselights === true ? "theme"
                 : config.caselights ? config.caselights : "off";
   // A reading this host has stopped sending still has to be selectable, or opening the
   // page and saving it would quietly turn the lights off.
   if (!options.some(([value]) => value === current)) {
-    options.push([current, `Follow ${current}`]);
+    options.push([current, current]);
   }
   for (const [value, text] of options) {
     const option = document.createElement("option");
@@ -576,6 +670,7 @@ async function boot() {
 
   offerExtensionPages();
   renderPages();
+  renderSettings();
   renderLook();
   renderSources();
   renderBadges();

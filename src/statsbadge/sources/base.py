@@ -7,10 +7,32 @@ class Source:
     # Which groups this source can contribute to, for the config UI's benefit.
     provides = ()
 
+    # What this source can be told, so the config UI can offer it and the server can
+    # store it. Each entry is a dict:
+    #
+    #   key       the name it arrives under in self.config
+    #   label     what the UI calls it
+    #   type      "text", "number", "bool" or "choice"
+    #   options   the allowed values, for "choice"
+    #   default   what it is worth when nothing is stored
+    #   hint      a line of explanation, optional
+    #
+    # A source with no settings declares none and gets no section in the UI. Anything
+    # not declared here cannot be set from the UI, only from --extension.
+    settings = ()
+
     def __init__(self, config):
         self.config = config
         self.faults = 0
         self.last_fault = None
+
+    def configure(self, settings):
+        """Take settings while running, on every save rather than only on a change.
+
+        The default suits a source that reads `self.config` as it samples. One that
+        copies values out in `__init__` has to override this and copy them again.
+        """
+        self.config.update(settings)
 
     @classmethod
     def available(cls):

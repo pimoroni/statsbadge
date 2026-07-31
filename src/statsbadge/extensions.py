@@ -105,6 +105,36 @@ def badge_modules(sources):
     return modules
 
 
+def settings_schema(sources):
+    """What each loaded extension can be told, keyed by extension name.
+
+    The config UI builds its fields from this, so an extension that declares nothing
+    gets no section and cannot be configured from the browser.
+    """
+    schema = {}
+    for source in sources:
+        declared = getattr(source, "settings", ()) or ()
+        if declared:
+            schema[getattr(source, "name", "ext")] = [dict(entry) for entry in declared]
+    return schema
+
+
+def configure(sources, settings):
+    """Hand each source its own block of stored settings.
+
+    A source that raises is recorded and left alone: one extension refusing a setting
+    must not stop the others taking theirs.
+    """
+    for source in sources:
+        block = (settings or {}).get(getattr(source, "name", ""), {})
+        if not block:
+            continue
+        try:
+            source.configure(block)
+        except Exception as exc:  # noqa: BLE001  a bad setting is the source's problem
+            source.note_fault(exc)
+
+
 def badge_pages(sources):
     """Page descriptors contributed by extensions, for the config UI to offer."""
     pages = []

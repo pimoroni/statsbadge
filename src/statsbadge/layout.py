@@ -60,6 +60,9 @@ DEFAULT_CONFIG = {
     "graph_points": 48,
     "pages": DEFAULT_PAGES,
     "buttons": {"a": None, "b": None, "c": None},
+    # Per-extension settings, keyed by extension name. Host-side: the badge never sees
+    # these, so a location or a token does not travel to it.
+    "settings": {},
 }
 
 
@@ -103,9 +106,9 @@ class Config:
         with self._lock:
             return self.data.get("rev", 1)
 
-    def replace(self, incoming, extra_kinds=()):
+    def replace(self, incoming, extra_kinds=(), settings_schema=None):
         """Validate and store a whole config from the UI. Returns the new revision."""
-        cleaned = validate(incoming, extra_kinds)
+        cleaned = validate(incoming, extra_kinds, settings_schema)
         with self._lock:
             cleaned["rev"] = self.data.get("rev", 1) + 1
             cleaned["updated_at"] = int(time.time())
@@ -116,12 +119,13 @@ class Config:
     def for_badge(self, capabilities=None):
         """The layout as the badge should see it: pruned to fields that exist."""
         data = self.snapshot()
+        data.pop("settings", None)
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
         return data
 
 
-def validate(incoming, extra_kinds=()):
+def validate(incoming, extra_kinds=(), settings_schema=None):
     """Reject anything the badge could not draw, and normalise the rest.
 
     The config UI is the only writer, but it arrives over HTTP so it is checked
@@ -169,7 +173,73 @@ def validate(incoming, extra_kinds=()):
         key: (str(buttons[key]) if buttons.get(key) else None)
         for key in ("a", "b", "c")
     }
+    out["settings"] = _validate_settings(incoming.get("settings"), settings_schema)
     return out
+
+
+def _validate_settings(incoming, schema):
+    """Keep the declared keys of each extension, in the declared type.
+
+    An extension with no schema keeps its block as it stands, because uninstalling or
+    disabling one must not be what throws away everything it was told.
+    """
+    stored = {}
+    if not isinstance(incoming, dict):
+        return stored
+    for name, block in incoming.items():
+        if not isinstance(block, dict):
+            continue
+        declared = {entry["key"]: entry
+                    for entry in (schema or {}).get(name, ())
+                    if entry.get("key")}
+        if not declared:
+            stored[name] = {key: value for key, value in block.items()
+                            if value is None or isinstance(value, (str, int, float, bool))}
+            continue
+        kept = {}
+        for key, entry in declared.items():
+            if key in block:
+                kept[key] = _coerce_setting(block[key], entry)
+        if kept:
+            stored[name] = kept
+    return stored
+
+
+def _coerce_setting(value, entry):
+    """One setting in the type it was declared as, or None where it is not answerable.
+
+    None rather than a default, so a field cleared in the UI reads as unset: a source
+    asking for a latitude wants to be able to tell "not set" from "the equator".
+    """
+    kind = entry.get("type", "text")
+    if kind == "bool":
+        return bool(value)
+    if kind == "number":
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+    if kind == "choice":
+        options = [str(option) for option in entry.get("options", ())]
+        text = "" if value is None else str(value)
+        return text if text in options else entry.get("default")
+    if value is None:
+        return None
+    return str(value)[:200]
+
+
+def merge_settings(from_command_line, stored):
+    """Per-extension settings, with the stored ones over anything given on the CLI.
+
+    The UI is the live editor, so what it saved wins; --extension is for a first run and
+    for a host with no browser near it.
+    """
+    merged = {name: dict(block) for name, block in (from_command_line or {}).items()}
+    for name, block in (stored or {}).items():
+        merged.setdefault(name, {}).update(block)
+    return merged
 
 
 def _validate_page(page, seen, extra_kinds=()):

@@ -12,10 +12,22 @@ uv pip install --no-deps ./extensions/statsbadge-clock
 statsbadge install --with-extensions
 ```
 
-Weather comes from [Open-Meteo](https://open-meteo.com), which needs no API key. Set a location to enable it:
+Weather comes from [Open-Meteo](https://open-meteo.com), which needs no API key. Set a location under **Extensions** in the config UI, which stores it and hands it to the running source, so the next sample fetches. The same settings work on the command line for a host with no browser near it:
 
 ```bash
 statsbadge serve --extension clock.latitude=52.4 --extension clock.longitude=-1.9
 ```
 
+A setting stored by the UI wins over the flag, since the UI is the live editor and the flag is for a first run.
+
 Without a location the clock still works and the weather readouts read "no location set".
+
+The settings themselves are declared on the source as `settings`, which is what the UI builds its fields from. An extension that declares none gets no section.
+
+## Working on it
+
+Install it editable, or an edit here does nothing: a plain `uv pip install` copies the package, and installing again over an unchanged version is a no-op, so the code that runs stays the snapshot from the first install.
+
+```bash
+uv pip install --no-deps -e ./extensions/statsbadge-clock
+```

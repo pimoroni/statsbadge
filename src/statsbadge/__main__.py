@@ -75,12 +75,21 @@ def _coerce(text):
 
 
 def source_config_from(args):
+    """What the sources are told. Settings stored by the UI beat --extension.
+
+    Read here as well as by the Service, because `probe` and `install` load extensions
+    without one and should see the same configuration the server would.
+    """
+    stored = layout.Config(
+        os.path.join(config_dir(getattr(args, "config_dir", None)), "layout.json")
+    ).snapshot().get("settings")
     return {
         "powermetrics": getattr(args, "powermetrics", False),
         "lhm_url": getattr(args, "lhm_url", None),
         "iface": getattr(args, "iface", None),
         "disk_path": getattr(args, "disk_path", "/"),
-        "extensions": parse_extension_options(getattr(args, "extension", None)),
+        "extensions": layout.merge_settings(
+            parse_extension_options(getattr(args, "extension", None)), stored),
         "disabled_extensions": getattr(args, "without", None) or [],
     }
 

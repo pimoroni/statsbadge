@@ -50,7 +50,12 @@ class Service:
         self.config = layout.Config(os.path.join(config_dir, "layout.json"))
         self.badges = auth.Store(os.path.join(config_dir, "badges.json"))
         self.identity = identity.load(config_dir)
-        self.collector = Collector(interval=interval, config=source_config or {})
+        # Stored settings reach the sources as they are constructed, so an extension
+        # configured in the browser works from the next start with no flags to remember.
+        source_config = dict(source_config or {})
+        source_config["extensions"] = layout.merge_settings(
+            source_config.get("extensions"), self.config.snapshot().get("settings"))
+        self.collector = Collector(interval=interval, config=source_config)
         self.started = threading.Event()
 
     def start(self):
@@ -68,13 +73,30 @@ class Service:
             if page.get("kind")
         )
 
+    def extension_settings(self):
+        """What each installed extension can be told, for the UI and the validator."""
+        return extensions.settings_schema(self.collector.extensions)
+
     def capabilities(self):
         caps = self.collector.capabilities()
         caps["commands"] = commands.names()
         caps["themes"] = list(layout.THEMES)
         caps["kinds"] = list(layout.KINDS)
         caps["extension_pages"] = extensions.badge_pages(self.collector.extensions)
+        caps["extension_settings"] = self.extension_settings()
         return caps
+
+    def replace_config(self, incoming):
+        """Store a config from the UI and hand the new settings to the sources.
+
+        Applied here rather than at the next restart, so a location typed in the browser
+        takes effect on the next sample.
+        """
+        rev = self.config.replace(incoming, self.extension_kinds(),
+                                 self.extension_settings())
+        extensions.configure(self.collector.extensions,
+                             self.config.snapshot().get("settings"))
+        return rev
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -270,8 +292,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._json(200, service.config.snapshot())
             if method == "PUT":
                 try:
-                    rev = service.config.replace(
-                        json.loads(body or b"{}"), service.extension_kinds())
+                    rev = service.replace_config(json.loads(body or b"{}"))
                 except ValueError as exc:
                     return self._fail(400, str(exc))
                 return self._json(200, {"rev": rev})
