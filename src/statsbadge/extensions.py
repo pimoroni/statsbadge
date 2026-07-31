@@ -18,11 +18,7 @@ own top-level group, which the badge draws by name.
 """
 
 import sys
-
-if sys.version_info >= (3, 10):
-    from importlib.metadata import entry_points
-else:  # pragma: no cover
-    from importlib_metadata import entry_points
+from importlib.metadata import entry_points
 
 GROUP = "statsbadge.sources"
 

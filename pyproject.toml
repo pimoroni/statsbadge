@@ -1,0 +1,53 @@
+[project]
+name = "statsbadge"
+version = "0.1.0"
+description = "System stats from a host PC, drawn on a Badgeware badge"
+readme = "README.md"
+authors = [
+    { name = "Philip Howard", email = "phil@pimoroni.com" },
+]
+maintainers = [
+    { name = "Philip Howard", email = "phil@pimoroni.com" },
+]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+    "psutil>=5.9",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Monitoring",
+]
+
+[project.optional-dependencies]
+# NVIDIA cards, via the same library nvidia-smi uses.
+nvidia = ["nvidia-ml-py>=12"]
+# Pushing the app and credentials to a badge over USB.
+install = ["mpremote>=1.22", "pyserial>=3.5"]
+all = ["nvidia-ml-py>=12", "mpremote>=1.22", "pyserial>=3.5"]
+
+[project.urls]
+Homepage = "https://github.com/pimoroni/stats-badge"
+Repository = "https://github.com/pimoroni/stats-badge"
+Issues = "https://github.com/pimoroni/stats-badge/issues"
+
+[project.scripts]
+statsbadge = "statsbadge.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.11.23,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = ["ruff>=0.6"]
+
+# The example extension is deliberately not a workspace member. It declares a real
+# dependency on statsbadge, which is correct once published but circular in a checkout,
+# so it is installed for development with --no-deps instead. See README.

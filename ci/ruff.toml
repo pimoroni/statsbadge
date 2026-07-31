@@ -129,19 +129,24 @@ lint.ignore = [
 lint.extend-select = ["UP"]
 
 [lint.per-file-ignores]
+# The badge app and any extension's badge module are MicroPython, not CPython, so rules
+# that assume a modern CPython do not hold. B905 wants zip(strict=...), and MicroPython's
+# zip takes no keyword arguments at all. Checked on the board, not assumed.
+"src/statsbadge/badge_app/*.py" = ["B905"]
+"extensions/*/src/statsbadge_*/badge/*.py" = ["B905"]
 # A source wraps every sensor read, because a flaky sensor has to degrade to a missing
 # field rather than take the collector down - that is the contract in sources/base.py.
 # `dt` is part of the sample() signature whether or not a source needs a rate.
-"server/statsbadge/sources/*.py" = ["BLE001", "ARG002"]
-"server/statsbadge/collect.py" = ["BLE001"]
-"server/statsbadge/extensions.py" = ["BLE001"]
-"server/statsbadge/beacon.py" = ["BLE001"]
-"server/statsbadge/install.py" = ["BLE001"]
-"server/statsbadge/server.py" = ["BLE001"]
-"extensions/*/statsbadge_*/__init__.py" = ["BLE001", "ARG002"]
+"src/statsbadge/sources/*.py" = ["BLE001", "ARG002"]
+"src/statsbadge/collect.py" = ["BLE001"]
+"src/statsbadge/extensions.py" = ["BLE001"]
+"src/statsbadge/beacon.py" = ["BLE001"]
+"src/statsbadge/install.py" = ["BLE001"]
+"src/statsbadge/server.py" = ["BLE001"]
+"extensions/*/src/statsbadge_*/__init__.py" = ["BLE001", "ARG002"]
 
 # The CLI reports the addresses a badge should use, which the server module works out.
-"server/statsbadge/__main__.py" = ["SLF001"]
+"src/statsbadge/__main__.py" = ["SLF001"]
 
 # The test harness prints its own results and pokes at internals on purpose.
-"server/tests/*.py" = ["BLE001", "SLF001"]
+"tests/*.py" = ["BLE001", "SLF001"]

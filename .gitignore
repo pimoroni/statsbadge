@@ -7,3 +7,5 @@ stats/ext/
 build/
 dist/
 .DS_Store
+dist/
+.venv/

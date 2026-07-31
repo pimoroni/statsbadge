@@ -14,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from statsbadge import auth, identity, layout, server  # noqa: E402
 

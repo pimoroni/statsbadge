@@ -17,12 +17,44 @@ def config_dir(explicit=None):
     return os.path.join(base, "statsbadge")
 
 
+def parse_extension_options(pairs):
+    """Turn --extension clock.latitude=52.4 into {"clock": {"latitude": 52.4}}.
+
+    Numbers and booleans are converted, because an extension asking for a latitude
+    wants a float and every value off a command line is a string.
+    """
+    options = {}
+    for pair in pairs or ():
+        if "=" not in pair or "." not in pair.split("=", 1)[0]:
+            raise SystemExit(f"--extension wants name.key=value, not {pair!r}")
+        target, value = pair.split("=", 1)
+        name, key = target.split(".", 1)
+        options.setdefault(name, {})[key] = _coerce(value)
+    return options
+
+
+def _coerce(text):
+    lowered = text.strip().lower()
+    if lowered in ("true", "yes", "on"):
+        return True
+    if lowered in ("false", "no", "off"):
+        return False
+    for cast in (int, float):
+        try:
+            return cast(text)
+        except ValueError:
+            pass
+    return text
+
+
 def build_service(args):
     source_config = {
         "powermetrics": getattr(args, "powermetrics", False),
         "lhm_url": getattr(args, "lhm_url", None),
         "iface": getattr(args, "iface", None),
         "disk_path": getattr(args, "disk_path", "/"),
+        "extensions": parse_extension_options(getattr(args, "extension", None)),
+        "disabled_extensions": getattr(args, "without", None) or [],
     }
     return server.Service(config_dir(args.config_dir),
                           interval=args.interval,
@@ -312,6 +344,11 @@ def main(argv=None):
     common.add_argument("--disk-path", default="/", help="filesystem to report")
     common.add_argument("--no-beacon", action="store_true",
                         help="do not broadcast the discovery beacon")
+    common.add_argument("--extension", action="append", metavar="NAME.KEY=VALUE",
+                        help="configure an installed extension, repeatable "
+                             "(e.g. clock.latitude=52.4)")
+    common.add_argument("--without", action="append", metavar="NAME",
+                        help="disable an installed extension, repeatable")
 
     subs = parser.add_subparsers(dest="command", required=True)
 

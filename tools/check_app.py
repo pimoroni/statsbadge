@@ -5,7 +5,7 @@ The badge compiles these from source when the app is launched, where a syntax er
 is a crash dialog and nothing else. Imports nothing: every module here expects the
 badge's builtins.
 
-    python3 tools/check_app.py stats
+    python3 tools/check_app.py src/statsbadge/badge_app
 """
 
 import ast
@@ -114,7 +114,8 @@ def check_names(path, tree):
 
 
 if __name__ == "__main__":
-    fault = main(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "stats"))
+    fault = main(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else
+                  "src/statsbadge/badge_app"))
     if fault:
         sys.exit(fault)
     print("app looks packable")

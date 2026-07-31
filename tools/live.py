@@ -11,7 +11,7 @@ here rather than as a blank page in the app.
 import sys
 import time
 
-sys.path.insert(0, "/remote/stats")
+sys.path.insert(0, "/remote/src/statsbadge/badge_app")
 
 import net
 import wifi

@@ -199,16 +199,16 @@ def secret_in_state(state, server_id=None):
 # -- the app itself ---------------------------------------------------------
 
 def app_source_dir():
-    """Where the badge app lives in this checkout or wheel."""
+    """Where the badge app lives.
+
+    Inside the package, so a checkout and an installed wheel are the same path: uv_build
+    ships everything under the module directory, icon included.
+    """
     here = os.path.dirname(os.path.abspath(__file__))
-    for candidate in (
-        os.path.join(here, "badge_app"),                        # packaged
-        os.path.join(here, "..", "..", APP_NAME),               # repo checkout
-    ):
-        resolved = os.path.normpath(candidate)
-        if os.path.isfile(os.path.join(resolved, "__init__.py")):
-            return resolved
-    raise InstallError("cannot find the badge app source")
+    app = os.path.join(here, "badge_app")
+    if not os.path.isfile(os.path.join(app, "__init__.py")):
+        raise InstallError(f"cannot find the badge app at {app}")
+    return app
 
 
 def enter_mass_storage(port):

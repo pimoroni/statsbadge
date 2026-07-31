@@ -7,7 +7,7 @@ A tiny gauge sweep over three bars: the two things the app does, at 24 pixels.
 
 import sys
 
-sys.path.insert(0, "/remote/stats")
+sys.path.insert(0, "/remote/src/statsbadge/badge_app")
 
 badge.mode(HIRES | VSYNC)
 
@@ -41,6 +41,6 @@ icon.pen = color.rgb(*INK)
 for i, height in enumerate((3, 5, 4)):
     icon.rectangle(rect(9 + i * 3, 14 - height, 2, height))
 
-with open("/remote/stats/icon.raw", "wb") as handle:
+with open("/remote/src/statsbadge/badge_app/icon.raw", "wb") as handle:
     handle.write(icon.raw)
 print(f"wrote icon.raw, {SIZE * SIZE * 4} bytes")

@@ -10,7 +10,7 @@ beacon, recognise the id it is already paired with, and follow it without re-pai
 import sys
 import time
 
-sys.path.insert(0, "/remote/stats")
+sys.path.insert(0, "/remote/src/statsbadge/badge_app")
 
 badge.mode(HIRES | VSYNC)
 screen.antialias = image.X4

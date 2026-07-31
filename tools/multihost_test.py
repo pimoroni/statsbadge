@@ -9,7 +9,7 @@ import json
 import os
 import sys
 
-sys.path.insert(0, "/remote/stats")
+sys.path.insert(0, "/remote/src/statsbadge/badge_app")
 
 import net
 

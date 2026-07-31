@@ -11,7 +11,7 @@ page looks like when a field is missing - which on macOS is every temperature.
 import sys
 import time
 
-sys.path.insert(0, "/remote/stats")
+sys.path.insert(0, "/remote/src/statsbadge/badge_app")
 
 import draw
 import net
