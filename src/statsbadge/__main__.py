@@ -229,9 +229,19 @@ def cmd_install(args):
     if not ports:
         print("No badge found. Connect it by USB, or pass --port-dev.", file=sys.stderr)
         return 1
-    port = ports[0]
-    print(f"badge on {port}")
+    # The port is carried in a dict because it changes when the badge is reset, and the
+    # reset on the way out has to use whichever one it ended up on.
+    session = {"port": ports[0]}
+    print("badge on {}".format(session["port"]))
+    try:
+        return _install(args, session)
+    finally:
+        install.hard_reset(session["port"])
+        print("The badge has been reset.")
 
+
+def _install(args, session):
+    port = session["port"]
     try:
         info = install.badge_info(port)
     except install.InstallError as exc:
@@ -344,6 +354,7 @@ def cmd_install(args):
         install.eject(volume)
         print("  ejected; waiting for the badge to come back...")
         port = install.wait_for_port(previous=port)
+        session["port"] = port
         print(f"  back on {port}")
 
     if args.app_only:
@@ -398,6 +409,13 @@ def cmd_status(args):
         print("badge: not connected by USB")
         return 0
     port = ports[0]
+    try:
+        return _badge_status(args, port)
+    finally:
+        install.hard_reset(port, settle=False)
+
+
+def _badge_status(args, port):
     try:
         info = install.badge_info(port)
     except install.InstallError as exc:

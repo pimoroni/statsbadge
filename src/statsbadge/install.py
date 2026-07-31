@@ -619,6 +619,44 @@ def wait_for_port(timeout=40, previous=None):
     raise InstallError("the badge did not come back after resetting")
 
 
+def hard_reset(port, settle=True):
+    """Reset the badge so it boots as it normally would.
+
+    Anything that talks over the REPL interrupts whatever the badge was running to get
+    there, which leaves it sitting at a bare prompt on a blank screen. A reset runs
+    `main.py` again, so the badge starts whatever it is set up to start.
+    """
+    try:
+        _run(port, "reset", timeout=10)
+    except (InstallError, subprocess.TimeoutExpired):
+        # Expected: the port goes away mid-command and mpremote never gets a reply.
+        pass
+    if not settle:
+        return None
+    return wait_for_enumeration(previous=port)
+
+
+def wait_for_enumeration(previous=None, timeout=15):
+    """Wait for the badge's port to come back, without talking to it.
+
+    wait_for_port confirms the REPL answers, which is right when something is about to
+    be written but not after a reset meant to hand the badge back: the check would
+    interrupt whatever has just started. So this only watches enumeration.
+    """
+    deadline = time.time() + timeout
+    # Wait for the old path to go first, or a port still present from before the reset
+    # would look like the badge already being back.
+    if previous:
+        while time.time() < deadline and previous in find_ports():
+            time.sleep(0.2)
+    while time.time() < deadline:
+        ports = find_ports()
+        if ports:
+            return ports[0]
+        time.sleep(0.2)
+    return None
+
+
 def eject(volume):
     system = platform.system()
     try:

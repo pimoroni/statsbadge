@@ -30,6 +30,8 @@ Two halves sharing one small contract: the host decides *what* to show, the badg
 
 **`/system` is read-only to MicroPython.** Credentials go to `/state` over the REPL; the app needs the USB volume, which means resetting the badge. Writing `/state` and *then* resetting into mass storage loses the write - the reset discards it and the volume commits what was there before - so `install` copies the app first, waits for the badge to come back, writes credentials last, and reads them back.
 
+**Talking to the REPL stops whatever the badge was running.** mpremote interrupts to get a prompt, and holds the board in raw mode so `main.py` never runs again, which leaves the badge on a blank screen. So every command that touches it hard resets on the way out, in a `finally` and using whichever port the badge ended up on: the port changes when mass storage is ejected. The wait after that reset watches enumeration only - confirming the REPL answers would interrupt what has just started - and what the badge then shows is `main.py`'s business, not the installer's. It cannot be observed over the same cable anyway, since reading the framebuffer interrupts it again.
+
 **The debug probe shares Raspberry Pi's USB vendor id** with the board it is attached to, so port detection filters on product id and product string. Talking MicroPython to a CMSIS-DAP interface just times out.
 
 **`screen.raw` is R G B A, premultiplied, no byte swap.** Get it wrong and red and blue swap, which reads as a drawing bug rather than a converter one.
