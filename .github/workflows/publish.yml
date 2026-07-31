@@ -25,9 +25,9 @@ jobs:
       TUFTY_REF: feature/align-v3
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v9
         with:
           version: "0.9.2"
 
@@ -52,7 +52,7 @@ jobs:
 
       - name: Cache mpy-cross
         id: mpy-cross
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: mpy-cross
           key: mpy-cross-${{ env.MICROPYTHON_FLAVOUR }}-${{ env.MICROPYTHON_VERSION }}

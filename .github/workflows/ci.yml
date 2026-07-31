@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v9
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
@@ -57,9 +57,9 @@ jobs:
       TUFTY_REF: feature/align-v3
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v9
         with:
           version: ${{ env.UV_VERSION }}
 
@@ -71,7 +71,7 @@ jobs:
 
       - name: Cache mpy-cross
         id: mpy-cross
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: mpy-cross
           key: mpy-cross-${{ env.MICROPYTHON_FLAVOUR }}-${{ env.MICROPYTHON_VERSION }}
@@ -114,7 +114,7 @@ jobs:
           print(f"wheel carries the app, the UI, and bytecode in {built}")
           PY
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/*
@@ -135,7 +135,7 @@ jobs:
       TUFTY_REF: feature/align-v3
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # MICROPYTHON_FLAVOUR and MICROPYTHON_VERSION, straight out of the firmware's own
       # CI script, so this never drifts from the badge it targets. Into GITHUB_ENV rather
@@ -148,7 +148,7 @@ jobs:
 
       - name: Cache mpy-cross
         id: mpy-cross
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: mpy-cross
           key: mpy-cross-${{ env.MICROPYTHON_FLAVOUR }}-${{ env.MICROPYTHON_VERSION }}
@@ -181,14 +181,14 @@ jobs:
           (cd stage && zip -r "$GITHUB_WORKSPACE/$NAME.zip" stats README.md)
           unzip -l "$NAME.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.NAME }}
           path: stage
 
       - name: Attach to the release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.NAME }}.zip
 
@@ -203,7 +203,7 @@ jobs:
       NAME: stats-${{ github.event.release.tag_name || github.sha }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Check the app is whole and parses
         run: python3 tools/check_app.py
@@ -218,13 +218,13 @@ jobs:
             -x '*__pycache__*' -x '*.pyc' -x '*.DS_Store' -x 'stats/ext/*'
           cd .. && unzip -l "$NAME.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.NAME }}
           path: stage
 
       - name: Attach to the release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.NAME }}.zip
