@@ -14,6 +14,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import pathlib
 import platform
 import shutil
@@ -220,6 +221,68 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
     if "wrote" not in out:
         raise InstallError(f"could not write {STATE_FILE}: {out.strip()}")
     return STATE_FILE
+
+
+def secrets_file(volume):
+    """The badge's secrets.py on its USB volume."""
+    for candidate in (os.path.join(volume, "system", "secrets.py"),
+                      os.path.join(volume, "secrets.py")):
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def wifi_configured(volume):
+    """Whether secrets.py already names a network."""
+    path = secrets_file(volume)
+    if not path:
+        return False
+    with open(path) as handle:
+        return bool(_secret_value(handle.read(), "WIFI_SSID"))
+
+
+def _secret_value(text, key):
+    match = re.search(rf"^\s*{key}\s*=\s*[\"'](.*?)[\"']", text, re.M)
+    return match.group(1) if match else ""
+
+
+def write_secrets(volume, ssid, password, region=None, timezone=None):
+    """Set WiFi details in the badge's secrets.py, leaving the rest of the file alone.
+
+    This is the file the badge's own error message tells people to edit, so it is the one
+    to change; a /secrets.py on the internal filesystem would take precedence over it and
+    silently defeat that edit.
+    """
+    path = secrets_file(volume)
+    if not path:
+        raise InstallError(f"no secrets.py on {volume}")
+    values = {"WIFI_SSID": ssid, "WIFI_PASSWORD": password}
+    if region:
+        values["REGION"] = region
+    if timezone is not None:
+        values["TIMEZONE"] = int(timezone)
+
+    with open(path) as handle:
+        text = handle.read()
+    for key, value in values.items():
+        # json.dumps, not repr: a valid Python literal either way, and it matches the
+        # double quotes the file ships with.
+        literal = json.dumps(value)
+
+        def replace(match, key=key, literal=literal):
+            # Keep any trailing comment - REGION's lists the values it accepts.
+            comment = (match.group(1) or "").strip()
+            return f"{key} = {literal}  {comment}" if comment else f"{key} = {literal}"
+
+        # A function as the replacement, so a backslash in a password is not read as an
+        # escape and written out broken.
+        text, count = re.subn(rf"^[ \t]*{key}[ \t]*=[^\n#]*(\s*#[^\n]*)?$",
+                              replace, text, count=1, flags=re.M)
+        if not count:
+            text = text.rstrip("\n") + f"\n{key} = {literal}\n"
+    with open(path, "w") as handle:
+        handle.write(text)
+    return path
 
 
 def read_state(port):

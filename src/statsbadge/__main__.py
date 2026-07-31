@@ -1,6 +1,7 @@
 """statsbadge command line: serve, pair, install, probe."""
 
 import argparse
+import getpass
 import json
 import os
 import sys
@@ -233,8 +234,9 @@ def cmd_install(args):
     # resetting into mass storage loses the write: the reset discards it and the volume
     # commits whatever was there before, which with --new-secret would leave the badge
     # holding a secret the host has already replaced.
+    # --ssid also needs the volume, so it is enough on its own to justify the trip.
     if not args.state_only and (not info["app_installed"] or args.force_app
-                                or args.app_only):
+                                or args.app_only or args.ssid):
         if not args.yes:
             print()
             print("Installing the app needs the badge's USB volume, which means")
@@ -252,8 +254,20 @@ def cmd_install(args):
             service = build_service(args)
             modules = extensions.badge_modules(service.collector.extensions)
             service.collector.stop()
-        target, copied = install.copy_app(volume, source=source, extra_modules=modules)
-        print(f"  copied {len(copied)} files to {target}")
+        if not (info["app_installed"] and not args.force_app and not args.app_only):
+            target, copied = install.copy_app(volume, source=source,
+                                              extra_modules=modules)
+            print(f"  copied {len(copied)} files to {target}")
+        if args.ssid:
+            if args.password is None:
+                # Prompted for, so it stays out of shell history.
+                args.password = getpass.getpass(f"password for {args.ssid!r}: ")
+            if args.force_secrets or not install.wifi_configured(volume):
+                written = install.write_secrets(volume, args.ssid, args.password,
+                                                args.region, args.timezone)
+                print(f"  set {args.ssid!r} in {os.path.basename(written)}")
+            else:
+                print("  WiFi is already set; --force-secrets to replace it")
         install.eject(volume)
         print("  ejected; waiting for the badge to come back...")
         port = install.wait_for_port(previous=port)
@@ -412,6 +426,15 @@ def main(argv=None):
     what = inst.add_mutually_exclusive_group()
     what.add_argument("--state-only", action="store_true",
                      help="write credentials only, never touch /system")
+    inst.add_argument("--ssid", help="WiFi network to set in the badge's secrets.py, "
+                                    "if it has none yet")
+    inst.add_argument("--pass", dest="password",
+                      help="password for --ssid. Prompted for if omitted; pass an empty "
+                           "string for an open network")
+    inst.add_argument("--region", help="WiFi region: us, eu, australia, nz and so on")
+    inst.add_argument("--timezone", type=int, help="hours offset from GMT")
+    inst.add_argument("--force-secrets", action="store_true",
+                      help="replace WiFi details the badge already has")
     inst.add_argument("--source", action="store_true",
                      help="install the .py sources even if the package carries a "
                           "precompiled build")

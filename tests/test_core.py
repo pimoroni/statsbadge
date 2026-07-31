@@ -562,6 +562,60 @@ def test_config_api_is_loopback_only(_h):
     assert "loopback" in _source_of(server.Handler._dispatch)
 
 
+@check
+def test_write_secrets_keeps_the_rest_of_the_file(_h):
+    """Setting WiFi details must not disturb the other settings or their comments."""
+    import tempfile
+
+    from statsbadge import install
+
+    template = ('WIFI_SSID = ""\n'
+                'WIFI_PASSWORD = ""\n'
+                'REGION = "eu"  # Options are us, cuba, eu, moldova\n'
+                'TIMEZONE = 0  # Offset from GMT as number of hours\n')
+    with tempfile.TemporaryDirectory() as volume:
+        os.mkdir(os.path.join(volume, "system"))
+        path = os.path.join(volume, "system", "secrets.py")
+        with open(path, "w") as handle:
+            handle.write(template)
+
+        assert install.secrets_file(volume) == path
+        assert not install.wifi_configured(volume)
+
+        # A backslash and quotes in the password: a naive regex replacement writes these
+        # back out as escapes and the file stops being valid Python.
+        password = 'p@ss "w0rd"\\'
+        install.write_secrets(volume, "Some Network", password, region="us")
+
+        with open(path) as handle:
+            after = handle.read()
+        values = {}
+        exec(compile(after, "secrets.py", "exec"), values)
+        assert values["WIFI_SSID"] == "Some Network"
+        assert values["WIFI_PASSWORD"] == password
+        assert values["REGION"] == "us"
+        assert values["TIMEZONE"] == 0, "an untouched setting was lost"
+        assert "Options are us" in after, "REGION's comment was dropped"
+        assert install.wifi_configured(volume)
+
+        # Writing again replaces, and does not append a second WIFI_SSID.
+        install.write_secrets(volume, "Other", "pw")
+        with open(path) as handle:
+            after = handle.read()
+        assert after.count("WIFI_SSID") == 1
+        values = {}
+        exec(compile(after, "secrets.py", "exec"), values)
+        assert values["WIFI_SSID"] == "Other"
+        assert values["TIMEZONE"] == 0
+
+        # A key the file lacks is appended.
+        install.write_secrets(volume, "Third", "pw", timezone=-7)
+        with open(path) as handle:
+            values = {}
+            exec(compile(handle.read(), "secrets.py", "exec"), values)
+        assert values["TIMEZONE"] == -7
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

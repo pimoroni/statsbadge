@@ -78,6 +78,10 @@ A page changes when a poll lands, once a second, so frames in between draw nothi
 
 Where a screen takes A/B/C for its own input rather than passing them to the host, they are used in the order they sit in: **A back, B select, C next**.
 
+HOME opens the hosts menu and holding it leaves, so the launcher's exit irq is taken off it and it is polled instead - the idiom `../BADGEWARE.md` describes. A press has to do something useful and a hold has to remain a way out, because nothing else can reach the menu: UP/DOWN page and A/B/C belong to the host. The menu rescans on open with a window longer than the 2s beacon interval, or a server that has just broadcast is missed and the list silently comes back short.
+
+`--ssid` edits `secrets.py` on the mounted volume, read-modify-write, keeping the other settings and the comment listing the regions. It does not write `/secrets.py` on the internal filesystem: the frozen `secrets` module prefers that one, so it would take precedence over the file the badge's own error message tells people to edit, and a later edit in disk mode would appear to do nothing.
+
 ## Launch, and .mpy
 
 The badge compiles from source at every launch: 763ms for the five modules, timed off its own flash, since a mounted checkout streams over serial. Two things come off that without precompiling: `setup.py` is imported on demand, and the mark goes up after `look` alone, from shapes only. `font.load` is a further 107ms, paid once.
