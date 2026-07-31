@@ -27,6 +27,40 @@ STEP_BUDGET_US = 2500
 
 IDLE, BUSY, DONE, FAILED = 0, 1, 2, 3
 
+# errno as this firmware actually reports it, checked on the board. Nothing listening
+# comes back as ECONNRESET rather than ECONNREFUSED, because lwIP surfaces the RST that
+# way; an address with nothing at it gives ECONNABORTED on the non-blocking path and
+# ETIMEDOUT on a blocking one, so both are worded for what they mean.
+_NET_ERRORS = {
+    104: "no server answering",         # ECONNRESET: nothing there, or it went away
+    103: "could not reach the host",    # ECONNABORTED
+    110: "could not reach the host",    # ETIMEDOUT
+    111: "connection refused",
+    113: "host unreachable",
+    2: "cannot resolve that name",
+    -2: "cannot resolve that name",
+}
+
+_HTTP_ERRORS = {
+    401: "signature rejected",
+    403: "badge not recognised",
+    404: "endpoint missing",
+    429: "host is rate limiting",
+    500: "host error",
+}
+
+
+def error_text(exc):
+    """A socket error in words. Keeps the number when there is nothing better to say."""
+    code = exc.args[0] if getattr(exc, "args", None) else None
+    if code in _NET_ERRORS:
+        return _NET_ERRORS[code]
+    return f"network error {code}" if code is not None else "network error"
+
+
+def http_error_text(status):
+    return _HTTP_ERRORS.get(status) or f"host said {status}"
+
 
 def _hmac_sha256(key, message):
     """HMAC-SHA256. MicroPython has hashlib but no hmac, and this is all it takes."""
@@ -355,7 +389,7 @@ class Client:
                 self.status = DONE if self.http_status == 200 else FAILED
                 if self.status == FAILED:
                     self.failures += 1
-                    self.error = f"HTTP {self.http_status}"
+                    self.error = http_error_text(self.http_status)
                     if self.http_status == 401:
                         self._resync()
                 else:
@@ -366,7 +400,7 @@ class Client:
                 self.close()
                 self.status = FAILED
                 self.failures += 1
-                self.error = f"net {exc.args[0] if exc.args else exc}"
+                self.error = error_text(exc)
                 return True
             except Exception as exc:  # noqa: BLE001
                 # Nothing from a socket may reach the draw loop: a surprise here has
@@ -528,8 +562,10 @@ def _exchange_once(host, port, request, body, timeout_ms):
         if b" 200 " not in head.split(b"\r\n")[0]:
             return None, parsed or {"error": "refused"}
         return parsed, None
-    except (OSError, ValueError) as exc:
-        return None, {"error": str(exc)[:40]}
+    except OSError as exc:
+        return None, {"error": error_text(exc)}
+    except ValueError:
+        return None, {"error": "bad reply from the host"}
     finally:
         if sock:
             try:
