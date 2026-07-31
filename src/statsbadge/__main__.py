@@ -105,16 +105,16 @@ def cmd_serve(args):
 # -- pair -------------------------------------------------------------------
 
 def cmd_pair(args):
-    """Open a pairing window and print the code, for typing on the badge.
+    """Serve, with a pairing window open from the start.
 
-    Runs a server if one is not already up, because pairing needs the badge to be
-    able to reach /v1/pair.
+    Pairing is not a separate mode. A badge needs a server to pair *to*, and the same
+    server to talk to immediately afterwards - opening a window, taking the pairing and
+    then exiting strands the badge on a host that has gone away, which looks to the user
+    like the pairing failed.
     """
     service = build_service(args)
     service.start()
     httpd = server.make_server(service, args.host, args.port, args.verbose)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
     announcer = None
     if not args.no_beacon:
         announcer = beacon.Beacon(args.port, service.identity["name"],
@@ -123,38 +123,49 @@ def cmd_pair(args):
 
     code = service.badges.begin_pairing(ttl=args.ttl)
     addresses = server._local_addresses()
-    print(f"Pairing is open for {args.ttl} seconds.")
+    print(f"Pairing is open for {args.ttl} seconds, and this keeps serving afterwards.")
     print()
-    print("  On the badge: launch Stats, hold C for setup, then enter")
+    print("  On the badge: launch Stats, press B to set up, then enter")
     print()
     print("      host:  %s   (or let the badge find it)" % (
         addresses[0] if addresses else "this machine's IP"))
     print(f"      port:  {args.port}")
     print(f"      code:  {code}")
     print()
-    print("Waiting...", end="", flush=True)
+    print(f"  config UI: http://127.0.0.1:{args.port}/")
+    print("  Ctrl-C to stop.")
+    print()
 
-    deadline = time.time() + args.ttl
-    before = set(service.badges.list_badges())
-    try:
-        while time.time() < deadline:
+    # Announce the pairing when it lands, without stopping the server.
+    def watch():
+        before = set(service.badges.list_badges())
+        deadline = time.time() + args.ttl
+        while True:
             now = set(service.badges.list_badges())
-            new = now - before
-            if new:
-                for badge_id in new:
-                    print(f"\npaired: {badge_id}")
-                return 0
+            for badge_id in now - before:
+                record = service.badges.list_badges()[badge_id]
+                print(f"paired: {record.get('name') or badge_id} ({badge_id})")
+                print("  still serving; the badge should start drawing.")
+            if now - before:
+                return
+            if time.time() > deadline and not service.badges.pairing_active():
+                print("The pairing window has closed. Still serving - reopen one from the")
+                print(f"config UI at http://127.0.0.1:{args.port}/ or restart this.")
+                return
             time.sleep(0.5)
-        print("\ntimed out, nothing paired")
-        return 1
+
+    threading.Thread(target=watch, daemon=True).start()
+
+    try:
+        httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\ncancelled")
-        return 1
+        print("\nstopping")
     finally:
-        httpd.shutdown()
+        httpd.server_close()
         if announcer:
             announcer.stop()
         service.stop()
+    return 0
 
 
 # -- install ----------------------------------------------------------------

@@ -145,6 +145,7 @@ class App:
         self._last_ok = 0
         self._was_stale = False
         self._next_hunt = 0
+        self.rejected = False
 
         # State.load merges into the dict it is given and returns whether a file was
         # there, so the defaults are what to read afterwards.
@@ -262,6 +263,11 @@ class App:
         if self.client.status != net.DONE:
             self.status = "offline"
             self.detail = self.client.error
+            # 403 is the host saying it does not know this badge. Nothing the badge can
+            # do about that on its own - it has to be paired again - so say so rather
+            # than sitting on "Connecting" forever.
+            if self.client.http_status == 403:
+                self.rejected = True
             self.dirty = True
             return
         payload = self.client.json()
@@ -273,6 +279,7 @@ class App:
         self._last_ok = time.ticks_ms()
         self.status = "ok"
         self.detail = None
+        self.rejected = False
         if what == "stats":
             self.frame = payload
             rev = payload.get("layout_rev")
@@ -333,6 +340,16 @@ class App:
         self.client.post("/v1/command", {"cmd": command})
         self.note(command.replace("_", " "))
 
+    def needs_setup(self):
+        """Whether to offer the pairing screens.
+
+        Not just when unpaired: a badge holding credentials a host rejects, or one that
+        has never managed a poll, is otherwise stuck with no way to reach setup at all.
+        """
+        if not self.config.paired or self.rejected:
+            return True
+        return self.layout is None and self.client.failures >= 3
+
     def note(self, text):
         self.toast_text = text
         self.toast_until = time.ticks_add(time.ticks_ms(), 1200)
@@ -365,14 +382,19 @@ class App:
             draw.banner(theme, "Not paired", "B to set up",
                         "or run: statsbadge install")
             return
+        if self.rejected:
+            draw.banner(theme, "Not recognised", self.config.name or self.config.host,
+                        "B to pair again")
+            return
         if not wifi.is_connected():
             draw.banner(theme, "No WiFi", wifi.status()[1])
             return
         page = self.current_page()
         if page is None:
+            hint = "B to set up" if self.needs_setup() else self.detail
             draw.banner(theme, "Connecting",
                         f"{self.config.name or self.config.host}:{self.config.port}",
-                        self.detail)
+                        hint)
             return
 
         subtitle = self.frame.get("sys", {}).get("host") or self.config.name
@@ -423,11 +445,15 @@ def main():
         if app.check_exit():
             return
         app.buttons()
-        # B selects, as it does on every screen that takes A/B/C. Only reachable while
-        # unpaired, so it cannot collide with a command bound to B.
-        if not app.config.paired and badge.pressed(BUTTON_B):
+        # B selects, as it does on every screen that takes A/B/C. Offered whenever the
+        # badge cannot get a usable connection, not only when unpaired, or credentials a
+        # host has stopped accepting would be a dead end. A command bound to B is only
+        # reachable once a layout has arrived, so the two cannot collide.
+        if app.needs_setup() and badge.pressed(BUTTON_B):
             if not pairing_ui().run(app):
                 return
+            app.rejected = False
+            app.layout = None
             app.apply_layout()
         app.poll()
         app.tick()
