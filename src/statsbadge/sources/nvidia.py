@@ -1,7 +1,7 @@
 """NVIDIA GPUs via NVML, which is the same library nvidia-smi uses.
 
 Works on Windows and Linux and gives everything an Afterburner panel wants without
-privileges. Needs `pynvml` (`pip install stats-badge[nvidia]`).
+privileges. Needs `pynvml` (`pip install statsbadge[nvidia]`).
 """
 
 from .base import Source
