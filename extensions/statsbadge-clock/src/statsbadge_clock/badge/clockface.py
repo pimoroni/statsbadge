@@ -16,6 +16,9 @@ picture of a particular object and a black-on-amber railway clock is not that ob
 but the readouts beside it stay themed.
 """
 
+import machine
+import time
+
 import draw
 import look
 import pages
@@ -120,13 +123,12 @@ def render(_page, frame, _history, theme):
     screen.blit(_face_cache, vec2(int(CENTRE[0] - size / 2),
                                   int(CENTRE[1] - size / 2)))
 
-    hour = clock.get("hour")
-    minute = clock.get("minute")
-    if hour is None or minute is None:
+    if clock.get("hour") is None:
         draw.blit_label("no time", look.SIZE_VALUE, theme.dim,
                         CENTRE[0], CENTRE[1] - 8, align=1)
     else:
-        second = _smooth_second(clock.get("seconds"))
+        _resync(clock)
+        hour, minute, second = _local_time()
         hour_hand, minute_hand, second_hand = _hands_cache
         _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, HANDS)
         _hand(minute_hand, minute * 6.0 + second * 0.1, HANDS)
@@ -156,26 +158,72 @@ def render(_page, frame, _history, theme):
         draw.blit_label("no location set", look.SIZE_SMALL, theme.dim, x, y)
 
 
-_last_second = None
-_last_second_at = 0
+# The badge's clock is set from the host once, and then left alone. A PCF85063A drifts a
+# second or two in a day, where a reading is a second or two stale by the time it lands,
+# so correcting against one costs more than it buys: the correction is a step backwards
+# and the drift it chases is not there. Past this much disagreement something real has
+# happened - a timezone change, or a clock that never got set - and it is set again.
+RESYNC_S = 30
+
+_synced = False
+
+# Where the local second last changed, so a fraction of it can be worked out.
+_phase_second = None
+_phase_at = 0
 
 
-def _smooth_second(seconds):
-    """Carry the second hand between polls.
+def _local_time():
+    """Hour, minute and a fractional second, from the badge's own clock.
 
-    The host reports a whole second once a second. Advancing it locally from the frame
-    clock is what makes the hand sweep instead of stepping, and is the reason this page
-    is code on the badge. It only ever moves forward within a second, so a late or
-    repeated reading cannot make the hand jump backwards.
+    The hands run on hardware, not on the frame. `time.localtime()` costs 14us and its
+    seconds arrive 1000ms apart, where a reading comes once a second at best and only when
+    a poll spent itself on stats rather than on history or a layout. Reading the local
+    clock is what makes the sweep even, and it keeps time if the host goes away.
+
+    Whole seconds come from the clock and the fraction from the ticks since that second
+    was seen to change. Clamped at one, so a clock that stops parks the hand rather than
+    running it on past a second that never arrived.
     """
-    global _last_second, _last_second_at
-    if seconds is None:
-        return 0.0
-    if seconds != _last_second:
-        _last_second = seconds
-        _last_second_at = badge.ticks
-    elapsed = min(1.0, max(0.0, (badge.ticks - _last_second_at) / 1000.0))
-    return (seconds + elapsed) % 60.0
+    global _phase_second, _phase_at
+    parts = time.localtime()
+    whole = parts[5]
+    now = time.ticks_ms()
+    if whole != _phase_second:
+        _phase_second = whole
+        _phase_at = now
+    fraction = time.ticks_diff(now, _phase_at) / 1000.0
+    return parts[3], parts[4], whole + min(1.0, fraction)
+
+
+def _resync(clock):
+    """Set the badge's clock from the host's, on the first reading and rarely after.
+
+    The host is the authority, being the machine with a network time source, but a reading
+    is stale and unevenly so by the time it arrives. Setting the clock from every one of
+    them walks it backwards a second at a time, which is a hand that sweeps smoothly and
+    then jumps: the correction, not the drift, is what is visible.
+
+    So the first reading sets it and the rest are ignored until they disagree by RESYNC_S,
+    which no amount of pipeline latency can account for.
+    """
+    global _synced
+    hour = clock.get("hour")
+    minute = clock.get("minute")
+    second = clock.get("seconds")
+    if hour is None or minute is None or second is None:
+        return
+    parts = time.localtime()
+    theirs = hour * 3600 + minute * 60 + second
+    ours = parts[3] * 3600 + parts[4] * 60 + parts[5]
+    # Shortest way round the day, so either side of midnight is not a 24 hour drift
+    drift = (theirs - ours + 43200) % 86400 - 43200
+    if _synced and -RESYNC_S <= drift <= RESYNC_S:
+        return
+    # (year, month, day, weekday, hour, minute, second, subsecond). The weekday is
+    # recomputed from the date, so what goes in that slot does not matter.
+    machine.RTC().datetime((parts[0], parts[1], parts[2], parts[6],
+                            hour, minute, second, 0))
+    _synced = True
 
 
 pages.EXTRA["clockface"] = render

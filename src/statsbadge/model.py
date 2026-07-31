@@ -35,21 +35,24 @@ GROUP_LABELS = {
     "sys": "System",
 }
 
+# Every label carries its unit, because a group with both a percentage and an absolute
+# reading of the same thing needs to say which is which: "Used %" against "Used GB".
 FIELD_LABELS = {
-    "cpu": {"pct": "Load", "temp": "Temperature", "freq": "Clock speed",
-            "load": "Load average", "cores": "Per-core load", "procs": "Processes"},
-    "mem": {"pct": "Used", "used_mb": "Used (GB)", "total_mb": "Total (GB)",
-            "swap_pct": "Swap used", "swap_used_mb": "Swap used (GB)"},
-    "gpu": {"name": "Name", "pct": "Load", "temp": "Temperature",
-            "mem_pct": "VRAM used", "mem_used_mb": "VRAM used (GB)",
-            "power": "Power draw", "fan_pct": "Fan", "clock": "Clock speed"},
+    "cpu": {"pct": "Load %", "temp": "Temperature C", "freq": "Clock MHz",
+            "load": "Load average", "cores": "Per-core load %",
+            "procs": "Processes"},
+    "mem": {"pct": "Used %", "used_mb": "Used GB", "total_mb": "Total GB",
+            "swap_pct": "Swap %", "swap_used_mb": "Swap GB"},
+    "gpu": {"name": "Name", "pct": "Load %", "temp": "Temperature C",
+            "mem_pct": "VRAM %", "mem_used_mb": "VRAM GB",
+            "power": "Power W", "fan_pct": "Fan %", "clock": "Clock MHz"},
     "net": {"iface": "Interface", "up_bps": "Upload", "down_bps": "Download",
-            "up_total_mb": "Sent (GB)", "down_total_mb": "Received (GB)"},
-    "disk": {"pct": "Used", "used_mb": "Used (GB)", "total_mb": "Total (GB)",
+            "up_total_mb": "Sent GB", "down_total_mb": "Received GB"},
+    "disk": {"pct": "Used %", "used_mb": "Used GB", "total_mb": "Total GB",
              "read_bps": "Read", "write_bps": "Write"},
-    "power": {"battery_pct": "Battery", "charging": "Charging",
-              "secs_left": "Time left", "package_w": "Package draw"},
-    "fans": {"name": "Name", "rpm": "Speed", "pct": "Speed"},
+    "power": {"battery_pct": "Battery %", "charging": "Charging",
+              "secs_left": "Time left", "package_w": "Package W"},
+    "fans": {"name": "Name", "rpm": "Speed rpm", "pct": "Speed %"},
     "sys": {"host": "Hostname", "os": "OS", "arch": "Architecture",
             "uptime_s": "Uptime", "cpu_name": "Processor model"},
 }
