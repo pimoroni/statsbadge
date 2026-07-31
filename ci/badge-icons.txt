@@ -1,0 +1,39 @@
+# Material Symbols for the badge app's own pages. Built with:
+#
+#   python3 tools/make_icon_font.py --corpus ci/badge-icons.txt \
+#                                   --out src/statsbadge/badge_app/icons.af
+#
+# Kept here rather than in badge_app, because everything in there is pushed to the badge
+# and the corpus is a build input. The .af it produces is committed.
+#
+#   name  codepoint  ascii
+#
+# The third field is what badge-side code draws. Symbols above U+FFFF do not fit the .af
+# format's u16 codepoint, and an ASCII character is easier to put in a string either way.
+# GROUP_ICONS and FIELD_ICONS in badge_app/pages.py are the only other place these letters
+# appear.
+#
+# A label with no symbol falls back to its name, so this does not have to be complete: add
+# a line and a letter to the map when a page wants one.
+
+# one per stat group, which is what tells gauges apart on a dials page
+memory              e322  c
+developer_board     e30d  g
+memory_alt          f7a3  m
+storage             e1db  d
+lan                 eb2f  n
+bolt                ea0b  p
+mode_fan            f168  f
+computer            e31e  y
+
+# one per field, for a page whose readings come from the same group
+speed               e9e4  l
+thermostat          f076  t
+graphic_eq          e1b8  s
+list_alt            e677  r
+upload              f09b  u
+download            f090  o
+battery_full        e1a5  b
+percent             eb58  e
+data_usage          eff2  a
+schedule            efd6  h

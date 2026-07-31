@@ -575,7 +575,7 @@ def copy_app(volume, source=None, extra_modules=()):
 
 # Only these are the installer's to delete. Anything else in the app directory was put
 # there by someone, and a install that eats it is worse than one that leaves litter.
-PRUNABLE = (".py", ".mpy", ".png")
+PRUNABLE = (".py", ".mpy", ".png", ".af")
 
 
 def prune_app(target, keep):

@@ -35,6 +35,12 @@ READOUT_H = 34
 
 FONT_PATH = "/system/assets/fonts/MonaSans-Medium.af"
 
+# The app's Material Symbols, built from ci/badge-icons.txt by tools/make_icon_font.py.
+# A name rather than a path: an install puts it in the app directory, and where that is
+# depends on how the app was started, so draw.add_font looks for it.
+ICON_FILE = "icons.af"
+APP_DIR = "/system/apps/stats"
+
 # Sizes are point sizes for the .af font. A capital stands 0.68 of size above the
 # baseline, and text(x, y) puts the baseline at y + size.
 SIZE_TITLE = 19

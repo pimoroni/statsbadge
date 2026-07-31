@@ -38,12 +38,12 @@ GROUP_LABELS = {
 # Every label carries its unit, because a group with both a percentage and an absolute
 # reading of the same thing needs to say which is which: "Used %" against "Used GB".
 FIELD_LABELS = {
-    "cpu": {"pct": "Load %", "temp": "Temperature C", "freq": "Clock MHz",
+    "cpu": {"pct": "Load %", "temp": "Temperature °C", "freq": "Clock MHz",
             "load": "Load average", "cores": "Per-core load %",
             "procs": "Processes"},
     "mem": {"pct": "Used %", "used_mb": "Used GB", "total_mb": "Total GB",
             "swap_pct": "Swap %", "swap_used_mb": "Swap GB"},
-    "gpu": {"name": "Name", "pct": "Load %", "temp": "Temperature C",
+    "gpu": {"name": "Name", "pct": "Load %", "temp": "Temperature °C",
             "mem_pct": "VRAM %", "mem_used_mb": "VRAM GB",
             "power": "Power W", "fan_pct": "Fan %", "clock": "Clock MHz"},
     "net": {"iface": "Interface", "up_bps": "Upload", "down_bps": "Download",
@@ -84,7 +84,7 @@ FULL_SCALE = {
 
 UNITS = {
     "pct": "%", "swap_pct": "%", "mem_pct": "%", "fan_pct": "%", "battery_pct": "%",
-    "temp": "C", "power": "W", "package_w": "W", "rpm": "rpm",
+    "temp": "°C", "power": "W", "package_w": "W", "rpm": "rpm",
     "freq": "MHz", "clock": "MHz",
     "up_bps": "B/s", "down_bps": "B/s", "read_bps": "B/s", "write_bps": "B/s",
     "used_mb": "MB", "total_mb": "MB", "swap_used_mb": "MB", "mem_used_mb": "MB",

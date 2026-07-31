@@ -85,7 +85,7 @@ PAGES = [
     {"id": "gauges", "kind": "dials", "title": "Load",
      "fields": ["cpu.pct", "gpu.pct", "mem.pct", "disk.pct"]},
     {"id": "gauges3", "kind": "dials", "title": "Three",
-     "fields": ["cpu.pct", "gpu.pct", "mem.pct"]},
+     "fields": ["cpu.temp", "gpu.temp", "cpu.freq"]},
     {"id": "gauges2", "kind": "dials", "title": "Processor",
      "fields": ["cpu.pct", "cpu.temp"]},
     {"id": "net", "kind": "graph", "title": "Network",

@@ -141,13 +141,38 @@ def _graph(page, frame, history, theme):
 
 
 def _grid(page, frame, _history, theme):
+    refs = page.get("fields", [])[:6]
+    groups = [ref.split(".")[0] for ref in refs]
+    by_group = len(set(groups)) == len(groups)
     entries = []
-    for ref in page.get("fields", [])[:6]:
+    for ref in refs:
         value = value_of(frame, ref)
         field = ref.split(".")[-1]
         entries.append((name_for(ref), draw.fmt(value, field),
-                        fraction_of(ref, value)))
+                        fraction_of(ref, value), icon_for(ref, by_group)))
     draw.grid(theme, entries)
+
+
+# One symbol per group and per field, as characters in icons.af. Built from
+# ci/badge-icons.txt, which is the only other place these letters appear. A reading with
+# no symbol falls back to its name, so neither map has to be complete.
+GROUP_ICONS = {"cpu": "c", "gpu": "g", "mem": "m", "disk": "d", "net": "n",
+               "power": "p", "fans": "f", "sys": "y"}
+FIELD_ICONS = {
+    "pct": "l", "temp": "t", "freq": "s", "clock": "s", "procs": "r",
+    "up_bps": "u", "down_bps": "o", "write_bps": "u", "read_bps": "o",
+    "battery_pct": "b", "package_w": "p", "power": "p", "rpm": "f",
+    "mem_pct": "m", "swap_pct": "e", "fan_pct": "f",
+    "used_mb": "a", "total_mb": "a", "mem_used_mb": "a", "swap_used_mb": "a",
+    "uptime_s": "h", "secs_left": "h",
+}
+
+
+def icon_for(ref, by_group):
+    """The symbol for a reading, or None. `by_group` picks which half of the name it is
+    standing in for, the same way the label does."""
+    group, _, field = ref.partition(".")
+    return GROUP_ICONS.get(group) if by_group else FIELD_ICONS.get(field)
 
 
 def _dials(page, frame, _history, theme):
@@ -160,9 +185,12 @@ def _dials(page, frame, _history, theme):
     entries = []
     for ref, group in zip(refs, groups):
         value = value_of(frame, ref)
+        field = ref.split(".")[-1]
         entries.append((group.upper() if by_group else name_for(ref),
-                        draw.fmt(value, ref.split(".")[-1]),
-                        fraction_of(ref, value, page)))
+                        draw.fmt(value, field),
+                        fraction_of(ref, value, page),
+                        icon_for(ref, by_group),
+                        draw.short_unit(field)))
     draw.dials(theme, entries)
 
 

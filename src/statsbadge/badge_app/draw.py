@@ -10,39 +10,104 @@ The header and footer change only when the page or the theme does, so they are b
 into two band images per page and blitted over a raster fill of the body.
 """
 
+import os
+
 import look
 
 FONT = None
 _labels = {}
 _bands = {}
 
+# Fonts by name, so a sprite cache key can say which one drew it. TEXT is the app's own;
+# `icons` is registered by prepare() when the .af is there, and an extension adds its own
+# with add_font. Without the name in the key an icon and a letter of the same string would
+# collide, and one of them would be drawn in the wrong font.
+TEXT = "text"
+ICONS = "icons"
+_fonts = {}
+
 
 def prepare():
-    """Load the font. 107ms, so once, and before the first frame."""
+    """Load the fonts. The text font is 107ms, so once, and before the first frame."""
     global FONT
     if FONT is None:
         FONT = font.load(look.FONT_PATH)
+    _fonts[TEXT] = FONT
     screen.font = FONT
+    add_font(ICONS, look.ICON_FILE)
+
+
+def add_font(name, *paths):
+    """Register a font under a name, from the first of `paths` that loads.
+
+    A bare filename is looked for in the installed app directory and then beside this
+    module. That order matters under `mpremote mount`: the mounted copy is served as text,
+    so a font loaded from it comes back mangled rather than refused. An extension passes
+    full paths, because its own file lives in ext/ and may share a name with the app's.
+
+    A missing file is not an error. An install predating the font has none, and a page that
+    wanted an icon falls back to its words. Anything that raises is reported and then
+    treated the same way, because a font is not worth a crash dialog.
+    """
+    if name in _fonts:
+        return True
+    for path in paths:
+        for candidate in _candidates(path):
+            try:
+                os.stat(candidate)
+            except OSError:
+                continue
+            try:
+                _fonts[name] = font.load(candidate)
+            except Exception as exc:  # noqa: BLE001  try the next one
+                print(f"draw: could not load {candidate}: {exc}")
+                continue
+            return True
+    return False
+
+
+def _candidates(path):
+    if "/" in path:
+        return (path,)
+    here = globals().get("__file__") or ""
+    beside = here.rsplit("/", 1)[0] if "/" in here else ""
+    found = [look.APP_DIR + "/" + path]
+    if beside:
+        found.append(beside + "/" + path)
+    found.append(path)
+    return found
+
+
+def has_font(name):
+    return name in _fonts
 
 
 # -- text cache -------------------------------------------------------------
 
-def label(text_value, size, rgb):
+def label(text_value, size, rgb, name=TEXT):
     """A string baked into a sprite. Live text is ~1ms a line, a blit is 0.08ms."""
-    key = (text_value, size, rgb)
+    key = (name, text_value, size, rgb)
     cached = _labels.get(key)
     if cached is not None:
         return cached
-    width, height = screen.measure_text(text_value, font_size=size)
-    width = max(1, int(width + 2))
-    height = max(1, int(size * 1.35))
-    sprite = image(width, height)
-    sprite.font = FONT
-    sprite.pen = brush.erase()
-    sprite.rectangle(rect(0, 0, width, height))
-    sprite.antialias = image.X4
-    sprite.pen = color.rgb(*rgb)
-    sprite.text(text_value, vec2(0, 0), size)
+    face = _fonts.get(name)
+    if face is None:
+        return None
+    was = screen.font
+    screen.font = face
+    try:
+        width, height = screen.measure_text(text_value, font_size=size)
+        width = max(1, int(width + 2))
+        height = max(1, int(size * 1.35))
+        sprite = image(width, height)
+        sprite.font = face
+        sprite.pen = brush.erase()
+        sprite.rectangle(rect(0, 0, width, height))
+        sprite.antialias = image.X4
+        sprite.pen = color.rgb(*rgb)
+        sprite.text(text_value, vec2(0, 0), size)
+    finally:
+        screen.font = was
     if len(_labels) > 220:
         # Values churn; the cache is for furniture, so drop it wholesale rather than
         # tracking ages.
@@ -51,15 +116,26 @@ def label(text_value, size, rgb):
     return sprite
 
 
-def blit_label(text_value, size, rgb, x, y, align=0):
-    """Draw a cached string. align 0 left, 1 centre, 2 right, about x."""
-    sprite = label(text_value, size, rgb)
+def blit_label(text_value, size, rgb, x, y, align=0, name=TEXT):
+    """Draw a cached string. align 0 left, 1 centre, 2 right, about x.
+
+    Returns the width drawn, or 0 for a font that is not loaded, which is what lets a
+    caller offer an icon and fall back to words without asking first.
+    """
+    sprite = label(text_value, size, rgb, name)
+    if sprite is None:
+        return 0
     if align == 1:
         x -= sprite.width // 2
     elif align == 2:
         x -= sprite.width
     screen.blit(sprite, vec2(int(x), int(y)))
     return sprite.width
+
+
+def blit_icon(character, size, rgb, x, y, align=0):
+    """Draw one symbol from the icon font. 0 if there is no icon font."""
+    return blit_label(character, size, rgb, x, y, align, ICONS)
 
 
 def clear_cache():
@@ -115,7 +191,7 @@ def short_unit(field):
     if field in ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"):
         return "%"
     if field == "temp":
-        return "C"
+        return "°C"
     if field in ("power", "package_w"):
         return "W"
     if field in ("freq", "clock"):
@@ -184,12 +260,17 @@ def _bake_bands(theme, title, index, total, subtitle):
 # -- widgets ----------------------------------------------------------------
 
 def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
-          value_size=None, label_size=None, cold=False):
+          value_size=None, label_size=None, cold=False, icon=None, unit=None):
     """One sweep gauge, with a line of text inside it.
 
     `shape.arc(centre, inner, outer, from, to)` - angles start at the top and run
     clockwise, so look.DIAL_FROM..DIAL_TO is 225..495 and the gap lands at the bottom,
     which is where `under` goes.
+
+    `icon` is drawn there instead where the font has it, and `under` is what it falls back
+    to. `unit` is a small suffix on the reading, for a gauge whose slot below is already
+    spoken for - the single dial puts its unit below instead, having nothing else to put
+    there. It is dropped rather than allowed to spill out of a small ring.
     """
     value_size = value_size or look.SIZE_HUGE
     label_size = label_size or look.SIZE_LABEL
@@ -213,11 +294,26 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
         screen.shape(shape.arc(middle, inner - 3, outer + 3, sweep - 1.4, sweep + 1.4))
 
     ink = theme.dim if cold else theme.ink
-    blit_label(value_text, value_size, ink,
-               centre[0], centre[1] - value_size * 0.62, align=1)
+    top = centre[1] - value_size * 0.62
+    unit_size = max(look.SIZE_SMALL, int(value_size * 0.45))
+    reading = label(value_text, value_size, ink)
+    suffix = label(unit, unit_size, theme.dim) if unit else None
+    if suffix and reading.width + suffix.width > inner * 2 - 4:
+        suffix = None                      # a long unit does not belong in a small ring
+    width = reading.width + (suffix.width if suffix else 0)
+    left = centre[0] - width // 2
+    screen.blit(reading, vec2(int(left), int(top)))
+    if suffix:
+        # Sat on the reading's own baseline, which is where the eye expects a unit. A
+        # sprite puts its baseline `size` from the top, so the drop is the size difference
+        # and not the difference in sprite heights.
+        screen.blit(suffix, vec2(int(left + reading.width),
+                                 int(top + value_size - unit_size)))
+    below = centre[1] + value_size * 0.42
+    if icon and blit_icon(icon, label_size + 8, theme.dim, centre[0], below, align=1):
+        return
     if under:
-        blit_label(under, label_size, theme.dim,
-                   centre[0], centre[1] + value_size * 0.42, align=1)
+        blit_label(under, label_size, theme.dim, centre[0], below, align=1)
 
 
 def dial(theme, fraction, value_text, unit_text, cold=False):
@@ -233,9 +329,10 @@ def dials(theme, entries):
     thing that changes, so it picks the layout and nothing else has to be decided.
     """
     shape_of = look.DIALS.get(len(entries)) or look.DIALS[4]
-    for centre, (name, value_text, fraction) in zip(shape_of["centres"], entries):
+    for centre, entry in zip(shape_of["centres"], entries):
+        name, value_text, fraction, icon, unit = entry
         gauge(theme, centre, shape_of["outer"], shape_of["inner"], fraction, value_text,
-              name, shape_of["value"], shape_of["label"], cold=fraction is None)
+              name, shape_of["value"], shape_of["label"], fraction is None, icon, unit)
 
 
 def readout(theme, index, name, value_text, fraction=None):
@@ -368,7 +465,7 @@ def grid(theme, entries):
     cell_h = (look.BODY_H - 12 - (rows - 1) * 6) // rows
 
     for i in range(count):
-        name, value_text, fraction = entries[i]
+        name, value_text, fraction, icon = entries[i]
         column = i % columns
         row = i // columns
         x = look.PAD + column * (cell_w + 6)
@@ -378,7 +475,12 @@ def grid(theme, entries):
         if fraction is not None:
             screen.pen = color.rgb(*theme.at(max(0.0, min(1.0, fraction))))
             screen.rectangle(rect(x, y + cell_h - 3, int(cell_w * max(0.0, min(1.0, fraction))), 3))
+        # Both: a cell has room for the name and for a symbol in the far corner, so the
+        # symbol is another way to find the tile rather than the only one. A gauge has
+        # room for one or the other and takes the symbol.
         blit_label(name, look.SIZE_SMALL, theme.dim, x + 7, y + 5)
+        if icon:
+            blit_icon(icon, look.SIZE_VALUE, theme.dim, x + cell_w - 7, y + 4, align=2)
         size = look.SIZE_BIG if rows < 3 else look.SIZE_VALUE
         blit_label(value_text, size, theme.ink, x + 7, y + cell_h // 2 - size // 2 + 2)
 
