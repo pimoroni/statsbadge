@@ -2,7 +2,7 @@
 
 The client is a generator advanced a slice at a time from the draw loop, so a poll
 never blocks a frame. Measured against a server that writes each response in one go:
-9ms a request warm, and the worst single step is 0.6ms. See NETWORKING.md - the
+9ms a request warm, and the worst single step is 0.6ms. See DEVELOPMENT.md - the
 firmware's own `fetch.py` is not used because it is broken on this build and wedges
 permanently on the first socket error.
 

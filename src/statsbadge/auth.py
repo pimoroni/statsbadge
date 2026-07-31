@@ -3,7 +3,7 @@
 Plain HTTP on a LAN, so the transport authenticates nothing. Every request carries
 an HMAC-SHA256 over the method, path, a counter and the body, keyed on a secret the
 badge and host share from pairing. That makes a command unforgeable without the
-secret, and the counter stops one being replayed. See NETWORKING.md for why the
+secret, and the counter stops one being replayed. See DEVELOPMENT.md for why the
 transport is not HTTPS.
 
 Reads are signed too. It costs the badge one HMAC per second and means an

@@ -3,7 +3,7 @@
 Every response goes out as a single `write()` with TCP_NODELAY set. That is not a
 micro-optimisation: `http.server` flushing headers and body separately costs a badge
 247ms per request against 7ms for one write, because Nagle holds the body until lwIP
-gets round to acknowledging the headers. NETWORKING.md has the measurements.
+gets round to acknowledging the headers. DEVELOPMENT.md has the measurements.
 
 Two audiences on one port:
 
