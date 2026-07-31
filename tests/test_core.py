@@ -766,6 +766,24 @@ def test_extensions_describe_finds_the_clock(_h):
 
 
 @check
+def test_caselights_take_a_field_or_a_flag(_h):
+    """Three settings in one value: off, the theme's level, or a reading to follow."""
+    base = dict(layout.DEFAULT_CONFIG)
+
+    def stored(value):
+        return layout.validate({**base, "caselights": value})["caselights"]
+
+    assert stored("cpu.pct") == "cpu.pct"
+    assert stored(True) is True
+    assert stored(False) is False
+    # Anything that is not a "group.field" falls back to a flag rather than reaching the
+    # badge as a reference it cannot look up.
+    assert stored("bogus") is True
+    assert stored("too.many.dots") is True
+    assert stored(None) is False
+
+
+@check
 def test_an_extension_page_can_be_added_and_reaches_the_badge(h):
     """The UI's kind picker is built from this, and the config it PUTs has to validate.
 

@@ -150,7 +150,9 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 .sources div { padding: 3px 0; }
 .sources .faulty { color: var(--bad); }
 
-.live { display: grid; gap: 14px; }
+/* A group is its own panel: one box per reading, not a box of boxes. */
+.live { display: grid; gap: 10px; }
+.live .group { background: var(--panel); padding: 12px 16px; }
 .live .group h3 { color: var(--accent); text-transform: uppercase;
                   letter-spacing: 0.08em; }
 .live .kv { display: flex; justify-content: space-between; gap: 8px;

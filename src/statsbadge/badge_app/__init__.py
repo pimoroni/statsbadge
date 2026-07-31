@@ -101,6 +101,9 @@ STATE_APP = "stats"
 # something instead. Drop this once display.backlight covers its own range.
 BACKLIGHT_FLOOR = 0.5
 
+# The share of the theme's case light level a reading of zero still gets.
+CASELIGHT_FLOOR = 0.15
+
 
 def backlight(fraction):
     """Set the display brightness, over the range the panel responds to.
@@ -278,6 +281,8 @@ class App:
         self.rejected = False
         if what == "stats":
             self.frame = payload
+            # Only meaningful when the lights follow a reading, and cheap once a second.
+            self.apply_caselights()
         elif what == "layout":
             self.layout = payload
             self.layout_rev = payload.get("rev", 0)
@@ -303,10 +308,27 @@ class App:
             self.theme = theme
             draw.clear_cache()
         backlight(float((self.layout or {}).get("brightness", 0.8)))
-        badge.caselights(
-            self.theme.case if (self.layout or {}).get("caselights", True) else 0.0)
+        self.apply_caselights()
         if self.page_index >= len(self.page_list):
             self.page_index = 0
+
+    def apply_caselights(self):
+        """Off, the theme's own level, or a level that follows a reading.
+
+        A reading maps onto CASELIGHT_FLOOR of the theme's level up to all of it, so an
+        idle machine still glows: dark is what the setting being off looks like, and the
+        two should not be the same. A field the host is not sending sits at the floor.
+        """
+        setting = (self.layout or {}).get("caselights", True)
+        if not setting:
+            badge.caselights(0.0)
+            return
+        level = self.theme.case
+        if isinstance(setting, str):
+            fraction = pages_module.fraction_of(
+                setting, pages_module.value_of(self.frame, setting)) or 0.0
+            level *= CASELIGHT_FLOOR + (1.0 - CASELIGHT_FLOOR) * fraction
+        badge.caselights(level)
 
     # -- input --------------------------------------------------------------
 

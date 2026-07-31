@@ -146,7 +146,9 @@ def validate(incoming, extra_kinds=()):
 
     brightness = float(incoming.get("brightness", out["brightness"]))
     out["brightness"] = max(0.05, min(1.0, brightness))
-    out["caselights"] = bool(incoming.get("caselights", out["caselights"]))
+    # Off, the theme's own level, or a field reference for the lights to follow.
+    caselights = incoming.get("caselights", out["caselights"])
+    out["caselights"] = caselights if _is_ref(caselights) else bool(caselights)
     out["graph_points"] = max(8, min(160, int(incoming.get("graph_points", 48))))
 
     pages = incoming.get("pages")

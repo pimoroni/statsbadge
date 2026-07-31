@@ -17,7 +17,6 @@
   <div class="column">
     <h2>Pages</h2>
     <section class="col">
-      <p class="hint">The badge pages through these with UP and DOWN. Drag to reorder.</p>
       <div class="row">
         <select id="addkind">
           <option value="dial">Dial</option>
@@ -52,9 +51,7 @@
         <input type="range" id="points" min="8" max="160" step="8">
         <output id="pointsout"></output>
       </label>
-      <label class="check">
-        <input type="checkbox" id="caselights"> Case lights follow the theme
-      </label>
+      <label>Case lights <select id="caselights"></select></label>
     </section>
 
     <h2>Buttons</h2>
@@ -80,10 +77,7 @@
 
   <div class="column">
     <h2>Live</h2>
-    <section class="col">
-      <p class="hint">What the badge is being sent, refreshed every second.</p>
-      <div id="live" class="live"></div>
-    </section>
+    <div id="live" class="live"></div>
   </div>
 </main>
 

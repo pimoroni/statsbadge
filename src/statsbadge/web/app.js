@@ -267,9 +267,31 @@ function renderLook() {
   bindRange("brightness", "brightness", (v) => `${v}%`, 100);
   bindRange("points", "graph_points", (v) => `${v}`);
 
+  // Off, the theme's own level, or a reading for the lights to follow. The stored value
+  // is false, true, or a field ref, so the option values carry it directly.
   const caselights = $("caselights");
-  caselights.checked = !!config.caselights;
-  caselights.onchange = () => { config.caselights = caselights.checked; markDirty(); };
+  caselights.innerHTML = "";
+  const options = [["off", "Off"], ["theme", "Follow the theme"]];
+  for (const ref of numericRefs()) options.push([ref, `Follow ${ref}`]);
+  const current = config.caselights === true ? "theme"
+                : config.caselights ? config.caselights : "off";
+  // A reading this host has stopped sending still has to be selectable, or opening the
+  // page and saving it would quietly turn the lights off.
+  if (!options.some(([value]) => value === current)) {
+    options.push([current, `Follow ${current}`]);
+  }
+  for (const [value, text] of options) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    if (value === current) option.selected = true;
+    caselights.appendChild(option);
+  }
+  caselights.onchange = () => {
+    const value = caselights.value;
+    config.caselights = value === "off" ? false : value === "theme" ? true : value;
+    markDirty();
+  };
 
   for (const which of ["a", "b", "c"]) {
     const select = $(`btn-${which}`);
