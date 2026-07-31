@@ -4,6 +4,9 @@ UP/DOWN     page through what the host is configured to show
 A B C       whatever the host has bound them to, if anything
 HOME        hold to leave
 
+Where a screen takes A/B/C for its own input rather than passing them to the host, they
+are used in the order they sit in: A back, B select, C next.
+
 The host decides what the pages are; this fetches them and draws them. Polling is a
 generator advanced from the draw loop, so a slow reply costs latency and never a
 frame.
@@ -359,7 +362,7 @@ class App:
     def render(self):
         theme = self.theme
         if not self.config.paired:
-            draw.banner(theme, "Not paired", "Hold C for setup",
+            draw.banner(theme, "Not paired", "B to set up",
                         "or run: statsbadge install")
             return
         if not wifi.is_connected():
@@ -420,6 +423,12 @@ def main():
         if app.check_exit():
             return
         app.buttons()
+        # B selects, as it does on every screen that takes A/B/C. Only reachable while
+        # unpaired, so it cannot collide with a command bound to B.
+        if not app.config.paired and badge.pressed(BUTTON_B):
+            if not pairing_ui().run(app):
+                return
+            app.apply_layout()
         app.poll()
         app.tick()
 

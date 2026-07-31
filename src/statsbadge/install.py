@@ -310,7 +310,8 @@ def copy_app(volume, source=None, extra_modules=()):
     os.makedirs(target, exist_ok=True)
     copied = []
     for name in sorted(os.listdir(source)):
-        if name.startswith(".") or name == "__pycache__":
+        # MPY_VERSION is a note from the precompile, not something the badge needs.
+        if name.startswith(".") or name in ("__pycache__", "MPY_VERSION"):
             continue
         src = os.path.join(source, name)
         if os.path.isdir(src):
