@@ -18,7 +18,7 @@ const SHAPE = {
 
 // Theme swatches, mirroring stats/look.py so the UI shows what the badge will do.
 const THEME_COLOURS = {
-  dark: ["#0a0a0c", "#38e8d1", "#00beff", "#78e65a", "#ffbe00", "#ff3020"],
+  dark: ["#12141c", "#38e8d1", "#7ed375", "#ec9f07", "#d71908"],
   mono: ["#080808", "#ebebeb", "#6e6e6e", "#9a9a9a", "#cccccc", "#ffffff"],
   amber: ["#0e0800", "#ffb000", "#8c5000", "#c07800", "#ffb000", "#fff0b4"],
   blueprint: ["#061022", "#5ab4ff", "#3c82dc", "#78d2ff", "#b4e4ff", "#ffffff"],

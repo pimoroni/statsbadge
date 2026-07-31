@@ -22,9 +22,9 @@ PAD = 10
 DIAL_C = (108, BODY_TOP + BODY_H // 2 + 4)
 DIAL_OUTER = 74
 DIAL_INNER = 56
-# A 270 degree sweep with the gap centred on the bottom, so it reads as a gauge and
-# not a ring. Angles start at the top and run clockwise: 225 is lower-left, and 495
-# is 135 once round, which is lower-right.
+# A 270 degree sweep with the gap centred on the bottom, so it looks like a gauge.
+# Angles start at the top and run clockwise: 225 is lower-left, and 495 is 135 once
+# round, which is lower-right.
 DIAL_FROM = 225.0
 DIAL_TO = 495.0
 
@@ -86,15 +86,15 @@ class Theme:
 
 
 THEMES = {
-    # The one this exists to replace: dark, hot at the top. The accent is dots' teal,
-    # so the two projects on this badge agree on one colour.
+    # Cool near-black, a teal accent, and a ramp that leaves the accent's colour behind
+    # as the reading climbs: teal, green, orange, red.
     "dark": Theme(
         "dark",
-        bg=(10, 10, 12), panel=(22, 22, 26), ink=(240, 238, 235), dim=(96, 96, 104),
+        bg=(18, 20, 28), panel=(26, 30, 43), ink=(242, 245, 255), dim=(139, 147, 171),
         accent=(56, 232, 209),
-        ramp=((0.0, (0, 190, 255)), (0.45, (120, 230, 90)),
-              (0.72, (255, 190, 0)), (1.0, (255, 48, 32))),
-        grid=(40, 40, 46), case=0.22,
+        ramp=((0.0, (56, 232, 209)), (0.45, (126, 211, 117)),
+              (0.72, (236, 159, 7)), (1.0, (215, 25, 8))),
+        grid=(44, 51, 70), case=0.22,
     ),
     "mono": Theme(
         "mono",
