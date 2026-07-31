@@ -85,6 +85,48 @@ jobs:
           name: dist
           path: dist/*
 
+  package-mpy:
+    name: Pack a precompiled badge app
+    runs-on: ubuntu-latest
+    needs: check
+    # Building mpy-cross takes a few minutes, so this is not on every push.
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+
+    env:
+      NAME: stats-${{ github.event.release.tag_name || github.sha }}-mpy
+      # Which board repo ref pins the MicroPython the badge ships. main pins bw-1.27.0
+      # and feature/align-v3 pins bw-1.28.0-3, so this needs changing to main once that
+      # has landed - a wrong value here produces bytecode the badge refuses to load.
+      BOARD_REF: feature/align-v3
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the app to .mpy
+        run: ci/build-mpy.sh src/statsbadge/badge_app build/mpy
+
+      # The launcher wants the directory called `stats`.
+      - name: Zip it
+        run: |
+          mkdir -p stage
+          cp -r build/mpy stage/stats
+          cp README.md stage/
+          cd stage && zip -r "../$NAME.zip" stats README.md && cd ..
+          unzip -l "$NAME.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: stage
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.NAME }}.zip
+
   package-app:
     name: Pack the badge app
     runs-on: ubuntu-latest

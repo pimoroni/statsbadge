@@ -13,6 +13,7 @@ first, because it resets the badge.
 import glob
 import json
 import os
+import pathlib
 import platform
 import shutil
 import subprocess
@@ -108,11 +109,48 @@ def badge_info(port):
         "print(badge.model)\n"
         "print(badge.uid)\n"
         "print('stats' in os.listdir('/system/apps'))\n"
+        "print(getattr(sys.implementation, '_mpy', 0))\n"
     ))
     lines = [line.strip() for line in out.strip().splitlines() if line.strip()]
-    if len(lines) < 3:
+    if len(lines) < 4:
         raise InstallError(f"unexpected reply from the badge: {out!r}")
-    return {"model": lines[-3], "uid": lines[-2], "app_installed": lines[-1] == "True"}
+    return {
+        "model": lines[-4],
+        "uid": lines[-3],
+        "app_installed": lines[-2] == "True",
+        # The bytecode version this firmware will load. Only the badge knows it, which
+        # is why a precompiled app is checked here and not only where it was built.
+        "mpy": int(lines[-1] or 0),
+    }
+
+
+def check_precompiled(directory, badge_mpy):
+    """Refuse a .mpy build the attached badge cannot load.
+
+    A wrong bytecode version does not fail at install: it fails at import, on the badge,
+    after the launcher has already started the app, as a crash dialog with no clue in it.
+    The header is 'M', version, reserved, flags, and (flags << 8) | version is exactly
+    what the firmware reports as sys.implementation._mpy.
+    """
+    found = sorted(pathlib.Path(directory).glob("*.mpy"))
+    if not found:
+        raise InstallError(f"no .mpy files in {directory}")
+    versions = set()
+    for path in found:
+        header = path.read_bytes()[:4]
+        if header[:1] != b"M":
+            raise InstallError(f"{path.name} is not a .mpy")
+        versions.add((header[3] << 8) | header[1])
+    if len(versions) > 1:
+        raise InstallError(f"mixed bytecode versions in {directory}: {sorted(versions)}")
+    built = versions.pop()
+    if badge_mpy and built != badge_mpy:
+        raise InstallError(
+            f"this build is bytecode v{built & 0xFF}.{(built >> 8) & 3} (_mpy {built}) "
+            f"but the badge loads v{badge_mpy & 0xFF}.{(badge_mpy >> 8) & 3} "
+            f"(_mpy {badge_mpy}). Rebuild against the firmware the badge is running."
+        )
+    return built, len(found)
 
 
 # -- credentials ------------------------------------------------------------
@@ -256,7 +294,11 @@ def _volume_candidates():
 
 
 def copy_app(volume, source=None, extra_modules=()):
-    """Copy the app onto a mounted badge volume."""
+    """Copy the app onto a mounted badge volume.
+
+    `source` may be a precompiled .mpy directory instead of the package's own, which is
+    how the CI-built bytecode gets installed.
+    """
     source = source or app_source_dir()
     apps = os.path.join(volume, "system", "apps")
     if not os.path.isdir(apps):

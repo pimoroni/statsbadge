@@ -191,6 +191,19 @@ def cmd_install(args):
         start_seq = 0
         print(f"  minted a new secret ({auth.fingerprint(secret)})")
 
+    # A precompiled build is verified against this badge before the volume is touched:
+    # the wrong bytecode version fails at import, after the launcher has started the app.
+    source = None
+    if args.mpy:
+        try:
+            built, count = install.check_precompiled(args.mpy, info["mpy"])
+        except install.InstallError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        source = args.mpy
+        print(f"  precompiled: {count} modules, bytecode v{built & 0xFF}."
+              f"{(built >> 8) & 3}, matches this badge")
+
     host = args.server_host or (server._local_addresses() or ["127.0.0.1"])[0]
 
     # The app goes on first, credentials second. Writing /state over the REPL and then
@@ -215,7 +228,7 @@ def cmd_install(args):
             service = build_service(args)
             modules = extensions.badge_modules(service.collector.extensions)
             service.collector.stop()
-        target, copied = install.copy_app(volume, extra_modules=modules)
+        target, copied = install.copy_app(volume, source=source, extra_modules=modules)
         print(f"  copied {len(copied)} files to {target}")
         install.eject(volume)
         print("  ejected; waiting for the badge to come back...")
@@ -371,6 +384,10 @@ def main(argv=None):
     inst.add_argument("--new-secret", action="store_true", help="mint a fresh secret")
     inst.add_argument("--with-extensions", action="store_true",
                      help="also push badge-side modules from installed extensions")
+    inst.add_argument("--mpy", metavar="DIR",
+                     help="install a precompiled build from DIR (see ci/build-mpy.sh) "
+                          "instead of the source. Checked against the badge's own "
+                          "bytecode version before anything is written")
     inst.add_argument("-y", "--yes", action="store_true", help="do not ask")
     inst.set_defaults(func=cmd_install)
 
