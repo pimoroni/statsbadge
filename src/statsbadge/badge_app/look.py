@@ -44,6 +44,22 @@ SIZE_LABEL = 12
 SIZE_VALUE = 17
 SIZE_SMALL = 11
 
+# Several gauges in the body band, keyed by how many there are: where their centres go,
+# the ring radii, and the type sizes that fit inside one. Measured on the board rather
+# than derived - four gauges cost the same frame as one, because an arc is charged for by
+# its area, so the radii are as large as the band allows and not as small as it takes to
+# be quick.
+DIALS = {
+    1: {"centres": ((160, 125),), "outer": 74, "inner": 56,
+        "value": SIZE_HUGE, "label": SIZE_VALUE},
+    2: {"centres": ((85, 125), (235, 125)), "outer": 62, "inner": 46,
+        "value": 34, "label": SIZE_LABEL},
+    3: {"centres": ((60, 125), (160, 125), (260, 125)), "outer": 46, "inner": 34,
+        "value": 26, "label": SIZE_SMALL},
+    4: {"centres": ((85, 84), (235, 84), (85, 166), (235, 166)), "outer": 40,
+        "inner": 29, "value": 22, "label": SIZE_SMALL},
+}
+
 
 class Theme:
     """A palette plus the two decisions that make it look like one thing.

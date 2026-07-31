@@ -10,6 +10,7 @@ let dirty = false;
 // Which field slots each page kind has, and how many.
 const SHAPE = {
   dial: { one: "field", many: "readouts", max: 3, label: "Readouts" },
+  dials: { one: null, many: "fields", max: 4, label: "Gauges" },
   bars: { one: "field", many: null, max: 0, label: "" },
   graph: { one: null, many: "fields", max: 2, label: "Series" },
   grid: { one: null, many: "fields", max: 6, label: "Values" },

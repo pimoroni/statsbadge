@@ -183,39 +183,59 @@ def _bake_bands(theme, title, index, total, subtitle):
 
 # -- widgets ----------------------------------------------------------------
 
-def dial(theme, fraction, value_text, unit_text, cold=False):
-    """A sweep gauge.
+def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
+          value_size=None, label_size=None, cold=False):
+    """One sweep gauge, with a line of text inside it.
 
     `shape.arc(centre, inner, outer, from, to)` - angles start at the top and run
-    clockwise, so look.DIAL_FROM..DIAL_TO is 225..495 and the gap lands at the bottom.
+    clockwise, so look.DIAL_FROM..DIAL_TO is 225..495 and the gap lands at the bottom,
+    which is where `under` goes.
     """
-    centre = vec2(*look.DIAL_C)
+    value_size = value_size or look.SIZE_HUGE
+    label_size = label_size or look.SIZE_LABEL
+    middle = vec2(*centre)
     start, end = look.DIAL_FROM, look.DIAL_TO
     fraction = 0.0 if fraction is None else max(0.0, min(1.0, fraction))
 
     screen.pen = color.rgb(*theme.grid)
-    screen.shape(shape.arc(centre, look.DIAL_INNER, look.DIAL_OUTER, start, end))
+    screen.shape(shape.arc(middle, inner, outer, start, end))
 
     if not cold and fraction > 0.001:
         sweep = start + (end - start) * fraction
         # Solid, in the ramp's colour for this value: a spatial gradient across the
         # arc's box does not follow the curve, so the hue would not track the reading.
         # This way the colour *is* the severity, and it costs one shape.
-        hot = theme.at(fraction)
-        screen.pen = color.rgb(*hot)
-        screen.shape(shape.arc(centre, look.DIAL_INNER, look.DIAL_OUTER, start, sweep))
+        screen.pen = color.rgb(*theme.at(fraction))
+        screen.shape(shape.arc(middle, inner, outer, start, sweep))
 
         # A brighter tick at the sweep's end, so the exact value is readable.
         screen.pen = color.rgb(*theme.ink)
-        screen.shape(shape.arc(centre, look.DIAL_INNER - 3, look.DIAL_OUTER + 3,
-                               sweep - 1.4, sweep + 1.4))
+        screen.shape(shape.arc(middle, inner - 3, outer + 3, sweep - 1.4, sweep + 1.4))
 
     ink = theme.dim if cold else theme.ink
-    blit_label(value_text, look.SIZE_HUGE, ink,
-               look.DIAL_C[0], look.DIAL_C[1] - look.SIZE_HUGE * 0.62, align=1)
-    if unit_text:
-        blit_label(unit_text, look.SIZE_LABEL, theme.dim,
-                   look.DIAL_C[0], look.DIAL_C[1] + look.SIZE_HUGE * 0.42, align=1)
+    blit_label(value_text, value_size, ink,
+               centre[0], centre[1] - value_size * 0.62, align=1)
+    if under:
+        blit_label(under, label_size, theme.dim,
+                   centre[0], centre[1] + value_size * 0.42, align=1)
+
+
+def dial(theme, fraction, value_text, unit_text, cold=False):
+    """The single gauge of a `dial` page, with its readouts beside it."""
+    gauge(theme, look.DIAL_C, look.DIAL_OUTER, look.DIAL_INNER, fraction, value_text,
+          unit_text, cold=cold)
+
+
+def dials(theme, entries):
+    """Up to four gauges across the body band, each named under its reading.
+
+    One page kind rather than one per count: how many fields the page carries is the only
+    thing that changes, so it picks the layout and nothing else has to be decided.
+    """
+    shape_of = look.DIALS.get(len(entries)) or look.DIALS[4]
+    for centre, (name, value_text, fraction) in zip(shape_of["centres"], entries):
+        gauge(theme, centre, shape_of["outer"], shape_of["inner"], fraction, value_text,
+              name, shape_of["value"], shape_of["label"], cold=fraction is None)
 
 
 def readout(theme, index, name, value_text, fraction=None):

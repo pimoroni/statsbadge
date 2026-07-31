@@ -838,6 +838,49 @@ def test_every_field_has_a_name_for_the_ui(_h):
 
 
 @check
+def test_a_dials_page_takes_up_to_four_fields(_h):
+    base = dict(layout.DEFAULT_CONFIG)
+    refs = ["cpu.pct", "gpu.pct", "mem.pct", "disk.pct", "cpu.temp"]
+
+    def kept(count):
+        page = {"id": "g", "kind": "dials", "title": "Load", "fields": refs[:count]}
+        return layout.validate({**base, "pages": [page]})["pages"][0]["fields"]
+
+    for count in (1, 2, 3, 4):
+        assert len(kept(count)) == count, count
+    assert len(kept(5)) == 4, "a fifth gauge has nowhere to go"
+
+    try:
+        layout.validate({**base, "pages": [{"id": "g", "kind": "dials", "fields": []}]})
+        raise AssertionError("a page with no fields should be refused")
+    except ValueError:
+        pass
+
+    # Pruned like any multi-field page: what the host cannot answer goes, and the page
+    # stays for what is left
+    caps = {"available": {"cpu": ["pct"], "mem": ["pct"]}}
+    page = {"id": "g", "kind": "dials",
+            "fields": ["cpu.pct", "gpu.pct", "mem.pct"]}
+    assert layout.prune([page], caps)[0]["fields"] == ["cpu.pct", "mem.pct"]
+
+
+@check
+def test_every_kind_has_a_badge_layout_and_a_ui_shape(_h):
+    """A kind the server accepts has to be drawable and configurable, or it is a page
+    that validates, reaches the badge and shows a message saying it cannot be drawn."""
+    app = pathlib.Path(install.app_source_dir())
+    pages_source = (app / "pages.py").read_text()
+    ui_source = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
+                 / "app.js").read_text()
+    markup = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
+              / "index.html").read_text()
+    for kind in layout.KINDS:
+        assert f'"{kind}": _' in pages_source, f"{kind} has no renderer"
+        assert f"  {kind}: {{" in ui_source, f"{kind} has no shape in the UI"
+        assert f'value="{kind}"' in markup, f"{kind} is not in the kind picker"
+
+
+@check
 def test_caselights_take_a_field_or_a_flag(_h):
     """Three settings in one value: off, the theme's level, or a reading to follow."""
     base = dict(layout.DEFAULT_CONFIG)

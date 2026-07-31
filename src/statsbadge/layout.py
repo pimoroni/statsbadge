@@ -17,11 +17,15 @@ import time
 
 # A page kind the badge knows how to draw, and what it needs.
 #   dial    one field as a sweep gauge, plus up to three readouts beside it
+#   dials   up to four fields as gauges side by side, each named under its reading
 #   bars    a list of fields as horizontal bars, good for per-core
 #   graph   one or two fields over time, from the server's history ring
 #   grid    up to six fields as big numbers
 #   text    labelled lines, for names and versions
-KINDS = ("dial", "bars", "graph", "grid", "text")
+KINDS = ("dial", "dials", "bars", "graph", "grid", "text")
+
+# How many fields a kind can draw. What is left out is the badge's own layout table.
+_FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7}
 
 THEMES = ("dark", "light", "frost", "mono", "red", "green", "cyan",
           "amber", "blueprint", "vapor")
@@ -268,11 +272,11 @@ def _validate_page(page, seen, extra_kinds=()):
         if not _is_ref(field):
             raise ValueError(f"page {page_id} needs a field")
         clean["field"] = field
-    elif kind in ("graph", "grid", "text"):
+    elif kind in ("dials", "graph", "grid", "text"):
         fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
         if not fields:
             raise ValueError(f"page {page_id} needs at least one field")
-        clean["fields"] = fields[: (2 if kind == "graph" else 6)]
+        clean["fields"] = fields[:_FIELD_MAX.get(kind, 6)]
     else:
         # An extension kind: keep its fields, since only the badge knows the shape.
         clean["fields"] = [f for f in (page.get("fields") or []) if _is_ref(f)][:8]

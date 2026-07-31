@@ -150,6 +150,22 @@ def _grid(page, frame, _history, theme):
     draw.grid(theme, entries)
 
 
+def _dials(page, frame, _history, theme):
+    refs = page.get("fields", [])[:4]
+    groups = [ref.split(".")[0] for ref in refs]
+    # Name each gauge by whatever tells it apart from the others. A page of one reading
+    # per subsystem wants CPU and GPU, where NAMES would call both of them LOAD; a page
+    # of several readings from one subsystem wants LOAD and TEMP.
+    by_group = len(set(groups)) == len(groups)
+    entries = []
+    for ref, group in zip(refs, groups):
+        value = value_of(frame, ref)
+        entries.append((group.upper() if by_group else name_for(ref),
+                        draw.fmt(value, ref.split(".")[-1]),
+                        fraction_of(ref, value, page)))
+    draw.dials(theme, entries)
+
+
 def _text(page, frame, _history, theme):
     entries = []
     for ref in page.get("fields", [])[:7]:
@@ -160,6 +176,7 @@ def _text(page, frame, _history, theme):
 
 _KINDS = {
     "dial": _dial,
+    "dials": _dials,
     "bars": _bars,
     "graph": _graph,
     "grid": _grid,
