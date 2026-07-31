@@ -87,8 +87,17 @@ function fieldLabel(ref) {
   return labels[field] || field.replace(/_/g, " ");
 }
 
-/** One dropdown, grouped by category, so a field can be found rather than hunted for. */
+/** One dropdown, grouped by category, so a field can be found rather than hunted for.
+ *
+ * With the group named beside it: a collapsed select shows only the chosen option's own
+ * text, so the optgroup that made the list navigable disappears exactly when it is needed,
+ * leaving "Used %" with nothing to say what it is used of. Returns both, as a fragment, so
+ * the row stays flat and its flex layout still applies to the select.
+ */
 function refSelect(value, refs, onChange) {
+  const holder = document.createDocumentFragment();
+  const groupName = document.createElement("span");
+  groupName.className = "group";
   const select = document.createElement("select");
   const options = refs.slice();
   if (value && !options.includes(value)) options.unshift(value);
@@ -111,8 +120,16 @@ function refSelect(value, refs, onChange) {
     }
     select.appendChild(holder);
   }
-  select.onchange = () => { onChange(select.value); markDirty(); };
-  return select;
+  // Told which ref rather than reading it back off the select, so the first paint does
+  // not depend on `value` already reflecting the option marked selected.
+  const showGroup = (ref) => {
+    groupName.textContent = groupLabel(String(ref || "").split(".")[0]);
+  };
+  select.onchange = () => { showGroup(select.value); onChange(select.value); markDirty(); };
+  showGroup(value || options[0]);
+  holder.appendChild(groupName);
+  holder.appendChild(select);
+  return holder;
 }
 
 // -- pages -----------------------------------------------------------------

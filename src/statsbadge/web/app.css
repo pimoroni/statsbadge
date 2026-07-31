@@ -110,6 +110,10 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 .page .fields { margin-top: 8px; display: grid; gap: 6px; }
 .page .fieldrow { display: flex; gap: 6px; align-items: center; }
 .page .fieldrow select { flex: 1; }
+/* Which group the chosen field is from, since a collapsed select drops its optgroup.
+   Fixed width so the selects below each other line up rather than stepping in and out. */
+.page .fieldrow .group { color: var(--dim); font-size: 12px; width: 62px;
+                         flex: 0 0 62px; text-align: right; }
 
 .warn { color: var(--accent); font-size: 12px; margin-top: 10px;
         border-left: 2px solid var(--accent); padding-left: 8px; }

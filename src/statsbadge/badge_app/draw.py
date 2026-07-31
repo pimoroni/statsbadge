@@ -691,16 +691,19 @@ def radar(theme, entries):
         blit_label("radar needs three readings", look.SIZE_VALUE, theme.dim,
                    look.W // 2, look.BODY_MID, align=1)
         return
-    centre = (look.W // 2, look.BODY_MID + 10)
-    # Room for a name and a reading outside the web, without either reaching the header.
-    radius = 62
+    centre = (look.W // 2, look.BODY_MID)
+    # An ellipse, not a circle: the body band is 300 wide and 190 tall, and a label is two
+    # lines that reach 15px below its anchor. Four readings put an axis straight down, so a
+    # circle wide enough to use the width spills that label into the page indicator. 56 is
+    # what keeps the block inside the band; the width is free to stay larger.
+    radius_x, radius_y = 70, 56
     count = len(rows)
 
     def point(index, fraction):
         # Axes start at twelve and run clockwise, matching the gauges.
         angle = math.radians(index * 360.0 / count - 90.0)
-        return vec2(centre[0] + math.cos(angle) * radius * fraction,
-                    centre[1] + math.sin(angle) * radius * fraction)
+        return vec2(centre[0] + math.cos(angle) * radius_x * fraction,
+                    centre[1] + math.sin(angle) * radius_y * fraction)
 
     screen.pen = color.rgb(*theme.grid)
     for step in (0.5, 1.0):
