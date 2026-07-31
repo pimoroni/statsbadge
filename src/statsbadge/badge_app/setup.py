@@ -16,6 +16,116 @@ import look
 import net
 
 POLL_INTERVAL_MS = 1200
+# The host beacons every 2s, so a scan has to be longer than that to catch every server.
+BEACON_INTERVAL_MS = 2000
+
+
+def hosts_menu(app):
+    """Switch host, add one, or leave. Opened with HOME.
+
+    Rescans on open, so a server started after the app did turns up without a restart.
+    Returns "exit" if the user chose to leave the app.
+    """
+    while True:
+        rows = _host_rows(app)
+        picked = _pick_row(app, rows)
+        if picked is None:
+            return None
+        if picked["kind"] == "exit":
+            return "exit"
+        if picked["kind"] == "rescan":
+            continue
+        if picked["kind"] == "known":
+            if app.config.switch(picked["id"]):
+                app.layout = None
+                app.history = {}
+                app.rejected = False
+                draw.clear_cache()
+            return None
+        if _ask_to_join(app, picked["host_entry"]):
+            app.layout = None
+            app.rejected = False
+            return None
+
+
+def _host_rows(app):
+    """Known hosts, then any unpaired ones answering now, then rescan and exit."""
+    draw.banner(app.theme, "Hosts", "looking for servers")
+    badge.update()
+    seen = {}
+    # Longer than the beacon interval, or a server that has just broadcast is missed and
+    # the list silently comes back short.
+    for entry in net.discover(timeout_ms=2 * BEACON_INTERVAL_MS):
+        if entry.get("id"):
+            seen[entry["id"]] = entry
+
+    rows = []
+    for server_id, host in app.config.hosts.items():
+        live = seen.pop(server_id, None)
+        if live:
+            app.config.note_address(server_id, live["host"], live["port"],
+                                    live.get("name"))
+        rows.append({
+            "kind": "known", "id": server_id,
+            "label": host.get("name") or host.get("host"),
+            "detail": f"{host.get('host')}:{host.get('port')}",
+            "note": "active" if server_id == app.config.active else
+                    ("here" if live else "not seen"),
+        })
+    for server_id, entry in seen.items():
+        rows.append({
+            "kind": "new", "id": server_id, "host_entry": entry,
+            "label": entry.get("name") or entry["host"],
+            "detail": f"{entry['host']}:{entry['port']}",
+            "note": "add",
+        })
+    rows.append({"kind": "rescan", "label": "Look again", "detail": "", "note": ""})
+    rows.append({"kind": "exit", "label": "Leave the app", "detail": "", "note": ""})
+    return rows
+
+
+def _pick_row(app, rows):
+    """Draw a list and return the chosen row, or None to close."""
+    index = 0
+    while True:
+        theme = app.theme
+        screen.pen = color.rgb(*theme.bg)
+        screen.rectangle(rect(0, 0, look.W, look.H))
+        draw.blit_label("HOSTS", look.SIZE_TITLE, theme.ink, look.PAD, 10)
+        draw.blit_label("A close", look.SIZE_SMALL, theme.dim,
+                        look.W - look.PAD, 16, align=2)
+
+        top = 38
+        height = 26
+        shown = rows[:6]
+        for i, row in enumerate(shown):
+            y = top + i * height
+            selected = i == index
+            screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
+            screen.shape(shape.rounded_rectangle(rect(look.PAD, y, look.W - look.PAD * 2,
+                                                      height - 4), 4))
+            ink = theme.bg if selected else theme.ink
+            draw.blit_label(row["label"], look.SIZE_VALUE, ink, look.PAD + 8, y + 2)
+            if row["detail"]:
+                draw.blit_label(row["detail"], look.SIZE_SMALL,
+                                ink if selected else theme.dim,
+                                look.W - look.PAD - 46, y + 6, align=2)
+            if row["note"]:
+                draw.blit_label(row["note"], look.SIZE_SMALL,
+                                ink if selected else theme.dim,
+                                look.W - look.PAD - 8, y + 6, align=2)
+        draw.blit_label("UP/DOWN move    B select    HOME back", look.SIZE_SMALL,
+                        theme.dim, look.W // 2, look.H - 16, align=1)
+        badge.update()
+
+        if badge.pressed(BUTTON_UP):
+            index = (index - 1) % len(shown)
+        if badge.pressed(BUTTON_DOWN):
+            index = (index + 1) % len(shown)
+        if badge.pressed(BUTTON_B):
+            return shown[index]
+        if badge.pressed(BUTTON_A) or badge.pressed(BUTTON_HOME):
+            return None
 
 
 def run(app):

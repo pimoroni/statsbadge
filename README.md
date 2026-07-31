@@ -35,10 +35,13 @@ Extras, if you want them: `statsbadge[nvidia]` for NVIDIA cards via NVML, `stats
 With the badge on USB, in another terminal:
 
 ```bash
-statsbadge install              # copies the app and pairs it
+statsbadge install                       # copies the app and pairs it
+statsbadge install --ssid "My Network"   # and sets up WiFi, from a brand new badge
 ```
 
 That writes the pairing secret over the serial REPL and, if the app is not already there, offers to reset the badge into USB mass storage mode to copy it. Answer no and you get credentials only.
+
+`--ssid` sets the WiFi details in the badge's `secrets.py` while that volume is mounted, so a new badge goes from unboxed to showing stats in one command. It prompts for the password, so the password stays out of your shell history; `--pass` takes it directly and an empty string means an open network. `--region` and `--timezone` set those too. Details the badge already has are left alone unless you pass `--force-secrets`.
 
 No cable? Run `statsbadge pair`, or open the config UI and press **Pair a badge**. Launch **Stats** on the badge and press **B** to set up; it finds the host by itself and shows a six-character code. Check that code matches the one the host shows, and approve it there. Nothing is typed on the badge.
 
@@ -58,11 +61,14 @@ Credentials are keyed on a server id the host mints once, not on its address. So
 
 ## On the badge
 
-| Button   | What it does                                        |
-| -------- | --------------------------------------------------- |
-| UP/DOWN  | previous/next page                                  |
-| A B C    | whatever the host has bound them to, if anything     |
-| HOME     | hold to leave                                        |
+| Button | What it does |
+| ------ | ------------ |
+| UP/DOWN | previous/next page |
+| A B C | whatever the host has bound them to, if anything |
+| HOME | open the hosts menu |
+| HOME, held | leave the app |
+
+The hosts menu is how you switch between machines - laptop, desktop, that Linux box - and how you add another one. It rescans every time it opens, so a server you start after the app is already running turns up without a restart.
 
 ## What it reports
 

@@ -2,7 +2,7 @@
 
 UP/DOWN     page through what the host is configured to show
 A B C       whatever the host has bound them to, if anything
-HOME        hold to leave
+HOME        open the hosts menu; hold to leave
 
 Where a screen takes A/B/C for its own input rather than passing them to the host, they
 are used in the order they sit in: A back, B select, C next.
@@ -112,9 +112,12 @@ def load_extensions():
             print(f"extension {name} failed: {exc}")
     return loaded
 
-# The launcher's HOME irq is left alone: it calls this module's on_exit() and resets, so
-# HOME quits and the page index is saved on the way out.
-#
+# HOME opens the hosts menu, so the launcher's exit irq is taken off it and it is polled
+# instead - the idiom BADGEWARE.md describes. Holding it still leaves, and the way out has
+# to stay: a press alone must not strand anyone.
+BUTTON_HOME.irq(None)
+HOLD_TO_EXIT_MS = 700
+
 # State writes /state/<app>.json, the same file net.Config keeps the pairing in. Both read
 # and write it, so page saves go through State.modify, which merges.
 STATE_APP = "stats"
@@ -135,6 +138,7 @@ class App:
         self.toast_until = 0
         self.toast_text = None
         self.dirty = True
+        self._home_at = None
 
         # Poll state: one request in flight at a time, cycling stats, then layout or
         # history when they are due.
@@ -406,6 +410,21 @@ class App:
 
     # -- exit ---------------------------------------------------------------
 
+    def home(self):
+        """What HOME did this frame: None, "menu" or "exit"."""
+        if badge.pressed(BUTTON_HOME):
+            self._home_at = badge.ticks
+            return None
+        if self._home_at is None:
+            return None
+        if badge.held(BUTTON_HOME):
+            if badge.ticks - self._home_at > HOLD_TO_EXIT_MS:
+                self._home_at = None
+                return "exit"
+            return None
+        self._home_at = None
+        return "menu"
+
     def save_page(self):
         """Persist the page index, if it moved. Called on the way out.
 
@@ -443,6 +462,17 @@ def main():
     app.apply_layout()
 
     while True:
+        pressed_home = app.home()
+        if pressed_home == "exit":
+            app.save_page()
+            return
+        if pressed_home == "menu":
+            if pairing_ui().hosts_menu(app) == "exit":
+                app.save_page()
+                return
+            app.apply_layout()
+            app.dirty = True
+
         app.buttons()
         # B selects, as it does on every screen that takes A/B/C. Offered whenever the
         # badge cannot get a usable connection, not only when unpaired, or credentials a
