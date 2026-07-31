@@ -35,37 +35,9 @@ screen.antialias = image.X4
 badge.default_clear = None
 
 
-def _splash():
-    """The mark, before anything expensive happens.
+import splash  # noqa: E402  a tiny module, imported before the expensive ones
 
-    Compiling draw, pages and net is about 500ms from flash and font.load another 107ms,
-    so this is shapes only - no font, no icon file. It redraws what the launcher icon
-    draws, a gauge sweep over three bars, at 320x240 and on the app's own dial angles so
-    the splash and the first page agree.
-    """
-    theme = look.get(look.DEFAULT)
-    screen.pen = color.rgb(*theme.bg)
-    screen.clear()
-
-    centre = vec2(look.W // 2, look.H // 2)
-    outer, inner = 62, 45
-    screen.pen = color.rgb(*theme.grid)
-    screen.shape(shape.arc(centre, inner, outer, look.DIAL_FROM, look.DIAL_TO))
-    screen.pen = color.rgb(*theme.accent)
-    sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * look.SPLASH_SWEEP
-    screen.shape(shape.arc(centre, inner, outer, look.DIAL_FROM, sweep))
-
-    screen.pen = color.rgb(*theme.ink)
-    bar_w, gap = 11, 7
-    span = 3 * bar_w + 2 * gap
-    left = look.W // 2 - span // 2
-    base = look.H // 2 + 14
-    for i, height in enumerate((17, 30, 23)):
-        screen.rectangle(rect(left + i * (bar_w + gap), base - height, bar_w, height))
-    display.update()
-
-
-_splash()
+splash.show()
 
 import draw  # noqa: E402
 import net  # noqa: E402

@@ -12,10 +12,15 @@ import sys
 import time
 
 sys.path.insert(0, "/remote/src/statsbadge/badge_app")
+sys.path.insert(0, "/remote/extensions/statsbadge-clock/src/statsbadge_clock/badge")
 
 import draw
 import look
 import pages as pages_module
+
+# Registers the clockface kind by importing, the same way the app picks it up out of
+# ext/. Without this the clock page has no renderer and draws a message saying so.
+import clockface  # noqa: F401
 
 badge.mode(HIRES | VSYNC)
 screen.antialias = image.X4
@@ -43,6 +48,13 @@ FRAME = {
     "fans": [{"name": "cpu", "rpm": 1820}],
     "sys": {"host": "workshop-pc", "os": "Windows 11", "arch": "AMD64",
             "cpu_name": "Ryzen 7 7800X3D", "uptime_s": 271830},
+    # The clock extension's groups. The hands are drawn from hour, minute and seconds
+    # and the digits from time, so these have to agree or the shot shows a clock
+    # disagreeing with itself.
+    "clock": {"time": "10:09", "date": "Fri 31 Jul", "hour": 10, "minute": 9,
+              "seconds": 36},
+    "weather": {"temp": 16.0, "feels": 14.0, "humidity": 78, "wind": 14.0,
+                "condition": "overcast", "code": 3},
 }
 
 
@@ -76,6 +88,9 @@ PAGES = [
     {"id": "host", "kind": "text", "title": "Host",
      "fields": ["sys.host", "sys.os", "sys.cpu_name", "sys.uptime_s",
                 "power.battery_pct", "power.package_w"]},
+    # The clock extension's page. The id names the shot the README shows.
+    {"id": "swiss_clock", "kind": "clockface", "title": "Clock",
+     "fields": ["clock.time", "clock.date", "weather.temp", "weather.condition"]},
 ]
 
 
@@ -131,9 +146,59 @@ badge.update()
 shot("sparse")
 print("\nsparse frame drew without raising")
 
-draw.banner(theme, "Not paired", "Hold C for setup", "or run: statsbadge install")
-badge.update()
-shot("banner")
+
+# Every screen that is not a page, so the shots in the README cannot drift from what
+# the app draws. The wording is not repeated here: these call the app's own drawing.
+import setup as setup_ui    # noqa: E402
+import splash               # noqa: E402
+
+SCREENS = (
+    ("splash", splash.show),
+    ("banner", lambda: draw.banner(theme, "Not paired", "B to set up",
+                                   "or run: statsbadge install")),
+    ("err_rejected", lambda: draw.banner(theme, "Not recognised", "workshop-pc",
+                                         "B to pair again")),
+    ("err_noserver", lambda: draw.banner(theme, "Connecting", "workshop-pc:8420",
+                                         "no server answering")),
+    ("setup_looking", lambda: draw.banner(theme, "Looking",
+                                          "for a host on the network",
+                                          "4s  -  HOME to cancel")),
+    ("setup_nohost", lambda: draw.banner(theme, "No host", "nothing answered",
+                                         "B retry   HOME quit")),
+    ("setup_choose", lambda: setup_ui.draw_hosts(theme, DISCOVERED, 0, {"pc-1": {}})),
+    ("setup_code", lambda: setup_ui.draw_code(theme, "7F3A9C", "workshop-pc")),
+    ("setup_refused", lambda: draw.banner(theme, "Refused", "already pairing",
+                                          "B retry   A back   HOME quit")),
+    ("setup_paired", lambda: draw.banner(theme, "Paired", "workshop-pc",
+                                         "2 host(s) known")),
+    ("menu_hosts", lambda: setup_ui.draw_rows(theme, MENU_ROWS, 0)),
+)
+
+DISCOVERED = [
+    {"id": "pc-1", "name": "workshop-pc", "host": "10.10.1.40", "port": 8420},
+    {"id": "mac-1", "name": "studio-mac", "host": "10.10.1.51", "port": 8420},
+]
+
+MENU_ROWS = [
+    {"kind": "known", "label": "workshop-pc", "detail": "10.10.1.40:8420",
+     "note": "active"},
+    {"kind": "known", "label": "studio-mac", "detail": "10.10.1.51:8420",
+     "note": "here"},
+    {"kind": "known", "label": "linux-box", "detail": "10.10.1.62:8420",
+     "note": "not seen"},
+    {"kind": "new", "label": "spare-pi", "detail": "10.10.1.77:8420", "note": "add"},
+    {"kind": "rescan", "label": "Look again", "detail": "", "note": ""},
+    {"kind": "exit", "label": "Leave the app", "detail": "", "note": ""},
+]
+
+print()
+theme = look.get("afterburner")
+for name, render in SCREENS:
+    draw.clear_cache()
+    render()
+    badge.update()
+    shot(name)
+    print(f"  {name}")
 
 gc.collect()
 print(f"free memory: {gc.mem_free() // 1024} KB")

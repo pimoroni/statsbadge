@@ -84,38 +84,15 @@ def _host_rows(app):
     return rows
 
 
+MAX_ROWS = 6
+
+
 def _pick_row(app, rows):
     """Draw a list and return the chosen row, or None to close."""
     index = 0
+    shown = rows[:MAX_ROWS]
     while True:
-        theme = app.theme
-        screen.pen = color.rgb(*theme.bg)
-        screen.rectangle(rect(0, 0, look.W, look.H))
-        draw.blit_label("HOSTS", look.SIZE_TITLE, theme.ink, look.PAD, 10)
-        draw.blit_label("A close", look.SIZE_SMALL, theme.dim,
-                        look.W - look.PAD, 16, align=2)
-
-        top = 38
-        height = 26
-        shown = rows[:6]
-        for i, row in enumerate(shown):
-            y = top + i * height
-            selected = i == index
-            screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
-            screen.shape(shape.rounded_rectangle(rect(look.PAD, y, look.W - look.PAD * 2,
-                                                      height - 4), 4))
-            ink = theme.bg if selected else theme.ink
-            draw.blit_label(row["label"], look.SIZE_VALUE, ink, look.PAD + 8, y + 2)
-            if row["detail"]:
-                draw.blit_label(row["detail"], look.SIZE_SMALL,
-                                ink if selected else theme.dim,
-                                look.W - look.PAD - 46, y + 6, align=2)
-            if row["note"]:
-                draw.blit_label(row["note"], look.SIZE_SMALL,
-                                ink if selected else theme.dim,
-                                look.W - look.PAD - 8, y + 6, align=2)
-        draw.blit_label("UP/DOWN move    B select    HOME back", look.SIZE_SMALL,
-                        theme.dim, look.W // 2, look.H - 16, align=1)
+        draw_rows(app.theme, shown, index)
         badge.update()
 
         if badge.pressed(BUTTON_UP):
@@ -126,6 +103,36 @@ def _pick_row(app, rows):
             return shown[index]
         if badge.pressed(BUTTON_A) or badge.pressed(BUTTON_HOME):
             return None
+
+
+def draw_rows(theme, shown, index):
+    screen.pen = color.rgb(*theme.bg)
+    screen.rectangle(rect(0, 0, look.W, look.H))
+    draw.blit_label("HOSTS", look.SIZE_TITLE, theme.ink, look.PAD, 10)
+    draw.blit_label("A close", look.SIZE_SMALL, theme.dim,
+                    look.W - look.PAD, 16, align=2)
+
+    top = 38
+    height = 26
+    for i, row in enumerate(shown):
+        y = top + i * height
+        selected = i == index
+        screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
+        screen.shape(shape.rounded_rectangle(rect(look.PAD, y, look.W - look.PAD * 2,
+                                                  height - 4), 4))
+        ink = theme.bg if selected else theme.ink
+        dim = ink if selected else theme.dim
+        draw.blit_label(row["label"], look.SIZE_VALUE, ink, look.PAD + 8, y + 2)
+        # The note is drawn first and the address is right-aligned to clear it, since a
+        # note as wide as "not seen" overlaps a fixed column.
+        right = look.W - look.PAD - 8
+        if row["note"]:
+            right -= draw.blit_label(row["note"], look.SIZE_SMALL, dim,
+                                     right, y + 6, align=2) + 8
+        if row["detail"]:
+            draw.blit_label(row["detail"], look.SIZE_SMALL, dim, right, y + 6, align=2)
+    draw.blit_label("UP/DOWN move    B select    HOME back", look.SIZE_SMALL,
+                    theme.dim, look.W // 2, look.H - 16, align=1)
 
 
 def run(app):
@@ -178,39 +185,44 @@ def _no_host(app):
     return False
 
 
+MAX_HOSTS = 5
+
+
 def _choose_host(app, hosts):
     """Pick from what answered. Skipped when only one host replied."""
     index = 0
     while True:
-        theme = app.theme
-        screen.pen = color.rgb(*theme.bg)
-        screen.rectangle(rect(0, 0, look.W, look.H))
-        draw.blit_label("CHOOSE A HOST", look.SIZE_TITLE, theme.ink,
-                        look.W // 2, 16, align=1)
-        for i, found in enumerate(hosts[:5]):
-            y = 56 + i * 30
-            selected = i == index
-            screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
-            screen.shape(shape.rounded_rectangle(rect(24, y, look.W - 48, 26), 5))
-            ink = theme.bg if selected else theme.ink
-            known = found.get("id") in app.config.hosts
-            label = found.get("name") or found["host"]
-            draw.blit_label(f"{label} (paired)" if known else label,
-                            look.SIZE_VALUE, ink, 34, y + 4)
-            draw.blit_label(f"{found['host']}:{found['port']}", look.SIZE_SMALL,
-                            ink, look.W - 34, y + 7, align=2)
-        draw.blit_label("UP/DOWN choose    B select    HOME quit", look.SIZE_SMALL,
-                        theme.dim, look.W // 2, look.H - 18, align=1)
+        draw_hosts(app.theme, hosts, index, app.config.hosts)
         badge.update()
 
         if badge.pressed(BUTTON_UP):
-            index = (index - 1) % min(len(hosts), 5)
+            index = (index - 1) % min(len(hosts), MAX_HOSTS)
         if badge.pressed(BUTTON_DOWN):
-            index = (index + 1) % min(len(hosts), 5)
+            index = (index + 1) % min(len(hosts), MAX_HOSTS)
         if badge.pressed(BUTTON_B):
             return hosts[index]
         if badge.pressed(BUTTON_HOME):
             return None
+
+
+def draw_hosts(theme, hosts, index, known):
+    screen.pen = color.rgb(*theme.bg)
+    screen.rectangle(rect(0, 0, look.W, look.H))
+    draw.blit_label("CHOOSE A HOST", look.SIZE_TITLE, theme.ink,
+                    look.W // 2, 16, align=1)
+    for i, found in enumerate(hosts[:MAX_HOSTS]):
+        y = 56 + i * 30
+        selected = i == index
+        screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
+        screen.shape(shape.rounded_rectangle(rect(24, y, look.W - 48, 26), 5))
+        ink = theme.bg if selected else theme.ink
+        label = found.get("name") or found["host"]
+        draw.blit_label(f"{label} (paired)" if found.get("id") in known else label,
+                        look.SIZE_VALUE, ink, 34, y + 4)
+        draw.blit_label(f"{found['host']}:{found['port']}", look.SIZE_SMALL,
+                        ink, look.W - 34, y + 7, align=2)
+    draw.blit_label("UP/DOWN choose    B select    HOME quit", look.SIZE_SMALL,
+                    theme.dim, look.W // 2, look.H - 18, align=1)
 
 
 def _ask_to_join(app, chosen):
@@ -236,7 +248,7 @@ def _ask_to_join(app, chosen):
     next_poll = time.ticks_ms()
 
     while True:
-        _draw_code(app.theme, code, label)
+        draw_code(app.theme, code, label)
         badge.update()
 
         if badge.pressed(BUTTON_HOME):
@@ -284,7 +296,7 @@ def _remember(app, chosen, outcome, host, port):
     return True
 
 
-def _draw_code(theme, code, label):
+def draw_code(theme, code, label):
     """Draw the code and what to do with it."""
     screen.pen = color.rgb(*theme.bg)
     screen.rectangle(rect(0, 0, look.W, look.H))

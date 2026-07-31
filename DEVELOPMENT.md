@@ -4,12 +4,13 @@ Two halves sharing one small contract: the host decides *what* to show, the badg
 
 | File | What is in it |
 | ---- | ------------- |
-| [`badge_app/__init__.py`](src/statsbadge/badge_app/__init__.py) | the app: splash, paging, buttons, the poll loop, exit |
+| [`badge_app/__init__.py`](src/statsbadge/badge_app/__init__.py) | the app: paging, buttons, the poll loop, exit |
 | [`badge_app/net.py`](src/statsbadge/badge_app/net.py) | the HTTP client, request signing, discovery, pairing |
 | [`badge_app/draw.py`](src/statsbadge/badge_app/draw.py) | every widget, the text cache, the band cache |
 | [`badge_app/pages.py`](src/statsbadge/badge_app/pages.py) | a page descriptor to a drawn page |
 | [`badge_app/look.py`](src/statsbadge/badge_app/look.py) | the five themes and the 320x240 layout |
 | [`badge_app/setup.py`](src/statsbadge/badge_app/setup.py) | pairing on the badge, with no keyboard |
+| [`badge_app/splash.py`](src/statsbadge/badge_app/splash.py) | the mark shown while the rest is still compiling |
 | [`model.py`](src/statsbadge/model.py) | the frame's shape, and what "unknown" means |
 | [`sources/`](src/statsbadge/sources/) | one file per way of measuring something |
 | [`collect.py`](src/statsbadge/collect.py) | the sampling thread and the history rings |
@@ -132,4 +133,4 @@ mpremote connect PORT mount . run tools/failover_test.py   # a changed host IP
 uv run python tools/shots.py shots                         # dumps to PNGs
 ```
 
-[`tools/probe.py`](tools/probe.py) draws every page kind and theme against a canned frame and needs no server. It also draws a deliberately sparse frame, because "unknown" rendering as `0` is the easiest thing here to break. [`tools/check_app.py`](tools/check_app.py) is what CI runs: the badge compiles these from source, where a syntax error is a crash dialog and nothing else, and it walks the AST for names that are neither defined, imported, nor badge builtins - these modules cannot be imported on the host to find that out.
+[`tools/probe.py`](tools/probe.py) draws every page kind and theme against a canned frame and needs no server. It also draws a deliberately sparse frame, because "unknown" rendering as `0` is the easiest thing here to break, and every screen that is not a page: the splash, the setup steps, the hosts menu, the error banners. Those call the app's own drawing, so a screenshot cannot go stale against a reworded screen. [`tools/check_app.py`](tools/check_app.py) is what CI runs: the badge compiles these from source, where a syntax error is a crash dialog and nothing else, and it walks the AST for names that are neither defined, imported, nor badge builtins - these modules cannot be imported on the host to find that out.

@@ -3,8 +3,8 @@
 
     python3 tools/icon.py
 
-The splash screen scaled down: the dial's angles and colours come from look.py, and the
-proportions are the splash's dimensions times one scale factor, so the two keep agreeing.
+The splash scaled down: the angles and colours come from look.py, the proportions from
+splash.py times one scale factor, so the two keep agreeing.
 Rendered at 16x and reduced, since there is no anti-aliasing to be had at 24 pixels
 otherwise.
 """
@@ -21,22 +21,15 @@ APP = ROOT / "src" / "statsbadge" / "badge_app"
 sys.path.insert(0, str(APP))
 
 import look  # noqa: E402
+import splash  # noqa: E402  its module-level constants; show() needs a badge
 
 SIZE = 24
 SUPERSAMPLE = 16
 CORNER = 5
 COLOURS = 32                      # 16 also reads fine at this size; 32 leaves margin
 
-# The splash at 320x240, from _splash() in badge_app/__init__.py.
-SPLASH_OUTER = 62
-SPLASH_INNER = 45
-SPLASH_BAR_W = 11
-SPLASH_GAP = 7
-SPLASH_BAR_HEIGHTS = (17, 30, 23)
-SPLASH_BASE_BELOW_CENTRE = 14
-
 OUTER = 11.5                      # leaves a pixel of margin inside the icon
-SCALE = OUTER / SPLASH_OUTER
+SCALE = OUTER / splash.OUTER
 
 # PicoVector's arc angles and PIL's both run clockwise on screen, but PIL starts at 3
 # o'clock where PicoVector starts at 6, so the dial's angles shift by a quarter turn.
@@ -73,16 +66,16 @@ def main():
     start = look.DIAL_FROM + PIL_OFFSET
     end = look.DIAL_TO + PIL_OFFSET
     sector(icon, theme.grid + (255,), start, end,
-           SPLASH_OUTER * scale, SPLASH_INNER * scale, centre)
+           splash.OUTER * scale, splash.INNER * scale, centre)
     sector(icon, theme.accent + (255,), start,
-           start + (end - start) * look.SPLASH_SWEEP,
-           SPLASH_OUTER * scale, SPLASH_INNER * scale, centre)
+           start + (end - start) * splash.SWEEP,
+           splash.OUTER * scale, splash.INNER * scale, centre)
 
-    bar_w = SPLASH_BAR_W * scale
-    gap = SPLASH_GAP * scale
+    bar_w = splash.BAR_W * scale
+    gap = splash.BAR_GAP * scale
     left = centre[0] - (3 * bar_w + 2 * gap) / 2
-    base = centre[1] + SPLASH_BASE_BELOW_CENTRE * scale
-    for i, height in enumerate(SPLASH_BAR_HEIGHTS):
+    base = centre[1] + splash.BASE_BELOW_CENTRE * scale
+    for i, height in enumerate(splash.BAR_HEIGHTS):
         x = left + i * (bar_w + gap)
         draw.rectangle([(x, base - height * scale), (x + bar_w, base)],
                        fill=theme.ink + (255,))
