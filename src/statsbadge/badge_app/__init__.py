@@ -94,6 +94,23 @@ HOLD_TO_EXIT_MS = 700
 # and write it, so page saves go through State.modify, which merges.
 STATE_APP = "stats"
 
+# The lowest display.backlight value that lights the panel. The driver raises its input
+# to the power of 2.8 to get the PWM duty, so 0.5 is 14% duty, 0.25 is 2% and 0.1 is
+# under a fifth of one percent: the bottom half of the range is the difference between
+# off and nearly off. A configured brightness is spread over the half that does
+# something instead. Drop this once display.backlight covers its own range.
+BACKLIGHT_FLOOR = 0.5
+
+
+def backlight(fraction):
+    """Set the display brightness, over the range the panel responds to.
+
+    Clamped as well as scaled: the binding casts to uint8_t, so anything over 1.0 wraps
+    and blanks the screen over a framebuffer that still dumps perfectly.
+    """
+    fraction = max(0.0, min(1.0, fraction))
+    display.backlight(BACKLIGHT_FLOOR + (1.0 - BACKLIGHT_FLOOR) * fraction)
+
 
 class App:
     def __init__(self):
@@ -285,7 +302,7 @@ class App:
         if theme is not self.theme:
             self.theme = theme
             draw.clear_cache()
-        display.backlight(float((self.layout or {}).get("brightness", 0.8)))
+        backlight(float((self.layout or {}).get("brightness", 0.8)))
         badge.caselights(
             self.theme.case if (self.layout or {}).get("caselights", True) else 0.0)
         if self.page_index >= len(self.page_list):
