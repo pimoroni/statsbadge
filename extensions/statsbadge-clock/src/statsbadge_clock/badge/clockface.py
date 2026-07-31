@@ -16,8 +16,6 @@ picture of a particular object and a black-on-amber railway clock is not that ob
 but the readouts beside it stay themed.
 """
 
-import math
-
 import draw
 import look
 import pages
@@ -40,36 +38,41 @@ SEC_HAND_LEN, SEC_HAND_HALF = 0.76, 0.011
 TAIL = 0.13
 
 _face_cache = None
+_hands_cache = None
 
 
-def _blunt(centre, degrees, inner, outer, half_width):
-    """A blunt-ended bar along a clock angle, as one four-point contour.
+def _bar(inner, outer, half_width):
+    """A blunt-ended bar pointing at twelve, measured out from the origin.
 
-    Angles run clockwise from twelve, which is how a clock is read, so no conversion
-    is needed. Built from points rather than a rotated rectangle because a mat3 chain
-    allocates once per call and this runs sixty times while baking the dial.
+    Where it ends up is left to _aim, so one bar serves every angle it is drawn at.
     """
-    radians = math.radians(degrees)
-    along_x, along_y = math.sin(radians), -math.cos(radians)
-    across_x, across_y = math.cos(radians), math.sin(radians)
-    cx, cy = centre
-    return [
-        vec2(cx + along_x * outer - across_x * half_width,
-             cy + along_y * outer - across_y * half_width),
-        vec2(cx + along_x * outer + across_x * half_width,
-             cy + along_y * outer + across_y * half_width),
-        vec2(cx + along_x * inner + across_x * half_width,
-             cy + along_y * inner + across_y * half_width),
-        vec2(cx + along_x * inner - across_x * half_width,
-             cy + along_y * inner - across_y * half_width),
-    ]
+    return shape.rectangle(rect(-half_width, -outer, half_width * 2.0, outer - inner))
+
+
+def _aim(bar, centre, degrees):
+    """Point a bar at a clock angle.
+
+    Angles run clockwise from twelve, which is how a clock is read and which way
+    rotate() turns, so the angle goes in as it comes. Translate before rotate, because
+    each call right-multiplies: the bar turns about the origin, then moves to centre.
+
+    Bars are built once and re-aimed rather than rebuilt, which is 653us against 958us
+    a draw. That relies on shape and mat3 both fitting one GC block, since only
+    single-block allocations advance MicroPython's free-block hint (py/gc.c,
+    n_free == 1). It holds with 32-byte blocks and a six-float mat3; on a build with
+    either of those changed, rebuilding each bar is the faster way round.
+    See tools/bench_clockface.py.
+    """
+    bar.transform = mat3().translate(centre[0], centre[1]).rotate(degrees)
+    return bar
 
 
 def _bake_face():
     """The dial: white disc and sixty marks. Static, so it is baked once and blitted.
 
-    Sixty anti-aliased bars is about 15ms, which would be most of a frame every frame.
-    Baked, the dial costs one small blit and only the hands are drawn live.
+    Sixty anti-aliased bars costs milliseconds, which would be most of a frame every
+    frame. Baked, the dial costs one small blit and only the hands are drawn live.
+    Timed by tools/bench_clockface.py.
     """
     size = RADIUS * 2 + 4
     face = image(size, size)
@@ -81,40 +84,38 @@ def _bake_face():
     face.pen = color.rgb(*FACE)
     face.shape(shape.circle(vec2(*middle), RADIUS))
 
-    # All sixty marks in one contour set under NON_ZERO: one shape, one setup cost.
-    face.fill_rule = image.NON_ZERO
+    # Two bars, re-aimed and drawn sixty times between them
     face.pen = color.rgb(*MARKS)
-    minutes = []
-    hours = []
+    hour_mark = _bar(RADIUS * (1.0 - HOUR_MARK_LEN), RADIUS * 0.97, RADIUS * HOUR_MARK_HALF)
+    minute_mark = _bar(RADIUS * (1.0 - MIN_MARK_LEN), RADIUS * 0.97, RADIUS * MIN_MARK_HALF)
     for tick in range(60):
-        degrees = tick * 6.0
-        if tick % 5 == 0:
-            hours.append(_blunt(middle, degrees,
-                                RADIUS * (1.0 - HOUR_MARK_LEN), RADIUS * 0.97,
-                                RADIUS * HOUR_MARK_HALF))
-        else:
-            minutes.append(_blunt(middle, degrees,
-                                  RADIUS * (1.0 - MIN_MARK_LEN), RADIUS * 0.97,
-                                  RADIUS * MIN_MARK_HALF))
-    face.shape(shape.custom(*minutes))
-    face.shape(shape.custom(*hours))
-    face.fill_rule = image.EVEN_ODD
+        face.shape(_aim(hour_mark if tick % 5 == 0 else minute_mark, middle, tick * 6.0))
+
     return face
 
 
-def _hand(centre, degrees, length, half_width, rgb, tail=TAIL):
+def _bake_hands():
+    """Hand geometry never changes, only the angle it is drawn at."""
+    return (
+        _bar(-RADIUS * TAIL, RADIUS * HOUR_HAND_LEN, RADIUS * HOUR_HAND_HALF),
+        _bar(-RADIUS * TAIL, RADIUS * MIN_HAND_LEN, RADIUS * MIN_HAND_HALF),
+        _bar(-RADIUS * TAIL, RADIUS * SEC_HAND_LEN, RADIUS * SEC_HAND_HALF),
+    )
+
+
+def _hand(bar, degrees, rgb):
     screen.pen = color.rgb(*rgb)
-    screen.shape(shape.custom(_blunt(centre, degrees, -RADIUS * tail,
-                                     RADIUS * length, RADIUS * half_width)))
+    screen.shape(_aim(bar, CENTRE, degrees))
 
 
 def render(_page, frame, _history, theme):
-    global _face_cache
+    global _face_cache, _hands_cache
     clock = frame.get("clock") or {}
     weather = frame.get("weather") or {}
 
     if _face_cache is None:
         _face_cache = _bake_face()
+        _hands_cache = _bake_hands()
     size = _face_cache.width
     screen.blit(_face_cache, vec2(int(CENTRE[0] - size / 2),
                                   int(CENTRE[1] - size / 2)))
@@ -126,11 +127,10 @@ def render(_page, frame, _history, theme):
                         CENTRE[0], CENTRE[1] - 8, align=1)
     else:
         second = _smooth_second(clock.get("seconds"))
-        _hand(CENTRE, (hour % 12) * 30.0 + minute * 0.5,
-              HOUR_HAND_LEN, HOUR_HAND_HALF, HANDS)
-        _hand(CENTRE, minute * 6.0 + second * 0.1,
-              MIN_HAND_LEN, MIN_HAND_HALF, HANDS)
-        _hand(CENTRE, second * 6.0, SEC_HAND_LEN, SEC_HAND_HALF, SECOND)
+        hour_hand, minute_hand, second_hand = _hands_cache
+        _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, HANDS)
+        _hand(minute_hand, minute * 6.0 + second * 0.1, HANDS)
+        _hand(second_hand, second * 6.0, SECOND)
         screen.pen = color.rgb(*SECOND)
         screen.shape(shape.circle(vec2(*CENTRE), 4))
 
