@@ -46,6 +46,10 @@ class Clock(Source):
     # the app so its page kind is available.
     badge_module = os.path.join(HERE, "badge", "clockface.py")
 
+    # Weather symbols, built from icons.txt by tools/make_icon_font.py. Pushed to the
+    # badge beside the module, which loads it with font.load().
+    badge_assets = (os.path.join(HERE, "badge", "icons.af"),)
+
     # Offered in the config UI, which stores them and hands them back through
     # configure(). Weather is off until a location is set, so the place comes first and
     # carries the explanation; coordinates are for pinning it exactly.

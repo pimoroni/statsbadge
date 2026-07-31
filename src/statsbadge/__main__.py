@@ -272,7 +272,9 @@ def _install(args, session):
         print(f"  {note}")
         modules = extension_modules(args)
         if modules:
-            print("  extensions: {}".format(", ".join(name for name, _ in modules)))
+            # One name per extension, however many files it contributes.
+            print("  extensions: {}".format(
+                ", ".join(sorted({name for name, _ in modules}))))
 
     # What would change, so the mass storage reset is only paid when it buys something.
     added, changed, removed = [], [], []

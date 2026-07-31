@@ -1,0 +1,33 @@
+# Material Symbols for the clock and weather page, built by
+# tools/make_icon_font.py into src/statsbadge_clock/badge/icons.af.
+#
+#   name  codepoint  ascii
+#
+# The third field is what badge-side code draws: the symbols live above U+FFFF's worth
+# of room in the .af format's u16 codepoint in some cases, and an ASCII character is
+# easier to put in a string either way. See CONDITIONS in __init__.py for the mapping.
+
+# sky, by Open-Meteo condition
+clear_day            f157  a
+clear_night          f159  b
+partly_cloudy_day    f172  c
+partly_cloudy_night  f174  d
+cloud                f15c  e
+filter_drama         e3dd  f
+foggy                e818  g
+
+# precipitation
+rainy_light          f61e  h
+rainy                f176  i
+rainy_heavy          f61f  j
+rainy_snow           f61d  k
+weather_mix          f60b  l
+weather_snowy        e2cd  m
+snowing_heavy        f61c  n
+thunderstorm         ebdb  o
+
+# readouts
+thermostat           f076  p
+thermostat_auto      f077  q
+humidity_percentage  f87e  r
+air                  efd8  s

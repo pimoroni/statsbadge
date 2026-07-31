@@ -34,6 +34,14 @@ Two halves sharing one small contract: the host decides *what* to show, the badg
 
 **The debug probe shares Raspberry Pi's USB vendor id** with the board it is attached to, so port detection filters on product id and product string. Talking MicroPython to a CMSIS-DAP interface just times out.
 
+**A .af advance over 127 is read as negative.** It is a signed byte, so an icon font that
+fills the -128..127 coordinate range draws every glyph of a run on the same spot, and
+`measure_text` returns a width of zero. Nothing in the badge's own font exceeds 120, and a
+capital stands 81 units, so `tools/make_icon_font.py` fits icons to a box of 100 and they
+line up with text. `../BADGEWARE.md` has the rest of the format, all of it measured off
+`MonaSans-Medium.af` rather than taken from alright-fonts' loader, which is a version
+behind what afinate writes.
+
 **`screen.raw` is R G B A, premultiplied, no byte swap.** Get it wrong and red and blue swap, which reads as a drawing bug rather than a converter one.
 
 ## Transport and signing

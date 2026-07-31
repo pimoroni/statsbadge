@@ -11,6 +11,7 @@ being a picture fetched over the wire.
 The class is a `sources.base.Source` with two extras:
 
     badge_module     path to a .py to install into the app's `pages/` directory
+    badge_assets     paths to further files the badge side needs, an .af icon font say
     badge_page       the page descriptor the config UI should offer
 
 Anything under the frame's own group names is merged; an extension may also add its
@@ -96,13 +97,20 @@ def _version(entry):
 
 
 def badge_modules(sources):
-    """The badge-side files the installer should push, as (name, path) pairs."""
-    modules = []
+    """The badge-side files the installer should push, as (name, path) pairs.
+
+    Modules and their assets together: the installer copies both into the app's ext/
+    directory, and load_extensions() imports only the .py it finds there.
+    """
+    files = []
     for source in sources:
+        name = getattr(source, "name", "ext")
         path = getattr(source, "badge_module", None)
         if path:
-            modules.append((getattr(source, "name", "ext"), path))
-    return modules
+            files.append((name, path))
+        for asset in getattr(source, "badge_assets", ()) or ():
+            files.append((name, asset))
+    return files
 
 
 def settings_schema(sources):

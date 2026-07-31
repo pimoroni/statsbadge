@@ -125,6 +125,15 @@ statsbadge install
 
 Badge-side modules go on by default, so installing an extension and then running `install` is all of it. `--no-extensions` leaves them off, and `--without NAME` drops one from both the frame and the badge.
 
+An extension can ship more than code. `badge_assets` lists further files to push, and the clock uses it for an icon font: its `icons.txt` names the Material Symbols it wants, and `tools/make_icon_font.py` packs them into an `.af` the badge loads with `font.load()`.
+
+```bash
+uv sync --group fonts
+python3 tools/make_icon_font.py extensions/statsbadge-clock
+```
+
+That fetches Material Symbols, fits each glyph to the text font's metrics so icons sit on the same baseline as the words beside them, and writes `src/statsbadge_clock/badge/icons.af`. Any vendored extension with an `icons.txt` builds the same way.
+
 That one is a worked example: a Swiss railway clock whose second hand sweeps at the badge's frame rate, plus weather from Open-Meteo, which needs no API key.
 
 ![Clock](shots/swiss_clock.png)

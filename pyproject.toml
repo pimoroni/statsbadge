@@ -47,6 +47,9 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = ["ruff>=0.6"]
+# Building an extension's .af icon font. Not needed to run or install anything, so it
+# is a group rather than an extra: uv sync --group fonts.
+fonts = ["freetype-py>=2.4", "shapely>=2.1"]
 
 # The example extension is deliberately not a workspace member. It declares a real
 # dependency on statsbadge, which is correct once published but circular in a checkout,
