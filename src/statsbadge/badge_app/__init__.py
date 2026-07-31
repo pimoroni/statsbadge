@@ -112,11 +112,11 @@ def load_extensions():
             print(f"extension {name} failed: {exc}")
     return loaded
 
-# The launcher puts an exit IRQ on HOME. Taking it lets HOME be held for exit, and
-# leaves the button usable, but a way out has to stay - see `_check_exit`.
-BUTTON_HOME.irq(None)
-HOLD_TO_EXIT_MS = 700
-
+# The launcher's HOME irq is left alone: it calls this module's on_exit() and resets, so
+# HOME quits and the page index is saved on the way out.
+#
+# State writes /state/<app>.json, the same file net.Config keeps the pairing in. Both read
+# and write it, so page saves go through State.modify, which merges.
 STATE_APP = "stats"
 
 
@@ -134,7 +134,6 @@ class App:
         self.detail = None
         self.toast_until = 0
         self.toast_text = None
-        self.home_since = None
         self.dirty = True
 
         # Poll state: one request in flight at a time, cycling stats, then layout or
@@ -152,6 +151,7 @@ class App:
         saved = {"page": 0}
         State.load(STATE_APP, saved)
         self.page_index = int(saved.get("page", 0) or 0)
+        self._saved_page = self.page_index
 
     # -- pages --------------------------------------------------------------
 
@@ -172,7 +172,6 @@ class App:
         if not pages:
             return
         self.page_index = (self.page_index + delta) % len(pages)
-        State.save(STATE_APP, {"page": self.page_index})
         self.dirty = True
 
     # -- polling ------------------------------------------------------------
@@ -407,23 +406,25 @@ class App:
 
     # -- exit ---------------------------------------------------------------
 
-    def check_exit(self):
-        """HOME held leaves the app. A press alone does nothing, so HOME stays free
-        for a menu without stranding anyone."""
-        if badge.held(BUTTON_HOME):
-            if self.home_since is None:
-                self.home_since = badge.ticks
-            elif badge.ticks - self.home_since > HOLD_TO_EXIT_MS:
-                return True
-        else:
-            self.home_since = None
-        return False
+    def save_page(self):
+        """Persist the page index, if it moved. Called on the way out.
+
+        modify, not save: save replaces the file and would drop the pairing that lives
+        in it. Not called per keypress - that is a flash write inside the input handler,
+        and the page is not worth one.
+        """
+        if self.page_index == self._saved_page:
+            return
+        State.modify(STATE_APP, {"page": self.page_index})
+        self._saved_page = self.page_index
 
 
 def main():
+    global _app
     draw.prepare()
     load_extensions()
     app = App()
+    _app = app
 
     # Say something before the first fetch lands: a blank screen for a second reads
     # as a hang.
@@ -442,8 +443,6 @@ def main():
     app.apply_layout()
 
     while True:
-        if app.check_exit():
-            return
         app.buttons()
         # B selects, as it does on every screen that takes A/B/C. Offered whenever the
         # badge cannot get a usable connection, not only when unpaired, or credentials a
@@ -465,6 +464,15 @@ def main():
             app.render()
             app.dirty = False
         badge.update()
+
+
+_app = None
+
+
+def on_exit():
+    """Called by the launcher when HOME quits the app, and on a normal return."""
+    if _app is not None:
+        _app.save_page()
 
 
 main()

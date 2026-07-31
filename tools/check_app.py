@@ -59,6 +59,7 @@ def main(app):
     return None
 
 
+
 def check_names(path, tree):
     """Catch a name that is neither defined here, imported, nor a badge builtin.
 

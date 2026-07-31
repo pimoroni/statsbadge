@@ -20,6 +20,10 @@ jobs:
     permissions:
       id-token: write # for trusted publishing
 
+    env:
+      TUFTY_REPO: pimoroni/tufty2350
+      TUFTY_REF: feature/align-v3
+
     steps:
       - uses: actions/checkout@v5
 
@@ -39,6 +43,34 @@ jobs:
             echo "::error::tag $TAG does not match pyproject version $VERSION"
             exit 1
           fi
+
+      - name: Read the pinned MicroPython
+        shell: bash
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/$TUFTY_REPO/$TUFTY_REF/ci/micropython.sh" \
+            | grep -E '^MICROPYTHON_(FLAVOUR|VERSION)=' | tr -d '"' | tee -a "$GITHUB_ENV"
+
+      - name: Cache mpy-cross
+        id: mpy-cross
+        uses: actions/cache@v4
+        with:
+          path: mpy-cross
+          key: mpy-cross-${{ env.MICROPYTHON_FLAVOUR }}-${{ env.MICROPYTHON_VERSION }}
+
+      - name: Build mpy-cross
+        if: steps.mpy-cross.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$MICROPYTHON_VERSION" \
+            "https://github.com/$MICROPYTHON_FLAVOUR/micropython" micropython
+          make -C micropython/mpy-cross -j"$(nproc)"
+          mkdir -p mpy-cross
+          cp micropython/mpy-cross/build/mpy-cross mpy-cross/
+
+      # Into the package, so `statsbadge install` uses bytecode without being asked. The
+      # .py sources ship too and are the fallback on different firmware.
+      - name: Compile the app into the package
+        run: MPY_CROSS=mpy-cross/mpy-cross ENTRY_MPY=1
+             ci/build-mpy.sh src/statsbadge/badge_app src/statsbadge/badge_app/mpy
 
       - run: uv build
 

@@ -82,7 +82,13 @@ Where a screen takes A/B/C for its own input rather than passing them to the hos
 
 The badge compiles from source at every launch: 763ms for the five modules, timed off its own flash, since a mounted checkout streams over serial. Two things come off that without precompiling: `setup.py` is imported on demand, and the mark goes up after `look` alone, from shapes only. `font.load` is a further 107ms, paid once.
 
-Precompiled, the five import in **66ms**. [`ci/build-mpy.sh`](ci/build-mpy.sh) builds them with an `mpy-cross` from whatever MicroPython the board repo's `ci/micropython.sh` pins, so the version cannot drift from the firmware, and compiles with `-s` so a traceback names the module rather than the build path. `(flags << 8) | version` from the header equals `sys.implementation._mpy`, so `statsbadge install --mpy build/mpy` checks compatibility against the connected badge before writing anything; the firmware then refuses a mismatch itself with `ValueError: incompatible .mpy file`. `-march` is irrelevant to bytecode-only modules - `armv6m`, `x64` and the default emit an identical header.
+Precompiled, the five import in **66ms**, and that is the default: CI runs [`ci/build-mpy.sh`](ci/build-mpy.sh) into `badge_app/mpy/` before `uv build`, so a wheel carries both the sources and bytecode, and `statsbadge install` picks the bytecode with no flags. `--mpy DIR` overrides with a build of your own; `--source` forces the sources.
+
+The build uses an `mpy-cross` from whatever MicroPython the board repo's `ci/micropython.sh` pins, so the version cannot drift from the firmware, and compiles with `-s` so a traceback names the module rather than the build path.
+
+Bytecode only loads on the firmware it was built for, which is why the sources ship too. `(flags << 8) | version` from the header equals `sys.implementation._mpy`, so the install compares the two and **falls back to the sources** on a mismatch rather than refusing - a wheel outlives a firmware release. The firmware would refuse it anyway, with `ValueError: incompatible .mpy file`. `-march` is irrelevant to bytecode-only modules: `armv6m`, `x64` and the default emit an identical header.
+
+Staleness is checked by content, not mtime: `ci/build-mpy.sh` records a hash per source in `BUILD_INFO` and the install warns if any has changed since. Mtimes would be meaningless here, because everything in an extracted wheel carries the same install-time stamp.
 
 ## The frame, and "unknown"
 

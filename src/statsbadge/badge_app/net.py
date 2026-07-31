@@ -106,15 +106,29 @@ class Config:
         return self.paired
 
     def save(self):
+        """Write our keys back, leaving anything else in the file alone.
+
+        The app's page index lives here too, under "page", and State replaces a file
+        wholesale - so both writers merge or one wipes the other.
+        """
         try:
             try:
                 import os
                 os.mkdir("/state")
             except OSError:
                 pass
+            try:
+                with open(STATE_FILE) as handle:
+                    data = json.load(handle)
+                if not isinstance(data, dict):
+                    data = {}
+            except (OSError, ValueError):
+                data = {}
+            data["badge_id"] = self.badge_id
+            data["active"] = self.active
+            data["hosts"] = self.hosts
             with open(STATE_FILE, "w") as handle:
-                json.dump({"badge_id": self.badge_id, "active": self.active,
-                           "hosts": self.hosts}, handle)
+                json.dump(data, handle)
             self._flushed = self.seq
             return True
         except OSError:

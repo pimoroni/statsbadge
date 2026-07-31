@@ -199,34 +199,33 @@ def cmd_install(args):
         info["model"], info["uid"],
         "already installed" if info["app_installed"] else "not installed"))
 
-    directory = config_dir(args.config_dir)
-    badges = auth.Store(os.path.join(directory, "badges.json"))
-    secret = badges.secret_for(info["uid"])
-    if secret and not args.new_secret:
-        # Hand the badge the counter the host has already reached, so its first
-        # request is neither a replay nor outside the window.
-        start_seq = badges.list_badges().get(info["uid"], {}).get("seq", 0)
-        print("  reusing the existing secret for this badge "
-              f"(counter at {start_seq})")
-    else:
-        secret = badges.provision(info["uid"], args.name)
-        start_seq = 0
-        print(f"  minted a new secret ({auth.fingerprint(secret)})")
+    secret, start_seq = None, 0
+    if not args.app_only:
+        directory = config_dir(args.config_dir)
+        badges = auth.Store(os.path.join(directory, "badges.json"))
+        secret = badges.secret_for(info["uid"])
+        if secret and not args.new_secret:
+            # Hand the badge the counter the host has already reached, so its first
+            # request is neither a replay nor outside the window.
+            start_seq = badges.list_badges().get(info["uid"], {}).get("seq", 0)
+            print("  reusing the existing secret for this badge "
+                  f"(counter at {start_seq})")
+        else:
+            secret = badges.provision(info["uid"], args.name)
+            print(f"  minted a new secret ({auth.fingerprint(secret)})")
 
-    # A precompiled build is verified against this badge before the volume is touched:
-    # the wrong bytecode version fails at import, after the launcher has started the app.
+    # Bytecode is preferred when it matches this badge, and the .py sources are the
+    # fallback: they load on any firmware.
     source = None
     if args.mpy and args.state_only:
         print("  note: --mpy does nothing with --state-only, which writes credentials only")
-    if args.mpy and not args.state_only:
+    if not args.state_only:
         try:
-            built, count = install.check_precompiled(args.mpy, info["mpy"])
+            source, note = install.choose_app_source(args.mpy, args.source, info["mpy"])
         except install.InstallError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        source = args.mpy
-        print(f"  precompiled: {count} modules, bytecode v{built & 0xFF}."
-              f"{(built >> 8) & 3}, matches this badge")
+        print(f"  {note}")
 
     host = args.server_host or (server._local_addresses() or ["127.0.0.1"])[0]
 
@@ -234,7 +233,8 @@ def cmd_install(args):
     # resetting into mass storage loses the write: the reset discards it and the volume
     # commits whatever was there before, which with --new-secret would leave the badge
     # holding a secret the host has already replaced.
-    if not args.state_only and (not info["app_installed"] or args.force_app):
+    if not args.state_only and (not info["app_installed"] or args.force_app
+                                or args.app_only):
         if not args.yes:
             print()
             print("Installing the app needs the badge's USB volume, which means")
@@ -260,6 +260,11 @@ def cmd_install(args):
         print(f"  back on {port}")
     elif not args.state_only:
         print("  app already installed, use --force-app to overwrite")
+
+    if args.app_only:
+        print("\nDone. App only; no credentials were written.")
+        print("Pair it from the badge: run 'statsbadge pair', then press B on the badge.")
+        return 0
 
     service = build_service(args)
     server_id = service.identity["id"]
@@ -404,8 +409,15 @@ def main(argv=None):
     inst.add_argument("--port-dev", help="serial port (default: autodetect)")
     inst.add_argument("--server-host", help="address to bake in (default: this host's)")
     inst.add_argument("--name", help="a name for this badge")
-    inst.add_argument("--state-only", action="store_true",
+    what = inst.add_mutually_exclusive_group()
+    what.add_argument("--state-only", action="store_true",
                      help="write credentials only, never touch /system")
+    inst.add_argument("--source", action="store_true",
+                     help="install the .py sources even if the package carries a "
+                          "precompiled build")
+    what.add_argument("--app-only", action="store_true",
+                     help="copy the app only, minting nothing and writing no "
+                          "credentials, so the badge can be paired from its own screen")
     inst.add_argument("--force-app", action="store_true", help="reinstall the app")
     inst.add_argument("--new-secret", action="store_true", help="mint a fresh secret")
     inst.add_argument("--with-extensions", action="store_true",

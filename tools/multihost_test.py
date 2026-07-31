@@ -14,7 +14,8 @@ sys.path.insert(0, "/remote/src/statsbadge/badge_app")
 import net
 
 REAL = net.STATE_FILE
-net.STATE_FILE = "/state/stats_test.json"
+STATE_APP = "stats_test"
+net.STATE_FILE = f"/state/{STATE_APP}.json"
 
 failures = []
 
@@ -72,6 +73,31 @@ check("first host's secret intact", config.secret == before_secret)
 check("first host's counter intact", config.seq == before_seq, f"seq={config.seq}")
 check("switching to the active one is a no-op", not config.switch("srv-aaa"))
 check("switching to an unknown id refuses", not config.switch("srv-zzz"))
+
+# -- the page index shares this file, so both writers must merge -----------
+config.save()
+before_hosts = len(net.Config().hosts)
+State.modify(STATE_APP, {"page": 3})
+check("pairing survives a page save", len(net.Config().hosts) == before_hosts,
+      f"{len(net.Config().hosts)} of {before_hosts} hosts left")
+
+# And the other way round: writing the pairing must not drop the page.
+net.Config().save()
+page = {"page": 0}
+State.load(STATE_APP, page)
+check("page survives a config save", page["page"] == 3, str(page))
+
+# A plain State.save would replace the file; that is why the app uses modify.
+State.save(STATE_APP, {"page": 4})
+check("a plain State.save does wipe it (hence modify)", len(net.Config().hosts) == 0,
+      "State.save left hosts behind")
+config = net.Config()
+config.badge_id = "badge1"
+config.remember("srv-aaa", "10.0.0.99", 8420, "ab" * 32, "workshop", seq=before_seq)
+config.remember("srv-bbb", "10.0.0.7", 8420, "cd" * 32, "laptop", seq=0)
+config.switch("srv-aaa")
+check("rebuilt for the rest of the checks", len(config.hosts) == 2,
+      f"{len(config.hosts)} hosts")
 
 # -- it all survives a reload ----------------------------------------------
 config.save()

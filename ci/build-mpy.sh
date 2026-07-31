@@ -146,5 +146,22 @@ if expect and int(expect) != mpy:
 (out / "MPY_VERSION").write_text(f"{mpy}\n")
 PY
 
+# What was compiled, by content hash, so the installer can tell a stale build from a
+# current one without relying on mtimes.
+python3 - "$APP_DIR" "$OUT_DIR" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+app, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+sources = {
+    path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+    for path in sorted(app.glob("*.py"))
+}
+(out / "BUILD_INFO").write_text(json.dumps({"sources": sources}, indent=2))
+print(f"recorded hashes for {len(sources)} sources")
+PY
+
 echo "compiled $compiled modules into $OUT_DIR"
 ls -la "$OUT_DIR"

@@ -140,7 +140,7 @@ mpremote connect PORT mount . run tools/failover_test.py    # a changed host IP
 uv run python tools/shots.py shots                  # framebuffer dumps to PNGs
 ```
 
-A precompiled app loads in 66ms where the source takes 763ms, because the badge compiles at every launch. `ci/build-mpy.sh` builds it against whatever MicroPython the board repo pins, and `statsbadge install --mpy build/mpy` checks the bytecode version against the badge before writing anything.
+`statsbadge install` uses precompiled bytecode by default: CI compiles it into the package before the wheel is built, so a pip install carries both that and the `.py` sources. It loads in 66ms where the sources take 763ms, because the badge compiles at every launch. Bytecode only loads on the firmware it was built for, so if a badge runs different firmware the install falls back to the sources and says so. `--mpy DIR` installs a build of your own, `--source` forces the sources.
 
 Releases: tag `vX.Y.Z` matching the version in `pyproject.toml` and publish a GitHub release. CI builds the wheel, checks it carries the badge app, attaches both the source and precompiled app zips, and publishes to PyPI over trusted publishing - no API token to store.
 

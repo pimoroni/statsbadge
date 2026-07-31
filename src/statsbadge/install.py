@@ -11,6 +11,7 @@ first, because it resets the badge.
 """
 
 import glob
+import hashlib
 import json
 import os
 import pathlib
@@ -140,13 +141,18 @@ def check_precompiled(directory, badge_mpy):
     if not found:
         raise InstallError(f"no .mpy files in {directory}")
     versions = set()
-    for path in found:
-        header = path.read_bytes()[:4]
+    for compiled in found:
+        header = compiled.read_bytes()[:4]
         if header[:1] != b"M":
-            raise InstallError(f"{path.name} is not a .mpy")
+            raise InstallError(f"{compiled.name} is not a .mpy")
         versions.add((header[3] << 8) | header[1])
     if len(versions) > 1:
         raise InstallError(f"mixed bytecode versions in {directory}: {sorted(versions)}")
+    stale = _stale_modules(path)
+    if stale:
+        print(f"warning: {', '.join(stale)} changed since {directory} was built. "
+              "Rebuild with ci/build-mpy.sh.")
+
     built = versions.pop()
     if badge_mpy and built != badge_mpy:
         raise InstallError(
@@ -204,7 +210,9 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
         "    entry['seq'] = max(entry.get('seq', 0), old.get('seq', 0))\n"
         "    del hosts['unknown']\n"
         f"hosts[{key!r}] = entry\n"
-        f"data = {{'badge_id': {badge_uid!r}, 'active': {key!r}, 'hosts': hosts}}\n"
+        f"data['badge_id'] = {badge_uid!r}\n"
+        f"data['active'] = {key!r}\n"
+        "data['hosts'] = hosts\n"
         "open(path, 'w').write(json.dumps(data))\n"
         "print('wrote', path, len(hosts), 'host(s)')\n"
     )
@@ -253,6 +261,42 @@ def app_source_dir():
     return app
 
 
+def packaged_mpy_dir():
+    """The precompiled app shipped inside the package, or None.
+
+    CI compiles into badge_app/mpy/ before the wheel is built, so a pip install carries
+    both: the .py sources, which load on any firmware, and bytecode for the firmware
+    current at release. A local `uv build` has no mpy-cross and produces neither.
+    """
+    app = pathlib.Path(app_source_dir()) / "mpy"
+    if app.is_dir() and any(app.glob("*.mpy")):
+        return str(app)
+    return None
+
+
+def choose_app_source(explicit, force_source, badge_mpy):
+    """Which directory to install from. Returns (source or None for .py, note).
+
+    Bytecode only loads on the firmware it was built for, so a packaged build that does
+    not match the badge is skipped rather than refused - the sources still work.
+    """
+    if force_source:
+        return None, "installing sources, as asked"
+    if explicit:
+        built, count = check_precompiled(explicit, badge_mpy)
+        return explicit, (f"precompiled from {explicit}: {count} modules, "
+                          f"bytecode v{built & 0xFF}.{(built >> 8) & 3}")
+    packaged = packaged_mpy_dir()
+    if packaged is None:
+        return None, "installing sources; no precompiled build in this package"
+    try:
+        built, count = check_precompiled(packaged, badge_mpy)
+    except InstallError as exc:
+        return None, f"installing sources instead: {exc}"
+    return packaged, (f"precompiled, shipped with the package: {count} modules, "
+                      f"bytecode v{built & 0xFF}.{(built >> 8) & 3}")
+
+
 def enter_mass_storage(port):
     """Ask the badge to present its USB volume.
 
@@ -297,6 +341,30 @@ def _volume_candidates():
     return []
 
 
+def _stale_modules(built_dir):
+    """Names of modules whose source has changed since the build.
+
+    By content, not mtime: a wheel's files all carry extraction-time stamps, so an mtime
+    comparison there is noise. A build with no BUILD_INFO cannot be checked.
+    """
+    try:
+        info = json.loads((built_dir / "BUILD_INFO").read_text())
+    except (OSError, ValueError):
+        return []
+    try:
+        sources = pathlib.Path(app_source_dir())
+    except InstallError:
+        return []
+    stale = []
+    for name, digest in sorted(info.get("sources", {}).items()):
+        source = sources / name
+        if not source.exists():
+            continue
+        if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+            stale.append(name)
+    return stale
+
+
 def copy_app(volume, source=None, extra_modules=()):
     """Copy the app onto a mounted badge volume.
 
@@ -315,7 +383,8 @@ def copy_app(volume, source=None, extra_modules=()):
     copied = []
     for name in sorted(os.listdir(source)):
         # MPY_VERSION is a note from the precompile, not something the badge needs.
-        if name.startswith(".") or name in ("__pycache__", "MPY_VERSION"):
+        if name.startswith(".") or name in ("__pycache__", "MPY_VERSION",
+                                            "BUILD_INFO", "mpy"):
             continue
         src = os.path.join(source, name)
         if os.path.isdir(src):
