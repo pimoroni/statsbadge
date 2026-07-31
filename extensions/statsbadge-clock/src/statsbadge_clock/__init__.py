@@ -16,6 +16,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from statsbadge.sources.base import Source
@@ -46,11 +47,14 @@ class Clock(Source):
     badge_module = os.path.join(HERE, "badge", "clockface.py")
 
     # Offered in the config UI, which stores them and hands them back through
-    # configure(). Weather is off until a location is set, which is why latitude comes
-    # first and carries the explanation.
+    # configure(). Weather is off until a location is set, so the place comes first and
+    # carries the explanation; coordinates are for pinning it exactly.
     settings = (
+        {"key": "place", "label": "Place", "type": "text",
+         "hint": "A town or city, and a country if the name is a common one: "
+                 "Sheffield, or Sheffield, US. Weather stays off until one is set"},
         {"key": "latitude", "label": "Latitude", "type": "number",
-         "hint": "Weather stays off until a location is set"},
+         "hint": "Used instead of the place, for a spot no name lands on"},
         {"key": "longitude", "label": "Longitude", "type": "number"},
         {"key": "units", "label": "Temperature", "type": "choice",
          "options": ["celsius", "fahrenheit"], "default": "celsius"},
@@ -69,13 +73,23 @@ class Clock(Source):
 
     def __init__(self, config):
         super().__init__(config)
-        self.latitude = config.get("latitude")
-        self.longitude = config.get("longitude")
-        self.units = config.get("units", "celsius")
         self._weather = {}
         self._next_weather = 0.0
         # Open-Meteo asks for no more than a request every few minutes per location.
         self._interval = float(config.get("weather_interval", 900))
+        self._read_settings()
+
+    def _read_settings(self):
+        was = getattr(self, "place", None)
+        self.place = (self.config.get("place") or "").strip()
+        self.latitude = self.config.get("latitude")
+        self.longitude = self.config.get("longitude")
+        self.units = self.config.get("units", "celsius")
+        # What the place name resolved to, kept so a name costs one lookup rather than one
+        # per forecast. configure() runs on every save, so an unchanged name keeps it.
+        if was != self.place or not hasattr(self, "_located"):
+            self._located = None
+            self._located_for = None
 
     def configure(self, settings):
         """Take a location while running.
@@ -86,9 +100,7 @@ class Clock(Source):
         an hour.
         """
         super().configure(settings)
-        self.latitude = self.config.get("latitude")
-        self.longitude = self.config.get("longitude")
-        self.units = self.config.get("units", "celsius")
+        self._read_settings()
         self._next_weather = 0.0
 
     def sample(self, frame, dt):
@@ -100,25 +112,77 @@ class Clock(Source):
             "hour": now.tm_hour,
             "minute": now.tm_min,
         }
-        if self.latitude is None or self.longitude is None:
+        where = self._where()
+        if where is None:
             frame["weather"] = {}
             return
         if time.monotonic() >= self._next_weather:
             self._next_weather = time.monotonic() + self._interval
             try:
-                self._weather = self._fetch()
+                self._weather = self._fetch(where)
             except Exception as exc:
                 self.note_fault(exc)
         frame["weather"] = dict(self._weather)
 
-    def _fetch(self):
+    def _where(self):
+        """Coordinates to ask about, and the name to show for them.
+
+        Coordinates win where they are given, being the more specific answer. Otherwise
+        the place name is looked up once and kept, because it cannot change until the
+        setting does.
+        """
+        if self.latitude is not None and self.longitude is not None:
+            return (self.latitude, self.longitude, None)
+        if not self.place:
+            return None
+        if self._located_for != self.place:
+            self._located_for = self.place
+            try:
+                self._located = self._geocode(self.place)
+            except Exception as exc:
+                self._located = None
+                self.note_fault(exc)
+        return self._located
+
+    def _geocode(self, place):
+        """A place name to coordinates, through Open-Meteo's own geocoder.
+
+        No key and no account, like the forecast. A name after a comma is matched against
+        the country, so "Sheffield, US" gets Alabama and "Sheffield" gets the one most
+        people mean: results arrive ordered by how well known they are.
+        """
+        name, _, country = place.partition(",")
+        name = name.strip()
+        country = country.strip().lower()
+        if not name:
+            return None
+        url = ("https://geocoding-api.open-meteo.com/v1/search"
+               f"?name={urllib.parse.quote(name)}&count=10&language=en&format=json")
+        with urllib.request.urlopen(url, timeout=8) as response:
+            found = json.loads(response.read().decode("utf-8")).get("results") or []
+        if not found:
+            raise LookupError(f"nowhere called {place!r}")
+        match = found[0]
+        if country:
+            for candidate in found:
+                if country in (candidate.get("country_code", "").lower(),
+                               candidate.get("country", "").lower()):
+                    match = candidate
+                    break
+        label = ", ".join(part for part in (match.get("name"),
+                                            match.get("country_code")) if part)
+        return (match["latitude"], match["longitude"], label)
+
+    def _fetch(self, where):
+        latitude, longitude, label = where
         url = (
             "https://api.open-meteo.com/v1/forecast"
-            "?latitude={}&longitude={}&current=temperature_2m,relative_humidity_2m,"
+            f"?latitude={latitude}&longitude={longitude}"
+            "&current=temperature_2m,relative_humidity_2m,"
             "apparent_temperature,weather_code,wind_speed_10m"
-            "&temperature_unit={}"
-        ).format(self.latitude, self.longitude,
-             "fahrenheit" if self.units == "fahrenheit" else "celsius")
+            f"&temperature_unit="
+            f"{'fahrenheit' if self.units == 'fahrenheit' else 'celsius'}"
+        )
         with urllib.request.urlopen(url, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
         current = payload.get("current", {})
@@ -130,4 +194,5 @@ class Clock(Source):
             "wind": current.get("wind_speed_10m"),
             "condition": CONDITIONS.get(code, "?") if code is not None else None,
             "code": code,
+            "place": label,
         }

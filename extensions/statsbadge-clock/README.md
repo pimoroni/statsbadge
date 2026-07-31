@@ -12,10 +12,21 @@ uv pip install --no-deps ./extensions/statsbadge-clock
 statsbadge install --with-extensions
 ```
 
-Weather comes from [Open-Meteo](https://open-meteo.com), which needs no API key. Set a location under **Extensions** in the config UI, which stores it and hands it to the running source, so the next sample fetches. The same settings work on the command line for a host with no browser near it:
+Weather comes from [Open-Meteo](https://open-meteo.com), which needs no API key. Set a **Place** under Extensions in the config UI - a town or city, and a country after a comma if the name is a common one:
+
+```
+Sheffield          the one most people mean, by how well known it is
+Sheffield, US      Alabama
+Paris, US          Texas
+```
+
+Names are resolved through Open-Meteo's own geocoder, which also needs no key, once per name rather than once per forecast. What it resolved to comes back as `weather.place`, so the Live panel shows which Sheffield you got.
+
+Latitude and longitude are still there for a spot no name lands on, and win where they are set. The same settings work on the command line, for a host with no browser near it:
 
 ```bash
-statsbadge serve --extension clock.latitude=52.4 --extension clock.longitude=-1.9
+statsbadge serve --extension clock.place=Sheffield
+statsbadge serve --extension clock.latitude=53.38 --extension clock.longitude=-1.47
 ```
 
 A setting stored by the UI wins over the flag, since the UI is the live editor and the flag is for a first run.
