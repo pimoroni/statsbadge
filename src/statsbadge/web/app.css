@@ -80,6 +80,10 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 
 /* -- pages ------------------------------------------------------------- */
 
+/* Above the list, where it stays reachable however many pages there are. */
+.row { display: flex; gap: 8px; margin-bottom: 12px; }
+.row select { flex: 1; }
+
 .pages { list-style: none; margin: 0; padding: 0; }
 
 .page {

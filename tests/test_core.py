@@ -765,6 +765,33 @@ def test_extensions_describe_finds_the_clock(_h):
     assert "clock" in clock["provides"], clock
 
 
+@check
+def test_an_extension_page_can_be_added_and_reaches_the_badge(h):
+    """The UI's kind picker is built from this, and the config it PUTs has to validate.
+
+    Without it the page an extension offers is unreachable: the server knows about it,
+    the badge can draw it, and there is no way to ask for one.
+    """
+    status, caps = h.raw("GET", "/api/capabilities")
+    assert status == 200, status
+    offered = caps.get("extension_pages") or []
+    if not offered:
+        return              # no extension is pip installed in this environment
+    page = offered[0]
+    assert page.get("kind") and page.get("title"), page
+    assert page["kind"] not in layout.KINDS, page
+
+    _status, config = h.raw("GET", "/api/config")
+    config["pages"].append({**page, "id": page["kind"] + "test"})
+    status, saved = h.raw("PUT", "/api/config", json.dumps(config).encode(),
+                          {"Content-Type": "application/json"})
+    assert status == 200, (status, saved)
+
+    _status, sent = h.raw("GET", "/api/preview")
+    kinds = [p["kind"] for p in sent["pages"]]
+    assert page["kind"] in kinds, kinds
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

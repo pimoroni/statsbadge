@@ -200,10 +200,16 @@ function pageCard(page, index) {
 }
 
 function newPage(kind) {
+  const suffix = Date.now().toString(36).slice(-4);
+  const offered = (caps.extension_pages || []).find((p) => p.kind === kind);
+  if (offered) {
+    // An extension knows its own page: take the fields and title it shipped with,
+    // since only its badge module knows what shape they go in.
+    return { ...offered, id: `${offered.id || kind}${suffix}` };
+  }
   const shape = SHAPE[kind];
   const pool = numericRefs();
-  const page = { id: `${kind}${Date.now().toString(36).slice(-4)}`, kind,
-                 title: kind };
+  const page = { id: `${kind}${suffix}`, kind, title: kind };
   if (shape.one) {
     page[shape.one] = kind === "bars" ? "cpu.cores" : (pool[0] || "cpu.pct");
   }
@@ -211,6 +217,18 @@ function newPage(kind) {
     page[shape.many] = pool.slice(0, Math.min(2, shape.max));
   }
   return page;
+}
+
+/** Add the installed extensions' pages to the kind picker, which only lists the built-ins. */
+function offerExtensionPages() {
+  const picker = $("addkind");
+  for (const page of caps.extension_pages || []) {
+    if ([...picker.options].some((option) => option.value === page.kind)) continue;
+    const option = document.createElement("option");
+    option.value = page.kind;
+    option.textContent = page.title || page.kind;
+    picker.appendChild(option);
+  }
 }
 
 /** Tell the user when a page they configured will not appear on the badge. */
@@ -534,6 +552,7 @@ async function boot() {
   $("hostline").textContent =
     `${sys.host || "host"} · ${sys.os || ""} · ${sys.cpu_name || ""}`;
 
+  offerExtensionPages();
   renderPages();
   renderLook();
   renderSources();
