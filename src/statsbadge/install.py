@@ -425,6 +425,11 @@ def choose_app_source(explicit, force_source, badge_mpy):
 
     Bytecode only loads on the firmware it was built for, so a packaged build that does
     not match the badge is skipped rather than refused - the sources still work.
+
+    A bundled build whose sources have moved on is skipped for the same reason. It loads
+    perfectly well and is simply the older program, which shows up as an edit that had no
+    effect rather than as an error. An explicitly named directory is still only warned
+    about: naming it is asking for it, and its sources are not expected to be these ones.
     """
     if force_source:
         return None, "installing sources, as asked"
@@ -435,6 +440,11 @@ def choose_app_source(explicit, force_source, badge_mpy):
     packaged = packaged_mpy_dir()
     if packaged is None:
         return None, "installing sources; no precompiled build in this package"
+    stale = _stale_modules(packaged)
+    if stale:
+        return None, (f"installing sources: {', '.join(stale)} changed since the bundled "
+                      "build, so that bytecode is the older program. Rebuild it with "
+                      "ci/build-mpy.sh to install bytecode again")
     try:
         built, count = check_precompiled(packaged, badge_mpy)
     except InstallError as exc:
@@ -494,7 +504,7 @@ def _stale_modules(built_dir):
     comparison there is noise. A build with no BUILD_INFO cannot be checked.
     """
     try:
-        info = json.loads((built_dir / "BUILD_INFO").read_text())
+        info = json.loads((pathlib.Path(built_dir) / "BUILD_INFO").read_text())
     except (OSError, ValueError):
         return []
     try:

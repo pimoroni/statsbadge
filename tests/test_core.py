@@ -6,6 +6,7 @@ plain run with no pytest installed.
 
 import json
 import os
+import pathlib
 import socket
 import sys
 import tempfile
@@ -16,7 +17,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from statsbadge import auth, identity, layout, server  # noqa: E402
+from statsbadge import auth, identity, install, layout, server  # noqa: E402
 
 
 class Harness:
@@ -257,6 +258,39 @@ def test_pruning_drops_absent_groups(_h):
     assert "gpu" not in ids, ids
     cpu = next(p for p in pages if p["id"] == "cpu")
     assert cpu["readouts"] == [], cpu
+
+
+@check
+def test_a_stale_precompile_is_not_what_gets_installed(_h):
+    """Bytecode built before an edit loads fine and is the older program.
+
+    Which looks like a change that did nothing, so the sources win instead.
+    """
+    import hashlib
+
+    app = pathlib.Path(install.app_source_dir())
+    digest = hashlib.sha256((app / "look.py").read_bytes()).hexdigest()
+    built = pathlib.Path(tempfile.mkdtemp(prefix="statsbadge-mpy-"))
+    (built / "look.mpy").write_bytes(b"M\x06\x00\x03")
+
+    def bundled():
+        return str(built)
+
+    original = install.packaged_mpy_dir
+    install.packaged_mpy_dir = bundled
+    try:
+        (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": digest}}))
+        assert install._stale_modules(built) == []
+        source, _note = install.choose_app_source(None, False, None)
+        assert source == str(built), source
+
+        (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": "0" * 64}}))
+        assert install._stale_modules(built) == ["look.py"]
+        source, note = install.choose_app_source(None, False, None)
+        assert source is None, source
+        assert "look.py" in note, note
+    finally:
+        install.packaged_mpy_dir = original
 
 
 @check
