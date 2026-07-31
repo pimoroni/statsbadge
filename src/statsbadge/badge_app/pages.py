@@ -6,6 +6,8 @@ up on its next poll with nothing installed. An extension that needs to draw some
 these cannot ships a module of its own and registers it in `EXTRA`.
 """
 
+import time
+
 import draw
 import look
 
@@ -148,7 +150,7 @@ def _grid(page, frame, _history, theme):
     for ref in refs:
         value = value_of(frame, ref)
         field = ref.split(".")[-1]
-        entries.append((name_for(ref), draw.fmt(value, field),
+        entries.append((name_for(ref), draw.reading(value, field),
                         fraction_of(ref, value), icon_for(ref, by_group)))
     draw.grid(theme, entries)
 
@@ -202,6 +204,147 @@ def _text(page, frame, _history, theme):
     draw.lines(theme, entries)
 
 
+def names_for(refs):
+    """Display names that tell these readings apart.
+
+    The field name where that is already unique - LOAD, TEMP - the group where it is
+    not, and both where neither is: a page of cpu.pct and gpu.pct would otherwise be
+    two rows both called LOAD.
+    """
+    plain = [name_for(ref) for ref in refs]
+    if len(set(plain)) == len(plain):
+        return plain
+    groups = [ref.split(".")[0].upper() for ref in refs]
+    if len(set(groups)) == len(groups):
+        return groups
+    return [f"{group} {name}" for group, name in zip(groups, plain)]
+
+
+def _series_for(ref, frame, history, page=None):
+    """A field's history, falling back to the live value so a cold ring still plots."""
+    points = list(history.get(ref) or ())
+    if not points:
+        value = value_of(frame, ref)
+        if value is not None:
+            points = [value, value]
+    peak = None
+    if page and page.get("max"):
+        peak = float(page["max"])
+    elif ref.split(".")[-1] in PERCENT:
+        peak = 100.0
+    if peak is None:
+        peak = max((p for p in points if p is not None), default=1.0)
+    return points, max(float(peak), 1.0)
+
+
+def _rings(page, frame, _history, theme):
+    refs = page.get("fields", [])[:4]
+    entries = []
+    labels = names_for(refs)
+    for index, ref in enumerate(refs):
+        value = value_of(frame, ref)
+        field = ref.split(".")[-1]
+        fraction = fraction_of(ref, value, page)
+        # Coloured by its own reading, the way every gauge here is: by position in the
+        # stack the outermost ring would always look calm and the innermost alarming.
+        rgb = theme.at(fraction) if fraction is not None else theme.grid
+        entries.append((labels[index], draw.reading(value, field), fraction, rgb))
+    draw.rings(theme, entries)
+
+
+def _spark(page, frame, history, theme):
+    refs = page.get("fields", [])[:6]
+    labels = names_for(refs)
+    entries = []
+    for index, ref in enumerate(refs):
+        points, peak = _series_for(ref, frame, history, page)
+        value = value_of(frame, ref)
+        entries.append((labels[index], draw.reading(value, ref.split(".")[-1]),
+                        points, peak))
+    draw.sparklines(theme, entries)
+
+
+def _radar(page, frame, _history, theme):
+    refs = page.get("fields", [])[:6]
+    labels = names_for(refs)
+    entries = []
+    for index, ref in enumerate(refs):
+        value = value_of(frame, ref)
+        entries.append((labels[index], draw.reading(value, ref.split(".")[-1]),
+                        fraction_of(ref, value, page), theme.accent))
+    draw.radar(theme, entries)
+
+
+def _trend(page, frame, history, theme):
+    ref = page.get("field", "")
+    field = ref.split(".")[-1]
+    value = value_of(frame, ref)
+    points, peak = _series_for(ref, frame, history, page)
+    # Against a few samples back rather than the last one, which is mostly noise.
+    delta = None
+    if value is not None and len(points) > 4:
+        was = points[-5]
+        if was is not None:
+            delta = float(value) - float(was)
+    draw.trend(theme, draw.fmt(value, field), draw.short_unit(field), name_for(ref),
+               delta, points, peak, fraction_of(ref, value, page))
+
+
+# How far between polls the waterfall has got, so it can interpolate rather than step.
+# Held here because only this side knows when a poll landed.
+_wf_from = ()
+_wf_to = ()
+_wf_seq = None
+_wf_at = 0
+# A poll is a second apart; the ease is over slightly less so it settles before the next.
+WF_EASE_MS = 850
+
+
+def _waterfall(page, frame, history, theme):
+    global _wf_from, _wf_to, _wf_seq, _wf_at
+    ref = page.get("field", "cpu.cores")
+    values = value_of_list(frame, ref)
+    maximum = float(page.get("max") or 100.0)
+
+    if values and frame.get("seq") != _wf_seq:
+        if not _wf_to:
+            # First sight of this page: seed from the host's ring so it does not start
+            # blank, oldest first.
+            for past in (history.get(ref) or ())[-24:]:
+                if isinstance(past, list) and past:
+                    draw.waterfall(theme, [v / maximum for v in past])
+            _wf_from = list(values)
+        else:
+            _wf_from = list(_wf_to)
+        _wf_to = list(values)
+        _wf_seq = frame.get("seq")
+        _wf_at = time.ticks_ms()
+
+    if not _wf_to:
+        draw.waterfall(theme, [])
+        return
+
+    phase = 1.0
+    if _wf_at:
+        phase = min(1.0, max(0.0, time.ticks_diff(time.ticks_ms(), _wf_at) / WF_EASE_MS))
+    lanes = []
+    for index, target in enumerate(_wf_to):
+        start = _wf_from[index] if index < len(_wf_from) else target
+        # Smoothstep, so a lane leaves and arrives gently instead of ramping linearly.
+        eased = phase * phase * (3.0 - 2.0 * phase)
+        lanes.append((start + (target - start) * eased) / maximum)
+    labels = [str(i) for i in range(len(lanes))] if len(lanes) <= 16 else None
+    draw.waterfall(theme, lanes, labels)
+
+
+def value_of_list(frame, ref):
+    """A field that is expected to be a list, as one."""
+    group, _, field = ref.partition(".")
+    values = (frame.get(group) or {})
+    values = values.get(field) if isinstance(values, dict) else None
+    return values if isinstance(values, list) else []
+
+
 _KINDS = {
     "dial": _dial,
     "dials": _dials,
@@ -209,4 +352,12 @@ _KINDS = {
     "graph": _graph,
     "grid": _grid,
     "text": _text,
+    "rings": _rings,
+    "spark": _spark,
+    "radar": _radar,
+    "trend": _trend,
+    "waterfall": _waterfall,
 }
+
+# It interpolates between polls, so it needs a frame whether or not one landed.
+ANIMATED.add("waterfall")

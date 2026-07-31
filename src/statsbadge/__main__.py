@@ -87,7 +87,7 @@ def source_config_from(args):
         "powermetrics": getattr(args, "powermetrics", False),
         "lhm_url": getattr(args, "lhm_url", None),
         "iface": getattr(args, "iface", None),
-        "disk_path": getattr(args, "disk_path", "/"),
+        "disk_path": getattr(args, "disk_path", None),
         "extensions": layout.merge_settings(
             parse_extension_options(getattr(args, "extension", None)), stored),
         "disabled_extensions": getattr(args, "without", None) or [],
@@ -591,7 +591,9 @@ def main(argv=None):
                         help="macOS: run powermetrics as root for power and temps")
     common.add_argument("--lhm-url", help="Windows: LibreHardwareMonitor data.json URL")
     common.add_argument("--iface", help="network interface to report (default: busiest)")
-    common.add_argument("--disk-path", default="/", help="filesystem to report")
+    common.add_argument("--disk-path",
+                        help="filesystem to report. Defaults to the volume "
+                             "holding your files, which on macOS is not /")
     common.add_argument("--no-beacon", action="store_true",
                         help="do not broadcast the discovery beacon")
     common.add_argument("--extension", action="append", metavar="NAME.KEY=VALUE",

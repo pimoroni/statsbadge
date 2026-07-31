@@ -234,6 +234,20 @@ def short_unit(field):
     return ""
 
 
+def reading(value, field):
+    """A value with its unit, for a slot that has no room to place one separately.
+
+    `fmt` already carries a suffix where the number was scaled - 12.3G, 50.0M - and
+    short_unit adds what belongs after that, so a rate reads 50.0M/s and a percentage
+    reads 9.2%. A reading that is not there gets no unit: there is no such thing as
+    "-- percent".
+    """
+    text = fmt(value, field)
+    if value is None or isinstance(value, (str, bool)):
+        return text
+    return text + short_unit(field)
+
+
 # -- chrome -----------------------------------------------------------------
 
 def background(theme, title, index, total, subtitle=None):
@@ -589,3 +603,259 @@ def toast(theme, message):
     screen.pen = color.rgb(*theme.accent)
     screen.shape(shape.rounded_rectangle(rect(x, y, width, 22), 6))
     blit_label(message, look.SIZE_LABEL, theme.bg, look.W // 2, y + 4, align=1)
+
+
+# -- rings ------------------------------------------------------------------
+
+def rings(theme, entries):
+    """Concentric sweep gauges, outermost first, with a legend down the side.
+
+    One arc per reading, so four readings cost four shapes: the same trick the single
+    gauge uses, at a quarter of the screen each.
+    """
+    centre = (look.W // 2 - 46, look.BODY_MID)
+    outer = 84
+    band = 15
+    gap = 4
+    for index, (name, value_text, fraction, rgb) in enumerate(entries[:4]):
+        ring_outer = outer - index * (band + gap)
+        ring_inner = ring_outer - band
+        if ring_inner < 12:
+            break
+        screen.pen = color.rgb(*theme.grid)
+        screen.shape(shape.arc(vec2(*centre), ring_inner, ring_outer,
+                               look.DIAL_FROM, look.DIAL_TO))
+        if fraction:
+            sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * fraction
+            screen.pen = color.rgb(*rgb)
+            screen.shape(shape.arc(vec2(*centre), ring_inner, ring_outer,
+                                   look.DIAL_FROM, sweep))
+
+        # The legend doubles as the reading, so the rings need no labels on them.
+        y = look.BODY_TOP + 14 + index * 42
+        screen.pen = color.rgb(*rgb)
+        screen.rectangle(rect(look.READOUT_X + 4, y + 6, 8, 8))
+        blit_label(name, look.SIZE_LABEL, theme.dim, look.READOUT_X + 18, y)
+        blit_label(value_text, look.SIZE_VALUE, theme.ink, look.READOUT_X + 18, y + 14)
+
+
+# -- sparklines -------------------------------------------------------------
+
+def sparklines(theme, entries):
+    """A row per reading: name, current value, and its history as a small area.
+
+    Six of these fit the body band, which is the point - one page that says what every
+    other page says, at the cost of the detail a full graph gives.
+    """
+    rows = entries[:6]
+    if not rows:
+        return
+    height = min(30, (look.BODY_H - 8) // max(1, len(rows)))
+    plot_x = look.PAD + 96
+    plot_w = look.W - plot_x - look.PAD - 42
+    for index, (name, value_text, points, peak) in enumerate(rows):
+        top = look.BODY_TOP + 6 + index * height
+        mid = top + height // 2
+        blit_label(name, look.SIZE_LABEL, theme.dim, look.PAD, mid - 7)
+
+        plot_h = height - 8
+        screen.pen = color.rgb(*theme.grid)
+        screen.hspan(plot_x, top + plot_h + 3, plot_w)
+        if points and len(points) > 1 and peak:
+            step = plot_w / float(len(points) - 1)
+            contour = []
+            for i, value in enumerate(points):
+                fraction = max(0.0, min(1.0, (value or 0.0) / peak))
+                contour.append(vec2(plot_x + i * step, top + plot_h - plot_h * fraction))
+            contour.append(vec2(plot_x + plot_w, top + plot_h + 3))
+            contour.append(vec2(plot_x, top + plot_h + 3))
+            screen.pen = color.rgb(*theme.accent)
+            screen.alpha = 190
+            screen.shape(shape.custom(contour))
+            screen.alpha = 255
+        blit_label(value_text, look.SIZE_LABEL, theme.ink, look.W - look.PAD, mid - 7,
+                   align=2)
+
+
+# -- radar ------------------------------------------------------------------
+
+def radar(theme, entries):
+    """A polygon over normalised axes: the shape of the machine's load right now.
+
+    Three axes is the fewest that encloses an area, and past six the labels collide.
+    """
+    import math
+
+    rows = entries[:6]
+    if len(rows) < 3:
+        blit_label("radar needs three readings", look.SIZE_VALUE, theme.dim,
+                   look.W // 2, look.BODY_MID, align=1)
+        return
+    centre = (look.W // 2, look.BODY_MID + 10)
+    # Room for a name and a reading outside the web, without either reaching the header.
+    radius = 62
+    count = len(rows)
+
+    def point(index, fraction):
+        # Axes start at twelve and run clockwise, matching the gauges.
+        angle = math.radians(index * 360.0 / count - 90.0)
+        return vec2(centre[0] + math.cos(angle) * radius * fraction,
+                    centre[1] + math.sin(angle) * radius * fraction)
+
+    screen.pen = color.rgb(*theme.grid)
+    for step in (0.5, 1.0):
+        web = [point(i, step) for i in range(count)]
+        for i in range(count):
+            here, then = web[i], web[(i + 1) % count]
+            screen.line(here, then, 1)
+    for i in range(count):
+        screen.line(vec2(*centre), point(i, 1.0), 1)
+
+    filled = [point(i, row[2] or 0.0) for i, row in enumerate(rows)]
+    screen.pen = color.rgb(*theme.accent)
+    screen.alpha = 150
+    screen.shape(shape.custom(filled))
+    screen.alpha = 255
+    for corner in filled:
+        screen.shape(shape.circle(corner, 3))
+
+    for i, (name, value_text, _fraction, _rgb) in enumerate(rows):
+        anchor = point(i, 1.34)
+        align = 1
+        if anchor.x < centre[0] - 20:
+            align = 2
+        elif anchor.x > centre[0] + 20:
+            align = 0
+        blit_label(name, look.SIZE_SMALL, theme.dim, anchor.x, anchor.y - 12,
+                   align=align)
+        blit_label(value_text, look.SIZE_LABEL, theme.ink, anchor.x, anchor.y - 1,
+                   align=align)
+
+
+# -- trend ------------------------------------------------------------------
+
+def trend(theme, value_text, unit_text, name, delta, points, peak, fraction):
+    """One big reading, which way it is going, and where it has been.
+
+    The arrow and the change are the point: a number on its own does not say whether
+    something is climbing.
+    """
+    blit_label(name, look.SIZE_LABEL, theme.dim, look.PAD + 2, look.BODY_TOP + 8)
+    reading = label(value_text, look.SIZE_HUGE, theme.ink)
+    screen.blit(reading, vec2(look.PAD, look.BODY_TOP + 26))
+    if unit_text:
+        blit_label(unit_text, look.SIZE_BIG, theme.dim,
+                   look.PAD + reading.width + 4, look.BODY_TOP + 48)
+
+    if delta is not None:
+        x = look.W - look.PAD
+        blit_label(f"{abs(delta):.1f}", look.SIZE_VALUE, theme.ink, x, look.BODY_TOP + 30,
+                   align=2)
+        # Drawn, not written: the text font carries no arrows, and a missing glyph is a
+        # gap rather than an error.
+        _arrow(theme, x - 46, look.BODY_TOP + 34, delta, fraction)
+
+
+    # The history underneath, so the number has somewhere to have come from.
+    top = look.BODY_TOP + 92
+    height = look.BODY_H - 100
+    left = look.PAD
+    width = look.W - look.PAD * 2
+    screen.pen = color.rgb(*theme.grid)
+    screen.hspan(left, top + height, width)
+    if points and len(points) > 1 and peak:
+        step = width / float(len(points) - 1)
+        contour = []
+        for i, value in enumerate(points):
+            part = max(0.0, min(1.0, (value or 0.0) / peak))
+            contour.append(vec2(left + i * step, top + height - height * part))
+        contour.append(vec2(left + width, top + height))
+        contour.append(vec2(left, top + height))
+        screen.pen = color.rgb(*theme.accent)
+        screen.alpha = 170
+        screen.shape(shape.custom(contour))
+        screen.alpha = 255
+
+
+def _arrow(theme, x, y, delta, fraction):
+    """A triangle for the direction, flat where the reading is holding still."""
+    half, height = 9, 11
+    if delta > 0.05:
+        screen.pen = color.rgb(*(theme.at(fraction) if fraction is not None
+                                 else theme.ink))
+        screen.shape(shape.custom([vec2(x, y - height), vec2(x + half, y),
+                                   vec2(x - half, y)]))
+    elif delta < -0.05:
+        screen.pen = color.rgb(*theme.dim)
+        screen.shape(shape.custom([vec2(x, y), vec2(x + half, y - height),
+                                   vec2(x - half, y - height)]))
+    else:
+        screen.pen = color.rgb(*theme.dim)
+        screen.rectangle(rect(x - half, y - height // 2 - 2, half * 2, 4))
+
+
+# -- waterfall --------------------------------------------------------------
+
+# The scroll buffer, its write cursor, and the lane count it was built for. One column
+# is written per frame and the buffer is shown as two windowed blits, because scrolling
+# by copying the image onto itself costs 11ms where two windows cost 7ms.
+_wf_image = None
+_wf_cursor = 0
+_wf_lanes = 0
+
+WF_LEFT = look.PAD + 22
+WF_TOP = look.BODY_TOP + 6
+
+
+def waterfall_reset():
+    global _wf_image, _wf_cursor, _wf_lanes
+    _wf_image = None
+    _wf_cursor = 0
+    _wf_lanes = 0
+
+
+def waterfall(theme, lanes, labels=None):
+    """One column per call, scrolling left: a lane per value, coloured by the ramp.
+
+    Time is measured in frames rather than samples, which is what makes it move: the
+    caller interpolates between polls and this draws wherever that got to. Precision is
+    the thing being traded away, and the ramp carries the reading instead.
+    """
+    global _wf_image, _wf_cursor, _wf_lanes
+    if not lanes:
+        blit_label("no per-core readings", look.SIZE_VALUE, theme.dim,
+                   look.W // 2, look.BODY_MID, align=1)
+        return
+
+    width = look.W - WF_LEFT - look.PAD
+    height = look.BODY_H - 14
+    if _wf_image is None or _wf_lanes != len(lanes):
+        _wf_image = image(width, height)
+        _wf_image.pen = color.rgb(*theme.bg)
+        _wf_image.rectangle(rect(0, 0, width, height))
+        _wf_cursor = 0
+        _wf_lanes = len(lanes)
+
+    lane_h = height / float(len(lanes))
+    for index, fraction in enumerate(lanes):
+        part = 0.0 if fraction is None else max(0.0, min(1.0, fraction))
+        top = int(index * lane_h)
+        bottom = int((index + 1) * lane_h)
+        _wf_image.pen = color.rgb(*theme.at(part))
+        # vspan, not a rectangle: one call for the lane's whole run of pixels.
+        _wf_image.vspan(_wf_cursor, top, max(1, bottom - top))
+    _wf_cursor = (_wf_cursor + 1) % width
+
+    # Oldest column first, so the newest lands at the right hand edge.
+    tail = width - _wf_cursor
+    screen.blit(_wf_image.window(rect(_wf_cursor, 0, tail, height)),
+                vec2(WF_LEFT, WF_TOP))
+    if _wf_cursor:
+        screen.blit(_wf_image.window(rect(0, 0, _wf_cursor, height)),
+                    vec2(WF_LEFT + tail, WF_TOP))
+
+    for index, name in enumerate(labels or ()):
+        if index >= len(lanes):
+            break
+        y = WF_TOP + int((index + 0.5) * lane_h) - 6
+        blit_label(name, look.SIZE_SMALL, theme.dim, look.PAD + 16, y, align=2)

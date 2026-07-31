@@ -4,6 +4,7 @@ Rates are computed here from counter deltas, because the badge should not have t
 remember the previous frame to draw a network graph.
 """
 
+import os
 import platform
 import socket
 import time
@@ -69,7 +70,7 @@ class Portable(Source):
 
         disk = frame["disk"]
         try:
-            usage = psutil.disk_usage(self.config.get("disk_path", "/"))
+            usage = psutil.disk_usage(self.config.get("disk_path") or default_disk())
             disk["pct"] = round(usage.percent, 1)
             disk["used_mb"] = round(usage.used / MB)
             disk["total_mb"] = round(usage.total / MB)
@@ -125,6 +126,21 @@ class Portable(Source):
             net["up_bps"] = _rate(counters.bytes_sent, prev[1].bytes_sent, dt)
             net["down_bps"] = _rate(counters.bytes_recv, prev[1].bytes_recv, dt)
         self._net_prev = (iface, counters)
+
+
+def default_disk():
+    """The filesystem "how full is my disk" means.
+
+    On macOS that is not "/": the root is a sealed, read-only system volume sharing an
+    APFS container with the data volume, so it reports the system's own 12G against the
+    container's size - 9% on a disk that is 86% full. Both volumes report the container's
+    free space, so the data volume is the one whose `used` is the answer.
+    """
+    if platform.system() == "Darwin":
+        for candidate in ("/System/Volumes/Data", "/"):
+            if os.path.isdir(candidate):
+                return candidate
+    return "/"
 
 
 def _rate(now, before, dt):

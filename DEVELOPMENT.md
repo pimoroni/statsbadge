@@ -42,6 +42,22 @@ line up with text. `../BADGEWARE.md` has the rest of the format, all of it measu
 `MonaSans-Medium.af` rather than taken from alright-fonts' loader, which is a version
 behind what afinate writes.
 
+**Scroll by blitting two windows, not by copying the image onto itself.** A waterfall keeps
+a ring buffer the width of the plot, writes one column per frame with `vspan` and shows it
+as `window(cursor..end)` then `window(0..cursor)`. Measured: two windowed blits 7ms, a
+self-blit of the same image 11.3ms, a column as `vspan` per lane against 30 rectangles
+4.4ms. The whole page runs at 28fps.
+
+**The firmware's image effects are too slow to animate.** On a 320x120 band: `dither` 13ms,
+`onebit` 12ms, `bloom` 21ms, `synthwave` 40ms, `edgeglow` 99ms. Fine for a page that
+redraws once a second, not for one that moves.
+
+**On macOS "/" is not the disk anyone means.** It is a sealed, read-only system volume
+sharing an APFS container with the data volume, so it reports the system's own 12G against
+the container's size: 9% on a disk that is 86% full. Both volumes report the container's
+free space, so the data volume is the one whose `used` is the answer, and
+`sources/portable.py` defaults there.
+
 **`screen.raw` is R G B A, premultiplied, no byte swap.** Get it wrong and red and blue swap, which reads as a drawing bug rather than a converter one.
 
 ## Transport and signing

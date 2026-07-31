@@ -1020,6 +1020,46 @@ def test_clock_weather_units_and_icons(_h):
         assert not missing, f"icons.txt does not pack {sorted(missing)}"
 
 
+@check
+def test_the_reported_disk_is_the_one_with_your_files_on(_h):
+    """On macOS "/" is a sealed system volume, and reporting it reads far too empty."""
+    import platform
+
+    import psutil
+
+    from statsbadge.sources.portable import default_disk
+
+    path = default_disk()
+    if platform.system() == "Darwin":
+        assert path == "/System/Volumes/Data", path
+        # Both volumes share the container, so free space matches and only `used`
+        # differs: the sealed root claims a fraction of what is actually in use.
+        root = psutil.disk_usage("/")
+        data = psutil.disk_usage(path)
+        assert data.used > root.used
+        assert data.percent > root.percent
+    else:
+        assert path == "/"
+
+
+@check
+def test_a_reading_carries_its_unit(_h):
+    """A grid or a sparkline row has one slot, so the unit has to be in the text."""
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+
+    assert draw.reading(9.2, "pct") == "9.2%"
+    assert draw.reading(85.7, "pct") == "85.7%"
+    assert draw.reading(71.0, "temp") == "71.0\u00b0C"
+    assert draw.reading(52428800, "read_bps") == "50.0M/s"
+    # Already scaled by fmt, so no unit is appended and none is missing.
+    assert draw.reading(12600, "used_mb") == "12.3G"
+    assert draw.reading(None, "pct") == "--"
+    assert draw.reading("workshop-pc", "host") == "workshop-pc"
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)
