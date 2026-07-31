@@ -1,46 +1,125 @@
-"""Draw the 24x24 launcher icon on the badge and write it back to the host.
+#!/usr/bin/env python3
+"""Draw src/statsbadge/badge_app/icon.png, the 24x24 sprite the launcher shows.
 
-    mpremote connect PORT mount . run tools/icon.py
+    python3 tools/icon.py
 
-A tiny gauge sweep over three bars: the two things the app does, at 24 pixels.
+The splash screen scaled down: the dial's angles and colours come from look.py, and the
+proportions are the splash's dimensions times one scale factor, so the two keep agreeing.
+Rendered at 16x and reduced, since there is no anti-aliasing to be had at 24 pixels
+otherwise.
 """
 
+import pathlib
+import shutil
+import subprocess
 import sys
 
-sys.path.insert(0, "/remote/src/statsbadge/badge_app")
+from PIL import Image, ImageDraw
 
-badge.mode(HIRES | VSYNC)
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+APP = ROOT / "src" / "statsbadge" / "badge_app"
+sys.path.insert(0, str(APP))
+
+import look  # noqa: E402
 
 SIZE = 24
-BG = (14, 14, 18)
-ACCENT = (255, 138, 0)
-HOT = (255, 60, 32)
-COOL = (0, 190, 255)
-INK = (240, 238, 235)
+SUPERSAMPLE = 16
+CORNER = 5
+COLOURS = 32                      # 16 also reads fine at this size; 32 leaves margin
 
-icon = image(SIZE, SIZE)
-icon.antialias = image.X4
-icon.pen = brush.erase()
-icon.rectangle(rect(0, 0, SIZE, SIZE))
+# The splash at 320x240, from _splash() in badge_app/__init__.py.
+SPLASH_OUTER = 62
+SPLASH_INNER = 45
+SPLASH_BAR_W = 11
+SPLASH_GAP = 7
+SPLASH_BAR_HEIGHTS = (17, 30, 23)
+SPLASH_BASE_BELOW_CENTRE = 14
 
-icon.pen = color.rgb(*BG)
-icon.shape(shape.rounded_rectangle(rect(0, 0, SIZE, SIZE), 5))
+OUTER = 11.5                      # leaves a pixel of margin inside the icon
+SCALE = OUTER / SPLASH_OUTER
 
-# The gauge: a track, then a sweep from cool to hot, angles clockwise from the top.
-centre = vec2(12, 13)
-icon.pen = color.rgb(60, 60, 68)
-icon.shape(shape.arc(centre, 6.5, 9.5, 150, 390))
-icon.pen = brush.gradient(brush.LINEAR, 3, 20, 21, 5,
-                          ((0.0, color.rgb(*COOL)),
-                           (0.6, color.rgb(*ACCENT)),
-                           (1.0, color.rgb(*HOT))))
-icon.shape(shape.arc(centre, 6.5, 9.5, 150, 330))
+# PicoVector's arc angles and PIL's both run clockwise on screen, but PIL starts at 3
+# o'clock where PicoVector starts at 6, so the dial's angles shift by a quarter turn.
+PIL_OFFSET = -90
 
-# Three bars inside the dial, so it still reads as "stats" and not "a speedometer".
-icon.pen = color.rgb(*INK)
-for i, height in enumerate((3, 5, 4)):
-    icon.rectangle(rect(9 + i * 3, 14 - height, 2, height))
 
-with open("/remote/src/statsbadge/badge_app/icon.raw", "wb") as handle:
-    handle.write(icon.raw)
-print(f"wrote icon.raw, {SIZE * SIZE * 4} bytes")
+def sector(target, colour, start, end, outer, inner, centre):
+    """Paste colour through an annular sector, PIL having no arc with an inner radius."""
+    mask = Image.new("L", target.size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.pieslice(_box(centre, outer), start, end, fill=255)
+    draw.ellipse(_box(centre, inner), fill=0)
+    target.paste(colour, mask=mask)
+
+
+def _box(centre, radius):
+    x, y = centre
+    return [(x - radius, y - radius), (x + radius, y + radius)]
+
+
+def main():
+    theme = look.get(look.DEFAULT)
+    size = SIZE * SUPERSAMPLE
+    scale = SCALE * SUPERSAMPLE
+    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(icon)
+
+    # A plate in the app's own background, so the dial reads against the launcher's brown
+    # the same way it does on the badge.
+    draw.rounded_rectangle([(0, 0), (size - 1, size - 1)],
+                           radius=CORNER * SUPERSAMPLE, fill=theme.bg + (255,))
+
+    centre = (size / 2, size / 2)
+    start = look.DIAL_FROM + PIL_OFFSET
+    end = look.DIAL_TO + PIL_OFFSET
+    sector(icon, theme.grid + (255,), start, end,
+           SPLASH_OUTER * scale, SPLASH_INNER * scale, centre)
+    sector(icon, theme.accent + (255,), start,
+           start + (end - start) * look.SPLASH_SWEEP,
+           SPLASH_OUTER * scale, SPLASH_INNER * scale, centre)
+
+    bar_w = SPLASH_BAR_W * scale
+    gap = SPLASH_GAP * scale
+    left = centre[0] - (3 * bar_w + 2 * gap) / 2
+    base = centre[1] + SPLASH_BASE_BELOW_CENTRE * scale
+    for i, height in enumerate(SPLASH_BAR_HEIGHTS):
+        x = left + i * (bar_w + gap)
+        draw.rectangle([(x, base - height * scale), (x + bar_w, base)],
+                       fill=theme.ink + (255,))
+
+    out = APP / "icon.png"
+    small = icon.resize((SIZE, SIZE), Image.LANCZOS)
+    small.save(out, compress_level=9)
+    print(f"wrote {out.relative_to(ROOT)}, {out.stat().st_size} bytes")
+    _shrink(out, small)
+
+
+def _shrink(out, unquantised):
+    """Cut the colour count, which is most of what the file costs.
+
+    pngquant only for the palette it picks: the badge's image.load mis-decodes an indexed
+    PNG, returning a short buffer of wrong colours, so the result is written back out as
+    RGBA. Fewer distinct colours still compress better, worth about a fifth of the file.
+    """
+    if not shutil.which("pngquant"):
+        print("pngquant not installed; left at full colour")
+        return
+    before = out.stat().st_size
+    quantised = out.with_suffix(".quantised.png")
+    try:
+        subprocess.run(["pngquant", "--force", "--strip", "--speed", "1", "--nofs",
+                        str(COLOURS), "--output", str(quantised), "--", str(out)],
+                       check=True)
+        with Image.open(quantised) as image_file:
+            image_file.convert("RGBA").save(out, compress_level=9)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        print(f"pngquant failed ({exc}); left at full colour")
+        unquantised.save(out, compress_level=9)
+        return
+    finally:
+        quantised.unlink(missing_ok=True)
+    print(f"{COLOURS} colours: {before} -> {out.stat().st_size} bytes")
+
+
+if __name__ == "__main__":
+    main()

@@ -27,6 +27,8 @@ DIAL_INNER = 56
 # is 135 once round, which is lower-right.
 DIAL_FROM = 225.0
 DIAL_TO = 495.0
+# How far the splash sweeps its dial. The launcher icon is drawn from the same numbers.
+SPLASH_SWEEP = 0.7
 
 # Where a dial's readouts stack, to the right of it.
 READOUT_X = 196

@@ -52,7 +52,7 @@ def _splash():
     screen.pen = color.rgb(*theme.grid)
     screen.shape(shape.arc(centre, inner, outer, look.DIAL_FROM, look.DIAL_TO))
     screen.pen = color.rgb(*theme.accent)
-    sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * 0.7
+    sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * look.SPLASH_SWEEP
     screen.shape(shape.arc(centre, inner, outer, look.DIAL_FROM, sweep))
 
     screen.pen = color.rgb(*theme.ink)
