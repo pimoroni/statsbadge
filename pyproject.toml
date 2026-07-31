@@ -10,7 +10,10 @@ maintainers = [
     { name = "Philip Howard", email = "phil@pimoroni.com" },
 ]
 license = "MIT"
-license-files = ["LICENSE"]
+# The vendored .af fonts are built from OFL originals, so their licences travel with the
+# wheel that carries them. Not with the badge copy: a licence is for whoever redistributes
+# the font, and the badge is where it is used.
+license-files = ["LICENSE", "licences/*.txt"]
 requires-python = ">=3.11"
 dependencies = [
     "psutil>=5.9",

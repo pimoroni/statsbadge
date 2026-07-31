@@ -31,8 +31,14 @@ def prepare():
     """Load the fonts. The text font is 107ms, so once, and before the first frame."""
     global FONT
     if FONT is None:
-        FONT = font.load(look.FONT_PATH)
+        if not add_font(look.FONT_NAME, look.FONT_FILE):
+            print(f"draw: no {look.FONT_FILE}, falling back to the firmware's font")
+            add_font(look.FONT_NAME, look.FALLBACK_FONT_PATH)
+        FONT = _fonts.get(look.FONT_NAME)
+    # TEXT is the role; look.FONT_NAME is which font is filling it, so use_font can name
+    # either and a candidate can be tried against the shipped one.
     _fonts[TEXT] = FONT
+    _fonts[look.FONT_NAME] = FONT
     screen.font = FONT
     add_font(ICONS, look.ICON_FILE)
 
@@ -67,19 +73,46 @@ def add_font(name, *paths):
 
 
 def _candidates(path):
-    if "/" in path:
+    """Where to look for a font. An absolute path is taken as given; anything else is
+    relative to the app, which is `fonts/x.af` for what the app ships.
+
+    A path under /remote is never offered. That is a `mpremote mount`, which serves a file
+    as text, so font.load reads it as UTF-8, fails partway and takes the REPL down with it -
+    a wedged badge rather than a caught error. Under mount the device copy is what gets
+    found, or the fallback, which is why /fonts is on the list: it is writable, so the tools
+    can put a font somewhere loadable without an install.
+    """
+    if path.startswith("/"):
         return (path,)
     here = globals().get("__file__") or ""
     beside = here.rsplit("/", 1)[0] if "/" in here else ""
-    found = [look.APP_DIR + "/" + path]
-    if beside:
+    found = [look.APP_DIR + "/" + path, "/" + path]
+    if beside and not beside.startswith("/remote"):
         found.append(beside + "/" + path)
     found.append(path)
-    return found
+    return [candidate for candidate in found if not candidate.startswith("/remote")]
 
 
 def has_font(name):
     return name in _fonts
+
+
+def use_font(name):
+    """Draw text with a registered font from here on. True when it is there.
+
+    The sprite cache keys on the name a caller asked for and not on the font behind it, so
+    changing what TEXT points at has to empty the cache or the last font's sprites are
+    handed back for every string already drawn once.
+    """
+    global FONT
+    face = _fonts.get(name)
+    if face is None:
+        return False
+    _fonts[TEXT] = face
+    FONT = face
+    screen.font = face
+    clear_cache()
+    return True
 
 
 # -- text cache -------------------------------------------------------------

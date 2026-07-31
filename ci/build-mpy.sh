@@ -97,8 +97,16 @@ for source in "$APP_DIR"/*.py; do
     compiled=$((compiled + 1))
 done
 
-# Everything that is not Python goes across untouched - the launcher wants icon.png.
-find "$APP_DIR" -maxdepth 1 -type f ! -name '*.py' -exec cp {} "$OUT_DIR/" \;
+# Everything that is not Python goes across untouched - the launcher wants icon.png, and
+# draw wants icons.af and fonts/. Subdirectories included, and with their paths: the app's
+# text font lives in fonts/, so a depth of one silently shipped a build with no type in it.
+# A loop rather than `install -D`, which BSD install has not got: this script is run by
+# hand on a Mac as well as by CI on Linux, and one code path is the point of it.
+(cd "$APP_DIR" && find . -type f ! -name '*.py' ! -path './mpy/*' \
+        ! -path './__pycache__/*' -print) | while IFS= read -r file; do
+    mkdir -p "$OUT_DIR/$(dirname "$file")"
+    cp "$APP_DIR/$file" "$OUT_DIR/$file"
+done
 
 if [ -z "${ENTRY_MPY:-}" ]; then
     echo "note: __init__.py left as source for the launcher; set ENTRY_MPY=1 once it"

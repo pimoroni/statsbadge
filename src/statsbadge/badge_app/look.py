@@ -33,7 +33,16 @@ READOUT_X = 196
 READOUT_W = W - READOUT_X - PAD
 READOUT_H = 34
 
-FONT_PATH = "/system/assets/fonts/MonaSans-Medium.af"
+# The app carries its own text font rather than borrowing one off the badge: what is in
+# /system/assets belongs to the firmware and can change under us, and a display this small
+# lives or dies on its type. Built from Lexend by tools/make_text_font.py.
+FONT_FILE = "fonts/lexend-regular.af"
+FONT_NAME = "lexend"
+
+# Only if the app's own font did not arrive - an install that predates it, or a partial
+# copy. Text is the one thing the app cannot draw a page without, so it borrows rather than
+# gives up.
+FALLBACK_FONT_PATH = "/system/assets/fonts/MonaSans-Medium.af"
 
 # The app's Material Symbols, built from ci/badge-icons.txt by tools/make_icon_font.py.
 # A name rather than a path: an install puts it in the app directory, and where that is
