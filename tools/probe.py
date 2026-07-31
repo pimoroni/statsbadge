@@ -127,7 +127,7 @@ print("\nfirst draw of a page, cold cache: %.1f ms"
       % (time.ticks_diff(time.ticks_us(), t) / 1000))
 
 print("\nevery theme, on the CPU dial:")
-for name in ("dark", "mono", "amber", "blueprint", "vapor"):
+for name in ("dark", "light", "mono", "amber", "blueprint", "vapor"):
     theme = look.get(name)
     draw.clear_cache()
     per_frame = time_page(PAGES[0], theme)

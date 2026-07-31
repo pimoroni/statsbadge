@@ -96,6 +96,17 @@ THEMES = {
               (0.72, (236, 159, 7)), (1.0, (215, 25, 8))),
         grid=(44, 51, 70), case=0.22,
     ),
+    # Paper rather than white, and warm with it. The panel sits below the ground here
+    # instead of above it, which is the only way a band reads on a pale field. Every
+    # ramp stop is a deep colour: the light ones clear the ground by too little.
+    "light": Theme(
+        "light",
+        bg=(250, 247, 242), panel=(240, 236, 228), ink=(30, 26, 20), dim=(102, 94, 82),
+        accent=(16, 145, 157),
+        ramp=((0.0, (16, 145, 157)), (0.45, (81, 146, 74)),
+              (0.72, (188, 103, 12)), (1.0, (138, 3, 22))),
+        grid=(216, 209, 195), case=0.3,
+    ),
     "mono": Theme(
         "mono",
         bg=(8, 8, 8), panel=(20, 20, 20), ink=(245, 245, 245), dim=(110, 110, 110),
