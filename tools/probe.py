@@ -54,7 +54,10 @@ FRAME = {
     "clock": {"time": "10:09", "date": "Fri 31 Jul", "hour": 10, "minute": 9,
               "seconds": 36},
     "weather": {"temp": 16.0, "feels": 14.0, "humidity": 78, "wind": 14.0,
-                "condition": "overcast", "code": 3},
+                "condition": "overcast", "code": 3,
+                # Units travel with the numbers, and the icon is a character in the
+                # extension's own icons.af.
+                "temp_unit": "C", "wind_unit": "km/h", "icon": "f"},
 }
 
 

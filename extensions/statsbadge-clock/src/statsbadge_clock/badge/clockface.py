@@ -17,11 +17,27 @@ but the readouts beside it stay themed.
 """
 
 import machine
+import os
+import sys
 import time
 
 import draw
 import look
 import pages
+
+# The icon font this extension ships, pushed into ext/ beside this module. Loaded on
+# first use rather than at import: an install predating it has no such file, and a
+# missing icon is not worth a page that will not draw.
+ICON_FONT = "icons.af"
+_icons = None
+_icons_tried = False
+# Icon glyphs baked to sprites, keyed by character, size and colour. draw.label cannot be
+# used for these: it keys on the string alone and always draws with the text font, so an
+# icon and a letter of the same name would collide.
+_icon_sprites = {}
+
+# Big enough to read at a glance in the readout column, which is 114 wide.
+ICON_SIZE = 40
 
 FACE = (245, 245, 242)
 MARKS = (16, 16, 18)
@@ -111,6 +127,76 @@ def _hand(bar, degrees, rgb):
     screen.shape(_aim(bar, CENTRE, degrees))
 
 
+def _icon_font():
+    """The extension's icon font, or None if it was not installed."""
+    global _icons, _icons_tried
+    if _icons_tried:
+        return _icons
+    _icons_tried = True
+    # Where an install puts it comes first. Under `mpremote mount` this module's own
+    # directory is on the host, and mpremote serves a mounted file as text, so a font
+    # loaded from there comes back mangled rather than refused.
+    directories = ["/system/apps/stats/ext"]
+    here = globals().get("__file__") or ""
+    if "/" in here:
+        directories.append(here.rsplit("/", 1)[0])
+    directories += sys.path
+    for directory in directories:
+        path = (directory + "/" + ICON_FONT) if directory else ICON_FONT
+        try:
+            os.stat(path)
+        except OSError:
+            continue
+        try:
+            _icons = font.load(path)
+        except Exception as exc:               # noqa: BLE001  try the next one
+            print(f"clockface: could not load {path}: {exc}")
+            continue
+        return _icons
+    return None
+
+
+def icon_sprite(character, size, rgb):
+    """An icon baked into a sprite, so a frame blits it instead of drawing text."""
+    key = (character, size, rgb)
+    cached = _icon_sprites.get(key)
+    if cached is not None:
+        return cached
+    icons = _icon_font()
+    if icons is None:
+        return None
+    was = screen.font
+    screen.font = icons
+    try:
+        width, _height = screen.measure_text(character, font_size=size)
+        width = max(1, int(width + 2))
+        height = max(1, int(size * 1.35))
+        sprite = image(width, height)
+        sprite.font = icons
+        sprite.pen = brush.erase()
+        sprite.rectangle(rect(0, 0, width, height))
+        sprite.antialias = image.X4
+        sprite.pen = color.rgb(*rgb)
+        sprite.text(character, vec2(0, 0), size)
+    finally:
+        screen.font = was
+    _icon_sprites[key] = sprite
+    return sprite
+
+
+def blit_icon(character, size, rgb, x, y, align=0):
+    """Draw an icon. Returns its width, or 0 if there is no icon font."""
+    sprite = icon_sprite(character, size, rgb)
+    if sprite is None:
+        return 0
+    if align == 1:
+        x -= sprite.width // 2
+    elif align == 2:
+        x -= sprite.width
+    screen.blit(sprite, vec2(int(x), int(y)))
+    return sprite.width
+
+
 def render(_page, frame, _history, theme):
     global _face_cache, _hands_cache
     clock = frame.get("clock") or {}
@@ -147,13 +233,25 @@ def render(_page, frame, _history, theme):
         y += 24
 
     if weather.get("temp") is not None:
-        draw.blit_label("{:.0f}".format(weather["temp"]), look.SIZE_BIG, theme.ink, x, y)
+        # The scale comes with the reading; without one a number is just a number.
+        unit = weather.get("temp_unit") or ""
+        draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
+                        look.SIZE_BIG, theme.ink, x, y)
         y += 30
-    if weather.get("condition"):
-        draw.blit_label(weather["condition"], look.SIZE_SMALL, theme.dim, x, y)
+
+    # The symbol, with the words for it underneath.
+    condition = weather.get("condition")
+    if condition:
+        drawn = blit_icon(weather.get("icon") or "", ICON_SIZE, theme.ink, x, y)
+        if drawn:
+            y += ICON_SIZE + 2
+        draw.blit_label(condition, look.SIZE_SMALL, theme.dim, x, y)
         y += 19
+
     if weather.get("wind") is not None:
-        draw.blit_label("wind {:.0f}".format(weather["wind"]), look.SIZE_SMALL, theme.dim, x, y)
+        draw.blit_label("wind {:.0f} {}".format(weather["wind"],
+                                                weather.get("wind_unit") or ""),
+                        look.SIZE_SMALL, theme.dim, x, y)
     elif not weather:
         draw.blit_label("no location set", look.SIZE_SMALL, theme.dim, x, y)
 

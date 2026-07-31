@@ -23,6 +23,10 @@ from statsbadge.sources.base import Source
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# What Open-Meteo calls a unit, against what it should be labelled as on the badge.
+TEMPERATURE_UNITS = {"celsius": "C", "fahrenheit": "F"}
+WIND_UNITS = {"kmh": "km/h", "mph": "mph", "ms": "m/s", "kn": "kn"}
+
 # Open-Meteo's numeric weather codes, collapsed to what fits on a badge.
 CONDITIONS = {
     0: "clear", 1: "fair", 2: "cloudy", 3: "overcast",
@@ -36,6 +40,18 @@ CONDITIONS = {
     85: "snow", 86: "snow",
     95: "thunder", 96: "thunder", 99: "thunder",
 }
+
+
+# The symbol for each condition, as a character in badge/icons.af. Kept here beside
+# CONDITIONS rather than on the badge, so there is one mapping and icons.txt is the only
+# other place the letters appear.
+ICONS = {
+    "clear": "a", "fair": "c", "cloudy": "e", "overcast": "f", "fog": "g",
+    "drizzle": "h", "rain": "i", "heavy rain": "j", "downpour": "j", "sleet": "k",
+    "showers": "l", "snow": "m", "heavy snow": "n", "thunder": "o",
+}
+# Night has its own symbol where there is one to have.
+NIGHT_ICONS = {"clear": "b", "fair": "d"}
 
 
 class Clock(Source):
@@ -62,6 +78,8 @@ class Clock(Source):
         {"key": "longitude", "label": "Longitude", "type": "number"},
         {"key": "units", "label": "Temperature", "type": "choice",
          "options": ["celsius", "fahrenheit"], "default": "celsius"},
+        {"key": "wind_units", "label": "Wind speed", "type": "choice",
+         "options": sorted(WIND_UNITS), "default": "kmh"},
     )
 
     # Offered in the config UI's page list.
@@ -89,6 +107,9 @@ class Clock(Source):
         self.latitude = self.config.get("latitude")
         self.longitude = self.config.get("longitude")
         self.units = self.config.get("units", "celsius")
+        self.wind_units = self.config.get("wind_units", "kmh")
+        if self.wind_units not in WIND_UNITS:
+            self.wind_units = "kmh"
         # What the place name resolved to, kept so a name costs one lookup rather than one
         # per forecast. configure() runs on every save, so an unchanged name keeps it.
         if was != self.place or not hasattr(self, "_located"):
@@ -183,20 +204,30 @@ class Clock(Source):
             "https://api.open-meteo.com/v1/forecast"
             f"?latitude={latitude}&longitude={longitude}"
             "&current=temperature_2m,relative_humidity_2m,"
-            "apparent_temperature,weather_code,wind_speed_10m"
+            "apparent_temperature,weather_code,wind_speed_10m,is_day"
             f"&temperature_unit="
             f"{'fahrenheit' if self.units == 'fahrenheit' else 'celsius'}"
+            f"&wind_speed_unit={self.wind_units}"
         )
         with urllib.request.urlopen(url, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
         current = payload.get("current", {})
         code = current.get("weather_code")
+        condition = CONDITIONS.get(code, "?") if code is not None else None
+        # is_day is 1 or 0, and absent on a response that predates it.
+        night = current.get("is_day") == 0
+        icon = NIGHT_ICONS.get(condition) if night else None
         return {
             "temp": current.get("temperature_2m"),
             "feels": current.get("apparent_temperature"),
             "humidity": current.get("relative_humidity_2m"),
             "wind": current.get("wind_speed_10m"),
-            "condition": CONDITIONS.get(code, "?") if code is not None else None,
+            "condition": condition,
             "code": code,
             "place": label,
+            # Units travel with the numbers: the badge has no way to know which was asked
+            # for, and a temperature with no scale on it is worse than none.
+            "temp_unit": TEMPERATURE_UNITS.get(self.units, "C"),
+            "wind_unit": WIND_UNITS[self.wind_units],
+            "icon": icon or ICONS.get(condition),
         }

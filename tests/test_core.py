@@ -944,6 +944,39 @@ def test_icon_font_corpus_and_packing(_h):
         raise AssertionError("packed a codepoint that does not fit")
 
 
+@check
+def test_clock_weather_units_and_icons(_h):
+    """Units travel with the readings, and each condition has a symbol."""
+    try:
+        import statsbadge_clock as clock
+    except ImportError:
+        return              # the extension is not pip installed in this environment
+
+    assert "wind_units" in [setting["key"] for setting in clock.Clock.settings]
+
+    source = clock.Clock({"units": "fahrenheit", "wind_units": "mph"})
+    assert (source.units, source.wind_units) == ("fahrenheit", "mph")
+    # An unknown unit would be passed straight to Open-Meteo, which rejects the request.
+    assert clock.Clock({"wind_units": "furlongs"}).wind_units == "kmh"
+    assert clock.Clock({}).wind_units == "kmh"
+
+    # Every condition the code table can produce needs a symbol, or the page draws a
+    # blank where the weather should be.
+    for condition in set(clock.CONDITIONS.values()):
+        assert condition in clock.ICONS, f"no icon for {condition!r}"
+    letters = set(clock.ICONS.values()) | set(clock.NIGHT_ICONS.values())
+    corpus = os.path.join(os.path.dirname(clock.__file__), "..", "..", "icons.txt")
+    if os.path.exists(corpus):
+        packed = set()
+        with open(corpus) as handle:
+            for line in handle:
+                line = line.split("#", 1)[0].split()
+                if len(line) == 3:
+                    packed.add(line[2])
+        missing = letters - packed
+        assert not missing, f"icons.txt does not pack {sorted(missing)}"
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

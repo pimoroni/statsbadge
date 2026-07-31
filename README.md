@@ -134,6 +134,13 @@ python3 tools/make_icon_font.py extensions/statsbadge-clock
 
 That fetches Material Symbols, fits each glyph to the text font's metrics so icons sit on the same baseline as the words beside them, and writes `src/statsbadge_clock/badge/icons.af`. Any vendored extension with an `icons.txt` builds the same way.
 
+Editing a vendored extension means reinstalling it before `statsbadge install` will push the change, because the installer reads the *installed* distribution and not the checkout:
+
+```bash
+uv pip install --python .venv/bin/python --no-deps --reinstall-package statsbadge-clock \
+  ./extensions/statsbadge-clock
+```
+
 That one is a worked example: a Swiss railway clock whose second hand sweeps at the badge's frame rate, plus weather from Open-Meteo, which needs no API key.
 
 ![Clock](shots/swiss_clock.png)
