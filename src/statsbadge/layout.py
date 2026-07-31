@@ -23,7 +23,7 @@ import time
 #   text    labelled lines, for names and versions
 KINDS = ("dial", "bars", "graph", "grid", "text")
 
-THEMES = ("afterburner", "mono", "amber", "blueprint", "vapor")
+THEMES = ("dark", "mono", "amber", "blueprint", "vapor")
 
 # What to show on a machine nobody has configured. Only pages whose fields the host
 # actually produces survive `prune`, so this is a superset on purpose.
@@ -52,7 +52,7 @@ DEFAULT_PAGES = [
 
 DEFAULT_CONFIG = {
     "rev": 1,
-    "theme": "afterburner",
+    "theme": "dark",
     "interval_ms": 1000,
     "brightness": 0.8,
     "caselights": True,

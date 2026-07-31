@@ -320,7 +320,7 @@ def _series_colour(theme, index):
 
     The two areas overlap and are drawn semi-transparent, so a near miss reads as one
     series and takes the legend with it. Which end is further depends on the theme:
-    afterburner's teal accent takes the hot end, mono's near-white takes the cold one.
+    the default theme's teal accent takes the hot end, mono's near-white the cold one.
     """
     if index == 0:
         return theme.accent

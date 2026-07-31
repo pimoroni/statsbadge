@@ -110,7 +110,7 @@ def time_page(page, theme, n=12):
 
 
 print()
-theme = look.get("afterburner")
+theme = look.get("dark")
 for index, page in enumerate(PAGES):
     per_frame = time_page(page, theme)
     pages_module.render(page, FRAME, HISTORY, theme, index, len(PAGES),
@@ -127,7 +127,7 @@ print("\nfirst draw of a page, cold cache: %.1f ms"
       % (time.ticks_diff(time.ticks_us(), t) / 1000))
 
 print("\nevery theme, on the CPU dial:")
-for name in ("afterburner", "mono", "amber", "blueprint", "vapor"):
+for name in ("dark", "mono", "amber", "blueprint", "vapor"):
     theme = look.get(name)
     draw.clear_cache()
     per_frame = time_page(PAGES[0], theme)
@@ -138,7 +138,7 @@ for name in ("afterburner", "mono", "amber", "blueprint", "vapor"):
 
 # Missing data must read as "unknown", not as zero.
 draw.clear_cache()
-theme = look.get("afterburner")
+theme = look.get("dark")
 sparse = {"v": 1, "cpu": {"pct": 12.0}, "mem": {}, "gpu": [], "net": {},
           "disk": {}, "power": {}, "fans": [], "sys": {"host": "quiet"}}
 pages_module.render(PAGES[0], sparse, {}, theme, 0, len(PAGES), "quiet")
@@ -192,7 +192,7 @@ MENU_ROWS = [
 ]
 
 print()
-theme = look.get("afterburner")
+theme = look.get("dark")
 for name, render in SCREENS:
     draw.clear_cache()
     render()
