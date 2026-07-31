@@ -17,6 +17,7 @@ Anything under the frame's own group names is merged; an extension may also add 
 own top-level group, which the badge draws by name.
 """
 
+import os
 import sys
 from importlib.metadata import entry_points
 
@@ -58,6 +59,40 @@ def _entries():
         return list(found.get(GROUP, []))
     except Exception:
         return []
+
+
+def describe():
+    """Every discovered extension and how far it got, whether or not it loaded.
+
+    A pip install that did not take is otherwise invisible until a page fails to turn
+    up, so this reports the failure instead of skipping it the way load() does.
+    """
+    found = []
+    for entry in _entries():
+        record = {"name": entry.name, "version": _version(entry), "loaded": False,
+                  "available": None, "provides": [], "badge_module": None,
+                  "error": None}
+        try:
+            cls = entry.load()
+        except Exception as exc:  # noqa: BLE001  any import failure is worth reporting
+            record["error"] = f"{type(exc).__name__}: {exc}"
+            found.append(record)
+            continue
+        record["loaded"] = True
+        record["provides"] = list(getattr(cls, "provides", ()) or ())
+        module = getattr(cls, "badge_module", None)
+        record["badge_module"] = os.path.basename(module) if module else None
+        try:
+            record["available"] = bool(cls.available())
+        except Exception as exc:  # noqa: BLE001
+            record["error"] = f"available() raised {type(exc).__name__}: {exc}"
+        found.append(record)
+    return sorted(found, key=lambda record: record["name"])
+
+
+def _version(entry):
+    distribution = getattr(entry, "dist", None)
+    return getattr(distribution, "version", None) if distribution else None
 
 
 def badge_modules(sources):

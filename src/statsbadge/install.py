@@ -223,12 +223,95 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
     return STATE_FILE
 
 
+APP_DIR = f"/system/apps/{APP_NAME}"
+
+# Hashing on the badge rather than reading the files back over the REPL: it does the
+# whole app directory in 45ms and only the digests cross the wire. Marker-prefixed
+# because the reply is many lines and has to be picked out of whatever else the REPL
+# said.
+_HASH_SCRIPT = """
+import hashlib, os, binascii
+def walk(base, prefix=''):
+    for name in sorted(os.listdir(base)):
+        path = base + '/' + name
+        if os.stat(path)[0] & 0x4000:
+            walk(path, prefix + name + '/')
+            continue
+        h = hashlib.sha256()
+        with open(path, 'rb') as handle:
+            while True:
+                chunk = handle.read(512)
+                if not chunk:
+                    break
+                h.update(chunk)
+        print('H', prefix + name, binascii.hexlify(h.digest()).decode())
+try:
+    walk(%r)
+except OSError:
+    pass
+print('HEND')
+"""
+
+
+def installed_hashes(port):
+    """sha256 of every file in the app directory on the badge, by relative name.
+
+    Empty if the app is not installed.
+    """
+    out = _run(port, "exec", _HASH_SCRIPT % APP_DIR)
+    if "HEND" not in out:
+        raise InstallError(f"could not read the installed app: {out.strip()}")
+    hashes = {}
+    for line in out.splitlines():
+        parts = line.strip().split()
+        if len(parts) == 3 and parts[0] == "H":
+            hashes[parts[1]] = parts[2]
+    return hashes
+
+
+def desired_hashes(source=None, extra_modules=()):
+    """The same mapping for what an install would put there."""
+    hashes = {}
+    for name, path in app_files(source, extra_modules):
+        with open(path, "rb") as handle:
+            hashes[name] = hashlib.sha256(handle.read()).hexdigest()
+    return hashes
+
+
+def app_changes(installed, desired):
+    """(added, changed, removed) between what is on the badge and what would be.
+
+    Only prunable names count as removed: a file the installer does not own is not a
+    reason to reset the badge.
+    """
+    added = sorted(set(desired) - set(installed))
+    changed = sorted(name for name in set(desired) & set(installed)
+                     if desired[name] != installed[name])
+    removed = sorted(name for name in set(installed) - set(desired)
+                     if name.endswith(PRUNABLE))
+    return added, changed, removed
+
+
 def secrets_file(volume):
     """The badge's secrets.py on its USB volume."""
     for candidate in (os.path.join(volume, "system", "secrets.py"),
                       os.path.join(volume, "secrets.py")):
         if os.path.exists(candidate):
             return candidate
+    return None
+
+
+def wifi_network(port):
+    """The SSID the badge is set to use, over the REPL. Never the password."""
+    try:
+        out = _run(port, "exec",
+                   "import secrets\n"
+                   "print('SSID', getattr(secrets, 'WIFI_SSID', '') or '')\n")
+    except InstallError:
+        return None
+    for line in out.splitlines():
+        if line.startswith("SSID "):
+            return line[5:].strip() or None
     return None
 
 
@@ -428,13 +511,41 @@ def _stale_modules(built_dir):
     return stale
 
 
+# MPY_VERSION and BUILD_INFO are notes from the precompile, not something the badge
+# needs. `mpy` is the built copy sitting inside the source directory.
+NOT_APP_FILES = ("__pycache__", "MPY_VERSION", "BUILD_INFO", "mpy")
+
+
+def app_files(source=None, extra_modules=()):
+    """What an install puts on the badge, as (name relative to the app dir, path).
+
+    The one place that decides which files belong, so the copy, the change check and
+    the prune cannot disagree about it.
+    """
+    source = source or app_source_dir()
+    files = []
+    for name in sorted(os.listdir(source)):
+        if name.startswith(".") or name in NOT_APP_FILES:
+            continue
+        path = os.path.join(source, name)
+        if os.path.isdir(path):
+            for inner in sorted(os.listdir(path)):
+                files.append((f"{name}/{inner}", os.path.join(path, inner)))
+            continue
+        files.append((name, path))
+    # `ext`, not `pages`: see load_extensions() in the app - a `pages` directory would
+    # shadow the app's pages.py module.
+    for _name, path in extra_modules:
+        files.append((f"ext/{os.path.basename(path)}", path))
+    return files
+
+
 def copy_app(volume, source=None, extra_modules=()):
-    """Copy the app onto a mounted badge volume.
+    """Copy the app onto a mounted badge volume, and remove what no longer belongs.
 
     `source` may be a precompiled .mpy directory instead of the package's own, which is
     how the CI-built bytecode gets installed.
     """
-    source = source or app_source_dir()
     apps = os.path.join(volume, "system", "apps")
     if not os.path.isdir(apps):
         apps = os.path.join(volume, "apps")
@@ -443,28 +554,49 @@ def copy_app(volume, source=None, extra_modules=()):
 
     target = os.path.join(apps, APP_NAME)
     os.makedirs(target, exist_ok=True)
-    copied = []
-    for name in sorted(os.listdir(source)):
-        # MPY_VERSION is a note from the precompile, not something the badge needs.
-        if name.startswith(".") or name in ("__pycache__", "MPY_VERSION",
-                                            "BUILD_INFO", "mpy"):
-            continue
-        src = os.path.join(source, name)
-        if os.path.isdir(src):
-            shutil.copytree(src, os.path.join(target, name), dirs_exist_ok=True)
-        else:
-            shutil.copy2(src, os.path.join(target, name))
-        copied.append(name)
+    files = app_files(source, extra_modules)
+    for name, path in files:
+        destination = os.path.join(target, *name.split("/"))
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copy2(path, destination)
+    removed = prune_app(target, {name for name, _ in files})
+    return target, [name for name, _ in files], removed
 
-    if extra_modules:
-        # `ext`, not `pages`: see load_extensions() in the app - a `pages` directory
-        # would shadow the app's pages.py module.
-        ext = os.path.join(target, "ext")
-        os.makedirs(ext, exist_ok=True)
-        for _name, path in extra_modules:
-            shutil.copy2(path, os.path.join(ext, os.path.basename(path)))
-            copied.append(f"ext/{os.path.basename(path)}")
-    return target, copied
+
+# Only these are the installer's to delete. Anything else in the app directory was put
+# there by someone, and a install that eats it is worse than one that leaves litter.
+PRUNABLE = (".py", ".mpy", ".png")
+
+
+def prune_app(target, keep):
+    """Delete app files that are no longer part of the install. Returns their names.
+
+    A .py left beside a .mpy takes precedence over it, so a source install followed by
+    a bytecode one silently undoes the precompile unless the old sources go. Extension
+    modules in ext/ have the same problem: one left behind keeps registering its page.
+    """
+    removed = []
+    for name in _existing_app_files(target):
+        if name in keep or not name.endswith(PRUNABLE):
+            continue
+        try:
+            os.remove(os.path.join(target, *name.split("/")))
+        except OSError:
+            continue
+        removed.append(name)
+    return sorted(removed)
+
+
+def _existing_app_files(target):
+    """Names, relative to the app directory, of what is on the badge now."""
+    found = []
+    for name in sorted(os.listdir(target)):
+        path = os.path.join(target, name)
+        if os.path.isdir(path):
+            found.extend(f"{name}/{inner}" for inner in sorted(os.listdir(path)))
+            continue
+        found.append(name)
+    return found
 
 
 def wait_for_port(timeout=40, previous=None):

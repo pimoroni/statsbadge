@@ -11,11 +11,37 @@ import time
 from . import auth, beacon, extensions, install, layout, server
 
 
+LEGACY_CONFIG_DIR = os.path.join(os.path.expanduser("~/.config"), "statsbadge")
+
+
 def config_dir(explicit=None):
+    """Where layout.json, badges.json and server.json live.
+
+    Each platform's own location, since ~/.config on Windows is just a dotfile in the
+    home directory. XDG_CONFIG_HOME wins anywhere it is set, for people who keep their
+    configuration somewhere deliberate.
+
+    An existing ~/.config/statsbadge keeps being used: it holds pairing secrets, and
+    moving those without being asked would strand a paired badge.
+    """
     if explicit:
         return os.path.abspath(explicit)
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    return os.path.join(base, "statsbadge")
+    if os.environ.get("XDG_CONFIG_HOME"):
+        return os.path.join(os.environ["XDG_CONFIG_HOME"], "statsbadge")
+    if os.path.isdir(LEGACY_CONFIG_DIR):
+        return LEGACY_CONFIG_DIR
+    return os.path.join(_platform_config_base(), "statsbadge")
+
+
+def _platform_config_base():
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support")
+    if os.name == "nt":
+        # LOCALAPPDATA, not APPDATA: the server id here identifies this machine, and a
+        # roaming profile would carry it to another one as a duplicate.
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        return base or os.path.expanduser("~")
+    return os.path.expanduser("~/.config")
 
 
 def parse_extension_options(pairs):
@@ -48,8 +74,8 @@ def _coerce(text):
     return text
 
 
-def build_service(args):
-    source_config = {
+def source_config_from(args):
+    return {
         "powermetrics": getattr(args, "powermetrics", False),
         "lhm_url": getattr(args, "lhm_url", None),
         "iface": getattr(args, "iface", None),
@@ -57,9 +83,24 @@ def build_service(args):
         "extensions": parse_extension_options(getattr(args, "extension", None)),
         "disabled_extensions": getattr(args, "without", None) or [],
     }
+
+
+def build_service(args):
     return server.Service(config_dir(args.config_dir),
                           interval=args.interval,
-                          source_config=source_config)
+                          source_config=source_config_from(args))
+
+
+def extension_modules(args):
+    """Badge-side modules from installed extensions, unless asked not to.
+
+    Loaded directly instead of through a Service, so an install does not start a
+    collector it will only stop again. --without NAME leaves that one out of both the
+    frame and the badge, which is what it should mean.
+    """
+    if getattr(args, "no_extensions", False):
+        return []
+    return extensions.badge_modules(extensions.load(source_config_from(args)))
 
 
 # -- serve ------------------------------------------------------------------
@@ -200,26 +241,9 @@ def cmd_install(args):
         info["model"], info["uid"],
         "already installed" if info["app_installed"] else "not installed"))
 
-    secret, start_seq = None, 0
-    if not args.app_only:
-        directory = config_dir(args.config_dir)
-        badges = auth.Store(os.path.join(directory, "badges.json"))
-        secret = badges.secret_for(info["uid"])
-        if secret and not args.new_secret:
-            # Hand the badge the counter the host has already reached, so its first
-            # request is neither a replay nor outside the window.
-            start_seq = badges.list_badges().get(info["uid"], {}).get("seq", 0)
-            print("  reusing the existing secret for this badge "
-                  f"(counter at {start_seq})")
-        else:
-            secret = badges.provision(info["uid"], args.name)
-            print(f"  minted a new secret ({auth.fingerprint(secret)})")
-
     # Bytecode is preferred when it matches this badge, and the .py sources are the
     # fallback: they load on any firmware.
-    source = None
-    if args.mpy and args.state_only:
-        print("  note: --mpy does nothing with --state-only, which writes credentials only")
+    source, modules = None, []
     if not args.state_only:
         try:
             source, note = install.choose_app_source(args.mpy, args.source, info["mpy"])
@@ -227,6 +251,59 @@ def cmd_install(args):
             print(f"error: {exc}", file=sys.stderr)
             return 1
         print(f"  {note}")
+        modules = extension_modules(args)
+        if modules:
+            print("  extensions: {}".format(", ".join(name for name, _ in modules)))
+
+    # What would change, so the mass storage reset is only paid when it buys something.
+    added, changed, removed = [], [], []
+    if not args.state_only:
+        try:
+            added, changed, removed = install.app_changes(
+                install.installed_hashes(port),
+                install.desired_hashes(source, modules))
+        except install.InstallError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        for label, names in (("new", added), ("changed", changed), ("stale", removed)):
+            if names:
+                print(f"  {label}: {', '.join(names)}")
+        if not (added or changed or removed):
+            print("  the app on the badge is already up to date")
+
+    server_id, server_name = None, None
+    secret, start_seq, write_credentials = None, 0, False
+    if not args.app_only:
+        directory = config_dir(args.config_dir)
+        badges = auth.Store(os.path.join(directory, "badges.json"))
+        if badges.unreadable:
+            print(f"error: {badges.path} cannot be read ({badges.unreadable}).",
+                  file=sys.stderr)
+            print("Running the server with sudo leaves it owned by root. Fix its "
+                  "ownership, or pass --config-dir.", file=sys.stderr)
+            return 1
+        secret = badges.secret_for(info["uid"])
+        service = build_service(args)
+        server_id = service.identity["id"]
+        server_name = service.identity["name"]
+        service.collector.stop()
+        # Credentials the badge already holds for this server are left alone: a repeat
+        # install is then only a code update, with nothing to lose if it is interrupted.
+        held = install.secret_in_state(install.read_state(port), server_id)
+        if args.new_secret or not secret:
+            secret = badges.provision(info["uid"], args.name)
+            print(f"  minted a new secret ({auth.fingerprint(secret)})")
+            write_credentials = True
+        elif held != secret:
+            start_seq = badges.list_badges().get(info["uid"], {}).get("seq", 0)
+            print("  reusing the existing secret for this badge "
+                  f"(counter at {start_seq})")
+            write_credentials = True
+        else:
+            print(f"  already paired with {server_name}; credentials left alone")
+
+    if args.mpy and args.state_only:
+        print("  note: --mpy does nothing with --state-only, which writes credentials only")
 
     host = args.server_host or (server._local_addresses() or ["127.0.0.1"])[0]
 
@@ -234,13 +311,12 @@ def cmd_install(args):
     # resetting into mass storage loses the write: the reset discards it and the volume
     # commits whatever was there before, which with --new-secret would leave the badge
     # holding a secret the host has already replaced.
-    # --ssid also needs the volume, so it is enough on its own to justify the trip.
-    if not args.state_only and (not info["app_installed"] or args.force_app
-                                or args.app_only or args.ssid):
+    copying = bool(added or changed or removed) or args.force_app
+    if not args.state_only and (copying or args.ssid):
         if not args.yes:
             print()
-            print("Installing the app needs the badge's USB volume, which means")
-            print("resetting it into mass storage mode.")
+            print("This needs the badge's USB volume, which means resetting it into")
+            print("mass storage mode.")
             reply = input("Continue? [y/N] ").strip().lower()
             if reply not in ("y", "yes"):
                 print("Nothing was changed.")
@@ -249,15 +325,12 @@ def cmd_install(args):
         install.enter_mass_storage(port)
         volume = install.wait_for_volume()
         print(f"  volume at {volume}")
-        modules = []
-        if args.with_extensions:
-            service = build_service(args)
-            modules = extensions.badge_modules(service.collector.extensions)
-            service.collector.stop()
-        if not (info["app_installed"] and not args.force_app and not args.app_only):
-            target, copied = install.copy_app(volume, source=source,
-                                              extra_modules=modules)
+        if copying:
+            target, copied, gone = install.copy_app(volume, source=source,
+                                                    extra_modules=modules)
             print(f"  copied {len(copied)} files to {target}")
+            if gone:
+                print(f"  removed {len(gone)}: {', '.join(gone)}")
         if args.ssid:
             if args.password is None:
                 # Prompted for, so it stays out of shell history.
@@ -272,38 +345,116 @@ def cmd_install(args):
         print("  ejected; waiting for the badge to come back...")
         port = install.wait_for_port(previous=port)
         print(f"  back on {port}")
-    elif not args.state_only:
-        print("  app already installed, use --force-app to overwrite")
 
     if args.app_only:
         print("\nDone. App only; no credentials were written.")
         print("Pair it from the badge: run 'statsbadge pair', then press B on the badge.")
         return 0
 
-    service = build_service(args)
-    server_id = service.identity["id"]
-    server_name = service.identity["name"]
-    service.collector.stop()
+    if write_credentials:
+        install.write_state(port, host, args.port, secret, info["uid"], seq=start_seq,
+                            server_id=server_id, name=server_name)
+        print(f"  wrote {install.STATE_FILE}: {server_name} at {host}:{args.port}")
 
-    install.write_state(port, host, args.port, secret, info["uid"], seq=start_seq,
-                        server_id=server_id, name=server_name)
-    print(f"  wrote {install.STATE_FILE}: {server_name} at {host}:{args.port}")
-
-    # Read it back: this is the write that must have survived.
-    written = install.read_state(port)
-    if install.secret_in_state(written, server_id) != secret:
-        print("error: the credentials did not stick. Try again, or reset the badge.",
-              file=sys.stderr)
-        return 1
-    others = [k for k in (written.get("hosts") or {}) if k != server_id]
-    if others:
-        names = ", ".join((written["hosts"][k].get("name") or k) for k in others)
-        print(f"  also still paired with: {names}")
+        # Read it back: this is the write that must have survived.
+        written = install.read_state(port)
+        if install.secret_in_state(written, server_id) != secret:
+            print("error: the credentials did not stick. Try again, or reset the badge.",
+                  file=sys.stderr)
+            return 1
+        others = [k for k in (written.get("hosts") or {}) if k != server_id]
+        if others:
+            names = ", ".join((written["hosts"][k].get("name") or k) for k in others)
+            print(f"  also still paired with: {names}")
 
     if args.state_only:
         print("\nDone. Credentials only; the app itself was not touched.")
         return 0
     print("\nDone. Run 'statsbadge serve' and launch Stats on the badge.")
+    return 0
+
+
+# -- status -----------------------------------------------------------------
+
+def cmd_status(args):
+    """What is on the badge and what this host knows, without touching anything."""
+    directory = config_dir(args.config_dir)
+    print(f"host: {directory}")
+    service = build_service(args)
+    print(f"  server:     {service.identity['name']} ({service.identity['id']})")
+    paired = service.badges.list_badges()
+    unreadable = service.badges.unreadable
+    service.collector.stop()
+    if unreadable:
+        print(f"  badges:     cannot be read: {unreadable}")
+    else:
+        print("  badges:     {}".format(", ".join(paired) if paired else "none paired"))
+    loaded = [e["name"] for e in extensions.describe() if e["available"]]
+    print("  extensions: {}".format(", ".join(loaded) if loaded else "none"))
+
+    print()
+    ports = [args.port_dev] if args.port_dev else install.find_ports()
+    if not ports:
+        print("badge: not connected by USB")
+        return 0
+    port = ports[0]
+    try:
+        info = install.badge_info(port)
+    except install.InstallError as exc:
+        print(f"badge: on {port}, but {exc}")
+        return 1
+    print(f"badge: {info['model']} on {port}")
+    print(f"  uid:        {info['uid']}")
+    print("  wifi:       {}".format(install.wifi_network(port) or "not set"))
+    print("  app:        {}".format("installed" if info["app_installed"]
+                                    else "not installed"))
+    if info["app_installed"]:
+        try:
+            source, _note = install.choose_app_source(None, args.source, info["mpy"])
+            added, changed, removed = install.app_changes(
+                install.installed_hashes(port),
+                install.desired_hashes(source, extension_modules(args)))
+        except install.InstallError as exc:
+            print(f"              cannot compare: {exc}")
+        else:
+            if added or changed or removed:
+                print("              differs from this package: {}".format(
+                    ", ".join(added + changed + removed)))
+                print("              run 'statsbadge install' to update it")
+            else:
+                print("              up to date with this package")
+
+    state = install.read_state(port) or {}
+    hosts = state.get("hosts") or {}
+    if not hosts:
+        print("  paired:     nothing yet")
+    for server_id, entry in hosts.items():
+        mark = " (active)" if server_id == state.get("active") else ""
+        print("  paired:     {} at {}:{} seq={}{}".format(
+            entry.get("name") or server_id, entry.get("host"), entry.get("port"),
+            entry.get("seq"), mark))
+    return 0
+
+
+# -- extensions -------------------------------------------------------------
+
+def cmd_extensions(_args):
+    found = extensions.describe()
+    if not found:
+        print("no extensions installed")
+        print("try: pip install ./extensions/statsbadge-clock")
+        return 0
+    for record in found:
+        state = "ok" if record["available"] else (
+            "not available here" if record["loaded"] else "failed to import")
+        version = f" {record['version']}" if record["version"] else ""
+        print(f"{record['name']}{version}  {state}")
+        if record["provides"]:
+            print("  provides:     {}".format(", ".join(record["provides"])))
+        if record["badge_module"]:
+            print(f"  badge module: {record['badge_module']}")
+        if record["error"]:
+            print(f"  error:        {record['error']}")
     return 0
 
 
@@ -382,6 +533,20 @@ def cmd_badges(args):
 
 # -- argument parsing -------------------------------------------------------
 
+INSTALL_EXAMPLES = """
+examples:
+  statsbadge install --ssid "My Network"   a new badge: app, extensions, WiFi, pairing
+  statsbadge install                       update it; only what changed is copied, and
+                                           the badge is not reset if nothing did
+  statsbadge install --force-app           copy regardless
+  statsbadge install --no-extensions       leave extension modules off
+  statsbadge install --without clock       everything except that extension
+  statsbadge install --ssid "Other" --force-secrets    change the WiFi it uses
+  statsbadge install --new-secret          re-key this badge
+
+'statsbadge update' is the same command. 'statsbadge status' says what is on the badge.
+"""
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="statsbadge",
                                      description="System stats for a Badgeware badge")
@@ -418,8 +583,10 @@ def main(argv=None):
                       help="approve without asking, for a scripted setup")
     pair.set_defaults(func=cmd_pair)
 
-    inst = subs.add_parser("install", parents=[common],
-                           help="push the app and credentials over USB")
+    inst = subs.add_parser("install", parents=[common], aliases=["update"],
+                           help="push or update the app and credentials over USB",
+                           epilog=INSTALL_EXAMPLES,
+                           formatter_class=argparse.RawDescriptionHelpFormatter)
     inst.add_argument("--port-dev", help="serial port (default: autodetect)")
     inst.add_argument("--server-host", help="address to bake in (default: this host's)")
     inst.add_argument("--name", help="a name for this badge")
@@ -443,8 +610,12 @@ def main(argv=None):
                           "credentials, so the badge can be paired from its own screen")
     inst.add_argument("--force-app", action="store_true", help="reinstall the app")
     inst.add_argument("--new-secret", action="store_true", help="mint a fresh secret")
+    inst.add_argument("--no-extensions", action="store_true",
+                     help="do not push badge-side modules from installed extensions")
+    # Accepted and ignored: extensions go on by default now, and scripts that passed
+    # this should keep working.
     inst.add_argument("--with-extensions", action="store_true",
-                     help="also push badge-side modules from installed extensions")
+                     help=argparse.SUPPRESS)
     inst.add_argument("--mpy", metavar="DIR", nargs="?", const="build/mpy",
                      help="install a precompiled app instead of the source. DIR is "
                           "either build/mpy, as left by ci/build-mpy.sh, or the stats/ "
@@ -458,6 +629,17 @@ def main(argv=None):
                             help="print what this host can measure")
     probe.add_argument("--json", action="store_true")
     probe.set_defaults(func=cmd_probe)
+
+    status = subs.add_parser("status", parents=[common],
+                             help="what is on the badge, and what this host knows")
+    status.add_argument("--port-dev", help="serial port (default: autodetect)")
+    status.add_argument("--source", action="store_true",
+                        help="compare against the .py sources, not the bytecode")
+    status.set_defaults(func=cmd_status)
+
+    exts = subs.add_parser("extensions", parents=[common],
+                           help="list installed extensions and whether they loaded")
+    exts.set_defaults(func=cmd_extensions)
 
     badges = subs.add_parser("badges", help="list or forget paired badges")
     badges.add_argument("--forget", metavar="BADGE_ID")

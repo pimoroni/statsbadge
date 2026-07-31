@@ -35,11 +35,13 @@ Extras, if you want them: `statsbadge[nvidia]` for NVIDIA cards via NVML, `stats
 With the badge on USB, in another terminal:
 
 ```bash
-statsbadge install                       # copies the app and pairs it
+statsbadge install                       # copies the app, extensions and pairs it
 statsbadge install --ssid "My Network"   # and sets up WiFi, from a brand new badge
 ```
 
-That writes the pairing secret over the serial REPL and, if the app is not already there, offers to reset the badge into USB mass storage mode to copy it. Answer no and you get credentials only.
+That writes the pairing secret over the serial REPL and, if the app needs copying, offers to reset the badge into USB mass storage mode to do it. Answer no and you get credentials only.
+
+Run it again whenever you have upgraded the package or installed an extension. It compares what is on the badge with what it would put there, copies only what changed, removes what no longer belongs, and leaves the badge alone entirely when nothing has: about a second, no reset. `statsbadge update` is the same command under the name you probably reached for. Credentials it has already written are left as they are, so a repeat run is purely a code update.
 
 `--ssid` sets the WiFi details in the badge's `secrets.py` while that volume is mounted, so a new badge goes from unboxed to showing stats in one command. It prompts for the password, so the password stays out of your shell history; `--pass` takes it directly and an empty string means an open network. `--region` and `--timezone` set those too. Details the badge already has are left alone unless you pass `--force-secrets`.
 
@@ -48,6 +50,27 @@ No cable? Run `statsbadge pair`, or open the config UI and press **Pair a badge*
 A server is not in pairing mode until you put it there, and the window closes on its own after five minutes or when you press **Stop pairing**. Requests are rate limited and capped, and one only pairs a badge when you approve it.
 
 Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings.
+
+## Everything else you might want
+
+```bash
+statsbadge serve                       # the usual thing
+statsbadge status                      # what is on the badge, what this host knows
+statsbadge extensions                  # installed extensions, and whether they loaded
+statsbadge probe                       # what this host can measure at all
+statsbadge badges                      # which badges are paired here
+statsbadge badges --forget <badge-id>
+
+statsbadge install --force-app         # copy the app whether or not it changed
+statsbadge install --no-extensions     # leave extension modules off the badge
+statsbadge install --without clock     # everything except that one extension
+statsbadge install --new-secret        # re-key this badge
+statsbadge install --ssid "Other" --force-secrets    # change the WiFi it uses
+
+statsbadge --config-dir ./cfg serve    # global options come before the subcommand
+```
+
+Configuration lives in `~/.config/statsbadge` on Linux, `~/Library/Application Support/statsbadge` on macOS and `%LOCALAPPDATA%\statsbadge` on Windows, or `$XDG_CONFIG_HOME/statsbadge` wherever that is set. `statsbadge status` prints the path it is using. Three files: `layout.json`, `server.json` and `badges.json`, the last holding pairing secrets and kept at mode 600.
 
 ## Changing IPs, and more than one computer
 
@@ -97,8 +120,10 @@ An extension is a pip install. It adds data to the frame, and optionally badge-s
 
 ```
 pip install ./extensions/statsbadge-clock
-statsbadge install --with-extensions
+statsbadge install
 ```
+
+Badge-side modules go on by default, so installing an extension and then running `install` is all of it. `--no-extensions` leaves them off, and `--without NAME` drops one from both the frame and the badge.
 
 That one is a worked example: a Swiss railway clock whose second hand sweeps at the badge's frame rate, plus weather from Open-Meteo, which needs no API key.
 

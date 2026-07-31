@@ -89,11 +89,18 @@ class Store:
     # -- persistence --------------------------------------------------------
 
     def load(self):
+        # A store that is there but cannot be read is remembered, not treated as empty:
+        # empty means every badge is unknown, and saving over it would take the real
+        # pairings with it. Happens after the server has been run with sudo.
+        self.unreadable = None
         try:
             with open(self.path) as handle:
                 data = json.load(handle)
             self._mtime = os.path.getmtime(self.path)
-        except (OSError, ValueError):
+        except FileNotFoundError:
+            data = {}
+        except (OSError, ValueError) as exc:
+            self.unreadable = str(exc)
             data = {}
         self.badges = data.get("badges", {})
         self._persisted = {
@@ -130,6 +137,10 @@ class Store:
             self.badges[badge_id] = record
 
     def save(self):
+        if self.unreadable:
+            raise PermissionError(
+                f"{self.path} cannot be read ({self.unreadable}), so it will not be "
+                "written over. Fix its ownership, or pass --config-dir.")
         directory = os.path.dirname(self.path)
         if directory:
             os.makedirs(directory, exist_ok=True)

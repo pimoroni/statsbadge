@@ -24,7 +24,9 @@ Two halves sharing one small contract: the host decides *what* to show, the badg
 
 **One `write()` per response, with `TCP_NODELAY`.** The same 515-byte reply costs a badge 247ms when the server flushes headers and body separately, and 7ms when it writes once: Nagle holds the second small segment until lwIP gets round to acknowledging the first, ~200ms later. A fixed cost per response that does not shrink with the payload. Hence [`server.py`](src/statsbadge/server.py) builds the whole response before writing, and a test asserts the body arrives in the first segment. Always send `Content-Length`, never chunked.
 
-**A `.py` beside a `.mpy` wins the import.** One stray source file silently undoes a precompiled build, and nothing errors. [`ci/build-mpy.sh`](ci/build-mpy.sh) refuses it.
+**A `.py` beside a `.mpy` wins the import.** One stray source file silently undoes a precompiled build, and nothing errors. [`ci/build-mpy.sh`](ci/build-mpy.sh) refuses it, and `install` prunes: copying alone would leave the sources behind when someone switches from `--source` to bytecode. Only `*.py`, `*.mpy` and `*.png` are the installer's to delete, so anything else in the app directory survives an update.
+
+**The badge can hash its own app directory in 45ms.** `hashlib.sha256` over all nine files, against a 0.6s REPL round trip, so `install` compares that with hashes of what it would copy and skips the mass storage reset when they match. No manifest is written to the badge, so there is nothing to go stale.
 
 **`/system` is read-only to MicroPython.** Credentials go to `/state` over the REPL; the app needs the USB volume, which means resetting the badge. Writing `/state` and *then* resetting into mass storage loses the write - the reset discards it and the volume commits what was there before - so `install` copies the app first, waits for the badge to come back, writes credentials last, and reads them back.
 

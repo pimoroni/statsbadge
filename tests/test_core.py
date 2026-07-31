@@ -616,6 +616,101 @@ def test_write_secrets_keeps_the_rest_of_the_file(_h):
         assert values["TIMEZONE"] == -7
 
 
+@check
+def test_app_files_and_pruning(_h):
+    """What goes on the badge, and what an update has to take off it."""
+    import tempfile
+
+    from statsbadge import install
+
+    with tempfile.TemporaryDirectory() as work:
+        source = os.path.join(work, "built")
+        os.makedirs(os.path.join(source, "mpy"))
+        for name in ("__init__.mpy", "net.mpy", "icon.png", "MPY_VERSION",
+                     "BUILD_INFO", ".hidden"):
+            with open(os.path.join(source, name), "w") as handle:
+                handle.write(name)
+        with open(os.path.join(source, "mpy", "stowaway.mpy"), "w") as handle:
+            handle.write("not this one either")
+        plugin = os.path.join(work, "clockface.py")
+        with open(plugin, "w") as handle:
+            handle.write("# a badge-side extension module")
+
+        names = dict(install.app_files(source, [("clock", plugin)]))
+        assert sorted(names) == ["__init__.mpy", "ext/clockface.py", "icon.png",
+                                 "net.mpy"], names
+
+        # A stale .py beside a .mpy is the one that matters: it wins the import and
+        # silently undoes the precompile.
+        target = os.path.join(work, "stats")
+        os.makedirs(os.path.join(target, "ext"))
+        for name in ("__init__.mpy", "net.mpy", "net.py", "icon.png", "notes.txt"):
+            with open(os.path.join(target, name), "w") as handle:
+                handle.write("old")
+        for name in ("clockface.py", "gone.py"):
+            with open(os.path.join(target, "ext", name), "w") as handle:
+                handle.write("old")
+
+        removed = install.prune_app(target, set(names))
+        assert removed == ["ext/gone.py", "net.py"], removed
+        assert os.path.exists(os.path.join(target, "notes.txt")), \
+            "pruning took a file the installer does not own"
+        assert os.path.exists(os.path.join(target, "net.mpy"))
+
+        installed = {"__init__.mpy": "aaa", "net.mpy": "bbb", "net.py": "ccc",
+                     "icon.png": "ddd", "notes.txt": "eee"}
+        desired = {"__init__.mpy": "aaa", "net.mpy": "CHANGED", "icon.png": "ddd",
+                   "ext/clockface.py": "fff"}
+        added, changed, gone = install.app_changes(installed, desired)
+        assert added == ["ext/clockface.py"], added
+        assert changed == ["net.mpy"], changed
+        assert gone == ["net.py"], f"{gone}, and notes.txt must not force a reset"
+
+
+@check
+def test_unreadable_badge_store_is_not_treated_as_empty(_h):
+    """An unreadable store must not read as "no badges" and then be written over."""
+    import tempfile
+
+    from statsbadge import auth
+
+    with tempfile.TemporaryDirectory() as work:
+        path = os.path.join(work, "badges.json")
+        store = auth.Store(path)
+        store.provision("badge-1", "test")
+        assert store.list_badges()
+
+        os.chmod(path, 0o000)
+        try:
+            reopened = auth.Store(path)
+            if reopened.unreadable is None:
+                return          # running as root, where the mode means nothing
+            assert reopened.list_badges() == {}
+            try:
+                reopened.save()
+            except PermissionError:
+                pass
+            else:
+                raise AssertionError("saved over a store it could not read")
+        finally:
+            os.chmod(path, 0o600)
+        # The real records are still there.
+        assert auth.Store(path).list_badges()
+
+
+@check
+def test_extensions_describe_finds_the_clock(_h):
+    from statsbadge import extensions
+
+    found = {record["name"]: record for record in extensions.describe()}
+    clock = found.get("clock")
+    if clock is None:
+        return              # the extension is not pip installed in this environment
+    assert clock["loaded"], clock
+    assert clock["badge_module"] == "clockface.py", clock
+    assert "clock" in clock["provides"], clock
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)
