@@ -260,6 +260,26 @@ def test_pruning_drops_absent_groups(_h):
 
 
 @check
+def test_every_offered_theme_exists_on_the_badge(_h):
+    """The UI offers whatever layout.THEMES lists, and the badge has to draw it."""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src",
+                                    "statsbadge", "badge_app"))
+    import look
+
+    assert set(layout.THEMES) == set(look.THEMES), (
+        set(layout.THEMES) ^ set(look.THEMES))
+    assert layout.DEFAULT_CONFIG["theme"] == look.DEFAULT
+    for name in look.THEMES:
+        theme = look.get(name)
+        assert theme.name == name, theme.name
+        stops = theme.ramp
+        assert stops[0][0] == 0.0 and stops[-1][0] == 1.0, name
+        assert list(stops) == sorted(stops, key=lambda s: s[0]), name
+        for _position, rgb in stops:
+            assert len(rgb) == 3 and all(0 <= v <= 255 for v in rgb), (name, rgb)
+
+
+@check
 def test_badge_provisioned_by_another_process_is_accepted(h):
     """`statsbadge install` writes badges.json while the server is already up.
 

@@ -23,7 +23,8 @@ import time
 #   text    labelled lines, for names and versions
 KINDS = ("dial", "bars", "graph", "grid", "text")
 
-THEMES = ("dark", "light", "mono", "amber", "blueprint", "vapor")
+THEMES = ("dark", "light", "mono", "red", "green", "cyan",
+          "amber", "blueprint", "vapor")
 
 # What to show on a machine nobody has configured. Only pages whose fields the host
 # actually produces survive `prune`, so this is a superset on purpose.

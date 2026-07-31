@@ -86,8 +86,6 @@ class Theme:
 
 
 THEMES = {
-    # Cool near-black, a teal accent, and a ramp that leaves the accent's colour behind
-    # as the reading climbs: teal, green, orange, red.
     "dark": Theme(
         "dark",
         bg=(18, 20, 28), panel=(26, 30, 43), ink=(242, 245, 255), dim=(139, 147, 171),
@@ -96,9 +94,6 @@ THEMES = {
               (0.72, (236, 159, 7)), (1.0, (215, 25, 8))),
         grid=(44, 51, 70), case=0.22,
     ),
-    # Paper rather than white, and warm with it. The panel sits below the ground here
-    # instead of above it, which is the only way a band reads on a pale field. Every
-    # ramp stop is a deep colour: the light ones clear the ground by too little.
     "light": Theme(
         "light",
         bg=(250, 247, 242), panel=(240, 236, 228), ink=(30, 26, 20), dim=(102, 94, 82),
@@ -113,6 +108,27 @@ THEMES = {
         accent=(235, 235, 235),
         ramp=((0.0, (110, 110, 110)), (1.0, (255, 255, 255))),
         grid=(38, 38, 38), case=0.14,
+    ),
+    "red": Theme(
+        "red",
+        bg=(28, 18, 16), panel=(42, 26, 23), ink=(255, 242, 240), dim=(169, 140, 134),
+        accent=(255, 82, 62),
+        ramp=((0.0, (165, 0, 0)), (0.7, (255, 82, 62)), (1.0, (255, 199, 188))),
+        grid=(68, 45, 41), case=0.24,
+    ),
+    "green": Theme(
+        "green",
+        bg=(16, 22, 15), panel=(24, 34, 22), ink=(240, 248, 239), dim=(135, 154, 133),
+        accent=(2, 185, 0),
+        ramp=((0.0, (0, 105, 0)), (0.7, (2, 185, 0)), (1.0, (75, 255, 57))),
+        grid=(41, 56, 40), case=0.24,
+    ),
+    "cyan": Theme(
+        "cyan",
+        bg=(12, 22, 26), panel=(16, 33, 40), ink=(236, 248, 252), dim=(124, 153, 165),
+        accent=(0, 169, 212),
+        ramp=((0.0, (0, 95, 121)), (0.7, (0, 169, 212)), (1.0, (141, 230, 255))),
+        grid=(30, 56, 65), case=0.24,
     ),
     "amber": Theme(
         "amber",
