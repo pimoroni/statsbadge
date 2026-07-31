@@ -92,7 +92,8 @@ for source in "$APP_DIR"/*.py; do
         cp "$source" "$OUT_DIR/__init__.py"
         continue
     fi
-    "$MPY_CROSS" -o "$OUT_DIR/$name.mpy" "$source"
+    # -s so a traceback on the badge names the module, not the runner's build path.
+    "$MPY_CROSS" -s "$name.py" -o "$OUT_DIR/$name.mpy" "$source"
     compiled=$((compiled + 1))
 done
 
@@ -129,12 +130,18 @@ if not seen:
 if len(seen) > 1:
     sys.exit(f"mixed bytecode versions in one build: {sorted(seen)}")
 
+# A .py alongside a .mpy takes precedence, so leaving one behind silently undoes the
+# precompile and the app quietly costs full compile time again. Checked, not assumed.
+shadowed = [p.name for p in out.glob("*.mpy") if (out / f"{p.stem}.py").exists()]
+if shadowed:
+    sys.exit(f"error: these .mpy are shadowed by a .py beside them: {shadowed}")
+
 mpy = seen.pop()
 version, flags = mpy & 0xFF, mpy >> 8
 print(f"bytecode v{version}.{flags & 3}, arch {flags >> 2}, _mpy {mpy}")
 if expect and int(expect) != mpy:
     sys.exit(f"error: built _mpy {mpy} but expected {expect}; wrong MicroPython version")
-pathlib.Path(out / "MPY_VERSION").write_text(f"{mpy}\n")
+(out / "MPY_VERSION").write_text(f"{mpy}\n")
 PY
 
 echo "compiled $compiled modules into $OUT_DIR"
