@@ -138,7 +138,9 @@ if shadowed:
 
 mpy = seen.pop()
 version, flags = mpy & 0xFF, mpy >> 8
-print(f"bytecode v{version}.{flags & 3}, arch {flags >> 2}, _mpy {mpy}")
+# The high byte is feature flags, not an architecture: -march makes no difference to a
+# bytecode-only .mpy, and armv6m, x64 and the default all emit an identical header.
+print(f"bytecode v{version}.{flags & 3}, flags {flags}, _mpy {mpy}")
 if expect and int(expect) != mpy:
     sys.exit(f"error: built _mpy {mpy} but expected {expect}; wrong MicroPython version")
 (out / "MPY_VERSION").write_text(f"{mpy}\n")
