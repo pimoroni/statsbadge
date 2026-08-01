@@ -49,7 +49,7 @@ No cable? Run `statsbadge pair`, or open the config UI and press **Pair a badge*
 
 A server is not in pairing mode until you put it there, and the window closes on its own after five minutes or when you press **Stop pairing**. Requests are rate limited and capped, and one only pairs a badge when you approve it.
 
-Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings. A button can run a host command or do something on the badge itself - page back and forth, or cycle the brightness - and the badge can take that brightness down to suit a dim room off its own light sensor.
+Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings. A button can run a host command or do something on the badge itself - page back and forth, or cycle the brightness - and the badge can take that brightness down to suit a dim room off its own light sensor, or page through the screens by itself once nobody has touched it for a while.
 
 ## Everything else you might want
 

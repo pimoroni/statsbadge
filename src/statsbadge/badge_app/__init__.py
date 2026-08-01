@@ -142,6 +142,9 @@ class App:
         self.dimmed = None
         self.dim_step = 0
         self._light_at = 0
+        # When a button was last touched, and when the badge last turned a page by itself.
+        self._pressed_at = time.ticks_ms()
+        self._advanced_at = 0
         self.layout_rev = -1
         self.frame = {}
         self.history = {}
@@ -398,13 +401,22 @@ class App:
     # -- input --------------------------------------------------------------
 
     def buttons(self):
+        touched = False
         if badge.pressed(BUTTON_UP):
             self.turn(-1)
+            touched = True
         if badge.pressed(BUTTON_DOWN):
             self.turn(1)
+            touched = True
         for name, button in (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C)):
             if badge.pressed(button):
                 self.press(name)
+                touched = True
+        if touched:
+            # Only a press counts as being touched: the page turns this class makes for
+            # itself must not, or the first one would put the badge back to sleep.
+            self._pressed_at = time.ticks_ms()
+            self._advanced_at = 0
 
     def press(self, which):
         """What a button is bound to: something this badge does, or a host command."""
@@ -478,6 +490,7 @@ class App:
         if stale != self._was_stale:
             self._was_stale = stale
             self.dirty = True
+        self.advance_if_idle(now)
         if time.ticks_diff(now, self._light_at) > LIGHT_EVERY_MS:
             self._light_at = now
             if self.read_light():
@@ -486,6 +499,25 @@ class App:
         if page is not None and page.get("kind") in pages_module.ANIMATED:
             # This page moves on its own, so it gets a frame regardless of polling.
             self.dirty = True
+
+    def advance_if_idle(self, now):
+        """Page on by itself when nobody has pressed anything for a while.
+
+        Off unless a timeout is configured, which is the default: a display that moves on
+        its own is a choice, and one that does it while somebody is reading is a nuisance.
+        The first turn comes as soon as the badge counts as idle, since the reader stopped
+        that long ago already, and the rest follow at the configured pace.
+        """
+        after = int((self.layout or {}).get("idle_advance_s", 0))
+        if not after or len(self.page_list) < 2:
+            return
+        if time.ticks_diff(now, self._pressed_at) < after * 1000:
+            return
+        every = max(1, int((self.layout or {}).get("advance_every_s", 10)))
+        if self._advanced_at and time.ticks_diff(now, self._advanced_at) < every * 1000:
+            return
+        self._advanced_at = now
+        self.turn(1)
 
     # -- drawing ------------------------------------------------------------
 
@@ -524,6 +556,8 @@ class App:
         """What HOME did this frame: None, "menu" or "exit"."""
         if badge.pressed(BUTTON_HOME):
             self._home_at = badge.ticks
+            self._pressed_at = time.ticks_ms()
+            self._advanced_at = 0
             return None
         if self._home_at is None:
             return None

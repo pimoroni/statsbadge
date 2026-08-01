@@ -78,6 +78,8 @@ DEFAULT_CONFIG = {
     "graph_points": 48,
     "smooth": True,
     "auto_brightness": False,
+    "idle_advance_s": 0,
+    "advance_every_s": 10,
     "pages": DEFAULT_PAGES,
     "buttons": {"a": None, "b": None, "c": None},
     # Per-extension settings, keyed by extension name. Host-side: the badge never sees
@@ -189,6 +191,12 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # Whether the badge takes its brightness down to suit a dim room. Off by default: it is
     # the badge's own sensor and not every board has one.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))
+    # How long the badge waits for a press before it starts paging on its own, and how long
+    # it then holds each page. Zero is off, which is the default: a display that moves while
+    # somebody is reading it is a nuisance. An hour is the longest wait worth offering, and a
+    # page has to be up for at least a second to be seen at all.
+    out["idle_advance_s"] = max(0, min(3600, int(incoming.get("idle_advance_s", 0))))
+    out["advance_every_s"] = max(1, min(600, int(incoming.get("advance_every_s", 10))))
 
     pages = incoming.get("pages")
     if pages is None:

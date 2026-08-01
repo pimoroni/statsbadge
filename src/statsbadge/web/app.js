@@ -481,6 +481,9 @@ function renderLook() {
   bindRange("interval", "interval_ms", (v) => `${v} ms`);
   bindRange("brightness", "brightness", (v) => `${v}%`, 100);
   bindRange("points", "graph_points", (v) => `${v}`);
+  // Zero is off, so the readout says so rather than showing a time nothing happens at.
+  bindRange("idle", "idle_advance_s", (v) => (v ? `${v}s idle` : "off"));
+  bindRange("advance", "advance_every_s", (v) => `${v}s`);
 
   // Whether a graph curves through its samples or joins them with straight lines. One
   // switch for every graph, since it is a drawing choice and not a property of a page.

@@ -1436,6 +1436,42 @@ def test_the_badge_dims_to_suit_the_room(_h):
 
 
 @check
+def test_the_badge_pages_on_its_own_when_left_alone(_h):
+    """Off by default: a display that moves while somebody is reading it is a nuisance."""
+    config = layout.validate({"pages": layout.DEFAULT_PAGES})
+    assert config["idle_advance_s"] == 0, config["idle_advance_s"]
+    assert config["advance_every_s"] == 10
+    clamped = layout.validate({"idle_advance_s": 99999, "advance_every_s": 0,
+                               "pages": layout.DEFAULT_PAGES})
+    assert clamped["idle_advance_s"] == 3600, clamped
+    # A page nobody can see for a whole second is not a page anybody can read.
+    assert clamped["advance_every_s"] == 1, clamped
+
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="idle"' in (web / "index.html").read_text()
+    assert '"idle_advance_s"' in (web / "app.js").read_text()
+
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    advance = app[app.index("    def advance_if_idle"):]
+    advance = advance[:advance.index("\n    # --", 1)]
+    # The turns it makes for itself must not count as somebody using the badge, or the first
+    # one would put it back to sleep.
+    assert "_pressed_at" in advance and "self._pressed_at =" not in advance, advance
+    assert "len(self.page_list) < 2" in advance, "one page would turn to itself"
+
+    # A press is what resets it, wherever a press is noticed - including HOME, since opening
+    # the menu is somebody using the badge.
+    for method in ("    def buttons(self):", "    def home(self):"):
+        body = app[app.index(method):]
+        body = body[:body.index("\n    def ", 1)]
+        assert "self._pressed_at = time.ticks_ms()" in body, method
+    # And not in turn(), which both the buttons and the badge itself go through.
+    turn = app[app.index("    def turn(self"):]
+    turn = turn[:turn.index("\n    # --", 1)]
+    assert "_pressed_at" not in turn, turn
+
+
+@check
 def test_a_button_can_do_something_without_the_host(_h):
     """Paging and the panel are the badge's own business: a round trip to change them would
     be slower than the press, and would not work at all with the host away."""
