@@ -428,12 +428,16 @@ def _pips(footer, theme, index, total):
 # -- widgets ----------------------------------------------------------------
 
 def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
-          value_size=None, label_size=None, cold=False, icon=None, unit=None):
+          value_size=None, label_size=None, cold=False, icon=None, unit=None, hot=None):
     """One sweep gauge, with a line of text inside it.
 
     `shape.arc(centre, inner, outer, from, to)` - angles start at the top and run
     clockwise, so look.DIAL_FROM..DIAL_TO is 225..495 and the gap lands at the bottom,
     which is where `under` goes.
+
+    `hot` is where this reading sits on the ramp, for a field where that is not where it
+    sits on its own scale: a battery at 100% is not a machine in trouble. It colours the
+    sweep and nothing else, the sweep's length being the reading either way.
 
     `icon` is drawn there instead where the font has it, and `under` is what it falls back
     to. `unit` is a small suffix on the reading, for a gauge whose slot below is already
@@ -454,7 +458,7 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
         # Solid, in the ramp's colour for this value: a spatial gradient across the
         # arc's box does not follow the curve, so the hue would not track the reading.
         # This way the colour *is* the severity, and it costs one shape.
-        screen.pen = color.rgb(*theme.at(fraction))
+        screen.pen = color.rgb(*theme.at(fraction if hot is None else hot))
         screen.shape(shape.arc(middle, inner, outer, start, sweep))
 
         # A brighter tick at the sweep's end, so the exact value is readable.
@@ -487,10 +491,10 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
         blit_label(under, label_size, theme.dim, centre[0], below, align=1)
 
 
-def dial(theme, fraction, value_text, unit_text, cold=False):
+def dial(theme, fraction, value_text, unit_text, cold=False, hot=None):
     """The single gauge of a `dial` page, with its readouts beside it."""
     gauge(theme, look.DIAL_C, look.DIAL_OUTER, look.DIAL_INNER, fraction, value_text,
-          unit_text, cold=cold)
+          unit_text, cold=cold, hot=hot)
 
 
 def dials(theme, entries):
@@ -501,12 +505,13 @@ def dials(theme, entries):
     """
     shape_of = look.DIALS.get(len(entries)) or look.DIALS[4]
     for centre, entry in zip(shape_of["centres"], entries):
-        name, value_text, fraction, icon, unit = entry
+        name, value_text, fraction, icon, unit, hot = entry
         gauge(theme, centre, shape_of["outer"], shape_of["inner"], fraction, value_text,
-              name, shape_of["value"], shape_of["label"], fraction is None, icon, unit)
+              name, shape_of["value"], shape_of["label"], fraction is None, icon, unit,
+              hot)
 
 
-def readout(theme, y, name, value_text, fraction=None, note=None, chip=None):
+def readout(theme, y, name, value_text, fraction=None, note=None, chip=None, hot=None):
     """One row of the column beside a gauge: a name, the reading under it, and then either
     a bar for the level or a line saying what full is.
 
@@ -530,7 +535,7 @@ def readout(theme, y, name, value_text, fraction=None, note=None, chip=None):
         screen.pen = color.rgb(*theme.grid)
         screen.rectangle(rect(x, y + 28, width, 3))
         if fraction > 0:
-            screen.pen = color.rgb(*theme.at(fraction))
+            screen.pen = color.rgb(*theme.at(fraction if hot is None else hot))
             screen.rectangle(rect(x, y + 28, int(width * fraction), 3))
 
 
@@ -785,7 +790,7 @@ def grid(theme, entries):
     cell_h = (look.BODY_H - 12 - (rows - 1) * 6) // rows
 
     for i in range(count):
-        name, value_text, fraction, icon = entries[i]
+        name, value_text, fraction, icon, hot = entries[i]
         column = i % columns
         row = i // columns
         x = look.PAD + column * (cell_w + 6)
@@ -793,7 +798,8 @@ def grid(theme, entries):
         screen.pen = color.rgb(*theme.panel)
         screen.shape(shape.rounded_rectangle(rect(x, y, cell_w, cell_h), 5))
         if fraction is not None:
-            screen.pen = color.rgb(*theme.at(max(0.0, min(1.0, fraction))))
+            screen.pen = color.rgb(*theme.at(max(0.0, min(1.0,
+                                            fraction if hot is None else hot))))
             screen.rectangle(rect(x, y + cell_h - 3, int(cell_w * max(0.0, min(1.0, fraction))), 3))
         # Both: a cell has room for the name and for a symbol in the far corner, so the
         # symbol is another way to find the tile rather than the only one. A gauge has
@@ -1017,7 +1023,8 @@ def radar(theme, entries):
 
 # -- trend ------------------------------------------------------------------
 
-def trend(theme, value_text, unit_text, name, delta, points, peak, fraction):
+def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
+          hot=None):
     """One big reading, which way it is going, and where it has been.
 
     The arrow and the change are the point: a number on its own does not say whether
@@ -1036,7 +1043,8 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction):
                    align=2)
         # Drawn, not written: the text font carries no arrows, and a missing glyph is a
         # gap rather than an error.
-        _arrow(theme, x - 46, look.BODY_TOP + 34, delta, fraction)
+        _arrow(theme, x - 46, look.BODY_TOP + 34, delta,
+               fraction if hot is None else hot)
 
 
     # The history underneath, so the number has somewhere to have come from.

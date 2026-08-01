@@ -50,6 +50,21 @@ SCALE = {
 # per-core page drew bare numbers and scaled its graph from the data.
 PERCENT = ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores")
 
+# Fields where a high reading is the good one, so the ramp is read backwards to colour them.
+# The ramp runs calm to alarming and almost everything here is a load or a temperature, but a
+# battery at 100% is not a machine in trouble.
+GOOD_HIGH = ("battery_pct",)
+
+
+def severity_of(ref, fraction):
+    """Where a reading sits on the ramp, which is not always where it sits on its own scale.
+
+    Only the colour: a gauge's sweep and a bar's length are the reading itself.
+    """
+    if fraction is None:
+        return None
+    return 1.0 - fraction if ref.split(".")[-1] in GOOD_HIGH else fraction
+
 
 def name_for(ref):
     if ref in NAMES:
@@ -134,14 +149,16 @@ def _dial(page, frame, _history, theme):
     # The unit slot says what full means where that is not obvious, which for a rate it
     # never is.
     under = scale_note(ref, frame) or draw.short_unit(field)
-    draw.dial(theme, fraction, draw.fmt(value, field), under, cold=value is None)
+    draw.dial(theme, fraction, draw.fmt(value, field), under, cold=value is None,
+              hot=severity_of(ref, fraction))
     readouts = page.get("readouts", [])[:3]
     for readout_ref, y in zip(readouts, look.readout_rows(len(readouts))):
         readout_value = value_of(frame, readout_ref)
         readout_field = readout_ref.split(".")[-1]
+        readout_fraction = fraction_of(readout_ref, readout_value, None, frame)
         draw.readout(theme, y, name_for(readout_ref),
-                     draw.reading(readout_value, readout_field),
-                     fraction_of(readout_ref, readout_value, None, frame))
+                     draw.reading(readout_value, readout_field), readout_fraction,
+                     hot=severity_of(readout_ref, readout_fraction))
 
 
 def _bars(page, frame, _history, theme):
@@ -177,8 +194,9 @@ def _grid(page, frame, _history, theme):
     for ref in refs:
         value = value_of(frame, ref)
         field = ref.split(".")[-1]
-        entries.append((name_for(ref), draw.reading(value, field),
-                        fraction_of(ref, value, None, frame), icon_for(ref, by_group)))
+        fraction = fraction_of(ref, value, None, frame)
+        entries.append((name_for(ref), draw.reading(value, field), fraction,
+                        icon_for(ref, by_group), severity_of(ref, fraction)))
     draw.grid(theme, entries)
 
 
@@ -215,11 +233,12 @@ def _dials(page, frame, _history, theme):
     for ref, group in zip(refs, groups):
         value = value_of(frame, ref)
         field = ref.split(".")[-1]
+        fraction = fraction_of(ref, value, page, frame)
         entries.append((group.upper() if by_group else name_for(ref),
-                        draw.fmt(value, field),
-                        fraction_of(ref, value, page, frame),
+                        draw.fmt(value, field), fraction,
                         icon_for(ref, by_group),
-                        draw.short_unit(field)))
+                        draw.short_unit(field),
+                        severity_of(ref, fraction)))
     draw.dials(theme, entries)
 
 
@@ -274,7 +293,8 @@ def _rings(page, frame, _history, theme):
         fraction = fraction_of(ref, value, page, frame)
         # Coloured by its own reading, the way every gauge here is: by position in the
         # stack the outermost ring would always look calm and the innermost alarming.
-        rgb = theme.at(fraction) if fraction is not None else theme.grid
+        rgb = (theme.at(severity_of(ref, fraction)) if fraction is not None
+               else theme.grid)
         entries.append((labels[index], draw.reading(value, field), fraction, rgb,
                         scale_note(ref, frame)))
     draw.rings(theme, entries)
@@ -314,8 +334,9 @@ def _trend(page, frame, history, theme):
         was = points[-5]
         if was is not None:
             delta = float(value) - float(was)
+    fraction = fraction_of(ref, value, page, frame)
     draw.trend(theme, draw.fmt(value, field), draw.short_unit(field), name_for(ref),
-               delta, points, peak, fraction_of(ref, value, page, frame))
+               delta, points, peak, fraction, hot=severity_of(ref, fraction))
 
 
 # How far between polls the waterfall has got, so it can interpolate rather than step.

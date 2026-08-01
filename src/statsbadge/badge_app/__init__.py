@@ -105,6 +105,20 @@ BACKLIGHT_FLOOR = 0.5
 CASELIGHT_FLOOR = 0.15
 
 
+# How much of a step to take towards a new ambient reading each poll, and how often to take
+# one. The sensor is a phototransistor a hand can shadow, so following it directly makes the
+# panel flicker at every passing movement: a fifth of the gap every 250ms is about a second
+# and a half from a curtain being opened.
+LIGHT_FOLLOW = 0.2
+LIGHT_EVERY_MS = 250
+
+# Bindings this badge answers itself, and the shares of the configured brightness its button
+# steps through. Paging and the panel are the badge's own business and a round trip to the host
+# would be slower than the press; the host never sees these.
+LOCAL_PREFIX = "badge."
+BRIGHTNESS_STEPS = (1.0, 0.6, 0.3)
+
+
 def backlight(fraction):
     """Set the display brightness, over the range the panel responds to.
 
@@ -121,6 +135,13 @@ class App:
         self.client = net.Client(self.config)
         self.theme = look.get(look.DEFAULT)
         self.layout = None
+        # Where the ambient follower has got to, and the brightest the sensor has read.
+        self.ambient = None
+        self.light_ceiling = look.LIGHT_BRIGHT
+        # A local override of the configured brightness, for the button that cycles it.
+        self.dimmed = None
+        self.dim_step = 0
+        self._light_at = 0
         self.layout_rev = -1
         self.frame = {}
         self.history = {}
@@ -310,11 +331,51 @@ class App:
         if theme.name != self.theme.name or theme is not self.theme:
             self.theme = theme
             draw.clear_cache()
-        backlight(float((self.layout or {}).get("brightness", 0.8)))
+        self.apply_backlight()
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
         self.apply_caselights()
         if self.page_index >= len(self.page_list):
             self.page_index = 0
+
+    def apply_backlight(self):
+        """The configured brightness, scaled by the room if the setting says so.
+
+        The scale is a floor plus what the sensor reads, so `brightness` stays the ceiling
+        the user asked for and ambient only ever takes some of it away. The button that
+        cycles brightness overrides the configured level until the next press, since
+        someone reaching for it wants this badge dimmer now and not a config edit.
+        """
+        wanted = self.dimmed
+        if wanted is None:
+            wanted = float((self.layout or {}).get("brightness", 0.8))
+        if (self.layout or {}).get("auto_brightness") and self.ambient is not None:
+            wanted *= look.LIGHT_FLOOR + (1.0 - look.LIGHT_FLOOR) * self.ambient
+        backlight(wanted)
+
+    def read_light(self):
+        """Follow the room, slowly. Returns True when the panel wants setting again.
+
+        Only while the setting is on: the read is cheap but the point of the setting being
+        off is that nothing touches the brightness.
+        """
+        if not (self.layout or {}).get("auto_brightness"):
+            return False
+        try:
+            raw = badge.light_level()
+        except (AttributeError, OSError):
+            return False           # not a Tufty, or no sensor on this board
+        if raw > self.light_ceiling:
+            self.light_ceiling = raw
+        fraction = look.ambient_fraction(raw, self.light_ceiling)
+        if self.ambient is None:
+            self.ambient = fraction
+        else:
+            moved = (fraction - self.ambient) * LIGHT_FOLLOW
+            # Under a step of the sensor's own resolution there is nothing to follow.
+            if abs(moved) < 0.005:
+                return False
+            self.ambient += moved
+        return True
 
     def apply_caselights(self):
         """Off, the theme's own level, or a level that follows a reading.
@@ -343,10 +404,40 @@ class App:
             self.turn(1)
         for name, button in (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C)):
             if badge.pressed(button):
-                self.send_command(name)
+                self.press(name)
 
-    def send_command(self, which):
-        command = ((self.layout or {}).get("buttons") or {}).get(which)
+    def press(self, which):
+        """What a button is bound to: something this badge does, or a host command."""
+        binding = ((self.layout or {}).get("buttons") or {}).get(which)
+        if not binding:
+            return
+        if binding.startswith(LOCAL_PREFIX):
+            self.local(binding)
+        else:
+            self.send_command(binding)
+
+    def local(self, action):
+        if action == "badge.prev":
+            self.turn(-1)
+        elif action == "badge.next":
+            self.turn(1)
+        elif action == "badge.brightness":
+            self.cycle_brightness()
+
+    def cycle_brightness(self):
+        """Step the panel down and round again, over the configured level.
+
+        A local override rather than a config edit: someone reaching for the button wants
+        this badge dimmer now. Back at the top it hands control to the config again.
+        """
+        self.dim_step = (self.dim_step + 1) % len(BRIGHTNESS_STEPS)
+        share = BRIGHTNESS_STEPS[self.dim_step]
+        base = float((self.layout or {}).get("brightness", 0.8))
+        self.dimmed = None if share >= 1.0 else base * share
+        self.apply_backlight()
+        self.note(f"brightness {round(share * 100)}%")
+
+    def send_command(self, command):
         if not command:
             return
         if self._pending is not None:
@@ -387,6 +478,10 @@ class App:
         if stale != self._was_stale:
             self._was_stale = stale
             self.dirty = True
+        if time.ticks_diff(now, self._light_at) > LIGHT_EVERY_MS:
+            self._light_at = now
+            if self.read_light():
+                self.apply_backlight()
         page = self.current_page()
         if page is not None and page.get("kind") in pages_module.ANIMATED:
             # This page moves on its own, so it gets a frame regardless of polling.

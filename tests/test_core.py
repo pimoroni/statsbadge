@@ -1381,6 +1381,82 @@ def test_the_ui_takes_its_swatches_from_the_host(_h):
 
 
 @check
+def test_a_full_battery_is_not_an_alarm(_h):
+    """The ramp runs calm to alarming and nearly every reading here is a load or a
+    temperature, so high is bad. A battery is the other way round and was drawn red at 100%."""
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import pages
+
+    assert pages.severity_of("power.battery_pct", 1.0) == 0.0
+    assert pages.severity_of("power.battery_pct", 0.1) == 0.9
+    # Everything else is coloured by where it actually sits.
+    for ref in ("cpu.pct", "cpu.temp", "mem.pct", "disk.pct", "gpu.temp"):
+        assert pages.severity_of(ref, 0.9) == 0.9, ref
+    assert pages.severity_of("cpu.pct", None) is None
+
+    # And it is only the colour: the sweep and the bar are the reading itself.
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    body = source[source.index("def gauge("):]
+    body = body[:body.index("\ndef ", 1)]
+    assert "theme.at(fraction if hot is None else hot)" in body
+    assert "shape.arc(middle, inner, outer, start, sweep)" in body, (
+        "the sweep is no longer drawn from the reading")
+
+
+@check
+def test_the_badge_dims_to_suit_the_room(_h):
+    """Measured on the badge: a curtained room reads 96-176 raw of a u16, stepping in
+    sixteens, so the useful adjustment is in the bottom couple of percent of the range."""
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import look
+
+    assert look.ambient_fraction(look.LIGHT_DIM) == 0.0
+    assert look.ambient_fraction(96) < look.ambient_fraction(176) < look.ambient_fraction(1000)
+    assert look.ambient_fraction(look.LIGHT_BRIGHT) == 1.0
+    # Anything past the ceiling is full, and a ceiling the app has raised rescales the rest.
+    assert look.ambient_fraction(65535) == 1.0
+    assert look.ambient_fraction(2000, 2000) == 1.0
+    assert look.ambient_fraction(2000, 20000) < 1.0
+    # Logarithmic: the first doubling is worth as much as the next.
+    first = look.ambient_fraction(look.LIGHT_DIM * 2)
+    assert 0.4 < first / look.ambient_fraction(look.LIGHT_DIM * 4) < 0.6, first
+
+    # A dim room is dimmer, not dark: dark is what the setting being off would look like.
+    assert 0.0 < look.LIGHT_FLOOR < 1.0
+
+    # Off by default, since it is the badge's own sensor and not every board has one.
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["auto_brightness"] is False
+    assert layout.validate({"auto_brightness": True,
+                            "pages": layout.DEFAULT_PAGES})["auto_brightness"] is True
+    assert 'id="autobright"' in pathlib.Path("src/statsbadge/web/index.html").read_text()
+
+
+@check
+def test_a_button_can_do_something_without_the_host(_h):
+    """Paging and the panel are the badge's own business: a round trip to change them would
+    be slower than the press, and would not work at all with the host away."""
+    actions = dict(layout.LOCAL_ACTIONS)
+    assert set(actions) == {"badge.prev", "badge.next", "badge.brightness"}, actions
+
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    press = app[app.index("    def press(self"):]
+    press = press[:press.index("\n    def ", 1)]
+    assert "LOCAL_PREFIX" in press and "send_command" in press, press
+    # Every action the host offers is one the badge answers, or a button does nothing.
+    handler = app[app.index("    def local(self"):]
+    handler = handler[:handler.index("\n    def ", 1)]
+    for action in actions:
+        assert f'"{action}"' in handler, action
+    # The prefix is what keeps them off the wire, so it has to be what the host offers.
+    for action in actions:
+        assert action.startswith("badge."), action
+
+
+@check
 def test_a_smoothed_graph_still_reads_as_the_data(_h):
     """A curve through the samples, not near them: it is a graph of a machine, so a peak
     drawn where there was none, or short of the one there was, is a lie about the machine."""

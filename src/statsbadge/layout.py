@@ -35,6 +35,15 @@ _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
 # nothing else.
 THEMES = tuple(themes.PALETTES)
 
+# Button bindings the badge answers itself, and never sends here: paging and the panel are its
+# own business, and a round trip would be slower than the press. Offered to the UI alongside
+# the host's commands, which is the only reason this list is on this side at all.
+LOCAL_ACTIONS = (
+    ("badge.prev", "previous page"),
+    ("badge.next", "next page"),
+    ("badge.brightness", "brightness"),
+)
+
 # What to show on a machine nobody has configured. Only pages whose fields the host
 # actually produces survive `prune`, so this is a superset on purpose.
 DEFAULT_PAGES = [
@@ -68,6 +77,7 @@ DEFAULT_CONFIG = {
     "caselights": True,
     "graph_points": 48,
     "smooth": True,
+    "auto_brightness": False,
     "pages": DEFAULT_PAGES,
     "buttons": {"a": None, "b": None, "c": None},
     # Per-extension settings, keyed by extension name. Host-side: the badge never sees
@@ -176,6 +186,9 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     out["graph_points"] = max(8, min(160, int(incoming.get("graph_points", 48))))
     # Whether a graph is a curve through its samples or a polyline between them.
     out["smooth"] = bool(incoming.get("smooth", True))
+    # Whether the badge takes its brightness down to suit a dim room. Off by default: it is
+    # the badge's own sensor and not every board has one.
+    out["auto_brightness"] = bool(incoming.get("auto_brightness", False))
 
     pages = incoming.get("pages")
     if pages is None:

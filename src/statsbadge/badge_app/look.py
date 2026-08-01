@@ -76,6 +76,32 @@ FALLBACK_FONT_PATH = "/system/assets/fonts/MonaSans-Medium.af"
 ICON_FILE = "icons.af"
 APP_DIR = "/system/apps/stats"
 
+# Ambient light, as `badge.light_level()` reads it: a raw u16 off the Tufty's phototransistor,
+# 16us a read. Measured in a curtained room it sits at 96-176 and steps in sixteens, which is
+# one count of the 12-bit conversion behind it. DIM is that room; BRIGHT is where the panel
+# wants everything it has, and the app raises it if the sensor ever reads past it, so a badge
+# in daylight calibrates its own top end rather than pegging at whatever was guessed here.
+LIGHT_DIM = 96
+LIGHT_BRIGHT = 4000
+# What ambient light is allowed to take away: a curtained room gets this much of the
+# configured brightness and full daylight gets all of it. Not zero, or a dark room reads as a
+# fault rather than as a setting.
+LIGHT_FLOOR = 0.45
+
+
+def ambient_fraction(raw, ceiling=LIGHT_BRIGHT):
+    """Where a raw light reading sits on 0-1, logarithmically.
+
+    Neither the sensor nor the eye is linear, and between a curtained room and an overcast
+    window is most of the adjustment worth making - a small fraction of the way up the
+    sensor's own scale.
+    """
+    import math
+
+    span = math.log(max(ceiling, LIGHT_DIM * 2) / LIGHT_DIM)
+    return max(0.0, min(1.0, math.log(max(raw, LIGHT_DIM) / LIGHT_DIM) / span))
+
+
 # Sizes are point sizes for the .af font: the size is what the font's em is scaled to, so a
 # capital stands draw.CAP of it, and text(x, y) puts the baseline at y + size.
 SIZE_TITLE = 19

@@ -96,6 +96,10 @@ class Service:
         caps = self.collector.capabilities()
         caps["commands"] = commands.names()
         caps["themes"] = list(layout.THEMES)
+        # What a button can be bound to that the badge does itself, labelled: the UI offers
+        # them in the same list as the commands, which is where someone looks for them.
+        caps["local_actions"] = [{"action": action, "label": label}
+                                 for action, label in layout.LOCAL_ACTIONS]
         # The colours too, so the UI's swatches are the badge's own and cannot drift from
         # them: they used to be a table in app.js with a comment asking to be kept in step.
         caps["palettes"] = {name: {"bg": palette["bg"], "accent": palette["accent"],

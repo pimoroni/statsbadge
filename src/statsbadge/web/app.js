@@ -488,6 +488,14 @@ function renderLook() {
   smooth.checked = config.smooth !== false;
   smooth.onchange = () => { config.smooth = smooth.checked; markDirty(); };
 
+  // The badge's own light sensor, taking the brightness above down to suit a dim room.
+  const autobright = $("autobright");
+  autobright.checked = !!config.auto_brightness;
+  autobright.onchange = () => {
+    config.auto_brightness = autobright.checked;
+    markDirty();
+  };
+
   // Off, the theme's own level, or a reading for the lights to follow. The stored value
   // is false, true, or a field ref, so the option values carry it directly.
   const caselights = $("caselights");
@@ -523,6 +531,13 @@ function renderLook() {
     none.value = "";
     none.textContent = "(nothing)";
     select.appendChild(none);
+    // The badge's own first, being the ones that need no host at all.
+    for (const local of caps.local_actions || []) {
+      const option = document.createElement("option");
+      option.value = local.action;
+      option.textContent = `${local.label} (on the badge)`;
+      select.appendChild(option);
+    }
     for (const name of caps.commands) {
       const option = document.createElement("option");
       option.value = name;
