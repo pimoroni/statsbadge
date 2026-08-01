@@ -270,8 +270,20 @@ def column_width(texts, size, name=TEXT):
     width in advance: the names are whatever the fields are called and a reading is
     whatever its unit makes it. Measured, a row reflows instead of leaving a gap at one
     end and running off the other.
+
+    One measurement, not one per string: `measure_text` breaks on newlines and returns the
+    widest line, so sixteen readings cost 0.2ms where a string at a time was 2.8ms.
     """
-    return max((text_width(text_value, size, name) for text_value in texts), default=0)
+    if not texts:
+        return 0
+    return text_width("\n".join(texts), size, name)
+
+
+# A column can also be drawn as one bounded `screen.text` call, the native layout placing
+# each line - `line_height` is `pitch / size`, the font's natural advance being its size.
+# Measured, that loses to the sprite cache: cores 24.2ms against 22.6 and the text page 14.4
+# against 10.3, because a live glyph is ~60us and a whole string blitted is 0.2ms. It only
+# wins with the cache off.
 
 
 # -- formatting -------------------------------------------------------------
