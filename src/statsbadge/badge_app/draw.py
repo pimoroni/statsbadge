@@ -709,7 +709,7 @@ def graph(theme, series, labels, maximum=None):
         contour.append(vec2(left + width, top + height))
         contour.append(vec2(left, top + height))
         area = shape.custom(contour)
-        screen.alpha = 150 if index else 200
+        screen.alpha = _series_alpha(theme, index)
         screen.pen = color.rgb(*rgb)
         screen.shape(area)
     screen.alpha = 255
@@ -726,6 +726,20 @@ def graph(theme, series, labels, maximum=None):
         blit_label(name, look.SIZE_SMALL, theme.dim, x + 14, y - 2)
 
 
+# What the two series are drawn at. The first is nearly solid and the second lets it show
+# through, so two areas that overlap still read as two - except on a pale page, where a
+# translucent area washes out towards it and the second may as well be as solid as the first.
+SERIES_ALPHA = (200, 150)
+# How far from the page a series has to land, as squared RGB distance, to count as visible.
+# Measured against the themes: mono's grey clears it at 10.8k and luminescence's pale ramp end
+# fails at 3.3k, which is the case it is here for.
+SERIES_FLOOR = 8000
+
+
+def _series_alpha(theme, index):
+    return SERIES_ALPHA[0] if index == 0 or sum(theme.bg) > 384 else SERIES_ALPHA[1]
+
+
 def _series_colour(theme, index):
     """Colours for the two graph series: the accent, and whichever end of the ramp is
     furthest from it.
@@ -737,7 +751,18 @@ def _series_colour(theme, index):
     if index == 0:
         return theme.accent
     cold, hot = theme.at(0.0), theme.at(1.0)
-    return cold if _apart(theme.accent, cold) >= _apart(theme.accent, hot) else hot
+    pick = cold if _apart(theme.accent, cold) >= _apart(theme.accent, hot) else hot
+    # A theme built out of one hue has the page at one end of its own ramp, and an area drawn
+    # in that is not there at all. The dim colour is the way out: it does not track a reading,
+    # so it is not the first choice, but it is a step in value from both page and accent.
+    drawn = _blend(pick, theme.bg, _series_alpha(theme, index))
+    return theme.dim if _apart(theme.bg, drawn) < SERIES_FLOOR else pick
+
+
+def _blend(rgb, bg, alpha):
+    """A colour as it lands on the page it is drawn over."""
+    part = alpha / 255.0
+    return tuple(int(c * part + b * (1.0 - part)) for c, b in zip(rgb, bg))
 
 
 def _apart(a, b):

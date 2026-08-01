@@ -176,6 +176,20 @@ PALETTES = {
                  (0.7, (182, 222, 181)),
                  (1.0, (218, 163, 60))),
     },
+    # A Casio electroluminescent watch face: the panel glows one colour and everything on it
+    # is that colour's ink at different weights, so the ramp darkens instead of changing hue,
+    # the way mono's does. The ink is a dark slate green and not the black of a segment, which
+    # on a lit panel reads as harsh.
+    "luminescence": {
+        "bg": (158, 240, 206), "panel": (136, 226, 192),
+        "ink": (34, 60, 52), "dim": (86, 146, 126),
+        "accent": (18, 96, 80), "grid": (124, 208, 176),
+        "case": 0.3,
+        "ramp": ((0.0, (104, 182, 156)),
+                 (0.45, (58, 130, 110)),
+                 (0.75, (34, 82, 70)),
+                 (1.0, (20, 46, 40))),
+    },
 }
 
 DEFAULT = "dark"
