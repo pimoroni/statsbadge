@@ -112,9 +112,10 @@ class Config:
         with self._lock:
             return self.data.get("rev", 1)
 
-    def replace(self, incoming, extra_kinds=(), settings_schema=None):
+    def replace(self, incoming, extra_kinds=(), settings_schema=None,
+                page_settings_schema=None):
         """Validate and store a whole config from the UI. Returns the new revision."""
-        cleaned = validate(incoming, extra_kinds, settings_schema)
+        cleaned = validate(incoming, extra_kinds, settings_schema, page_settings_schema)
         with self._lock:
             cleaned["rev"] = self.data.get("rev", 1) + 1
             cleaned["updated_at"] = int(time.time())
@@ -131,14 +132,17 @@ class Config:
         return data
 
 
-def validate(incoming, extra_kinds=(), settings_schema=None):
+def validate(incoming, extra_kinds=(), settings_schema=None,
+             page_settings_schema=None):
     """Reject anything the badge could not draw, and normalise the rest.
 
     The config UI is the only writer, but it arrives over HTTP so it is checked
     here: a bad `kind` on the badge is a crash dialog in a launcher, not a 400.
 
     `extra_kinds` are page kinds contributed by installed extensions, which the badge
-    only knows how to draw once their module has been pushed to it.
+    only knows how to draw once their module has been pushed to it, and
+    `page_settings_schema` is what those kinds let a single page be told. Anything a
+    kind has not declared is dropped, so a page cannot smuggle keys to the badge.
     """
     if not isinstance(incoming, dict):
         raise ValueError("config must be an object")
@@ -172,7 +176,8 @@ def validate(incoming, extra_kinds=(), settings_schema=None):
     seen = set()
     out["pages"] = []
     for page in pages:
-        out["pages"].append(_validate_page(page, seen, tuple(extra_kinds)))
+        out["pages"].append(_validate_page(page, seen, tuple(extra_kinds),
+                                           page_settings_schema or {}))
 
     buttons = incoming.get("buttons") or {}
     out["buttons"] = {
@@ -248,7 +253,7 @@ def merge_settings(from_command_line, stored):
     return merged
 
 
-def _validate_page(page, seen, extra_kinds=()):
+def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
     if not isinstance(page, dict):
         raise ValueError("a page must be an object")
     kind = page.get("kind")
@@ -282,6 +287,10 @@ def _validate_page(page, seen, extra_kinds=()):
     else:
         # An extension kind: keep its fields, since only the badge knows the shape.
         clean["fields"] = [f for f in (page.get("fields") or []) if _is_ref(f)][:8]
+        for entry in ((page_settings_schema or {}).get(kind) or ()):
+            key = entry.get("key")
+            if key:
+                clean[key] = _coerce_setting(page.get(key), entry)
 
     for optional in ("max", "min"):
         if page.get(optional) is not None:

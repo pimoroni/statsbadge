@@ -21,6 +21,15 @@ class Source:
     # not declared here cannot be set from the UI, only from --extension.
     settings = ()
 
+    # Settings that belong to one page rather than to the source. Same shape as
+    # `settings`, and the badge finds them in the page it is handed, so a page can be
+    # told which place to show where the source is told which units to show it in.
+    #
+    # A source wanting to do different work per page - fetching two locations, say -
+    # implements `pages(instances)`, which is handed every page of its own kinds
+    # whenever the config changes.
+    page_settings = ()
+
     def __init__(self, config):
         self.config = config
         self.faults = 0
@@ -33,6 +42,13 @@ class Source:
         copies values out in `__init__` has to override this and copy them again.
         """
         self.config.update(settings)
+
+    def pages(self, instances):
+        """Take the pages configured for this source's kinds, on every config change.
+
+        `instances` is a list of page dicts, each carrying whatever `page_settings`
+        declared. A source that samples the same thing for every page ignores this.
+        """
 
     @classmethod
     def available(cls):

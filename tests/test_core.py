@@ -1060,6 +1060,65 @@ def test_a_reading_carries_its_unit(_h):
     assert draw.reading("workshop-pc", "host") == "workshop-pc"
 
 
+@check
+def test_a_page_carries_only_what_its_kind_declared(_h):
+    """Page-scoped settings, so two clock pages can show two cities.
+
+    An extension page could not carry anything but fields before this: validate dropped
+    every other key, so there was nowhere for a per-page place to live.
+    """
+    schema = {"clockface": [{"key": "place", "label": "Place", "type": "text"},
+                            {"key": "big", "label": "Big", "type": "bool"}]}
+    config = {"pages": [{"id": "a", "kind": "clockface", "title": "Tokyo",
+                         "fields": [], "place": "Tokyo", "big": "yes",
+                         "smuggled": "nope"}]}
+    page = layout.validate(config, extra_kinds=("clockface",),
+                           page_settings_schema=schema)["pages"][0]
+    assert page["place"] == "Tokyo"
+    assert page["big"] is True, "declared type not applied"
+    assert "smuggled" not in page, "an undeclared key reached the badge"
+
+    # Without a schema an extension page keeps its fields and nothing else, as before.
+    plain = layout.validate(config, extra_kinds=("clockface",))["pages"][0]
+    assert "place" not in plain
+
+
+@check
+def test_an_extension_sees_only_its_own_pages(_h):
+    """So a source can fetch per page without knowing about the rest of the layout."""
+    from statsbadge import extensions
+
+    seen = []
+
+    class Fake:
+        name = "fake"
+        page_settings = ({"key": "place", "type": "text"},)
+        badge_page = {"kind": "faceplate"}
+
+        def pages(self, instances):
+            seen.append([page.get("place") for page in instances])
+
+    source = Fake()
+    assert extensions.page_settings_schema([source]) == {
+        "faceplate": [{"key": "place", "type": "text"}]}
+    extensions.configure_pages([source], [
+        {"kind": "faceplate", "place": "Tokyo"},
+        {"kind": "dial", "field": "cpu.pct"},
+        {"kind": "faceplate", "place": "Oslo"},
+    ])
+    assert seen == [["Tokyo", "Oslo"]], seen
+
+    # A source that raises must not stop the others being told.
+    class Angry(Fake):
+        name = "angry"
+
+        def pages(self, _instances):
+            raise RuntimeError("no")
+
+    extensions.configure_pages([Angry(), source], [{"kind": "faceplate", "place": "Rome"}])
+    assert seen[-1] == ["Rome"]
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

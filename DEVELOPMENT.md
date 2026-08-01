@@ -52,6 +52,13 @@ self-blit of the same image 11.3ms, a column as `vspan` per lane against 30 rect
 `onebit` 12ms, `bloom` 21ms, `synthwave` 40ms, `edgeglow` 99ms. Fine for a page that
 redraws once a second, not for one that moves.
 
+**A page can only carry what its kind declared.** `page_settings` on a source is the same
+shape as `settings`, keyed into the UI and the validator by page kind; `validate` keeps those
+keys and drops the rest, so a page cannot smuggle anything to the badge. A source that needs
+to do different work per page implements `pages(instances)` and is handed its own pages at
+startup and on every save. The badge finds the settings in the page dict it is already given,
+so that side needed nothing.
+
 **On macOS "/" is not the disk anyone means.** It is a sealed, read-only system volume
 sharing an APFS container with the data volume, so it reports the system's own 12G against
 the container's size: 9% on a disk that is 86% full. Both volumes report the container's

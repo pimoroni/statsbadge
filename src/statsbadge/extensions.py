@@ -127,6 +127,41 @@ def settings_schema(sources):
     return schema
 
 
+def page_settings_schema(sources):
+    """What each extension's own pages can be told, keyed by page kind.
+
+    Keyed by kind and not by extension: the config UI is editing a page, and the page
+    knows its kind. An extension contributing two kinds can declare settings once and
+    have both carry them.
+    """
+    schema = {}
+    for source in sources:
+        declared = getattr(source, "page_settings", ()) or ()
+        if not declared:
+            continue
+        for page in badge_pages([source]):
+            kind = page.get("kind")
+            if kind:
+                schema[kind] = [dict(entry) for entry in declared]
+    return schema
+
+
+def configure_pages(sources, pages):
+    """Hand each source the configured pages of its own kinds.
+
+    So a source can do per-page work - one weather lookup per place on the badge -
+    without knowing anything about the layout beyond its own pages.
+    """
+    for source in sources:
+        kinds = {page.get("kind") for page in badge_pages([source])}
+        mine = [page for page in (pages or ()) if page.get("kind") in kinds]
+        try:
+            source.pages(mine)
+        except Exception as exc:  # noqa: BLE001  one source must not stop the others
+            print(f"statsbadge: extension {getattr(source, 'name', '?')!r} rejected its "
+                  f"pages: {exc}", file=sys.stderr)
+
+
 def configure(sources, settings):
     """Hand each source its own block of stored settings.
 

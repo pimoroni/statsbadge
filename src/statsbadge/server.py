@@ -59,6 +59,7 @@ class Service:
         self.started = threading.Event()
 
     def start(self):
+        self.announce_pages()
         self.collector.start()
         self.started.set()
 
@@ -77,6 +78,19 @@ class Service:
         """What each installed extension can be told, for the UI and the validator."""
         return extensions.settings_schema(self.collector.extensions)
 
+    def extension_page_settings(self):
+        """What an extension's own pages can be told, keyed by page kind."""
+        return extensions.page_settings_schema(self.collector.extensions)
+
+    def announce_pages(self):
+        """Tell the sources about the pages already stored, at startup.
+
+        replace_config covers a later save; without this a source doing per-page work
+        does nothing until someone presses Save.
+        """
+        extensions.configure_pages(self.collector.extensions,
+                                   self.config.snapshot().get("pages"))
+
     def capabilities(self):
         caps = self.collector.capabilities()
         caps["commands"] = commands.names()
@@ -84,6 +98,7 @@ class Service:
         caps["kinds"] = list(layout.KINDS)
         caps["extension_pages"] = extensions.badge_pages(self.collector.extensions)
         caps["extension_settings"] = self.extension_settings()
+        caps["extension_page_settings"] = self.extension_page_settings()
         return caps
 
     def replace_config(self, incoming):
@@ -93,9 +108,13 @@ class Service:
         takes effect on the next sample.
         """
         rev = self.config.replace(incoming, self.extension_kinds(),
-                                 self.extension_settings())
-        extensions.configure(self.collector.extensions,
-                             self.config.snapshot().get("settings"))
+                                 self.extension_settings(),
+                                 self.extension_page_settings())
+        stored = self.config.snapshot()
+        extensions.configure(self.collector.extensions, stored.get("settings"))
+        # Pages too, so a source doing per-page work sees the new ones without waiting
+        # for a restart.
+        extensions.configure_pages(self.collector.extensions, stored.get("pages"))
         return rev
 
 
