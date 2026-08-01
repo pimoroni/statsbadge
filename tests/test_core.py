@@ -1463,16 +1463,22 @@ def test_a_page_can_slide_on_like_a_card(_h):
     due = due[:due.index("\n    def ", 1)]
     assert "self.sliding is not None" in due, "a second slide can start over a running one"
 
-    # The title and the pip answer the press while the body waits, and `render` is what
-    # draws them - a press drawing on the screen itself would put a page's furniture over a
-    # banner. A slide already running is drawn before that test and not behind it: behind
-    # it, a press landing mid-slide stopped the slide being advanced, and since a waiting
-    # turn will not start over a running one, the body never redrew again.
+    # The title and the pip answer every press, including presses that land during a slide,
+    # so paging through five pages moves the pip five times and slides once. That takes two
+    # things together, and either alone is a bug that shipped:
+    #
+    #   - the wait is drawn ahead of a running slide, or a press mid-slide leaves the pip
+    #     stuck until the movement finishes;
+    #   - a press abandons the slide it lands in, so nothing is left in flight that the wait
+    #     is now suppressing. Queueing behind it instead gave a slide per press, each late.
     body = app[app.index("    def render(self):"):]
     body = body[:body.index("\n    def ", 1)]
-    assert body.index("self.sliding is not None") < body.index("self._slide_at"), (
-        "a press during a slide freezes it")
+    assert body.index("self._slide_at") < body.index("self.sliding is not None"), (
+        "a press during a slide cannot move the pip")
+    assert "self.sliding = None" in turn, "a press queues behind the slide it lands in"
     assert "draw.furniture(" in body, "the press does not answer until the body catches up"
+    # And the body is withheld on a deadline and never on the flag alone, so nothing can
+    # hold it back for longer than the wait however the state is arrived at.
     assert "time.ticks_diff(self._slide_at" in body, (
         "the body can be withheld for longer than the wait")
     start = app[app.index("def start_slide"):]

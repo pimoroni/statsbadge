@@ -260,6 +260,13 @@ class App:
             # The movement waits for the presses to stop; until then `render` puts up the
             # title and the pip for where this is going and leaves the body standing, that
             # being what the slide travels away from.
+            #
+            # A press during a slide abandons it where it stands rather than queueing behind
+            # it. Waiting would give a slide per press, each one late, and would leave the
+            # pip stuck for as long as the movement lasted - where the point of the wait is
+            # that paging through five pages is one transition onto the fifth. Whatever is on
+            # the screen when the movement finally starts is what it travels away from.
+            self.sliding = None
             self._slide_at = time.ticks_add(time.ticks_ms(), SLIDE_WAIT_MS)
             self._slide_from = delta < 0
         self.dirty = True
@@ -275,6 +282,8 @@ class App:
             return
         if time.ticks_diff(now, self._slide_at) < 0:
             return
+        # Only reached with nothing in flight: a press abandons the slide it lands in, so a
+        # waiting turn never has one to queue behind.
         self._slide_at = 0
         style = (self.layout or {}).get("slide") or "off"
         if style == "off":
@@ -736,18 +745,16 @@ class App:
             return
 
         subtitle = self.subtitle()
-        if self.sliding is not None:
-            # A slide in flight is drawn first and unconditionally. It used to sit behind the
-            # test below, so a press landing mid-slide stopped it being advanced - and since
-            # a waiting turn will not start over a running one, both stuck: a body that never
-            # redrew again, and every further press only re-arming the wait.
-            self.render_sliding(page, theme, subtitle)
-        elif self._slide_at and time.ticks_diff(self._slide_at, time.ticks_ms()) > 0:
-            # A turn is waiting for the presses to stop. The title and the pip say where it
-            # is going; the body stays put, being what the movement travels away from. Bounded
-            # by the wait, so nothing here can withhold the body for longer than that.
+        if self._slide_at and time.ticks_diff(self._slide_at, time.ticks_ms()) > 0:
+            # A turn is waiting for the presses to stop: the title and the pip say where it
+            # is going, and the body stays put, being what the movement will travel away
+            # from. Nothing is left in flight to strand - a press abandons the slide it lands
+            # in - and the test is on the deadline and not on the flag, so the body cannot be
+            # withheld for longer than the wait however this is arrived at.
             draw.furniture(theme, page.get("title", page.get("id", "")),
                            self.page_index, len(self.page_list), subtitle)
+        elif self.sliding is not None:
+            self.render_sliding(page, theme, subtitle)
         else:
             pages_module.render(page, self.frame, self.history, theme,
                                 self.page_index, len(self.page_list), subtitle)
