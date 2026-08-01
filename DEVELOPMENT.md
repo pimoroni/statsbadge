@@ -34,6 +34,8 @@ Two halves sharing one small contract: the host decides *what* to show, the badg
 
 **The debug probe shares Raspberry Pi's USB vendor id** with the board it is attached to, so port detection filters on product id and product string. Talking MicroPython to a CMSIS-DAP interface just times out.
 
+**A .af point is a signed byte, which is the ceiling on how large text can be drawn.** A capital stands 81 of those units, so a coordinate is `size / 119` pixels and at 93pt every vertex on a curve is snapped 0.8px. That is what makes big numbers lumpy, and none of the other suspects account for it: the antialiasing resolves an edge in a single pixel over ~150 coverage levels, and a font built at a fifteenth of the usual simplification tolerance renders identically. The one lever inside the format is packing a glyph taller - `tools/make_text_font.py --cap`, up to 122 before a digit's own height overflows the byte - which buys 1.5x, and `fonts/lexend-digits.af` spends it on the digits alone. `draw.add_font` takes that cap and `label` converts, so a caller still asks for the size it wants. Past 1.5x the format has to change: points are `int8_t x, y` in picovector's `font.hpp` and are read in exactly one place, so a flags bit for 16-bit points is a small loader change, but the glyph record's bbox and advance are bytes too and would have to widen with them.
+
 **A .af advance over 127 is read as negative.** It is a signed byte, so an icon font that
 fills the -128..127 coordinate range draws every glyph of a run on the same spot, and
 `measure_text` returns a width of zero. Nothing in the badge's own font exceeds 120, and a

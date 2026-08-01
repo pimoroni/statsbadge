@@ -61,6 +61,11 @@ def default_codepoints():
 
 CAP_HEIGHT = 81           # units a capital stands in the reference font
 MAX_COORD = 127
+# Half a unit, so the simplifier gives up no more than the grid the points are
+# rounded to already costs. Scaled with --cap: a tolerance means nothing except
+# against the size of the glyph it is thinning, and at a high cap a fixed one
+# leaves contours over the firmware's 512-point buffer, which drops them.
+QUALITY = 0.5
 MAX_ADVANCE = 254
 # The glyph renderer converts one contour at a time into a fixed buffer and skips any that
 # does not fit, without a word: the glyph loses a piece, or draws nothing at all where it
@@ -75,8 +80,8 @@ MAX_CONTOUR = 512
 SAFE_CONTOUR = 256        # what an unraised firmware manages
 
 
-def cap_scale(face, sample="H"):
-    """Font units per output unit, so that a capital stands CAP_HEIGHT."""
+def cap_scale(face, sample="H", cap=CAP_HEIGHT):
+    """Font units per output unit, so that a capital stands `cap`."""
     if face.get_char_index(ord(sample)) == 0:
         raise SystemExit(f"the font has no {sample!r} to measure a cap height from")
     import freetype
@@ -84,7 +89,7 @@ def cap_scale(face, sample="H"):
     height = Bounds(face.glyph.outline.get_bbox()).height
     if not height:
         raise SystemExit(f"{sample!r} has no outline to measure")
-    return height / CAP_HEIGHT
+    return height / cap
 
 
 def text_glyph(face, codepoint, scale, tolerance):
@@ -155,10 +160,20 @@ def main():
     parser = argparse.ArgumentParser(description="Build an .af text font.")
     parser.add_argument("font", help="a .ttf or .otf to take glyphs from")
     parser.add_argument("--out", required=True, help="output .af")
-    parser.add_argument("--quality", type=float, default=0.5,
-                        help="simplification tolerance, in output units of 81 to a "
-                             "capital. 0 keeps every point (default: 0.5)")
+    parser.add_argument("--quality", type=float,
+                        help="simplification tolerance, in output units. 0 keeps every "
+                             f"point. Defaults to {QUALITY} at a cap of {CAP_HEIGHT} and "
+                             "scales with --cap, since a tolerance is only meaningful "
+                             "against the size of the glyph it is thinning")
     parser.add_argument("--weight", type=int, help="variable weight axis, e.g. 500")
+    parser.add_argument("--cap", type=int, default=CAP_HEIGHT,
+                        help=f"units a capital stands in the output, where the reference "
+                             f"font is {CAP_HEIGHT} (default: {CAP_HEIGHT}). Higher is "
+                             f"finer, since a point is a signed byte either way, and is "
+                             f"for a font drawn large; draw.add_font takes the same number "
+                             f"so a caller still asks for the size it wants")
+    parser.add_argument("--chars",
+                        help="only these characters, for a font built for one job")
     parser.add_argument("--list", action="store_true",
                         help="report coverage and size, and write nothing")
     args = parser.parse_args()
@@ -174,11 +189,14 @@ def main():
         except Exception as exc:  # noqa: BLE001  a static font has no axes
             raise SystemExit(f"--weight needs a variable font: {exc}") from None
 
-    scale = cap_scale(face)
-    wanted = default_codepoints()
+    quality = (args.quality if args.quality is not None
+               else QUALITY * args.cap / CAP_HEIGHT)
+    scale = cap_scale(face, cap=args.cap)
+    wanted = ([ord(c) for c in args.chars] if args.chars
+              else default_codepoints())
     glyphs, missing = [], []
     for codepoint in wanted:
-        glyph = text_glyph(face, codepoint, scale, args.quality)
+        glyph = text_glyph(face, codepoint, scale, quality)
         if glyph is None:
             missing.append(codepoint)
             continue
@@ -195,7 +213,8 @@ def main():
     blob = pack(glyphs)
     points = sum(len(c) for g in glyphs for c in g.contours)
     print(f"{args.font}")
-    print(f"  cap height scale {scale:.3f} font units per output unit")
+    print(f"  cap height {args.cap} units, {scale:.3f} font units per "
+          f"output unit, tolerance {quality:.3f}")
     longest = max((len(c) for g in glyphs for c in g.contours), default=0)
     print(f"  {len(glyphs)} glyphs, {points} points, {len(blob)} bytes "
           f"({len(blob) // max(1, len(glyphs))} each)")

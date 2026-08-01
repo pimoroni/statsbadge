@@ -216,6 +216,11 @@ def _register_font():
     draw.add_font(WEATHER_FONT, look.APP_DIR + "/ext/icons.af", beside)
 
 
+# What the digits are sized against: 4 is the widest of them in this face, so a time made of
+# them is the one that has to fit.
+WIDEST_TIME = "44:44"
+
+
 def _digital(clock, weather, label, theme):
     """No dial: the whole band, laid out as a desk clock and drawn in the theme.
 
@@ -232,19 +237,31 @@ def _digital(clock, weather, label, theme):
 
     text = clock.get("time") or "--:--"
     hours, _, minutes = text.partition(":")
-    # As large as the band allows between the two rows, worked out rather than picked: a
-    # label sprite stands size * 1.35 tall, and there is nothing else competing for the
-    # middle of a digital face.
+    # As large as the band allows between the two rows, and sized by the ink rather than by
+    # the sprite: a digit stands draw.CAP of the size asked for, so sizing by the sprite -
+    # which is size * 1.35, most of it the room a descender would want - drew them at half
+    # the height that fits.
+    gap = 10
     digits_top = look.BODY_TOP + 26
     room = (look.BODY_TOP + look.BODY_H - 38) - digits_top
-    size = int(room / 1.35)
-    digits_left = draw.label(hours, size, theme.ink)
-    digits_right = draw.label(minutes or "--", size, theme.ink)
-    colon = draw.label(":", size, theme.accent)
-    gap = 10
+    size = int(room / draw.CAP)
+    # And no wider than the band. Measured against the widest time it could ever have to
+    # show rather than the one it is showing, so the digits do not change size from one
+    # minute to the next and nothing is ever clipped.
+    span = look.W - look.PAD * 4
+    widest = draw.text_width(WIDEST_TIME, size, draw.DIGITS) + gap * 2
+    if widest > span:
+        size = int(size * span / widest)
+    # The app's digits font, which is packed at a finer grid. At this size the ordinary one
+    # snaps every point on a curve by most of a pixel: the bowls come out lumpy and the
+    # colon is a pair of hexagons.
+    digits_left = draw.label(hours, size, theme.ink, draw.DIGITS)
+    digits_right = draw.label(minutes or "--", size, theme.ink, draw.DIGITS)
+    colon = draw.label(":", size, theme.accent, draw.DIGITS)
     total = digits_left.width + colon.width + digits_right.width + gap * 2
     x = (look.W - total) // 2
-    y = digits_top
+    # The sprite's baseline sits `size` from its top, so this lifts the ink to digits_top.
+    y = digits_top - int(size * (1.0 - draw.CAP))
     screen.blit(digits_left, vec2(int(x), int(y)))
     screen.blit(colon, vec2(int(x + digits_left.width + gap), int(y)))
     screen.blit(digits_right,

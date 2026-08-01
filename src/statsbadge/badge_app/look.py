@@ -65,6 +65,14 @@ def readout_rows(count, height=READOUT_H):
 FONT_FILE = "fonts/lexend-regular.af"
 FONT_NAME = "lexend"
 
+# The same face, digits only, packed at a finer grid for text drawn large: a point is a
+# signed byte, so at 93pt one unit of the ordinary font is 0.8px and the snap shows as a
+# wobble along every curve. 122 units to a capital is as tall as the format holds. Digits,
+# the colon, a full stop, a comma, plus, minus, a space and the degree sign - a string with
+# a letter in it wants the text font. Built by tools/make_text_font.py --cap 122.
+DIGITS_FILE = "fonts/lexend-digits.af"
+DIGITS_CAP = 122
+
 # Only if the app's own font did not arrive - an install that predates it, or a partial
 # copy. Text is the one thing the app cannot draw a page without, so it borrows rather than
 # gives up.

@@ -31,7 +31,15 @@ _bands = {}
 # collide, and one of them would be drawn in the wrong font.
 TEXT = "text"
 ICONS = "icons"
+DIGITS = "digits"
 _fonts = {}
+
+# Units a capital stands in a font built the ordinary way, which is what a size means:
+# ../BADGEWARE.md, and tools/make_text_font.py's --cap. A font built taller is finer, a
+# point being a signed byte either way, and _font_cap is what lets a caller go on asking
+# for the size it wants whichever one it is drawing with.
+CAP_UNITS = 81
+_font_cap = {}
 
 
 def prepare():
@@ -48,10 +56,21 @@ def prepare():
     _fonts[look.FONT_NAME] = FONT
     screen.font = FONT
     add_font(ICONS, look.ICON_FILE)
+    # Text drawn large wobbles: a point is a signed byte, so at 93pt one unit is 0.8px and
+    # every vertex on a curve is snapped that far. The digits are also packed at a finer
+    # grid, for the pages that draw a number the height of the band. An install predating
+    # the file falls back to the text font, which is the same shapes with the wobble.
+    if not add_font(DIGITS, look.DIGITS_FILE, cap=look.DIGITS_CAP):
+        _fonts[DIGITS] = FONT
+        _font_cap[DIGITS] = CAP_UNITS
 
 
-def add_font(name, *paths):
+def add_font(name, *paths, cap=CAP_UNITS):
     """Register a font under a name, from the first of `paths` that loads.
+
+    `cap` is the units a capital stands in that file, 81 for one built the ordinary way.
+    Sizes are quoted in those terms whatever the font, so a caller asks for the size it
+    wants and `label` converts: a font packed at a finer grid is a drop-in replacement.
 
     A bare filename is looked for in the installed app directory and then beside this
     module. That order matters under `mpremote mount`: the mounted copy is served as text,
@@ -75,8 +94,15 @@ def add_font(name, *paths):
             except Exception as exc:  # noqa: BLE001  try the next one
                 print(f"draw: could not load {candidate}: {exc}")
                 continue
+            _font_cap[name] = cap
             return True
     return False
+
+
+def _drawn_size(name, size):
+    """The size to ask a font for, so `size` means the same height in every one of them."""
+    cap = _font_cap.get(name, CAP_UNITS)
+    return size if cap == CAP_UNITS else size * CAP_UNITS / cap
 
 
 def _candidates(path):
@@ -124,6 +150,12 @@ def use_font(name):
 
 # -- text cache -------------------------------------------------------------
 
+# What the baked strings may hold between them. A screen of furniture is a few tens of KB;
+# the ceiling is for the pages that bake something enormous.
+LABEL_CACHE_BYTES = 768 * 1024
+_label_bytes = 0
+
+
 def label(text_value, size, rgb, name=TEXT):
     """A string baked into a sprite. Live text is ~1ms a line, a blit is 0.08ms."""
     key = (name, text_value, size, rgb)
@@ -136,7 +168,8 @@ def label(text_value, size, rgb, name=TEXT):
     was = screen.font
     screen.font = face
     try:
-        width, height = screen.measure_text(text_value, font_size=size)
+        drawn = _drawn_size(name, size)
+        width, height = screen.measure_text(text_value, font_size=drawn)
         width = max(1, int(width + 2))
         height = max(1, int(size * 1.35))
         sprite = image(width, height)
@@ -145,13 +178,20 @@ def label(text_value, size, rgb, name=TEXT):
         sprite.rectangle(rect(0, 0, width, height))
         sprite.antialias = image.X4
         sprite.pen = color.rgb(*rgb)
-        sprite.text(text_value, vec2(0, 0), size)
+        # The baseline lands `size` from the top whatever the font's own grid, which is what
+        # keeps every placement rule here in one set of terms.
+        sprite.text(text_value, vec2(0, size - drawn), drawn)
     finally:
         screen.font = was
-    if len(_labels) > 220:
+    global _label_bytes
+    _label_bytes += width * height * 4
+    if len(_labels) > 220 or _label_bytes > LABEL_CACHE_BYTES:
         # Values churn; the cache is for furniture, so drop it wholesale rather than
-        # tracking ages.
+        # tracking ages. Bounded by bytes as well as by count, because a page drawing a
+        # number the height of the band bakes 400KB a minute and would otherwise hold every
+        # minute it had drawn.
         _labels.clear()
+        _label_bytes = 0
     _labels[key] = sprite
     return sprite
 
@@ -179,8 +219,10 @@ def blit_icon(character, size, rgb, x, y, align=0):
 
 
 def clear_cache():
+    global _label_bytes
     _labels.clear()
     _bands.clear()
+    _label_bytes = 0
 
 
 # -- measuring --------------------------------------------------------------
@@ -200,7 +242,7 @@ def text_width(text_value, size, name=TEXT):
     was = screen.font
     screen.font = face
     try:
-        width, _ = screen.measure_text(text_value, font_size=size)
+        width, _ = screen.measure_text(text_value, font_size=_drawn_size(name, size))
     finally:
         screen.font = was
     return int(width) + 2
