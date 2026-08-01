@@ -27,7 +27,9 @@ import pages
 # registered with draw under a name of their own: the app has an icons.af too, and a
 # sprite cache keyed on the string alone would hand one font's glyph to the other.
 WEATHER_FONT = "weather"
-ICON_SIZE = 40
+# The symbol shares a row with the temperature on every face, so it is sized to what the
+# two of them together have room for.
+ICON_SIZE = 32
 
 CENTRE = (look.W // 2 - 62, look.BODY_TOP + look.BODY_H // 2)
 RADIUS = 82
@@ -251,7 +253,8 @@ def _digital(clock, weather, label, theme):
     x = left
     icon = weather.get("icon")
     if icon:
-        drawn = draw.blit_label(icon, 30, theme.ink, x, y - 2, name=WEATHER_FONT)
+        drawn = draw.blit_label(icon, ICON_SIZE, theme.ink, x, y - 4,
+                                name=WEATHER_FONT)
         x += (drawn or 0) + 8
     if weather.get("temp") is not None:
         unit = weather.get("temp_unit") or ""
@@ -301,8 +304,10 @@ def render(page, frame, _history, theme):
         screen.pen = color.rgb(*rgb["second"])
         screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
 
-    # The readouts beside the dial, in the badge's theme rather than the clock's.
-    x = look.READOUT_X - 4
+    # The readouts beside the dial, in the badge's theme rather than the clock's. Placed
+    # off the dial and not off the app's own readout column, which belongs to a gauge of a
+    # different size.
+    x = CENTRE[0] + RADIUS + 14
     y = look.BODY_TOP + 12
     if clock.get("time"):
         draw.blit_label(clock["time"], look.SIZE_BIG, theme.ink, x, y)
@@ -315,20 +320,24 @@ def render(page, frame, _history, theme):
         draw.blit_label(clock["date"], look.SIZE_SMALL, theme.dim, x, y)
         y += 24
 
-    if weather.get("temp") is not None:
-        # The scale comes with the reading; without one a number is just a number.
-        unit = weather.get("temp_unit") or ""
-        draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
-                        look.SIZE_BIG, theme.ink, x, y)
-        y += 30
+    # The symbol beside the reading, not above it: stacked, the column ran on to within a
+    # few pixels of the page indicator.
+    icon = weather.get("icon")
+    if weather.get("temp") is not None or icon:
+        drawn = draw.blit_label(icon or "", ICON_SIZE, theme.ink, x, y,
+                                name=WEATHER_FONT)
+        if weather.get("temp") is not None:
+            # The scale comes with the reading; without one a number is just a number.
+            unit = weather.get("temp_unit") or ""
+            # On the symbol's baseline, which a sprite puts its own size from the top.
+            draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
+                            look.SIZE_BIG, theme.ink,
+                            x + (drawn + 8 if drawn else 0),
+                            y + ICON_SIZE - look.SIZE_BIG)
+        y += ICON_SIZE + 4
 
-    # The symbol, with the words for it underneath.
     condition = weather.get("condition")
     if condition:
-        drawn = draw.blit_label(weather.get("icon") or "", ICON_SIZE, theme.ink,
-                                x, y, name=WEATHER_FONT)
-        if drawn:
-            y += ICON_SIZE + 2
         draw.blit_label(condition, look.SIZE_SMALL, theme.dim, x, y)
         y += 19
 

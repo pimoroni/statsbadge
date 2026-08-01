@@ -61,6 +61,12 @@ so a trickle on a quiet link is not a full ring. It travels as `peaks` in the fr
 is scale and not a reading, so it is not a model group and never offered as a field. A
 gauge drawn from a rate states its peak, because otherwise nothing says what full means.
 
+**A byte figure carries its prefix on the number and its base in the unit.** `fmt` scales to
+the largest prefix the value fills - 512, 800K, 11.4M - and `short_unit` returns `B/s` or `B`
+after it, so one unit serves a reading whatever size it grows to and a slot with a unit of
+its own gets the pair for free. A gauge too small for the unit shows the reading alone, since
+the prefix is the part that says which 11 it is.
+
 **Each field slot draws from a pool, not from everything.** A gauge needs a top end, so it
 is offered percentages and the fields in `model.FULL_SCALE` and nothing else - uptime is a
 number and a ring drawn from it is empty whatever the machine is doing. A graph is offered
@@ -113,6 +119,8 @@ So anything repeated is baked and blitted, and only what changes shape is drawn 
 - **The dial** is two `shape.arc` calls. Angles start at the top and run clockwise, so a 270-degree gauge with its gap at the bottom is 225 to 495. The fill is a solid ramp colour, not a gradient: a linear gradient across the arc's box does not follow the curve, so the hue would not track the reading.
 - **A graph** is one `shape.custom` per series, a polyline across the top and back along the bottom. The two series take opposite ends of the ramp - the accent and the ramp at 0.85 are the same orange.
 - **Bars** are raster rectangles. Axis-aligned needs no anti-aliasing, and this is the page that can have thirty-two.
+- **A text column is measured, not fixed.** A page of names down one side and readings down the other cannot know either width in advance: the names are whatever the chosen fields are called and a reading is whatever its unit makes it. `draw.column_width` measures both and the plot takes the rest, so a sparkline page reflows instead of leaving a gap after the names and running the readings over the plots.
+- **The single dial and its readouts sit on one gap.** `look.DIAL_GAP` is the space at the screen edge, between the dial and the readouts, and at the right edge; the positions are worked out from it. The stack hangs off the top of the dial unless there are too many to fit the band.
 
 A page changes when a poll lands, once a second, so frames in between draw nothing at all: `badge.default_clear = None` leaves the framebuffer standing. A page that animates adds its kind to `pages.ANIMATED`, which is how the clock's second hand sweeps.
 

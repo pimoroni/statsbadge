@@ -18,10 +18,13 @@ BODY_MID = BODY_TOP + BODY_H // 2
 
 PAD = 10
 
-# Dial geometry, in the body band.
-DIAL_C = (108, BODY_TOP + BODY_H // 2 + 4)
+# Dial geometry, in the body band. The one dial and the readouts beside it get the same
+# gap at the screen edge, between the two, and at the right edge, so the positions are
+# worked out from that gap rather than picked one at a time.
+DIAL_GAP = 20
 DIAL_OUTER = 74
 DIAL_INNER = 56
+DIAL_C = (DIAL_GAP + DIAL_OUTER, BODY_TOP + BODY_H // 2 + 4)
 # A 270 degree sweep with the gap centred on the bottom, so it looks like a gauge.
 # Angles start at the top and run clockwise: 225 is lower-left, and 495 is 135 once
 # round, which is lower-right.
@@ -29,9 +32,21 @@ DIAL_FROM = 225.0
 DIAL_TO = 495.0
 
 # Where a dial's readouts stack, to the right of it.
-READOUT_X = 196
-READOUT_W = W - READOUT_X - PAD
-READOUT_H = 34
+READOUT_X = DIAL_C[0] + DIAL_OUTER + DIAL_GAP
+READOUT_W = W - READOUT_X - DIAL_GAP
+# Tall enough for the name, the reading and its bar, with a gap to the next name.
+READOUT_H = 38
+
+
+def readout_top(count):
+    """Where a stack of `count` readouts starts.
+
+    Level with the top of the dial, which is what makes the two read as one block, and
+    lifted only if that many would otherwise run past the bottom of the band.
+    """
+    room = BODY_TOP + BODY_H - 6 - count * READOUT_H
+    return max(BODY_TOP + 6, min(DIAL_C[1] - DIAL_OUTER, room))
+
 
 # The app carries its own text font rather than borrowing one off the badge: what is in
 # /system/assets belongs to the firmware and can change under us, and a display this small

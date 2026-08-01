@@ -1086,11 +1086,18 @@ def test_a_reading_carries_its_unit(_h):
     assert draw.reading(9.2, "pct") == "9.2%"
     assert draw.reading(85.7, "pct") == "85.7%"
     assert draw.reading(71.0, "temp") == "71.0\u00b0C"
-    assert draw.reading(52428800, "read_bps") == "50.0M/s"
-    # Already scaled by fmt, so no unit is appended and none is missing.
-    assert draw.reading(12600, "used_mb") == "12.3G"
     assert draw.reading(None, "pct") == "--"
     assert draw.reading("workshop-pc", "host") == "workshop-pc"
+
+    # A byte figure carries its prefix on the number and its base in the unit, so one
+    # unit serves every size the reading grows to.
+    assert draw.reading(800, "read_bps") == "800B/s"
+    assert draw.reading(819200, "read_bps") == "800KB/s"
+    assert draw.reading(52428800, "read_bps") == "50.0MB/s"
+    assert draw.reading(3 * 1024 ** 3, "read_bps") == "3.0GB/s"
+    assert draw.reading(512, "used_mb") == "512MB"
+    assert draw.reading(12600, "used_mb") == "12.3GB"
+    assert draw.reading(3 * 1024 ** 2, "total_mb") == "3.0TB"
 
 
 @check
@@ -1269,6 +1276,24 @@ def test_setup_waves_through_a_server_already_paired(_h):
     # that must not be waved through.
     guard = source[source.index("def _already_paired"):source.index("def _ask_to_join")]
     assert "rejected" in guard, "a refused badge would be waved through with dead credentials"
+
+
+@check
+def test_a_row_of_text_and_a_plot_measures_its_columns(_h):
+    """A fixed column either leaves a gap after the names or runs the readings into the
+    plots, and which of the two it does depends on the fields the page carries."""
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    for widget in ("def bars", "def sparklines", "def graph"):
+        body = source[source.index(widget):]
+        body = body[:body.index("\ndef ", 1)]
+        assert "column_width(" in body, f"{widget} still lays out to a fixed column"
+
+    # The dial and its readouts sit in the band on one gap, so no part of the pair can be
+    # placed on a number of its own.
+    look_source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text()
+    for name in ("DIAL_C = (DIAL_GAP", "READOUT_X = DIAL_C[0]",
+                 "READOUT_W = W - READOUT_X - DIAL_GAP"):
+        assert name in look_source, f"{name} is not derived from the dial's gap"
 
 
 def _source_of(fn):

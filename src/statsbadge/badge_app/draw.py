@@ -176,6 +176,40 @@ def clear_cache():
     _bands.clear()
 
 
+# -- measuring --------------------------------------------------------------
+
+# Between a measured column and whatever sits next to it.
+COLUMN_GAP = 8
+
+
+def text_width(text_value, size, name=TEXT):
+    """How wide a string will be drawn, so a column can be fitted to it.
+
+    Plus the pixel `label` adds, so a measurement and the sprite it describes agree.
+    """
+    face = _fonts.get(name)
+    if face is None:
+        return 0
+    was = screen.font
+    screen.font = face
+    try:
+        width, _ = screen.measure_text(text_value, font_size=size)
+    finally:
+        screen.font = was
+    return int(width) + 2
+
+
+def column_width(texts, size, name=TEXT):
+    """How wide a column of these strings has to be.
+
+    A page that puts names down one side and readings down the other cannot know either
+    width in advance: the names are whatever the fields are called and a reading is
+    whatever its unit makes it. Measured, a row reflows instead of leaving a gap at one
+    end and running off the other.
+    """
+    return max((text_width(text_value, size, name) for text_value in texts), default=0)
+
+
 # -- formatting -------------------------------------------------------------
 
 def fmt(value, field):
@@ -189,7 +223,7 @@ def fmt(value, field):
     if field.endswith("_bps"):
         return _rate(value)
     if field.endswith("_mb"):
-        return f"{value / 1024.0:.1f}G" if value >= 1024 else f"{value:.0f}M"
+        return _size(value)
     if field in ("uptime_s", "secs_left"):
         return _duration(value)
     if field in ("freq", "clock", "rpm", "procs"):
@@ -200,13 +234,28 @@ def fmt(value, field):
 
 
 def _rate(bps):
+    """A throughput, scaled to the largest prefix it fills.
+
+    The prefix is part of the number and `short_unit` supplies the B/s after it, so the
+    two together read 512B/s, 800KB/s, 11.4MB/s, 1.2GB/s.
+    """
     if bps >= 1024 * 1024 * 1024:
         return f"{bps / (1024.0 ** 3):.1f}G"
     if bps >= 1024 * 1024:
         return f"{bps / (1024.0 ** 2):.1f}M"
     if bps >= 1024:
         return f"{bps / 1024.0:.0f}K"
-    return f"{bps}B"
+    return f"{bps:.0f}"
+
+
+def _size(megabytes):
+    """A size, given in megabytes, scaled the same way a rate is. A 2TB disk reads 2.0T
+    where the megabyte figure alone would have said 2097152."""
+    if megabytes >= 1024 * 1024:
+        return f"{megabytes / (1024.0 ** 2):.1f}T"
+    if megabytes >= 1024:
+        return f"{megabytes / 1024.0:.1f}G"
+    return f"{megabytes:.0f}M"
 
 
 def _duration(seconds):
@@ -219,8 +268,14 @@ def _duration(seconds):
 
 
 def short_unit(field):
+    """What follows the number.
+
+    A byte figure is scaled by `fmt`, which leaves the prefix on the number, so the unit
+    here is only the base: 11.4M and MB/s make 11.4MB/s, and the same unit serves the
+    reading whatever size it has grown to.
+    """
     if field.endswith("_bps"):
-        return "/s"
+        return "B/s"
     if field in ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores"):
         return "%"
     if field == "temp":
@@ -230,16 +285,16 @@ def short_unit(field):
     if field in ("freq", "clock"):
         return "MHz"
     if field.endswith("_mb"):
-        return ""
+        return "B"
     return ""
 
 
 def reading(value, field):
     """A value with its unit, for a slot that has no room to place one separately.
 
-    `fmt` already carries a suffix where the number was scaled - 12.3G, 50.0M - and
-    short_unit adds what belongs after that, so a rate reads 50.0M/s and a percentage
-    reads 9.2%. A reading that is not there gets no unit: there is no such thing as
+    `fmt` already carries a prefix where the number was scaled - 12.3G, 50.0M - and
+    short_unit adds the base after it, so a rate reads 50.0MB/s and a percentage reads
+    9.2%. A reading that is not there gets no unit: there is no such thing as
     "-- percent".
     """
     text = fmt(value, field)
@@ -366,7 +421,10 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
     reading = label(value_text, value_size, ink)
     suffix = label(unit, unit_size, theme.dim) if unit else None
     if suffix and reading.width + suffix.width > inner * 2 - 4:
-        suffix = None                      # a long unit does not belong in a small ring
+        # Kept inside the ring rather than allowed over the arc, so a gauge too small for
+        # its unit shows the reading and the name under it and nothing else. A scaled
+        # figure carries its prefix on the number, so 11.0M still says which 11 it is.
+        suffix = None
     width = reading.width + (suffix.width if suffix else 0)
     left = centre[0] - width // 2
     screen.blit(reading, vec2(int(left), int(top)))
@@ -402,10 +460,14 @@ def dials(theme, entries):
               name, shape_of["value"], shape_of["label"], fraction is None, icon, unit)
 
 
-def readout(theme, index, name, value_text, fraction=None):
-    """One of the small figures beside a dial, with a thin bar under it."""
+def readout(theme, index, name, value_text, fraction=None, count=1):
+    """One of the small figures beside a dial, with a thin bar under it.
+
+    `count` is how many there are, because where the stack starts depends on that: it
+    hangs off the top of the dial unless it is too tall to.
+    """
     x = look.READOUT_X
-    y = look.BODY_TOP + 6 + index * look.READOUT_H
+    y = look.readout_top(count) + index * look.READOUT_H
     blit_label(name, look.SIZE_SMALL, theme.dim, x, y)
     blit_label(value_text, look.SIZE_VALUE, theme.ink, x, y + 10)
     if fraction is not None:
@@ -432,22 +494,27 @@ def bars(theme, values, maximum=100.0, field="pct"):
         # Fit the band whatever the core count, with at least a pixel between bars.
     slot = max(6, (look.BODY_H - 12) // count)
     height = max(4, slot - 3)
-    label_w = 26
-    x = look.PAD + label_w
-    # Room on the right for the widest reading plus its unit, which is "100%".
-    width = look.W - x - look.PAD - 40
+    names = [f"{i}" for i in range(count)]
+    readings = [reading(values[i] or 0.0, field) for i in range(count)]
+    # Both columns are as wide as their own widest entry: the index runs to two digits and
+    # a reading is whatever its unit makes it, so a fixed column either leaves a gap or
+    # runs the readings into the bars.
+    label_w = column_width(names, look.SIZE_SMALL)
+    value_w = column_width(readings, look.SIZE_SMALL)
+    x = look.PAD + label_w + COLUMN_GAP
+    width = max(20, look.W - x - COLUMN_GAP - value_w - look.PAD)
 
     for i in range(count):
         value = values[i] or 0.0
         fraction = max(0.0, min(1.0, value / maximum if maximum else 0.0))
         y = top + i * slot
-        blit_label(f"{i}", look.SIZE_SMALL, theme.dim, look.PAD, y - 1)
+        blit_label(names[i], look.SIZE_SMALL, theme.dim, look.PAD, y - 1)
         screen.pen = color.rgb(*theme.grid)
         screen.rectangle(rect(x, y, width, height))
         if fraction > 0:
             screen.pen = color.rgb(*theme.at(fraction))
             screen.rectangle(rect(x, y, max(1, int(width * fraction)), height))
-        blit_label(reading(value, field), look.SIZE_SMALL, theme.ink,
+        blit_label(readings[i], look.SIZE_SMALL, theme.ink,
                    look.W - look.PAD, y - 1, align=2)
 
 
@@ -458,15 +525,19 @@ def graph(theme, series, labels, maximum=None):
     along the bottom. One shape is one anti-aliased edge and one setup cost, where a
     line per sample would be dozens.
     """
-    left = look.PAD + 30
-    top = look.BODY_TOP + 8
-    width = look.W - left - look.PAD
-    height = look.BODY_H - 26
-
     peak = maximum
     if peak is None:
         peak = max((max(s) for s in series if s), default=1.0)
     peak = max(peak, 1.0) * 1.15
+
+    field = labels[0][1] if labels else "pct"
+    peak_text = reading(peak, field)
+    # The gutter holds the scale, which is as wide as the scale is: 100% and 9.8MB/s do
+    # not need the same room.
+    left = look.PAD + column_width((peak_text, "0"), look.SIZE_SMALL) + 4
+    top = look.BODY_TOP + 8
+    width = look.W - left - look.PAD
+    height = look.BODY_H - 26
 
     screen.pen = color.rgb(*theme.grid)
     for i in range(5):
@@ -491,8 +562,7 @@ def graph(theme, series, labels, maximum=None):
     screen.alpha = 255
 
     # Scale and legend.
-    blit_label(fmt(peak, labels[0][1] if labels else "pct"), look.SIZE_SMALL,
-               theme.dim, look.PAD, top - 4)
+    blit_label(peak_text, look.SIZE_SMALL, theme.dim, look.PAD, top - 4)
     blit_label("0", look.SIZE_SMALL, theme.dim, look.PAD, top + height - 8)
     for index, (name, _field) in enumerate(labels[:2]):
         rgb = _series_colour(theme, index)
@@ -632,14 +702,21 @@ def toast(theme, message):
 
 # -- rings ------------------------------------------------------------------
 
+# The stack reaches further right than a single dial does, so its legend gets a column of
+# its own instead of the dial's.
+RINGS_C = (look.W // 2 - 46, look.BODY_MID)
+RINGS_OUTER = 84
+RINGS_LEGEND_X = RINGS_C[0] + RINGS_OUTER + 2
+
+
 def rings(theme, entries):
     """Concentric sweep gauges, outermost first, with a legend down the side.
 
     One arc per reading, so four readings cost four shapes: the same trick the single
     gauge uses, at a quarter of the screen each.
     """
-    centre = (look.W // 2 - 46, look.BODY_MID)
-    outer = 84
+    centre = RINGS_C
+    outer = RINGS_OUTER
     band = 15
     gap = 4
     # Room for a third line under a reading where one has a peak to state.
@@ -660,13 +737,14 @@ def rings(theme, entries):
 
         # The legend doubles as the reading, so the rings need no labels on them.
         y = look.BODY_TOP + 12 + index * row
+        text_x = RINGS_LEGEND_X + 14
         screen.pen = color.rgb(*rgb)
-        screen.rectangle(rect(look.READOUT_X + 4, y + 6, 8, 8))
-        blit_label(name, look.SIZE_LABEL, theme.dim, look.READOUT_X + 18, y)
-        blit_label(value_text, look.SIZE_VALUE, theme.ink, look.READOUT_X + 18, y + 14)
+        screen.rectangle(rect(RINGS_LEGEND_X, y + 6, 8, 8))
+        blit_label(name, look.SIZE_LABEL, theme.dim, text_x, y)
+        blit_label(value_text, look.SIZE_VALUE, theme.ink, text_x, y + 14)
         if note:
             # What a full ring is, for a reading whose scale is not a round number.
-            blit_label(note, look.SIZE_SMALL, theme.dim, look.READOUT_X + 18, y + 30)
+            blit_label(note, look.SIZE_SMALL, theme.dim, text_x, y + 30)
 
 
 # -- sparklines -------------------------------------------------------------
@@ -681,8 +759,12 @@ def sparklines(theme, entries):
     if not rows:
         return
     height = min(30, (look.BODY_H - 8) // max(1, len(rows)))
-    plot_x = look.PAD + 96
-    plot_w = look.W - plot_x - look.PAD - 42
+    # The plot takes what the two text columns leave, so the names are not followed by a
+    # gap and the readings are not sat on the plots.
+    name_w = column_width([row[0] for row in rows], look.SIZE_LABEL)
+    value_w = column_width([row[1] for row in rows], look.SIZE_LABEL)
+    plot_x = look.PAD + name_w + COLUMN_GAP
+    plot_w = max(40, look.W - plot_x - COLUMN_GAP - value_w - look.PAD)
     for index, (name, value_text, points, peak) in enumerate(rows):
         top = look.BODY_TOP + 6 + index * height
         mid = top + height // 2

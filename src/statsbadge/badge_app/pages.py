@@ -135,12 +135,14 @@ def _dial(page, frame, _history, theme):
     # never is.
     under = scale_note(ref, frame) or draw.short_unit(field)
     draw.dial(theme, fraction, draw.fmt(value, field), under, cold=value is None)
-    for i, readout_ref in enumerate(page.get("readouts", [])[:3]):
+    readouts = page.get("readouts", [])[:3]
+    for i, readout_ref in enumerate(readouts):
         readout_value = value_of(frame, readout_ref)
         readout_field = readout_ref.split(".")[-1]
         draw.readout(theme, i, name_for(readout_ref),
-                     draw.fmt(readout_value, readout_field),
-                     fraction_of(readout_ref, readout_value, None, frame))
+                     draw.reading(readout_value, readout_field),
+                     fraction_of(readout_ref, readout_value, None, frame),
+                     count=len(readouts))
 
 
 def _bars(page, frame, _history, theme):
