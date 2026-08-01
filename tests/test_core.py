@@ -1599,6 +1599,22 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(_h):
     assert abs(eight["bbox_h"] / lcd["units_per_em"] - draw.CAP) < 0.01, (
         eight["bbox_h"], lcd["units_per_em"], draw.CAP)
 
+    # The digital face's own digits are the app's face at a finer grid, so they have to agree
+    # with it on both counts: the cap it is sized from and the width it is placed by. A
+    # mismatch draws a time that is the wrong height or does not sit in its column.
+    digits = read_af.read(
+        "extensions/statsbadge-clock/src/statsbadge_clock/badge/digits.af")
+    assert digits["wide"], "the face that draws digits 84pt tall wants the finer grid"
+    for char in "0123456789:":
+        assert any(g["codepoint"] == ord(char) for g in digits["glyphs"]), char
+    for char in ("H", "0"):
+        theirs = next(g for g in digits["glyphs"] if g["codepoint"] == ord(char))
+        ours = next(g for g in text["glyphs"] if g["codepoint"] == ord(char))
+        assert abs(theirs["bbox_h"] / digits["units_per_em"]
+                   - ours["bbox_h"] / text["units_per_em"]) < 0.01, char
+        assert abs(theirs["advance"] / digits["units_per_em"]
+                   - ours["advance"] / text["units_per_em"]) < 0.01, char
+
 
 @check
 def test_the_clock_only_syncs_from_a_fresh_reading(_h):

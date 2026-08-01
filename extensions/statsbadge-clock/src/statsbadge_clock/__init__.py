@@ -93,11 +93,13 @@ class Clock(Source):
     # the app so its page kind is available.
     badge_module = os.path.join(HERE, "badge", "clockface.py")
 
-    # Weather symbols, built from icons.txt by tools/make_icon_font.py, and the LCD face's
-    # seven-segment digits. Pushed to the badge beside the module, which loads them with
+    # Weather symbols, built from icons.txt by tools/make_icon_font.py, and the two digital
+    # faces' numbers: seven segments, and Lexend's digits packed wide for a face that draws
+    # them 84pt tall. Pushed to the badge beside the module, which loads them with
     # font.load().
     badge_assets = (os.path.join(HERE, "badge", "icons.af"),
-                    os.path.join(HERE, "badge", "lcd.af"))
+                    os.path.join(HERE, "badge", "lcd.af"),
+                    os.path.join(HERE, "badge", "digits.af"))
 
     # Offered in the config UI, which stores them and hands them back through
     # configure(). Weather is off until a location is set, so the place comes first and

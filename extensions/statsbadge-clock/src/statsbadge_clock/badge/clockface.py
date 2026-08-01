@@ -38,6 +38,12 @@ ICON_SIZE = 32
 LCD_FONT = "lcd"
 LCD_FILE = "lcd.af"
 
+# Lexend's digits and a colon, packed --wide: the same face the app sets text in, at eight
+# times the grid. The app's own copy is narrow, which is right for body text and visibly
+# flattens the counter of a nought at the 84pt this face draws. Thirteen glyphs, 3KB.
+DIGITS_FONT = "digits"
+DIGITS_FILE = "digits.af"
+
 # The app's own split layout: where its single gauge sits and how big it may be, so paging
 # from a dial or a ring stack to a clock does not move the thing being looked at.
 CENTRE = look.DIAL_C
@@ -92,8 +98,10 @@ DEFAULT_FACE = "railway"
 # whether the unlit segments show behind the lit ones. `ghost` is what an unlit pair looks
 # like, which for seven segments is a pair of eights.
 DIGITAL = {
-    "digital": {"label": "Digital", "font": draw.TEXT, "ghost": None, "colon": "dots"},
-    "lcd": {"label": "Digital LCD", "font": LCD_FONT, "ghost": "88", "colon": "glyph"},
+    "digital": {"label": "Digital", "font": DIGITS_FONT, "file": DIGITS_FILE,
+                "ghost": None, "colon": "dots"},
+    "lcd": {"label": "Digital LCD", "font": LCD_FONT, "file": LCD_FILE,
+            "ghost": "88", "colon": "glyph"},
 }
 
 # Baked dials and hand geometry, per face: a page each side of the list can ask for a
@@ -245,16 +253,15 @@ COLON_W, COLON_AT, COLON_DOT = 0.20, 0.30, 0.062
 def _digits_font(spec):
     """The font a digital face sets its numbers in, loading it on first use.
 
-    A face with one of its own gets it from beside this module, and an install predating the
-    file falls back to the app's text font: the same numbers, without the segments.
+    Both faces carry their own, shipped beside this module, and an install predating the file
+    falls back to the app's text font: the same numbers, coarser or without the segments.
     """
     wanted = spec["font"]
-    if wanted == draw.TEXT:
-        return wanted
     if not draw.has_font(wanted):
         here = globals().get("__file__") or ""
-        beside = here.rsplit("/", 1)[0] + "/" + LCD_FILE if "/" in here else LCD_FILE
-        draw.add_font(wanted, look.APP_DIR + "/ext/" + LCD_FILE, beside)
+        beside = (here.rsplit("/", 1)[0] + "/" + spec["file"] if "/" in here
+                  else spec["file"])
+        draw.add_font(wanted, look.APP_DIR + "/ext/" + spec["file"], beside)
     return wanted if draw.has_font(wanted) else draw.TEXT
 
 
