@@ -78,6 +78,7 @@ DEFAULT_CONFIG = {
     "graph_points": 48,
     "smooth": True,
     "animate": False,
+    "slide": False,
     "auto_brightness": False,
     "idle_advance_s": 0,
     "advance_every_s": 10,
@@ -193,6 +194,9 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # that arrives once a second and moves for a third of it is a choice, and on a noisy
     # field - a throughput that halves between polls - the sweep reads as lag.
     out["animate"] = bool(incoming.get("animate", False))
+    # Whether a page turn slides the next page on like a card off a deck. Off by default:
+    # it is a quarter of a second before the reader sees what they pressed for.
+    out["slide"] = bool(incoming.get("slide", False))
     # Whether the badge takes its brightness down to suit a dim room. Off by default: it is
     # the badge's own sensor and not every board has one.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))

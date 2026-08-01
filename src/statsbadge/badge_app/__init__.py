@@ -12,9 +12,15 @@ generator advanced from the draw loop, so a slow reply costs latency and never a
 frame.
 """
 
+import builtins
 import os
 import sys
 import time
+
+# The screen, kept because a page turn draws into a window of it and rebinds the builtin to
+# do so: `screen` is where every module - the app's and an extension's - resolves the target
+# from, so a card slide has to swap it and put it back.
+_SCREEN = screen
 
 APP_DIR = "/system/apps/stats"
 try:
@@ -119,6 +125,10 @@ LOCAL_PREFIX = "badge."
 BRIGHTNESS_STEPS = (1.0, 0.6, 0.3)
 
 
+# How long a page takes to slide on, when the layout asks for that. Short: it is a quarter
+# of a second between pressing for the next page and being able to read it.
+SLIDE_MS = 220
+
 # How long the panel takes to reach a new brightness. Short enough to answer a button
 # press, long enough that the step is a change of light rather than a click.
 BACKLIGHT_MS = 300
@@ -190,6 +200,8 @@ class App:
         self.detail = None
         # Whether the panel has been set once, so the first level is taken and not ramped to.
         self._lit = False
+        # The page turn in progress, if the layout asks for one.
+        self.sliding = None
         self.toast_until = 0
         self.toast_text = None
         self.dirty = True
@@ -232,6 +244,8 @@ class App:
             return
         self.page_index = (self.page_index + delta) % len(pages)
         pages_module.sweep_reset()
+        if (self.layout or {}).get("slide"):
+            self.sliding = tween(0.0, 1.0, SLIDE_MS, tween.QUAD_OUT).start()
         self.dirty = True
 
     # -- polling ------------------------------------------------------------
@@ -566,9 +580,10 @@ class App:
         if page is not None and page.get("kind") in pages_module.ANIMATED:
             # This page moves on its own, so it gets a frame regardless of polling.
             self.dirty = True
-        if pages_module.moving:
-            # A gauge is part way to its reading. Frames only while that is true, so a
-            # sweeping page costs a third of a second's drawing and not the whole second.
+        if pages_module.moving or self.sliding is not None:
+            # A gauge is part way to its reading, or a page is part way on. Frames only
+            # while that is true, so a sweeping page costs a third of a second's drawing
+            # and not the whole second.
             self.dirty = True
 
     def advance_if_idle(self, now):
@@ -616,10 +631,46 @@ class App:
         subtitle = self.frame.get("sys", {}).get("host") or self.config.name
         if self._was_stale:
             subtitle = self.detail or "offline"
-        pages_module.render(page, self.frame, self.history, theme,
-                            self.page_index, len(self.page_list), subtitle)
+        if self.sliding is None:
+            pages_module.render(page, self.frame, self.history, theme,
+                                self.page_index, len(self.page_list), subtitle)
+        else:
+            self.render_sliding(page, theme, subtitle)
         if self.toast_text:
             draw.toast(theme, self.toast_text, self.toast_fade())
+
+    def render_sliding(self, page, theme, subtitle):
+        """Draw the page part way on, like a card off a deck.
+
+        A window of the screen is an image in its own right: it has its own origin, so a page
+        drawn into one lands shifted by that origin and clipped to the window, which is a
+        card whose left edge is part way across. The page beneath is left standing wherever
+        the card has not reached, `badge.default_clear` being None - so the new page is drawn
+        once a frame and nothing else is.
+
+        The card always arrives from the right, whichever way the reader is paging: a window
+        clamps to the screen, so there is no drawing at a negative origin to bring one in
+        from the left.
+
+        `screen` is a builtin, so it is rebound rather than passed: an extension's page
+        renderer draws through the same name and would otherwise put its clock face on the
+        screen while the app put everything else on the card.
+        """
+        left = int(look.W * (1.0 - self.sliding.now))
+        if left <= 0 or self.sliding.done:
+            self.sliding = None
+            pages_module.render(page, self.frame, self.history, theme,
+                                self.page_index, len(self.page_list), subtitle)
+            return
+        card = screen.window(rect(left, 0, look.W - left, look.H))
+        card.font = draw.FONT
+        card.antialias = image.X4
+        builtins.screen = card
+        try:
+            pages_module.render(page, self.frame, self.history, theme,
+                                self.page_index, len(self.page_list), subtitle)
+        finally:
+            builtins.screen = _SCREEN
 
     # -- exit ---------------------------------------------------------------
 

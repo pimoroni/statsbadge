@@ -1412,6 +1412,32 @@ def test_a_gauge_can_sweep_to_its_reading(_h):
 
 
 @check
+def test_a_page_can_slide_on_like_a_card(_h):
+    """A window of the screen has its own origin, so a page drawn into one lands shifted and
+    clipped: that is the card. The page under it is left standing wherever the card has not
+    reached, so only the incoming page is drawn each frame."""
+    config = layout.validate({"slide": True, "pages": layout.DEFAULT_PAGES})
+    assert config["slide"] is True
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["slide"] is False, (
+        "off by default")
+
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="slide"' in (web / "index.html").read_text(), "no control in the UI"
+    assert "config.slide" in (web / "app.js").read_text(), "the control is not bound"
+
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    sliding = app[app.index("def render_sliding"):]
+    sliding = sliding[:sliding.index("\n    def ", 1)]
+    # Rebound rather than passed: an extension's renderer draws through the same builtin,
+    # and would otherwise put its page on the screen while the app drew the card.
+    assert "builtins.screen = card" in sliding and "builtins.screen = _SCREEN" in sliding
+    assert "card.font" in sliding, "a window starts with no font, and label() restores it"
+    # And the turn only starts one when the layout asks.
+    turn = app[app.index("def turn"):]
+    assert '.get("slide")' in turn[:turn.index("\n    def ", 1)]
+
+
+@check
 def test_smooth_graphs_are_a_setting_that_reaches_the_badge(_h):
     """A drawing switch, so it is one setting for every graph rather than a page property."""
     config = layout.validate({"smooth": False, "pages": layout.DEFAULT_PAGES})
