@@ -1,10 +1,10 @@
 """Drawing the pages.
 
 Vector shapes throughout, so a theme is a colour table. The costs that shape this
-(measured on this board, in BADGEWARE.md): an anti-aliased shape is about a quarter
-of a millisecond whatever its size, a line of live text is about 1ms, and the same
-text blitted from a cache is 0.08ms. So shapes are drawn live and every string that
-is not new every frame is baked into a sprite once.
+(measured on this board, in DEVELOPMENT.md): an anti-aliased shape is about 0.08ms
+plus 8us an edge and almost nothing for its fill, a line of live text is about 1ms,
+and the same text blitted from a cache is 0.08ms. So shapes are drawn live and every
+string that is not new every frame is baked into a sprite once.
 
 The header and footer change only when the page or the theme does, so they are baked
 into two band images per page and blitted over a raster fill of the body.

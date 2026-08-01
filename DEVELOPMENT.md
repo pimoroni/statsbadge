@@ -128,7 +128,7 @@ Credentials are keyed on a server id from [`identity.py`](src/statsbadge/identit
 
 ## Drawing
 
-Costs on this board, with more in `../BADGEWARE.md`: an anti-aliased shape is ~0.25ms whatever its size, a line of live text ~1ms, the same text blitted from a sprite 0.08ms, a full-screen 1:1 blit 14ms.
+Costs on this board, with more in `../BADGEWARE.md`: an anti-aliased shape is ~0.08ms plus 8us an edge, a line of live text ~1ms, the same text blitted from a sprite 0.08ms, a full-screen 1:1 blit 11ms.
 
 So anything repeated is baked and blitted, and only what changes shape is drawn live:
 
@@ -137,7 +137,7 @@ So anything repeated is baked and blitted, and only what changes shape is drawn 
 - **Header and footer** are baked per page as two band images and blitted over a raster fill of the body. A whole-screen bake made a page turn cost 90ms; bands are cheap enough to keep a dozen. A `window()` view also takes the unscaled blit path, where equal-size source and destination rects go through the sampler.
 - **The dial** is two `shape.arc` calls. Angles start at the top and run clockwise, so a 270-degree gauge with its gap at the bottom is 225 to 495. The fill is a solid ramp colour, not a gradient: a linear gradient across the arc's box does not follow the curve, so the hue would not track the reading.
 - **A graph** is one `shape.custom` per series, a polyline across the top and back along the bottom. The two series take opposite ends of the ramp - the accent and the ramp at 0.85 are the same orange - except on a theme built out of one hue, where the page *is* one end of its own ramp and an area drawn in that is not there at all: those fall through to the dim colour, and on a pale page the second series is drawn as solid as the first, a translucent area over one washing out towards it. `draw.curve` resamples the samples as a Catmull-Rom spline first, which passes *through* each one, so the peak drawn is the peak measured; overshoot is held to the range of the data, or an area fill would run under its own baseline. Only the values are interpolated, the samples being evenly spaced, and the step count follows the plot's width because a segment shorter than a pixel costs the same as one that shows. The weights are worked out once per step count: evaluating the polynomial per point cost 265us a point, 50ms for one series, against 2.7ms from the table. It is a setting, `smooth`, since it is a drawing choice rather than a property of a page - a graph costs 31ms a redraw against 18, and a poll is a second apart.
-- **An anti-aliased shape costs its bounding box, not its ink.** Measured: a 270-degree arc at r82 is 4.5ms whether its band is 20 pixels or one, and a 45-degree wedge is 0.5ms at any orientation - so it is the box, not the fill and not the scanlines. `emit_sa_spans` in picovector's rasteriser says why: it memsets a `w*h` accumulator, deposits the edges, then prefix-sums *every pixel of every row* and emits one span from the first covered pixel to the last, which for an annulus runs straight through the hole. About 0.19ms of setup plus 200ns a box pixel. The raster path - `screen.rectangle`, `hspan`, `vspan` - is 7 to 22ns a pixel, so anything axis-aligned belongs there: a 147x86 rounded rectangle is 2.58ms against 0.117ms for the same box drawn raster.
+- **An anti-aliased shape costs its edges, not its area.** picovector used to price the bounding box, which made an arc absurd; it now skips a constant-winding run with one memset, so what is left is ~0.08ms of setup plus about 8us an edge. Measured at radius 3, where the box cannot matter: 0.114ms for four sides, 0.294 for thirty, 0.569 for sixty. The fill is nearly free - a 270-degree arc at r82 is 1.82ms with a 20px band and 1.53ms with a 1px one, and a solid disc of the same radius is 1.76ms. So the thing to watch is the side count, which scales with radius (`PV_CURVE_CHORD_PX`, clamped to 30..120), and the number of shapes: sixty dots the size of a dial's minute marks are 11.4ms whatever is in them. `image.X2` and `image.X4` cost the same, the coverage being analytic - the setting is anti-aliasing on or off, and off is ~40% cheaper. The raster path - `screen.rectangle`, `hspan`, `vspan` - is 10ns a pixel, so a large axis-aligned fill still belongs there: a 147x86 rounded rectangle is 0.70ms against 0.14ms for the same box drawn raster.
 - **A gauge draws the track it can see.** The unfilled part runs from the sweep to the end rather than the whole way round, so the two arcs abut instead of one being drawn over the other: 4.30ms against 7.61ms, and the join is under the tick in any case. That took the dial from 21.2 to 18.2ms, four gauges from 26.4 to 22.1 and the rings from 32 to 27. Splitting a long arc into quadrants is faster again in isolation - 3.06ms against 4.53 for 270 degrees, the optimum being three pieces - but it was slower on the pages that actually draw arcs, where the boxes are already small, and two anti-aliased edges laid over each other reach `1 - (1-a)(1-b)`, not 1, so every join left a seam about 10% light.
 - **Bars** are raster rectangles. Axis-aligned needs no anti-aliasing, and this is the page that can have thirty-two.
 - **A text column is measured, not fixed.** A page of names down one side and readings down the other cannot know either width in advance: the names are whatever the chosen fields are called and a reading is whatever its unit makes it. `draw.column_width` measures both and the plot takes the rest, so a sparkline page reflows instead of leaving a gap after the names and running the readings over the plots.
@@ -147,16 +147,16 @@ A page changes when a poll lands, once a second, so frames in between draw nothi
 
 | Page | Draw |
 | ---- | ---- |
-| CPU dial | 17.7ms |
-| Cores, twelve bars | 16.9ms |
-| Network graph | 20.0ms |
-| Disk grid | 22.8ms |
-| Host, text | 11.2ms |
-| Swiss clock | 14.7ms |
-| page turn, cold caches | 46.3ms |
+| CPU dial | 16.1ms |
+| Cores, sixteen bars | 23.7ms |
+| Network graph | 29.0ms |
+| Disk grid | 19.2ms |
+| Host, text | 12.7ms |
+| Swiss clock | 15.7ms |
+| page turn, cold caches | 49.4ms |
 | nothing changed | 0ms |
 
-`display.update()` blocks on vsync, so everything above is two 90Hz periods: a steady 45fps. A signed `/v1/stats` round trip is 14ms, worst single step 2.85ms - the step carrying the HMAC.
+`display.update()` blocks on vsync, which rounds a frame up to a whole 90Hz period, so a page has to draw in under 14.7ms for 45fps and under 25.8ms to hold 30. A signed `/v1/stats` round trip is 14ms, worst single step 2.85ms - the step carrying the HMAC.
 
 Where a screen takes A/B/C for its own input rather than passing them to the host, they are used in the order they sit in: **A back, B select, C next**.
 
