@@ -210,8 +210,17 @@ def blit_icon(character, size, rgb, x, y, align=0):
 
 
 def clear_cache():
+    """Forget everything held from an earlier draw.
+
+    Called when the theme changes or the host does, so it has to include anything holding
+    colours and not only the sprites: the waterfall's scroll buffer is a second of columns
+    painted in the ramp they were drawn with, and it showed the old theme's for a whole
+    screen's width after a switch.
+    """
     _labels.clear()
     _pip_rows.clear()
+    _readings.clear()
+    waterfall_reset()
 
 
 # -- measuring --------------------------------------------------------------
@@ -634,12 +643,16 @@ def column_lines(entries, top=None, align=0):
     return y
 
 
-def bars(theme, values, maximum=100.0, field="pct"):
+def bars(theme, values, maximum=100.0, field="pct", fractions=None):
     """A stack of horizontal bars. Raster rectangles: no AA needed on an axis-aligned
     bar, and this is the one page that can have 32 of them.
 
     `field` is what the values are, so a per-core load reads as a percentage. Without it
     every bar was a bare number.
+
+    `fractions` is where each bar should be drawn to, for a caller sweeping them to their
+    readings; without it each bar is drawn at its own value, which is the same thing once a
+    sweep has landed.
     """
     if not values:
         return
@@ -660,7 +673,10 @@ def bars(theme, values, maximum=100.0, field="pct"):
 
     for i in range(count):
         value = values[i] or 0.0
-        fraction = max(0.0, min(1.0, value / maximum if maximum else 0.0))
+        if fractions is None:
+            fraction = max(0.0, min(1.0, value / maximum if maximum else 0.0))
+        else:
+            fraction = fractions[i]
         y = top + i * slot
         blit_label(names[i], look.SIZE_SMALL, theme.dim, look.PAD, y - 1)
         filled = max(1, int(width * fraction)) if fraction > 0 else 0
