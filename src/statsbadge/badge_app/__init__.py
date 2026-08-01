@@ -17,11 +17,6 @@ import os
 import sys
 import time
 
-# The screen, kept because a page turn draws into a window of it and rebinds the builtin to
-# do so: `screen` is where every module - the app's and an extension's - resolves the target
-# from, so a card slide has to swap it and put it back.
-_SCREEN = screen
-
 APP_DIR = "/system/apps/stats"
 try:
     os.chdir(APP_DIR)
@@ -200,8 +195,16 @@ class App:
         self.detail = None
         # Whether the panel has been set once, so the first level is taken and not ramped to.
         self._lit = False
-        # The page turn in progress, if the layout asks for one.
+        # The page turn in progress, if the layout asks for one: the two cards, which way it
+        # is going, and the images behind them. 307KB each, allocated on the first turn that
+        # needs one and written over after that - a deck needs both, a slide-over only the
+        # page arriving.
         self.sliding = None
+        self.slide_back = False
+        self.arriving = None
+        self.leaving = None
+        self._arriving = None
+        self._kept = None
         self.toast_until = 0
         self.toast_text = None
         self.dirty = True
@@ -244,9 +247,65 @@ class App:
             return
         self.page_index = (self.page_index + delta) % len(pages)
         pages_module.sweep_reset()
-        if (self.layout or {}).get("slide"):
-            self.sliding = tween(0.0, 1.0, SLIDE_MS, tween.QUAD_OUT).start()
+        style = (self.layout or {}).get("slide") or "off"
+        if style != "off" and len(pages) > 1:
+            self.start_slide(style, delta < 0)
         self.dirty = True
+
+    def start_slide(self, style, back):
+        """Set a page turn moving: the page arriving drawn once, the one leaving kept.
+
+        Both cards are then blits, which is what makes the direction free - a window cannot
+        start at a negative origin, so a page cannot be *drawn* part way off the left of the
+        screen, but a rect out of an image can be put anywhere. It also means the arriving
+        page is rendered once for the turn instead of once a frame.
+
+        The setup is the expensive part of a turn: 45ms to draw a page into an image against
+        15 to draw it on the screen, because an image is on the heap in PSRAM where the
+        framebuffer is SRAM, and another 23ms to keep the outgoing page for a deck. Paid once
+        on the press, against 12 to 15ms a frame for the ten frames that follow.
+        """
+        page = self.current_page()
+        if page is None:
+            return
+        if self._arriving is None:
+            self._arriving = image(look.W, look.H)
+        self.draw_page_into(self._arriving, page)
+        self.leaving = None
+        if style == "deck":
+            # Whatever was on the screen, toast and all: that is what was there to look at.
+            if self._kept is None:
+                self._kept = image(look.W, look.H)
+            self._kept.blit(screen, vec2(0, 0))
+            self.leaving = self._kept
+        self.arriving = self._arriving
+        self.slide_back = back
+        self.sliding = tween(0.0, 1.0, SLIDE_MS, tween.QUAD_OUT).start()
+
+    def draw_page_into(self, target, page):
+        """Render a page somewhere other than the screen.
+
+        `screen` is a builtin, so it is rebound rather than passed: an extension's page
+        renderer draws through the same name and would otherwise put its clock face on the
+        screen while the app drew everything else into the image. Rebound from whatever
+        `screen` is *now* - `badge.mode` replaces it, so a copy taken at import time is the
+        160x120 screen the app started with, and a 320-wide page drawn into that wraps two
+        rows into one.
+        """
+        was = screen
+        target.font = draw.FONT
+        target.antialias = image.X4
+        builtins.screen = target
+        try:
+            pages_module.render(page, self.frame, self.history, self.theme,
+                                self.page_index, len(self.page_list), self.subtitle())
+        finally:
+            builtins.screen = was
+
+    def subtitle(self):
+        if self._was_stale:
+            return self.detail or "offline"
+        return self.frame.get("sys", {}).get("host") or self.config.name
 
     # -- polling ------------------------------------------------------------
 
@@ -628,9 +687,7 @@ class App:
                         hint)
             return
 
-        subtitle = self.frame.get("sys", {}).get("host") or self.config.name
-        if self._was_stale:
-            subtitle = self.detail or "offline"
+        subtitle = self.subtitle()
         if self.sliding is None:
             pages_module.render(page, self.frame, self.history, theme,
                                 self.page_index, len(self.page_list), subtitle)
@@ -640,37 +697,39 @@ class App:
             draw.toast(theme, self.toast_text, self.toast_fade())
 
     def render_sliding(self, page, theme, subtitle):
-        """Draw the page part way on, like a card off a deck.
+        """A page turn part way through: two cards, placed by a rect out of an image each.
 
-        A window of the screen is an image in its own right: it has its own origin, so a page
-        drawn into one lands shifted by that origin and clipped to the window, which is a
-        card whose left edge is part way across. The page beneath is left standing wherever
-        the card has not reached, `badge.default_clear` being None - so the new page is drawn
-        once a frame and nothing else is.
+        The next page comes in from the right and the previous one from the left, which is
+        the direction the reader pressed. `over` moves only the arriving card and leaves the
+        page underneath standing; `deck` moves both, the one leaving going the other way.
 
-        The card always arrives from the right, whichever way the reader is paging: a window
-        clamps to the screen, so there is no drawing at a negative origin to bring one in
-        from the left.
-
-        `screen` is a builtin, so it is rebound rather than passed: an extension's page
-        renderer draws through the same name and would otherwise put its clock face on the
-        screen while the app put everything else on the card.
+        A blit costs its pixels, so `over` averages half a screen a frame and a deck a whole
+        one: 13.6ms a frame against 14.8, over 250ms. Nothing is rasterised - the arriving
+        page was drawn once when the turn happened.
         """
-        left = int(look.W * (1.0 - self.sliding.now))
-        if left <= 0 or self.sliding.done:
+        travel = int(look.W * self.sliding.now)
+        if travel >= look.W or self.sliding.done or self.arriving is None:
             self.sliding = None
+            self.arriving = None
+            self.leaving = None
             pages_module.render(page, self.frame, self.history, theme,
                                 self.page_index, len(self.page_list), subtitle)
             return
-        card = screen.window(rect(left, 0, look.W - left, look.H))
-        card.font = draw.FONT
-        card.antialias = image.X4
-        builtins.screen = card
-        try:
-            pages_module.render(page, self.frame, self.history, theme,
-                                self.page_index, len(self.page_list), subtitle)
-        finally:
-            builtins.screen = _SCREEN
+        if travel <= 0:
+            return
+        rest = look.W - travel
+        if self.slide_back:
+            # Arriving from the left, so its right hand edge is what shows first.
+            screen.blit(self.arriving.window(rect(rest, 0, travel, look.H)), vec2(0, 0))
+            if self.leaving is not None:
+                screen.blit(self.leaving.window(rect(0, 0, rest, look.H)),
+                            vec2(travel, 0))
+        else:
+            if self.leaving is not None:
+                screen.blit(self.leaving.window(rect(travel, 0, rest, look.H)),
+                            vec2(0, 0))
+            screen.blit(self.arriving.window(rect(0, 0, travel, look.H)),
+                        vec2(rest, 0))
 
     # -- exit ---------------------------------------------------------------
 

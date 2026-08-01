@@ -1414,27 +1414,50 @@ def test_a_gauge_can_sweep_to_its_reading(_h):
 @check
 def test_a_page_can_slide_on_like_a_card(_h):
     """A window of the screen has its own origin, so a page drawn into one lands shifted and
-    clipped: that is the card. The page under it is left standing wherever the card has not
-    reached, so only the incoming page is drawn each frame."""
-    config = layout.validate({"slide": True, "pages": layout.DEFAULT_PAGES})
-    assert config["slide"] is True
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["slide"] is False, (
-        "off by default")
+    clipped: that is the card, and the rasteriser costs the window rather than the screen.
+    `over` leaves the outgoing page standing under it; `deck` moves both, which needs a copy
+    of the page that is leaving because a window cannot start at a negative origin."""
+    for style in layout.SLIDE_STYLES:
+        assert layout.validate({"slide": style,
+                                "pages": layout.DEFAULT_PAGES})["slide"] == style
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["slide"] == "off", (
+        "immediate by default")
+    assert layout.validate({"slide": "sideways",
+                            "pages": layout.DEFAULT_PAGES})["slide"] == "off"
+    # A bool still works, from before there was a choice of styles.
+    assert layout.validate({"slide": True, "pages": layout.DEFAULT_PAGES})["slide"] == "over"
+    assert layout.validate({"slide": False, "pages": layout.DEFAULT_PAGES})["slide"] == "off"
 
     web = pathlib.Path("src/statsbadge/web")
     assert 'id="slide"' in (web / "index.html").read_text(), "no control in the UI"
     assert "config.slide" in (web / "app.js").read_text(), "the control is not bound"
+    for style in layout.SLIDE_STYLES:
+        assert f'value="{style}"' in (web / "index.html").read_text(), style
 
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
     sliding = app[app.index("def render_sliding"):]
     sliding = sliding[:sliding.index("\n    def ", 1)]
-    # Rebound rather than passed: an extension's renderer draws through the same builtin,
-    # and would otherwise put its page on the screen while the app drew the card.
-    assert "builtins.screen = card" in sliding and "builtins.screen = _SCREEN" in sliding
-    assert "card.font" in sliding, "a window starts with no font, and label() restores it"
-    # And the turn only starts one when the layout asks.
+    # Both cards are a rect out of an image, which is what makes the direction free: a window
+    # cannot start at a negative origin, so a page cannot be drawn part way off the left.
+    assert "self.arriving.window(" in sliding and "self.leaving.window(" in sliding
+    assert "self.slide_back" in sliding, "both directions look the same"
+
+    into = app[app.index("def draw_page_into"):]
+    into = into[:into.index("\n    def ", 1)]
+    # Rebound rather than passed: an extension's renderer draws through the same builtin, and
+    # would otherwise put its page on the screen while the app drew into the image.
+    assert "builtins.screen = target" in into and "builtins.screen = was" in into
+    # From whatever screen is now: badge.mode replaces it, and a copy taken at import time is
+    # the 160x120 screen the app started with - a 320-wide page drawn into that wraps.
+    assert "was = screen" in into
+    assert "target.font" in into, "an image starts with no font, and label() restores it"
+
+    # And the turn only starts one when the layout asks, keeping the screen only for a deck.
     turn = app[app.index("def turn"):]
-    assert '.get("slide")' in turn[:turn.index("\n    def ", 1)]
+    turn = turn[:turn.index("\n    def ", 1)]
+    assert '.get("slide")' in turn and "delta < 0" in turn
+    start = app[app.index("def start_slide"):]
+    assert 'style == "deck"' in start[:start.index("\n    def ", 1)]
 
 
 @check

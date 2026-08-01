@@ -31,6 +31,10 @@ KINDS = ("dial", "dials", "bars", "graph", "grid", "text",
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
               "rings": 4, "spark": 6, "radar": 6}
 
+# How a page turn moves. "over" draws the incoming page over the outgoing one; "deck" moves
+# them together, the outgoing page leaving to the left.
+SLIDE_STYLES = ("off", "over", "deck")
+
 # The names, from the palettes themselves: a theme is data, so adding one is a palette and
 # nothing else.
 THEMES = tuple(themes.PALETTES)
@@ -78,7 +82,7 @@ DEFAULT_CONFIG = {
     "graph_points": 48,
     "smooth": True,
     "animate": False,
-    "slide": False,
+    "slide": "off",
     "auto_brightness": False,
     "idle_advance_s": 0,
     "advance_every_s": 10,
@@ -194,9 +198,14 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # that arrives once a second and moves for a third of it is a choice, and on a noisy
     # field - a throughput that halves between polls - the sweep reads as lag.
     out["animate"] = bool(incoming.get("animate", False))
-    # Whether a page turn slides the next page on like a card off a deck. Off by default:
-    # it is a quarter of a second before the reader sees what they pressed for.
-    out["slide"] = bool(incoming.get("slide", False))
+    # How a page turn moves: not at all, the next page sliding over this one, or the two
+    # travelling together like a card off a deck. Off by default, since it is a fifth of a
+    # second before what the reader pressed for can be read. A bool is taken as well, from
+    # before there was a choice.
+    slide = incoming.get("slide", "off")
+    if isinstance(slide, bool):
+        slide = "over" if slide else "off"
+    out["slide"] = slide if slide in SLIDE_STYLES else "off"
     # Whether the badge takes its brightness down to suit a dim room. Off by default: it is
     # the badge's own sensor and not every board has one.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))

@@ -57,7 +57,11 @@
       </label>
       <label class="check"><input type="checkbox" id="smooth"> Smooth graphs</label>
       <label class="check"><input type="checkbox" id="animate"> Sweep gauges to each reading</label>
-      <label class="check"><input type="checkbox" id="slide"> Slide pages on when turning</label>
+      <label>Page turn <select id="slide">
+        <option value="off">immediate</option>
+        <option value="over">next page slides over</option>
+        <option value="deck">both slide, like a deck</option>
+      </select></label>
       <label class="check"><input type="checkbox" id="autobright"> Dim to suit the room</label>
       <label>Page on its own after
         <input type="range" id="idle" min="0" max="300" step="15">

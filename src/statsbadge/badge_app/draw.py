@@ -775,8 +775,13 @@ def curve(values, steps=CURVE_STEPS):
 _points = array("f", b"")
 
 
-def area(left, top, width, height, values, peak, base=None):
+def area(left, top, width, height, values, peak, base=None, shift=0.0):
     """One filled area from `values` against `peak`, closed along its base. A shape, or None.
+
+    `shift` is how far the plot has walked left since its newest sample landed, in samples:
+    0 draws it where the readings are, and 1 would have moved a whole sample's width. The
+    plot is drawn one step wider than its box and clipped to it, so the oldest sample leaves
+    at the left while the gap at the right is where the next one is arriving.
 
     The plot is smoothed first if it is tall enough to show a curve, then scaled and laid out
     in one pass into a float buffer: `shape.custom` takes one of those, so no point is boxed
@@ -798,22 +803,26 @@ def area(left, top, width, height, values, peak, base=None):
     step = width / float(count - 1)
     scale = height / float(peak or 1.0)
     bottom = top + height
+    # A sample of the original data, however many points it was interpolated to, so a shift
+    # of one moves the plot by one reading whether it is smoothed or not.
+    away = (shift * step * (steps if steps > 1 else 1)) if shift else 0.0
+    start = left - away
     i = 0
     for index in range(count):
         y = bottom - (values[index] or 0.0) * scale
-        _points[i] = left + index * step
+        _points[i] = start + index * step
         _points[i + 1] = top if y < top else (bottom if y > bottom else y)
         i += 2
     if base is None:
         base = bottom
-    _points[i] = left + width
+    _points[i] = start + width
     _points[i + 1] = base
-    _points[i + 2] = left
+    _points[i + 2] = start
     _points[i + 3] = base
     return shape.custom(memoryview(_points)[:i + 4])
 
 
-def graph(theme, series, labels, maximum=None):
+def graph(theme, series, labels, maximum=None, shift=0.0):
     """One or two series over time, as filled areas.
 
     Each series is one `shape.custom` contour: a polyline across the top and back
@@ -842,10 +851,15 @@ def graph(theme, series, labels, maximum=None):
     for index, points in enumerate(series):
         if not points or len(points) < 2:
             continue
-        filled = area(left, top, width, height, points, peak)
+        filled = area(left, top, width, height, points, peak, shift=shift)
         screen.alpha = _series_alpha(theme, index)
         screen.pen = color.rgb(*_series_colour(theme, index))
+        was = screen.clip
+        # The plot is drawn a sample wider than its box while it walks left, so the oldest
+        # reading leaves at the gutter rather than over it.
+        screen.clip = rect(left, look.BODY_TOP, width, look.BODY_H)
         screen.shape(filled)
+        screen.clip = was
     screen.alpha = 255
 
     # Scale and legend.
@@ -1072,7 +1086,7 @@ def rings(theme, entries):
 
 # -- sparklines -------------------------------------------------------------
 
-def sparklines(theme, entries):
+def sparklines(theme, entries, shift=0.0):
     """A row per reading: name, current value, and its history as a small area.
 
     Six of these fit the body band, which is the point - one page that says what every
@@ -1098,10 +1112,13 @@ def sparklines(theme, entries):
         screen.hspan(plot_x, top + plot_h + 3, plot_w)
         if points and len(points) > 1 and peak:
             filled = area(plot_x, top, plot_w, plot_h, points, peak,
-                          base=top + plot_h + 3)
+                          base=top + plot_h + 3, shift=shift)
             screen.pen = color.rgb(*theme.accent)
             screen.alpha = 190
+            was = screen.clip
+            screen.clip = rect(plot_x, look.BODY_TOP, plot_w, look.BODY_H)
             screen.shape(filled)
+            screen.clip = was
             screen.alpha = 255
         blit_label(value_text, look.SIZE_LABEL, theme.ink, look.W - look.PAD, mid - 7,
                    align=2)
@@ -1168,7 +1185,7 @@ def radar(theme, entries):
 # -- trend ------------------------------------------------------------------
 
 def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
-          hot=None):
+          hot=None, shift=0.0):
     """One big reading, which way it is going, and where it has been.
 
     The arrow and the change are the point: a number on its own does not say whether
@@ -1199,10 +1216,13 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
     screen.pen = color.rgb(*theme.grid)
     screen.hspan(left, top + height, width)
     if points and len(points) > 1 and peak:
-        filled = area(left, top, width, height, points, peak)
+        filled = area(left, top, width, height, points, peak, shift=shift)
         screen.pen = color.rgb(*theme.accent)
         screen.alpha = 170
+        was = screen.clip
+        screen.clip = rect(left, look.BODY_TOP, width, look.BODY_H)
         screen.shape(filled)
+        screen.clip = was
         screen.alpha = 255
 
 

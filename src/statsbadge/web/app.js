@@ -498,11 +498,13 @@ function renderLook() {
   animate.checked = !!config.animate;
   animate.onchange = () => { config.animate = animate.checked; markDirty(); };
 
-  // Whether a page turn slides the next page on like a card off a deck, or swaps it. Off by
-  // default: it is a quarter of a second before what you pressed for can be read.
+  // How a page turn moves: not at all, the next page over this one, or both together like a
+  // card off a deck. Immediate by default - it is a fifth of a second before what you
+  // pressed for can be read.
   const slide = $("slide");
-  slide.checked = !!config.slide;
-  slide.onchange = () => { config.slide = slide.checked; markDirty(); };
+  slide.value = typeof config.slide === "string" ? config.slide
+    : (config.slide ? "over" : "off");
+  slide.onchange = () => { config.slide = slide.value; markDirty(); };
 
   // The badge's own light sensor, taking the brightness above down to suit a dim room.
   const autobright = $("autobright");
