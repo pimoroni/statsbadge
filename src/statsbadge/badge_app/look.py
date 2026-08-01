@@ -128,6 +128,11 @@ DIALS = {
 }
 
 
+# Colours a theme's ramp is resolved to when it is built, so a gauge fills from a table.
+# Sixty-five is a quarter of a percent of 100, and steps of one or two in a channel.
+RAMP_STEPS = 65
+
+
 class Theme:
     """A palette plus the two decisions that make it look like one thing.
 
@@ -148,9 +153,24 @@ class Theme:
         # The four case lights are single-channel PWM, not RGB: one brightness
         # fraction each. badge.caselights takes one value for all four or four values.
         self.case = case
+        self.steps = tuple(self._blend(step / (RAMP_STEPS - 1.0))
+                           for step in range(RAMP_STEPS))
 
     def at(self, fraction):
-        """The ramp colour for a 0-1 value, interpolated."""
+        """The ramp colour for a 0-1 value, off a table built with the theme.
+
+        Interpolating per call was 102us, and a page with sixteen bars asks sixteen times
+        a frame. RAMP_STEPS across the ramp is finer than the eye reads a gauge fill and
+        finer than most of the ramps have stops.
+        """
+        if fraction <= 0.0:
+            return self.steps[0]
+        if fraction >= 1.0:
+            return self.steps[-1]
+        return self.steps[int(fraction * (RAMP_STEPS - 1) + 0.5)]
+
+    def _blend(self, fraction):
+        """The ramp colour for a 0-1 value, interpolated between its stops."""
         stops = self.ramp
         if fraction <= stops[0][0]:
             return stops[0][1]
