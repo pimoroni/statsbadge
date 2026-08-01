@@ -48,8 +48,9 @@ def sweep_reset():
 def _swept(ref, fraction):
     """`fraction`, eased from wherever this gauge already stood.
 
-    Keyed on the field alone. One page is drawn at a time and a turn forgets the table, so
-    a gauge only ever meets its own history.
+    Keyed on the field, or on the field and a position where a page draws a row of them.
+    One page is drawn at a time and a turn forgets the table, so a gauge only ever meets its
+    own history.
     """
     global moving
     if not ANIMATE or fraction is None:
@@ -217,7 +218,22 @@ def _bars(page, frame, _history, theme):
     if not isinstance(values, list):
         values = [] if values is None else [values]
     maximum = float(page.get("max") or 100.0)
-    draw.bars(theme, values, maximum, ref.split(".")[-1])
+    draw.bars(theme, values, maximum, ref.split(".")[-1],
+              _swept_lanes(ref, values, maximum))
+
+
+def _swept_lanes(ref, values, maximum):
+    """Where each bar of a row should be drawn to, or None to draw them at their readings.
+
+    A lane is a gauge of its own, keyed by its position: sixteen cores are sixteen needles
+    that happen to share a field, and one core going quiet says nothing about the next.
+    """
+    if not ANIMATE or not maximum:
+        return None
+    # Keyed by a tuple and not a formatted string: sixteen lanes a frame is sixteen keys,
+    # and building them cost 1ms of the 4 the whole row of sweeps takes.
+    return [_swept((ref, index), max(0.0, min(1.0, (value or 0.0) / maximum)))
+            for index, value in enumerate(values)]
 
 
 def _graph(page, frame, history, theme):
