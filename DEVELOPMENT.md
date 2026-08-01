@@ -147,6 +147,8 @@ So anything repeated is baked and blitted, and only what changes shape is drawn 
 
 A page changes when a poll lands, once a second, so frames in between draw nothing at all: `badge.default_clear = None` leaves the framebuffer standing. A page that animates adds its kind to `pages.ANIMATED`, which is how the clock's second hand sweeps.
 
+**A gauge can sweep to each reading** instead of stepping to it, which is the `animate` setting and off by default. Every gauge fraction goes through `pages.fraction_of`, so that is where the sweep lives: a firmware `tween` per field, 350ms on `CUBIC_OUT`, started when a reading differs from the one it was heading for and eased from *where the needle is* - from the last target, a second reading landing mid-sweep would jump forward before carrying on. It is time-driven rather than accumulated, so a dropped frame changes nothing and the needle lands exactly on the reading. A page turn calls `sweep_reset()`, a turn not being a change in the machine. Frames come only while something moves: `pages.moving` is set while drawing and the loop reads it, so a sweeping page draws for about 40% of each second rather than all of it. Measured with the setting on: the dial 16 frames over 378ms at 12.9ms each, four gauges 12 frames over 412ms at 18.5, the ring stack 12 over 411 at 17.0 - all inside the buckets they already held. Only the arc moves. The reading steps, because a number redrawn at frame rate is a new string every frame, and on the pages whose values are set under 40pt that means baking a sprite a frame: a sweeping dials page spiked from 17.6 to a 24.0ms p90 when the numbers moved with the arcs.
+
 | Page | Draw |
 | ---- | ---- |
 | CPU dial | 12.4ms |

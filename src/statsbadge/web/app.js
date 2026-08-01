@@ -491,6 +491,13 @@ function renderLook() {
   smooth.checked = config.smooth !== false;
   smooth.onchange = () => { config.smooth = smooth.checked; markDirty(); };
 
+  // Whether a gauge eases to each new reading or steps to it. Off by default: a reading
+  // arrives once a second, and on a field that swings between polls - a throughput, say -
+  // the sweep reads as lag rather than as motion.
+  const animate = $("animate");
+  animate.checked = !!config.animate;
+  animate.onchange = () => { config.animate = animate.checked; markDirty(); };
+
   // The badge's own light sensor, taking the brightness above down to suit a dim room.
   const autobright = $("autobright");
   autobright.checked = !!config.auto_brightness;

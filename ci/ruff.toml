@@ -21,6 +21,7 @@ builtins = [
     "vec2",
     "rect",
     "shape",
+    "tween",
     "screen",
 # image text align / overflow constants (hoisted in badgeware.py)
     "LEFT",

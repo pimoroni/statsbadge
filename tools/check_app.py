@@ -26,7 +26,7 @@ WANTED = (
 # Names the badge injects into builtins from `badgeware`, plus the app's own modules.
 BADGE_GLOBALS = {
     "screen", "display", "badge", "image", "shape", "brush", "color", "font",
-    "vec2", "rect", "mat3", "State", "text", "clamp", "rnd", "frnd",
+    "vec2", "rect", "mat3", "tween", "State", "text", "clamp", "rnd", "frnd",
     "file_exists", "is_dir", "rtc", "run", "launch", "reset", "fatal_error",
     "loop", "HIRES", "LORES", "VSYNC", "LEFT", "CENTER", "RIGHT", "TOP",
     "MIDDLE", "BOTTOM", "CLIP", "ELLIPSES",

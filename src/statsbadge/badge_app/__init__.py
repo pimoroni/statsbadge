@@ -192,6 +192,7 @@ class App:
         if not pages:
             return
         self.page_index = (self.page_index + delta) % len(pages)
+        pages_module.sweep_reset()
         self.dirty = True
 
     # -- polling ------------------------------------------------------------
@@ -336,6 +337,10 @@ class App:
             draw.clear_cache()
         self.apply_backlight()
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
+        animate = bool((self.layout or {}).get("animate", False))
+        if animate != pages_module.ANIMATE:
+            pages_module.ANIMATE = animate
+            pages_module.sweep_reset()
         self.apply_caselights()
         if self.page_index >= len(self.page_list):
             self.page_index = 0
@@ -498,6 +503,10 @@ class App:
         page = self.current_page()
         if page is not None and page.get("kind") in pages_module.ANIMATED:
             # This page moves on its own, so it gets a frame regardless of polling.
+            self.dirty = True
+        if pages_module.moving:
+            # A gauge is part way to its reading. Frames only while that is true, so a
+            # sweeping page costs a third of a second's drawing and not the whole second.
             self.dirty = True
 
     def advance_if_idle(self, now):

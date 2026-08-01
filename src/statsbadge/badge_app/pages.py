@@ -20,6 +20,54 @@ EXTRA = {}
 # only when a poll lands, which is once a second.
 ANIMATED = set()
 
+# -- sweeping gauges --------------------------------------------------------
+
+# Whether a gauge sweeps to each new reading or steps to it, from the layout. The reading
+# itself steps either way: the number is the measurement, and one redrawn at frame rate
+# would bake a sprite a frame.
+ANIMATE = False
+# How long a sweep takes. A reading lands once a second, so this is the fraction of that
+# second the needle is moving for; long enough to read as motion, short enough that the
+# gauge is standing at the measurement most of the time.
+SWEEP_MS = 350
+_sweeps = {}
+# Whether the frame just drawn had a sweep in it, which is how the loop knows to ask for
+# another. Set by `_swept` while drawing and cleared by `render`.
+moving = False
+
+
+def sweep_reset():
+    """Forget where each gauge stood, so the next reading is drawn where it is.
+
+    A page turn is not a change in the machine, and neither is turning the setting on:
+    sweeping from the last page's reading would say something untrue about this one.
+    """
+    _sweeps.clear()
+
+
+def _swept(ref, fraction):
+    """`fraction`, eased from wherever this gauge already stood.
+
+    Keyed on the field alone. One page is drawn at a time and a turn forgets the table, so
+    a gauge only ever meets its own history.
+    """
+    global moving
+    if not ANIMATE or fraction is None:
+        return fraction
+    sweep = _sweeps.get(ref)
+    # Eased from where the needle *is*, not from the reading it was heading for, or a
+    # second reading mid-sweep would jump the needle forward before carrying on.
+    if sweep is None:
+        sweep = _sweeps[ref] = tween(fraction, fraction, SWEEP_MS, tween.CUBIC_OUT).start()
+    elif abs(sweep.to - fraction) > 0.001:
+        sweep = _sweeps[ref] = tween(sweep.now, fraction, SWEEP_MS,
+                                     tween.CUBIC_OUT).start()
+    # A sweep with the same endpoints is how a gauge is seeded, on the first reading and
+    # after a page turn. It has nowhere to go, so it does not earn a frame.
+    if not sweep.done and abs(sweep.to - sweep.from_) > 0.001:
+        moving = True
+    return sweep.now
+
 # Nicer names than the raw field, where the raw field reads badly.
 NAMES = {
     "cpu.pct": "LOAD", "cpu.temp": "TEMP", "cpu.freq": "CLOCK", "cpu.procs": "PROCS",
@@ -105,7 +153,7 @@ def fraction_of(ref, value, page=None, frame=None):
         if top is None:
             return None
     try:
-        return max(0.0, min(1.0, float(value) / top))
+        return _swept(ref, max(0.0, min(1.0, float(value) / top)))
     except (TypeError, ValueError, ZeroDivisionError):
         return None
 
@@ -128,6 +176,8 @@ def scale_note(ref, frame):
 
 def render(page, frame, history, theme, index, total, subtitle=None):
     """Draw one page. Everything before this has already cleared the screen."""
+    global moving
+    moving = False
     draw.background(theme, page.get("title", page.get("id", "")), index, total,
                     subtitle)
     kind = page.get("kind")

@@ -1307,6 +1307,95 @@ def test_a_split_page_takes_the_layout_it_is_given(_h):
 
 
 @check
+def test_a_gauge_can_sweep_to_its_reading(_h):
+    """A reading lands once a second and the gauge may ease to it instead of stepping.
+
+    The needle has to leave from where it *is*: a second reading arriving mid-sweep must
+    carry on from the drawn position, not jump to the one it was heading for. And the frames
+    only come while something is moving, or a sweeping page would redraw all second."""
+    import sys
+
+    config = layout.validate({"animate": True, "pages": layout.DEFAULT_PAGES})
+    assert config["animate"] is True
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["animate"] is False, (
+        "off by default")
+
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="animate"' in (web / "index.html").read_text(), "no control in the UI"
+    assert "config.animate" in (web / "app.js").read_text(), "the control is not bound"
+
+    sys.path.insert(0, install.app_source_dir())
+    import pages
+
+    # A stand-in for the firmware's tween, driven by hand: the easing is picovector's, so
+    # what is worth checking here is which endpoints each sweep is given.
+    class FakeTween:
+        CUBIC_OUT = "cubic_out"
+        made = []
+
+        def __init__(self, start, end, duration, _easing):
+            self.from_, self.to, self.duration = start, end, duration
+            self.progress = 0.0
+            FakeTween.made.append((start, end))
+
+        def start(self):
+            return self
+
+        @property
+        def now(self):
+            return self.from_ + (self.to - self.from_) * self.progress
+
+        @property
+        def done(self):
+            return self.progress >= 1.0
+
+    pages.__dict__["tween"] = FakeTween
+    was = pages.ANIMATE
+    try:
+        pages.ANIMATE = False
+        pages.sweep_reset()
+        assert pages.fraction_of("cpu.pct", 40.0) == 0.4, "stepping when the setting is off"
+        assert not FakeTween.made, "a sweep was started with the setting off"
+
+        pages.ANIMATE = True
+        # The first reading is drawn where it is: there is nowhere to come from.
+        assert pages.fraction_of("cpu.pct", 40.0) == 0.4
+        assert FakeTween.made == [(0.4, 0.4)], FakeTween.made
+        assert not pages.moving, "a gauge with nowhere to go asked for another frame"
+
+        # A new reading sweeps from the last, and asks for frames until it lands.
+        assert pages.fraction_of("cpu.pct", 80.0) == 0.4, "the needle jumped to the reading"
+        assert FakeTween.made[-1] == (0.4, 0.8), FakeTween.made
+        assert pages.moving
+
+        # Interrupted half way: from the drawn position, not from 0.8.
+        pages._sweeps["cpu.pct"].progress = 0.5
+        assert abs(pages.fraction_of("cpu.pct", 20.0) - 0.6) < 1e-9
+        started, heading = FakeTween.made[-1]
+        assert abs(started - 0.6) < 1e-9 and heading == 0.2, FakeTween.made
+
+        # The same reading again is not a new sweep.
+        made = len(FakeTween.made)
+        pages.fraction_of("cpu.pct", 20.0)
+        assert len(FakeTween.made) == made, "an unchanged reading restarted the sweep"
+
+        # And a page turn forgets where everything stood, a turn not being a change in the
+        # machine.
+        pages.sweep_reset()
+        assert pages.fraction_of("cpu.pct", 20.0) == 0.2
+        assert FakeTween.made[-1] == (0.2, 0.2)
+    finally:
+        pages.ANIMATE = was
+        pages.sweep_reset()
+        pages.__dict__.pop("tween", None)
+
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    assert "pages_module.sweep_reset()" in app[app.index("def turn"):], (
+        "a page turn keeps the last page's needle positions")
+    assert "pages_module.moving" in app, "nothing asks for a frame while a gauge is moving"
+
+
+@check
 def test_smooth_graphs_are_a_setting_that_reaches_the_badge(_h):
     """A drawing switch, so it is one setting for every graph rather than a page property."""
     config = layout.validate({"smooth": False, "pages": layout.DEFAULT_PAGES})
