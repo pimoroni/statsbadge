@@ -149,13 +149,14 @@ A page changes when a poll lands, once a second, so frames in between draw nothi
 
 | Page | Draw |
 | ---- | ---- |
-| CPU dial | 16.1ms |
-| Cores, sixteen bars | 23.7ms |
-| Network graph | 29.0ms |
-| Disk grid | 19.2ms |
-| Host, text | 12.7ms |
-| Swiss clock | 15.7ms |
-| page turn, cold caches | 49.4ms |
+| CPU dial | 12.4ms |
+| Cores, sixteen bars | 15.2ms |
+| Network graph | 18.6ms |
+| Disk grid | 16.2ms |
+| Host, text | 10.2ms |
+| Swiss clock | 14.7ms |
+| At a glance, six sparklines | 25.5ms |
+| page turn, cold caches | 39.7ms |
 | nothing changed | 0ms |
 
 `display.update()` blocks on vsync, which rounds a frame up to a whole 90Hz period, so a page has to draw in under 14.7ms for 45fps and under 25.8ms to hold 30. A signed `/v1/stats` round trip is 14ms, worst single step 2.85ms - the step carrying the HMAC.
