@@ -1003,14 +1003,31 @@ def _fit(text, size, room):
     return (cut + "...") if cut else text
 
 
-def toast(theme, message):
-    """A short-lived note over the footer, for a command that was sent."""
+# How long a toast takes to go, and how much of that is left when the fade starts. It holds
+# at full strength while it is being read and then leaves; fading the whole time would make
+# it look like it was never quite there.
+TOAST_FADE_MS = 400
+
+
+def toast(theme, message, fade=1.0):
+    """A short-lived note over the footer, for a command that was sent.
+
+    `fade` is how much of it to draw, 1 solid and 0 gone. The page under it is redrawn on
+    every frame of the fade, so the note thins out over the page rather than over a copy of
+    itself; the label is drawn from the sprite cache either way, `alpha` being a property of
+    the blend and not of the string.
+    """
+    if fade <= 0.0:
+        return
     width = min(look.W - 40, 40 + len(message) * 7)
     x = (look.W - width) // 2
     y = look.H - look.FOOTER_H - 26
+    if fade < 1.0:
+        screen.alpha = int(255 * fade)
     screen.pen = color.rgb(*theme.accent)
     screen.shape(shape.rounded_rectangle(rect(x, y, width, 22), 6))
     blit_label(message, look.SIZE_LABEL, theme.bg, look.W // 2, y + 4, align=1)
+    screen.alpha = 255
 
 
 # -- rings ------------------------------------------------------------------

@@ -119,6 +119,13 @@ LOCAL_PREFIX = "badge."
 BRIGHTNESS_STEPS = (1.0, 0.6, 0.3)
 
 
+# How long the panel takes to reach a new brightness. Short enough to answer a button
+# press, long enough that the step is a change of light rather than a click.
+BACKLIGHT_MS = 300
+_backlight_at = 1.0
+_backlight_to = None
+
+
 def backlight(fraction):
     """Set the display brightness, over the range the panel responds to.
 
@@ -127,6 +134,36 @@ def backlight(fraction):
     """
     fraction = max(0.0, min(1.0, fraction))
     display.backlight(BACKLIGHT_FLOOR + (1.0 - BACKLIGHT_FLOOR) * fraction)
+
+
+def backlight_to(fraction, ease=True):
+    """Head for a brightness, easing there over BACKLIGHT_MS unless told not to.
+
+    A step is the one thing on this badge that is unmissable however small, because the
+    whole panel moves at once: cycling the button or a curtain opening both read as a click
+    where a ramp reads as the light changing. The sensor is already smoothed by
+    LIGHT_FOLLOW, which stops the panel chasing a passing hand; this is about the step
+    itself.
+    """
+    global _backlight_at, _backlight_to
+    fraction = max(0.0, min(1.0, fraction))
+    if not ease or abs(fraction - _backlight_at) < 0.005:
+        _backlight_to = None
+        _backlight_at = fraction
+        backlight(fraction)
+        return
+    _backlight_to = tween(_backlight_at, fraction, BACKLIGHT_MS, tween.QUAD_INOUT).start()
+
+
+def backlight_step():
+    """Move the panel along its ramp, if it is on one. Called every frame."""
+    global _backlight_at, _backlight_to
+    if _backlight_to is None:
+        return
+    _backlight_at = _backlight_to.now
+    backlight(_backlight_at)
+    if _backlight_to.done:
+        _backlight_to = None
 
 
 class App:
@@ -151,6 +188,8 @@ class App:
         self.page_index = 0
         self.status = "starting"
         self.detail = None
+        # Whether the panel has been set once, so the first level is taken and not ramped to.
+        self._lit = False
         self.toast_until = 0
         self.toast_text = None
         self.dirty = True
@@ -335,7 +374,10 @@ class App:
         if theme.name != self.theme.name or theme is not self.theme:
             self.theme = theme
             draw.clear_cache()
-        self.apply_backlight()
+        # The first layout to land is the badge coming up, so it takes its brightness
+        # rather than ramping to it.
+        self.apply_backlight(self._lit)
+        self._lit = True
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
         animate = bool((self.layout or {}).get("animate", False))
         if animate != pages_module.ANIMATE:
@@ -345,20 +387,23 @@ class App:
         if self.page_index >= len(self.page_list):
             self.page_index = 0
 
-    def apply_backlight(self):
+    def apply_backlight(self, ease=True):
         """The configured brightness, scaled by the room if the setting says so.
 
         The scale is a floor plus what the sensor reads, so `brightness` stays the ceiling
         the user asked for and ambient only ever takes some of it away. The button that
         cycles brightness overrides the configured level until the next press, since
         someone reaching for it wants this badge dimmer now and not a config edit.
+
+        Eased, except at startup: the first level is what the badge should have come up at,
+        and ramping to it from full brightness is a flash in a dark room.
         """
         wanted = self.dimmed
         if wanted is None:
             wanted = float((self.layout or {}).get("brightness", 0.8))
         if (self.layout or {}).get("auto_brightness") and self.ambient is not None:
             wanted *= look.LIGHT_FLOOR + (1.0 - look.LIGHT_FLOOR) * self.ambient
-        backlight(wanted)
+        backlight_to(wanted, ease)
 
     def read_light(self):
         """Follow the room, slowly. Returns True when the panel wants setting again.
@@ -481,6 +526,17 @@ class App:
         self.toast_until = time.ticks_add(time.ticks_ms(), 1200)
         self.dirty = True
 
+    def toast_fade(self):
+        """How solid the toast should be drawn: 1 while it is being read, 0 once it is gone.
+
+        Time, not a frame count, so the note leaves at the same speed whatever the page it
+        is sitting on costs to redraw.
+        """
+        left = time.ticks_diff(self.toast_until, time.ticks_ms())
+        if left >= draw.TOAST_FADE_MS:
+            return 1.0
+        return max(0.0, left / draw.TOAST_FADE_MS)
+
     def tick(self):
         """Notice the things that change with time rather than with an event.
 
@@ -488,9 +544,15 @@ class App:
         gone away, because nothing would mark it for redraw.
         """
         now = time.ticks_ms()
-        if self.toast_text and time.ticks_diff(self.toast_until, now) <= 0:
-            self.toast_text = None
-            self.dirty = True
+        if self.toast_text:
+            left = time.ticks_diff(self.toast_until, now)
+            if left <= 0:
+                self.toast_text = None
+                self.dirty = True
+            elif left < draw.TOAST_FADE_MS:
+                # Frames while it thins out and not before: the page under the note has to
+                # be redrawn for it to fade over anything, and it holds for most of its life.
+                self.dirty = True
         stale = time.ticks_diff(now, self._last_ok) > 5000
         if stale != self._was_stale:
             self._was_stale = stale
@@ -557,7 +619,7 @@ class App:
         pages_module.render(page, self.frame, self.history, theme,
                             self.page_index, len(self.page_list), subtitle)
         if self.toast_text:
-            draw.toast(theme, self.toast_text)
+            draw.toast(theme, self.toast_text, self.toast_fade())
 
     # -- exit ---------------------------------------------------------------
 
@@ -639,6 +701,9 @@ def main():
             app.apply_layout()
         app.poll()
         app.tick()
+        # The panel's own ramp, which owes nothing to drawing: a frame that redraws
+        # nothing still moves the brightness along.
+        backlight_step()
 
         # A stats page changes when a poll lands, once a second. Everything between
         # is a frame that would redraw the same picture, so it does not draw at all:
