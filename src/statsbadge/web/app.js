@@ -67,6 +67,17 @@ function availableRefs() {
   return refs;
 }
 
+/** Numbers first, then everything else, each of them once.
+ *
+ * A slot that can take any reading still wants the numbers at the top, since that is what
+ * nearly every page is made of. Concatenating the two lists was the obvious way to say
+ * that and the wrong one: the numeric refs are a subset of all of them, so every number
+ * appeared twice, once qualified by its group and once again below it.
+ */
+function preferredRefs() {
+  return [...new Set(numericRefs().concat(availableRefs()))];
+}
+
 /** Refs that make sense in a gauge: a number, not a name or a list. */
 function numericRefs() {
   return availableRefs().filter((ref) => {
@@ -99,7 +110,9 @@ function refSelect(value, refs, onChange) {
   const groupName = document.createElement("span");
   groupName.className = "group";
   const select = document.createElement("select");
-  const options = refs.slice();
+  // Deduplicated here as well as by the caller: one option per reading is the whole
+  // point of a picker, and a repeat is impossible to tell apart once it is on screen.
+  const options = [...new Set(refs)];
   if (value && !options.includes(value)) options.unshift(value);
 
   const byGroup = new Map();
@@ -229,7 +242,7 @@ function pageCard(page, index) {
     current.forEach((ref, slot) => {
       const row = document.createElement("div");
       row.className = "fieldrow";
-      row.appendChild(refSelect(ref, numericRefs().concat(availableRefs()),
+      row.appendChild(refSelect(ref, preferredRefs(),
                                 (value) => { current[slot] = value; }));
       const drop = document.createElement("button");
       drop.className = "small";

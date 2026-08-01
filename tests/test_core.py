@@ -1172,6 +1172,22 @@ def test_the_build_script_defaults_where_the_installer_looks(_h):
             assert "src/statsbadge/badge_app/mpy" in text, workflow
 
 
+@check
+def test_the_field_picker_offers_each_reading_once(_h):
+    """numericRefs is a subset of availableRefs, so concatenating them listed every
+    number twice - once qualified by its group and once again below it."""
+    ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
+          / "app.js").read_text()
+    # Joining the two lists is fine, so long as the result is deduplicated where it is
+    # joined. Checked per line so this cannot pass by matching the fix itself.
+    for line in ui.splitlines():
+        if "concat(availableRefs())" in line:
+            assert "new Set(" in line, f"undeduplicated: {line.strip()}"
+    assert "function preferredRefs()" in ui
+    # And refSelect deduplicates whatever it is handed, so no caller can bring it back.
+    assert "new Set(refs)" in ui
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)
