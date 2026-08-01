@@ -123,6 +123,11 @@ BRIGHTNESS_STEPS = (1.0, 0.6, 0.3)
 # How long a page takes to slide on, when the layout asks for that. Short: it is a quarter
 # of a second between pressing for the next page and being able to read it.
 SLIDE_MS = 220
+# How long a press waits for another before the slide starts. Five quick presses should be
+# one slide onto the page they landed on, not five slides fighting over the screen - and the
+# page being slid to is only known once they stop. Short enough that a single press does not
+# feel held up.
+SLIDE_WAIT_MS = 120
 
 # How long the panel takes to reach a new brightness. Short enough to answer a button
 # press, long enough that the step is a change of light rather than a click.
@@ -205,6 +210,9 @@ class App:
         self.leaving = None
         self._arriving = None
         self._kept = None
+        # A turn waiting for the presses to stop: when to start moving, and which way.
+        self._slide_at = 0
+        self._slide_from = False
         self.toast_until = 0
         self.toast_text = None
         self.dirty = True
@@ -249,8 +257,35 @@ class App:
         pages_module.sweep_reset()
         style = (self.layout or {}).get("slide") or "off"
         if style != "off" and len(pages) > 1:
-            self.start_slide(style, delta < 0)
+            # The title and the pip go now, so the badge answers the press immediately, and
+            # the body follows once the presses stop. Until then it is left standing: it is
+            # what the slide has to move away from, and drawing the new page there would
+            # give the movement nothing to do.
+            page = self.current_page()
+            if page is not None:
+                draw.furniture(self.theme, page.get("title", page.get("id", "")),
+                               self.page_index, len(pages), self.subtitle())
+            self._slide_at = time.ticks_add(time.ticks_ms(), SLIDE_WAIT_MS)
+            self._slide_from = delta < 0
         self.dirty = True
+
+    def slide_due(self, now):
+        """Start a waiting page turn once the presses have stopped.
+
+        One slide a burst: while the wait keeps being pushed out the body stays where it is,
+        so the movement that eventually runs goes from the page the reader was on to the one
+        they landed on, and never two at once - which is what was drawing over itself.
+        """
+        if not self._slide_at or self.sliding is not None:
+            return
+        if time.ticks_diff(now, self._slide_at) < 0:
+            return
+        self._slide_at = 0
+        style = (self.layout or {}).get("slide") or "off"
+        if style == "off":
+            self.dirty = True
+            return
+        self.start_slide(style, self._slide_from)
 
     def start_slide(self, style, back):
         """Set a page turn moving: the page arriving drawn once, the one leaving kept.
@@ -271,14 +306,6 @@ class App:
         if self._arriving is None:
             self._arriving = image(look.W, look.H)
         self.draw_page_into(self._arriving, page)
-        # The header and footer belong to the page you are on, not to the movement: the
-        # subtitle is the same host either way, and a pip row sliding past carries a mark for
-        # a page nobody is going to. So they change now, and only the body travels.
-        self._arriving.font = draw.FONT
-        screen.blit(self._arriving.window(rect(0, 0, look.W, look.HEADER_H)), vec2(0, 0))
-        screen.blit(self._arriving.window(rect(0, look.H - look.FOOTER_H, look.W,
-                                              look.FOOTER_H)),
-                    vec2(0, look.H - look.FOOTER_H))
         self.leaving = None
         if style == "deck":
             # Whatever was on the screen, toast and all: that is what was there to look at.
@@ -639,6 +666,7 @@ class App:
             self._was_stale = stale
             self.dirty = True
         self.advance_if_idle(now)
+        self.slide_due(now)
         if time.ticks_diff(now, self._light_at) > LIGHT_EVERY_MS:
             self._light_at = now
             if self.read_light():
@@ -713,7 +741,12 @@ class App:
             return
 
         subtitle = self.subtitle()
-        if self.sliding is None:
+        if self._slide_at:
+            # A turn is waiting for the presses to stop. The title and the pip are already
+            # the page being gone to; the body stays put, because that is what the slide has
+            # to move away from.
+            pass
+        elif self.sliding is None:
             pages_module.render(page, self.frame, self.history, theme,
                                 self.page_index, len(self.page_list), subtitle)
         else:

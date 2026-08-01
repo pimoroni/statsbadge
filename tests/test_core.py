@@ -1456,6 +1456,13 @@ def test_a_page_can_slide_on_like_a_card(_h):
     turn = app[app.index("def turn"):]
     turn = turn[:turn.index("\n    def ", 1)]
     assert '.get("slide")' in turn and "delta < 0" in turn
+    # A press moves the title and the pip at once and schedules the movement, so a burst is
+    # one slide onto the page it landed on rather than several fighting over the screen.
+    assert "draw.furniture(" in turn, "the press does not answer until the body catches up"
+    assert "SLIDE_WAIT_MS" in turn
+    due = app[app.index("def slide_due"):]
+    due = due[:due.index("\n    def ", 1)]
+    assert "self.sliding is not None" in due, "a second slide can start over a running one"
     start = app[app.index("def start_slide"):]
     assert 'style == "deck"' in start[:start.index("\n    def ", 1)]
 

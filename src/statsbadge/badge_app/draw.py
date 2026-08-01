@@ -443,6 +443,16 @@ def background(theme, title, index, total, subtitle=None):
     """
     screen.pen = color.rgb(*theme.bg)
     screen.rectangle(rect(0, look.HEADER_H, look.W, look.BODY_H))
+    furniture(theme, title, index, total, subtitle)
+
+
+def furniture(theme, title, index, total, subtitle=None):
+    """The header and footer alone, leaving the body as it stands.
+
+    So a page turn can say where it is going before the body gets there: the title and the
+    pip are the page you are on, and during a slide - or while a burst of presses settles -
+    they should already be the page you pressed for.
+    """
     screen.pen = color.rgb(*theme.panel)
     screen.rectangle(rect(0, 0, look.W, look.HEADER_H))
     screen.rectangle(rect(0, look.H - look.FOOTER_H, look.W, look.FOOTER_H))
