@@ -1327,6 +1327,60 @@ def test_a_split_page_takes_the_layout_it_is_given(_h):
 
 
 @check
+def test_smooth_graphs_are_a_setting_that_reaches_the_badge(_h):
+    """A drawing switch, so it is one setting for every graph rather than a page property."""
+    config = layout.validate({"smooth": False, "pages": layout.DEFAULT_PAGES})
+    assert config["smooth"] is False
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["smooth"] is True, "on by default"
+    # Anything truthy, since the UI sends a checkbox and a command line sends a string.
+    assert layout.validate({"smooth": "yes", "pages": layout.DEFAULT_PAGES})["smooth"] is True
+
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="smooth"' in (web / "index.html").read_text(), "no control in the UI"
+    assert "config.smooth" in (web / "app.js").read_text(), "the control is not bound"
+    # And the badge applies it where it applies the rest of the layout.
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    applied = app[app.index("def apply_layout"):]
+    assert "draw.SMOOTH" in applied[:applied.index("\n    def ", 1)]
+
+
+@check
+def test_a_smoothed_graph_still_reads_as_the_data(_h):
+    """A curve through the samples, not near them: it is a graph of a machine, so a peak
+    drawn where there was none, or short of the one there was, is a lie about the machine."""
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+
+    values = [0.2, 0.9, 0.3, 0.31, 0.8, 0.1, 0.5]
+    dense = draw.curve(values, steps=4)
+    assert len(dense) == (len(values) - 1) * 4 + 1, len(dense)
+    # Every sample is still on the curve, at the position it was in.
+    for index, value in enumerate(values):
+        assert abs(dense[index * 4] - value) < 1e-9, (index, dense[index * 4], value)
+    # And a spline's overshoot is held to the range of the data, or an area fill would run
+    # under its own baseline where the reading touched zero.
+    assert min(dense) >= min(values) and max(dense) <= max(values), (
+        min(dense), max(dense))
+
+    # Fewer than three points cannot be interpolated, and the switch is honoured.
+    assert draw.curve([0.5, 0.6], steps=4) == [0.5, 0.6]
+    draw.SMOOTH = False
+    try:
+        assert draw.curve(values, steps=4) == values
+    finally:
+        draw.SMOOTH = True
+
+    # The weights are worked out once: evaluating the polynomial per point cost 265us a
+    # point on the badge, which is 50ms for one series.
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    body = source[source.index("def curve("):]
+    body = body[:body.index("\ndef ", 1)]
+    assert "_basis(steps)" in body, "the weights are not taken from the table"
+
+
+@check
 def test_a_symbol_centres_on_the_words_beside_it(_h):
     """An icon and a string on one baseline do not line up: the icon's box stands a fifth
     taller than a capital and its ink sits in the middle of that box, so the symbol floats.

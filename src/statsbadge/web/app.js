@@ -494,6 +494,12 @@ function renderLook() {
   bindRange("brightness", "brightness", (v) => `${v}%`, 100);
   bindRange("points", "graph_points", (v) => `${v}`);
 
+  // Whether a graph curves through its samples or joins them with straight lines. One
+  // switch for every graph, since it is a drawing choice and not a property of a page.
+  const smooth = $("smooth");
+  smooth.checked = config.smooth !== false;
+  smooth.onchange = () => { config.smooth = smooth.checked; markDirty(); };
+
   // Off, the theme's own level, or a reading for the lights to follow. The stored value
   // is false, true, or a field ref, so the option values carry it directly.
   const caselights = $("caselights");

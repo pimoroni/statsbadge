@@ -308,6 +308,7 @@ class App:
             self.theme = theme
             draw.clear_cache()
         backlight(float((self.layout or {}).get("brightness", 0.8)))
+        draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
         self.apply_caselights()
         if self.page_index >= len(self.page_list):
             self.page_index = 0

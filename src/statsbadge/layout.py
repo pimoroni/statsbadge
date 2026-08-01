@@ -64,6 +64,7 @@ DEFAULT_CONFIG = {
     "brightness": 0.8,
     "caselights": True,
     "graph_points": 48,
+    "smooth": True,
     "pages": DEFAULT_PAGES,
     "buttons": {"a": None, "b": None, "c": None},
     # Per-extension settings, keyed by extension name. Host-side: the badge never sees
@@ -164,6 +165,8 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     caselights = incoming.get("caselights", out["caselights"])
     out["caselights"] = caselights if _is_ref(caselights) else bool(caselights)
     out["graph_points"] = max(8, min(160, int(incoming.get("graph_points", 48))))
+    # Whether a graph is a curve through its samples or a polyline between them.
+    out["smooth"] = bool(incoming.get("smooth", True))
 
     pages = incoming.get("pages")
     if pages is None:

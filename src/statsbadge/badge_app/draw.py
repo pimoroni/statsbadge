@@ -595,6 +595,82 @@ def bars(theme, values, maximum=100.0, field="pct"):
                    look.W - look.PAD, y - 1, align=2)
 
 
+# Whether a series is drawn as a curve through its samples or as a polyline between them.
+# Set from the layout, so it is one switch for every graph on the badge.
+SMOOTH = True
+# Points per span between two samples. Four puts a segment about a pixel across on a plot of
+# 48 samples in 250, which is where the corners stop reading.
+CURVE_STEPS = 4
+_weights = {}
+
+
+def _basis(steps):
+    """The Catmull-Rom weights for each fraction of a span, worked out once.
+
+    The four weights depend only on t, so a curve of any length reuses `steps` sets of them
+    and each output point costs four multiplies an axis. Evaluating the polynomial per point
+    instead cost 265us a point on this board, which is 50ms for one series.
+    """
+    table = _weights.get(steps)
+    if table is None:
+        table = []
+        for step in range(steps):
+            t = step / steps
+            t2 = t * t
+            t3 = t2 * t
+            table.append((0.5 * (-t3 + 2.0 * t2 - t),
+                          0.5 * (3.0 * t3 - 5.0 * t2 + 2.0),
+                          0.5 * (-3.0 * t3 + 4.0 * t2 + t),
+                          0.5 * (t3 - t2)))
+        table = tuple(table)
+        _weights[steps] = table
+    return table
+
+
+def curve_steps(width, count):
+    """How finely to subdivide `count` samples across `width` pixels.
+
+    A segment shorter than a pixel buys nothing and costs the same as one that shows, so a
+    narrow plot is subdivided less: a sparkline is 180px across where a graph is 250.
+    """
+    if count < 2:
+        return 0
+    return max(2, min(CURVE_STEPS, int(width / (count - 1))))
+
+
+def curve(values, steps=CURVE_STEPS):
+    """`values` resampled to a Catmull-Rom curve through them, evenly spaced as they were.
+
+    A graph is a polyline with a corner at every sample, and the corners are what reads as
+    jagged. Catmull-Rom passes *through* each sample rather than near it, so the shape is
+    smoothed without the reading moving: the peak drawn is still the peak measured.
+
+    Only the values are interpolated, the samples being evenly spaced along the axis - so a
+    caller lays the output out the same way it laid out the input, over one more point per
+    step. Returned as it came when there is nothing to interpolate or SMOOTH is off.
+
+    A spline overshoots where the data turns sharply, so the output is held within the range
+    of the input: inside that the bulge is what makes a curve read as one, but past the
+    lowest sample an area fill would run under its own baseline.
+    """
+    if not SMOOTH or steps < 2 or len(values) < 3:
+        return values
+    low, high = min(values), max(values)
+    table = _basis(steps)
+    last = len(values) - 1
+    out = []
+    for index in range(last):
+        a = values[index - 1] if index else values[0]
+        b = values[index]
+        c = values[index + 1]
+        d = values[index + 2] if index + 2 <= last else values[last]
+        for w0, w1, w2, w3 in table:
+            value = w0 * a + w1 * b + w2 * c + w3 * d
+            out.append(low if value < low else (high if value > high else value))
+    out.append(values[last])
+    return out
+
+
 def graph(theme, series, labels, maximum=None):
     """One or two series over time, as filled areas.
 
@@ -625,11 +701,11 @@ def graph(theme, series, labels, maximum=None):
         if not points or len(points) < 2:
             continue
         rgb = _series_colour(theme, index)
-        step = width / float(len(points) - 1)
-        contour = []
-        for i, value in enumerate(points):
-            fraction = max(0.0, min(1.0, (value or 0.0) / peak))
-            contour.append(vec2(left + i * step, top + height - height * fraction))
+        plot = curve([max(0.0, min(1.0, (value or 0.0) / peak)) for value in points],
+                     curve_steps(width, len(points)))
+        step = width / float(len(plot) - 1)
+        contour = [vec2(left + i * step, top + height - height * fraction)
+                   for i, fraction in enumerate(plot)]
         contour.append(vec2(left + width, top + height))
         contour.append(vec2(left, top + height))
         area = shape.custom(contour)
@@ -841,11 +917,11 @@ def sparklines(theme, entries):
         screen.pen = color.rgb(*theme.grid)
         screen.hspan(plot_x, top + plot_h + 3, plot_w)
         if points and len(points) > 1 and peak:
-            step = plot_w / float(len(points) - 1)
-            contour = []
-            for i, value in enumerate(points):
-                fraction = max(0.0, min(1.0, (value or 0.0) / peak))
-                contour.append(vec2(plot_x + i * step, top + plot_h - plot_h * fraction))
+            plot = curve([max(0.0, min(1.0, (value or 0.0) / peak)) for value in points],
+                         curve_steps(plot_w, len(points)))
+            step = plot_w / float(len(plot) - 1)
+            contour = [vec2(plot_x + i * step, top + plot_h - plot_h * fraction)
+                       for i, fraction in enumerate(plot)]
             contour.append(vec2(plot_x + plot_w, top + plot_h + 3))
             contour.append(vec2(plot_x, top + plot_h + 3))
             screen.pen = color.rgb(*theme.accent)
@@ -946,11 +1022,11 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction):
     screen.pen = color.rgb(*theme.grid)
     screen.hspan(left, top + height, width)
     if points and len(points) > 1 and peak:
-        step = width / float(len(points) - 1)
-        contour = []
-        for i, value in enumerate(points):
-            part = max(0.0, min(1.0, (value or 0.0) / peak))
-            contour.append(vec2(left + i * step, top + height - height * part))
+        plot = curve([max(0.0, min(1.0, (value or 0.0) / peak)) for value in points],
+                     curve_steps(width, len(points)))
+        step = width / float(len(plot) - 1)
+        contour = [vec2(left + i * step, top + height - height * part)
+                   for i, part in enumerate(plot)]
         contour.append(vec2(left + width, top + height))
         contour.append(vec2(left, top + height))
         screen.pen = color.rgb(*theme.accent)
