@@ -260,8 +260,11 @@ def _digital(clock, weather, label, theme):
     colon = draw.label(":", size, theme.accent, draw.DIGITS)
     total = digits_left.width + colon.width + digits_right.width + gap * 2
     x = (look.W - total) // 2
-    # The sprite's baseline sits `size` from its top, so this lifts the ink to digits_top.
-    y = digits_top - int(size * (1.0 - draw.CAP))
+    # Centred in the room, not sat at the top of it: the width cap leaves the digits shorter
+    # than the height allows, and that slack belongs on both sides of them. The sprite's
+    # baseline sits `size` from its own top, which is what the second term takes off.
+    ink = int(size * draw.CAP)
+    y = digits_top + (room - ink) // 2 - (size - ink)
     screen.blit(digits_left, vec2(int(x), int(y)))
     screen.blit(colon, vec2(int(x + digits_left.width + gap), int(y)))
     screen.blit(digits_right,
