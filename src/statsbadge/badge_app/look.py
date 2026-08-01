@@ -65,14 +65,6 @@ def readout_rows(count, height=READOUT_H):
 FONT_FILE = "fonts/lexend-regular.af"
 FONT_NAME = "lexend"
 
-# The same face, digits only, packed at a finer grid for text drawn large: a point is a
-# signed byte, so at 93pt one unit of the ordinary font is 0.8px and the snap shows as a
-# wobble along every curve. 122 units to a capital is as tall as the format holds. Digits,
-# the colon, a full stop, a comma, plus, minus, a space and the degree sign - a string with
-# a letter in it wants the text font. Built by tools/make_text_font.py --cap 122.
-DIGITS_FILE = "fonts/lexend-digits.af"
-DIGITS_CAP = 122
-
 # Only if the app's own font did not arrive - an install that predates it, or a partial
 # copy. Text is the one thing the app cannot draw a page without, so it borrows rather than
 # gives up.
@@ -84,8 +76,8 @@ FALLBACK_FONT_PATH = "/system/assets/fonts/MonaSans-Medium.af"
 ICON_FILE = "icons.af"
 APP_DIR = "/system/apps/stats"
 
-# Sizes are point sizes for the .af font. A capital stands 0.68 of size above the
-# baseline, and text(x, y) puts the baseline at y + size.
+# Sizes are point sizes for the .af font: the size is what the font's em is scaled to, so a
+# capital stands draw.CAP of it, and text(x, y) puts the baseline at y + size.
 SIZE_TITLE = 19
 SIZE_HUGE = 44
 SIZE_BIG = 26

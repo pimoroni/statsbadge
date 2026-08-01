@@ -1331,25 +1331,29 @@ def test_a_symbol_centres_on_the_words_beside_it(_h):
     """An icon and a string on one baseline do not line up: the icon's box stands a fifth
     taller than a capital and its ink sits in the middle of that box, so the symbol floats.
     """
-    import struct
     import sys
 
     sys.path.insert(0, install.app_source_dir())
+    sys.path.insert(0, str(pathlib.Path("tools")))
     import draw
+    import read_af
 
     # The placement holds only while an icon's ink is centred in a box sat on the baseline,
-    # so that is read out of the fonts rather than assumed.
+    # so that is read out of the fonts rather than assumed. Through the tool, so a font
+    # repacked wide is read as one instead of misparsed as narrow.
     fonts = (pathlib.Path(install.app_source_dir()) / "icons.af",
              pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge"
                           "/icons.af"))
     for path in fonts:
-        data = path.read_bytes()
-        for i in range(struct.unpack(">H", data[6:8])[0]):
-            _cp, _bx, by, _bw, bh, _adv, _nc = struct.unpack(
-                ">HbbBBBB", data[12 + i * 8:20 + i * 8])
-            assert by >= 0 and by + bh <= 100, f"{path.name} glyph {i} is not in its box"
-            assert abs(by - (100 - bh) / 2.0) <= 1, (
-                f"{path.name} glyph {i} is not centred in its box")
+        font = read_af.read(str(path))
+        box = draw.ICON_BOX * font["units_per_em"]
+        for glyph in font["glyphs"]:
+            if not glyph["contours"]:
+                continue
+            assert -1 <= glyph["bbox_y"] and glyph["bbox_y"] + glyph["bbox_h"] <= box + 1, (
+                path.name, glyph, box)
+            assert abs(glyph["bbox_y"] - (box - glyph["bbox_h"]) / 2.0) <= 1, (
+                f"{path.name} {chr(glyph['codepoint'])!r} is not centred in its box")
 
     text_y, text_size, icon_size = 100, 26, 32
     icon_y = draw.icon_baseline(text_y, text_size, icon_size)
@@ -1358,6 +1362,33 @@ def test_a_symbol_centres_on_the_words_beside_it(_h):
     assert abs(cap_middle - ink_middle) <= 1, (cap_middle, ink_middle)
     # Which is lower than a shared baseline puts it, that being the bug.
     assert icon_y > text_y + text_size - icon_size
+
+
+@check
+def test_the_shipped_fonts_are_packed_as_the_metrics_assume(_h):
+    """draw.CAP and draw.ICON_BOX are fractions of the size a string is drawn at, and hold
+    only while the fonts keep the em those numbers came from. A wide font is the same ratios
+    at a finer grid, so nothing here cares which a font is - but one repacked to different
+    proportions would move every symbol and mis-size every big number."""
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    sys.path.insert(0, str(pathlib.Path("tools")))
+    import draw
+    import read_af
+
+    text = read_af.read(str(pathlib.Path(install.app_source_dir())
+                            / "fonts" / "lexend-regular.af"))
+    cap = next(g for g in text["glyphs"] if g["codepoint"] == ord("H"))
+    assert abs(cap["bbox_h"] / text["units_per_em"] - draw.CAP) < 0.01, (
+        cap["bbox_h"], text["units_per_em"], draw.CAP)
+
+    # The LCD face's digits stand where a capital does, or the clock sizes one of its faces
+    # by numbers that do not describe it.
+    lcd = read_af.read("extensions/statsbadge-clock/src/statsbadge_clock/badge/lcd.af")
+    eight = next(g for g in lcd["glyphs"] if g["codepoint"] == ord("8"))
+    assert abs(eight["bbox_h"] / lcd["units_per_em"] - draw.CAP) < 0.01, (
+        eight["bbox_h"], lcd["units_per_em"], draw.CAP)
 
 
 @check

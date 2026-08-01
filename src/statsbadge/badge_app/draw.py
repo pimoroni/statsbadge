@@ -31,15 +31,7 @@ _bands = {}
 # collide, and one of them would be drawn in the wrong font.
 TEXT = "text"
 ICONS = "icons"
-DIGITS = "digits"
 _fonts = {}
-
-# Units a capital stands in a font built the ordinary way, which is what a size means:
-# ../BADGEWARE.md, and tools/make_text_font.py's --cap. A font built taller is finer, a
-# point being a signed byte either way, and _font_cap is what lets a caller go on asking
-# for the size it wants whichever one it is drawing with.
-CAP_UNITS = 81
-_font_cap = {}
 
 
 def prepare():
@@ -56,21 +48,10 @@ def prepare():
     _fonts[look.FONT_NAME] = FONT
     screen.font = FONT
     add_font(ICONS, look.ICON_FILE)
-    # Text drawn large wobbles: a point is a signed byte, so at 93pt one unit is 0.8px and
-    # every vertex on a curve is snapped that far. The digits are also packed at a finer
-    # grid, for the pages that draw a number the height of the band. An install predating
-    # the file falls back to the text font, which is the same shapes with the wobble.
-    if not add_font(DIGITS, look.DIGITS_FILE, cap=look.DIGITS_CAP):
-        _fonts[DIGITS] = FONT
-        _font_cap[DIGITS] = CAP_UNITS
 
 
-def add_font(name, *paths, cap=CAP_UNITS):
+def add_font(name, *paths):
     """Register a font under a name, from the first of `paths` that loads.
-
-    `cap` is the units a capital stands in that file, 81 for one built the ordinary way.
-    Sizes are quoted in those terms whatever the font, so a caller asks for the size it
-    wants and `label` converts: a font packed at a finer grid is a drop-in replacement.
 
     A bare filename is looked for in the installed app directory and then beside this
     module. That order matters under `mpremote mount`: the mounted copy is served as text,
@@ -94,15 +75,8 @@ def add_font(name, *paths, cap=CAP_UNITS):
             except Exception as exc:  # noqa: BLE001  try the next one
                 print(f"draw: could not load {candidate}: {exc}")
                 continue
-            _font_cap[name] = cap
             return True
     return False
-
-
-def _drawn_size(name, size):
-    """The size to ask a font for, so `size` means the same height in every one of them."""
-    cap = _font_cap.get(name, CAP_UNITS)
-    return size if cap == CAP_UNITS else size * CAP_UNITS / cap
 
 
 def _candidates(path):
@@ -168,8 +142,7 @@ def label(text_value, size, rgb, name=TEXT):
     was = screen.font
     screen.font = face
     try:
-        drawn = _drawn_size(name, size)
-        width, height = screen.measure_text(text_value, font_size=drawn)
+        width, height = screen.measure_text(text_value, font_size=size)
         width = max(1, int(width + 2))
         height = max(1, int(size * 1.35))
         sprite = image(width, height)
@@ -178,9 +151,7 @@ def label(text_value, size, rgb, name=TEXT):
         sprite.rectangle(rect(0, 0, width, height))
         sprite.antialias = image.X4
         sprite.pen = color.rgb(*rgb)
-        # The baseline lands `size` from the top whatever the font's own grid, which is what
-        # keeps every placement rule here in one set of terms.
-        sprite.text(text_value, vec2(0, size - drawn), drawn)
+        sprite.text(text_value, vec2(0, 0), size)
     finally:
         screen.font = was
     global _label_bytes
@@ -242,18 +213,21 @@ def text_width(text_value, size, name=TEXT):
     was = screen.font
     screen.font = face
     try:
-        width, _ = screen.measure_text(text_value, font_size=_drawn_size(name, size))
+        width, _ = screen.measure_text(text_value, font_size=size)
     finally:
         screen.font = was
     return int(width) + 2
 
 
-# Type metrics, as fractions of the size a string is drawn at. A capital stands CAP above
-# the baseline (../BADGEWARE.md), and tools/make_icon_font.py fits every icon to a box of
-# 100 units sat on the baseline, where a capital is 81 - so an icon's box is a fifth taller
-# than a capital and its ink is centred half way up it.
-CAP = 0.68
-ICON_BOX = CAP * 100.0 / 81.0
+# What the app's fonts are built to: a capital stands 81 units of a 128 unit em, and
+# tools/make_icon_font.py fits an icon to a box of 100 of the same, sat on the baseline. A
+# wide font keeps both ratios, its em being the same em at a finer grid, and the decoder
+# scales whichever em to the size asked for - so these are fractions of any size, in any of
+# the app's fonts. An icon's box is a quarter taller than a capital, with its ink centred
+# half way up it.
+CAP_UNITS, ICON_UNITS, EM_UNITS = 81.0, 100.0, 128.0
+CAP = CAP_UNITS / EM_UNITS
+ICON_BOX = ICON_UNITS / EM_UNITS
 
 
 def icon_baseline(text_y, text_size, icon_size):

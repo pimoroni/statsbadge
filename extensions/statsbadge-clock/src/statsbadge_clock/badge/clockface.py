@@ -32,12 +32,11 @@ WEATHER_FONT = "weather"
 ICON_SIZE = 32
 
 # Seven-segment digits, shipped beside this module the same way. DSEG7 Classic Bold, under
-# the SIL Open Font License, packed by tools/make_text_font.py --cap 122 --cap-from 8: there
-# is no H in a face that only draws numbers. A digit stands the full 122, so it fills
-# draw.CAP of whatever size it is asked for, like a capital does.
+# the SIL Open Font License, packed by tools/make_text_font.py --wide --cap-from 8: there is
+# no H in a face that only draws numbers to measure a cap height from. Its digits stand where
+# a capital does, so it is a drop-in for the app's own font at the same size.
 LCD_FONT = "lcd"
 LCD_FILE = "lcd.af"
-LCD_CAP = 122
 
 # The app's own split layout: where its single gauge sits and how big it may be, so paging
 # from a dial or a ring stack to a clock does not move the thing being looked at.
@@ -93,8 +92,8 @@ DEFAULT_FACE = "railway"
 # whether the unlit segments show behind the lit ones. `ghost` is what an unlit pair looks
 # like, which for seven segments is a pair of eights.
 DIGITAL = {
-    "digital": {"label": "Digital", "font": None, "ghost": None},
-    "lcd": {"label": "Digital LCD", "font": LCD_FONT, "ghost": "88"},
+    "digital": {"label": "Digital", "font": draw.TEXT, "ghost": None, "colon": "dots"},
+    "lcd": {"label": "Digital LCD", "font": LCD_FONT, "ghost": "88", "colon": "glyph"},
 }
 
 # Baked dials and hand geometry, per face: a page each side of the list can ask for a
@@ -237,28 +236,36 @@ def _register_font():
 # time measures the same.
 WIDEST_TIME = "44:44"
 
+# The dot colon, as fractions of the digit height: the column it takes, how far up the digits
+# each dot sits, and its radius. Taken off the seven-segment face's own colon, which is where
+# a display puts one and which reads better on a clock than a typographic colon does.
+COLON_W, COLON_AT, COLON_DOT = 0.20, 0.30, 0.062
+
 
 def _digits_font(spec):
     """The font a digital face sets its numbers in, loading it on first use.
 
     A face with one of its own gets it from beside this module, and an install predating the
-    file falls back to the app's digits: the same numbers, without the segments.
+    file falls back to the app's text font: the same numbers, without the segments.
     """
     wanted = spec["font"]
-    if not wanted:
-        return draw.DIGITS
+    if wanted == draw.TEXT:
+        return wanted
     if not draw.has_font(wanted):
         here = globals().get("__file__") or ""
         beside = here.rsplit("/", 1)[0] + "/" + LCD_FILE if "/" in here else LCD_FILE
-        draw.add_font(wanted, look.APP_DIR + "/ext/" + LCD_FILE, beside, cap=LCD_CAP)
-    return wanted if draw.has_font(wanted) else draw.DIGITS
+        draw.add_font(wanted, look.APP_DIR + "/ext/" + LCD_FILE, beside)
+    return wanted if draw.has_font(wanted) else draw.TEXT
 
 
 def _digital(clock, weather, label, theme, spec):
     """No dial: the whole band, laid out as a desk clock and drawn in the theme.
 
-    The colon is drawn as its own label between the two pairs, because a proportional
-    font kerns it into the digits and the whole point is that the numbers line up.
+    The two pairs are drawn as separate strings with the colon between them, because a
+    proportional font kerns a colon into the digits and the whole point is that the numbers
+    line up. The seven-segment face has a colon of its own, sat where a display puts it; for
+    a text face it is drawn as two dots, that font's colon being a typographic one on the
+    baseline, which between numbers this size reads as having dropped off them.
     """
     left, right = look.PAD + 2, look.W - look.PAD - 2
     top = look.BODY_TOP + 6
@@ -274,32 +281,37 @@ def _digital(clock, weather, label, theme, spec):
     # the sprite: a digit stands draw.CAP of the size asked for, so sizing by the sprite -
     # which is size * 1.35, most of it the room a descender would want - drew them at half
     # the height that fits.
-    gap = 10
+    gap = 8
     digits_top = look.BODY_TOP + 26
     room = (look.BODY_TOP + look.BODY_H - 38) - digits_top
     size = int(room / draw.CAP)
-    # And no wider than the band. Measured against the widest time it could ever have to
-    # show rather than the one it is showing, so the digits do not change size from one
-    # minute to the next and nothing is ever clipped.
-    # The app's digits font, or the face's own, which is packed at a finer grid than the text
-    # font: at this size that one snaps every point on a curve by most of a pixel, and the
-    # bowls come out lumpy.
+    # And no wider than the rows above and below, so the block lines up with them. Measured
+    # against the widest time it could ever have to show rather than the one it is showing,
+    # so the digits do not change size from one minute to the next and nothing is clipped.
     name = _digits_font(spec)
-    span = look.W - look.PAD * 4
+    dots = spec["colon"] == "dots"
+    span = right - left
     widest = draw.text_width(WIDEST_TIME, size, name) + gap * 2
+    if dots:
+        # Two dots take a column of their own, narrower than a glyph colon's advance.
+        widest += int(size * draw.CAP * COLON_W) - draw.text_width(":", size, name)
     if widest > span:
         size = int(size * span / widest)
     digits_left = draw.label(hours, size, theme.ink, name)
     digits_right = draw.label(minutes or "--", size, theme.ink, name)
-    colon = draw.label(":", size, theme.accent, name)
-    total = digits_left.width + colon.width + digits_right.width + gap * 2
-    x = (look.W - total) // 2
+    ink = int(size * draw.CAP)
+    colon = None if dots else draw.label(":", size, theme.accent, name)
+    colon_w = int(ink * COLON_W) if dots else colon.width
+    # Justified to the same margins as the rows above and below, so the block lines up with
+    # them whichever digits it is showing. Centring it instead insets a narrow time - 10:09
+    # is 89% of the width of 44:44 in a proportional face, which is 16px in from each side -
+    # and the size cannot follow the time without changing every minute.
+    x = left
+    minutes_x = right - digits_right.width
     # Centred in the room, not sat at the top of it: the width cap leaves the digits shorter
     # than the height allows, and that slack belongs on both sides of them. The sprite's
     # baseline sits `size` from its own top, which is what the second term takes off.
-    ink = int(size * draw.CAP)
     y = digits_top + (room - ink) // 2 - (size - ink)
-    minutes_x = x + digits_left.width + colon.width + gap * 2
     # The unlit segments first, which is what a display of them actually shows. The face is
     # monospaced, so a pair of eights covers exactly where either pair's segments fall.
     if spec["ghost"] and name == spec["font"]:
@@ -307,8 +319,16 @@ def _digital(clock, weather, label, theme, spec):
         screen.blit(unlit, vec2(int(x), int(y)))
         screen.blit(unlit, vec2(int(minutes_x), int(y)))
     screen.blit(digits_left, vec2(int(x), int(y)))
-    screen.blit(colon, vec2(int(x + digits_left.width + gap), int(y)))
     screen.blit(digits_right, vec2(int(minutes_x), int(y)))
+    # Between the two, wherever justifying them left the middle.
+    colon_x = (x + digits_left.width + minutes_x) / 2.0
+    if dots:
+        ink_top = y + size - ink
+        screen.pen = color.rgb(*theme.accent)
+        for at in (ink_top + ink * COLON_AT, ink_top + ink * (1.0 - COLON_AT)):
+            screen.shape(shape.circle(vec2(colon_x, at), ink * COLON_DOT))
+    else:
+        screen.blit(colon, vec2(int(colon_x - colon_w / 2.0), int(y)))
 
     # The weather along the bottom, symbol first so the eye lands on it.
     y = look.BODY_TOP + look.BODY_H - 34

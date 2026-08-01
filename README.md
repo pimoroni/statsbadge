@@ -169,7 +169,7 @@ Plain HTTP on the LAN, with every request signed HMAC-SHA256 against a shared se
 
 The badge draws with two typefaces, both under the SIL Open Font License, packed into `.af` by `tools/make_text_font.py`:
 
-- [Lexend](https://github.com/googlefonts/lexend) for everything, with the digits packed a second time at a finer grid for the numbers a clock draws the height of the band. [Licence](licences/OFL-Lexend.txt).
+- [Lexend](https://github.com/googlefonts/lexend) for everything, packed wide so the numbers a clock draws the height of the band are as smooth as the body text. [Licence](licences/OFL-Lexend.txt).
 - [DSEG](https://github.com/keshikan/DSEG) by keshikan, DSEG7 Classic Bold, for the LCD clock face's seven segments. [Licence](licences/OFL-DSEG.txt).
 
 ## Names
