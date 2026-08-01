@@ -271,6 +271,14 @@ class App:
         if self._arriving is None:
             self._arriving = image(look.W, look.H)
         self.draw_page_into(self._arriving, page)
+        # The header and footer belong to the page you are on, not to the movement: the
+        # subtitle is the same host either way, and a pip row sliding past carries a mark for
+        # a page nobody is going to. So they change now, and only the body travels.
+        self._arriving.font = draw.FONT
+        screen.blit(self._arriving.window(rect(0, 0, look.W, look.HEADER_H)), vec2(0, 0))
+        screen.blit(self._arriving.window(rect(0, look.H - look.FOOTER_H, look.W,
+                                              look.FOOTER_H)),
+                    vec2(0, look.H - look.FOOTER_H))
         self.leaving = None
         if style == "deck":
             # Whatever was on the screen, toast and all: that is what was there to look at.
@@ -720,9 +728,11 @@ class App:
         the direction the reader pressed. `over` moves only the arriving card and leaves the
         page underneath standing; `deck` moves both, the one leaving going the other way.
 
-        A blit costs its pixels, so `over` averages half a screen a frame and a deck a whole
-        one: 13.6ms a frame against 14.8, over 250ms. Nothing is rasterised - the arriving
-        page was drawn once when the turn happened.
+        Only the body band travels: the header and footer were put in place when the turn
+        started, since they belong to the page rather than to the movement.
+
+        A blit costs its pixels, so `over` averages half a band a frame and a deck a whole
+        one. Nothing is rasterised - the arriving page was drawn once when the turn happened.
         """
         travel = int(look.W * self.sliding.now)
         if travel >= look.W or self.sliding.done or self.arriving is None:
@@ -735,18 +745,18 @@ class App:
         if travel <= 0:
             return
         rest = look.W - travel
+        top, deep = look.BODY_TOP, look.BODY_H
         if self.slide_back:
             # Arriving from the left, so its right hand edge is what shows first.
-            screen.blit(self.arriving.window(rect(rest, 0, travel, look.H)), vec2(0, 0))
+            screen.blit(self.arriving.window(rect(rest, top, travel, deep)), vec2(0, top))
             if self.leaving is not None:
-                screen.blit(self.leaving.window(rect(0, 0, rest, look.H)),
-                            vec2(travel, 0))
+                screen.blit(self.leaving.window(rect(0, top, rest, deep)),
+                            vec2(travel, top))
         else:
             if self.leaving is not None:
-                screen.blit(self.leaving.window(rect(travel, 0, rest, look.H)),
-                            vec2(0, 0))
-            screen.blit(self.arriving.window(rect(0, 0, travel, look.H)),
-                        vec2(rest, 0))
+                screen.blit(self.leaving.window(rect(travel, top, rest, deep)),
+                            vec2(0, top))
+            screen.blit(self.arriving.window(rect(0, top, travel, deep)), vec2(rest, top))
 
     # -- exit ---------------------------------------------------------------
 
