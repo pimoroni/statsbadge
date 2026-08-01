@@ -6,8 +6,8 @@ plus 8us an edge and almost nothing for its fill, a line of live text is about 1
 and the same text blitted from a cache is 0.08ms. So shapes are drawn live and every
 string that is not new every frame is baked into a sprite once.
 
-The header and footer change only when the page or the theme does, so they are baked
-into two band images per page and blitted over a raster fill of the body.
+The header and footer are drawn where they stand, from raster fills and cached labels.
+Only the pip row is baked, being rounded rectangles.
 
 A page that splits into something round and a column of text beside it - the single dial,
 the ring stack, an extension's clock face - takes its geometry from `look.DIAL_C`,
@@ -23,7 +23,7 @@ import look
 
 FONT = None
 _labels = {}
-_bands = {}
+_pip_rows = {}
 
 # Fonts by name, so a sprite cache key can say which one drew it. TEXT is the app's own;
 # `icons` is registered by prepare() when the .af is there, and an extension adds its own
@@ -210,7 +210,7 @@ def blit_icon(character, size, rgb, x, y, align=0):
 
 def clear_cache():
     _labels.clear()
-    _bands.clear()
+    _pip_rows.clear()
 
 
 # -- measuring --------------------------------------------------------------
@@ -369,49 +369,27 @@ def reading(value, field):
 # -- chrome -----------------------------------------------------------------
 
 def background(theme, title, index, total, subtitle=None):
-    """The header and footer, baked per page and blitted as two bands.
+    """The header, the footer and a cleared body, drawn where they stand.
 
-    Only the two bands are baked, not a whole screen: a full-screen 1:1 blit is 14ms,
-    against 0.5ms for a raster fill of the body plus two small blits. Baking bands
-    also makes them cheap enough to keep several, so paging back and forth does not
-    re-bake - a cold page cost 90ms with a single full-screen slot, which is a visible
-    hitch on every button press.
+    Raster fills and two cached labels: 2.1ms, against 3.9ms when the bands were baked
+    into images and blitted, a blit being 180ns a pixel and a fill 10ns. Only the pip
+    row is baked, because a rounded rectangle apiece is 0.19ms and there can be a dozen
+    of them.
     """
-    key = (theme.name, title, index, total, subtitle)
-    bands = _bands.get(key)
-    if bands is None:
-        bands = _bake_bands(theme, title, index, total, subtitle)
-        if len(_bands) > 12:
-            _bands.clear()
-        _bands[key] = bands
     screen.pen = color.rgb(*theme.bg)
     screen.rectangle(rect(0, look.HEADER_H, look.W, look.BODY_H))
-    screen.blit(bands[0], vec2(0, 0))
-    screen.blit(bands[1], vec2(0, look.H - look.FOOTER_H))
-
-
-def _bake_bands(theme, title, index, total, subtitle):
-    header = image(look.W, look.HEADER_H)
-    header.font = FONT
-    header.antialias = image.X4
-    header.pen = color.rgb(*theme.panel)
-    header.rectangle(rect(0, 0, look.W, look.HEADER_H))
-    header.pen = color.rgb(*theme.accent)
-    header.rectangle(rect(0, look.HEADER_H - 2, look.W, 2))
-    header.pen = color.rgb(*theme.ink)
-    header.text(title.upper(), vec2(look.PAD, 4), look.SIZE_TITLE)
+    screen.pen = color.rgb(*theme.panel)
+    screen.rectangle(rect(0, 0, look.W, look.HEADER_H))
+    screen.rectangle(rect(0, look.H - look.FOOTER_H, look.W, look.FOOTER_H))
+    screen.pen = color.rgb(*theme.accent)
+    screen.rectangle(rect(0, look.HEADER_H - 2, look.W, 2))
+    blit_label(title.upper(), look.SIZE_TITLE, theme.ink, look.PAD, 4)
     if subtitle:
-        header.pen = color.rgb(*theme.dim)
-        width, _ = header.measure_text(subtitle, font_size=look.SIZE_SMALL)
-        header.text(subtitle, vec2(look.W - look.PAD - width, 10), look.SIZE_SMALL)
-
-    footer = image(look.W, look.FOOTER_H)
-    footer.antialias = image.X4
-    footer.pen = color.rgb(*theme.panel)
-    footer.rectangle(rect(0, 0, look.W, look.FOOTER_H))
+        blit_label(subtitle, look.SIZE_SMALL, theme.dim, look.W - look.PAD, 10, align=2)
     if total > 1:
-        _pips(footer, theme, index, total)
-    return (header, footer)
+        row = _pips(theme, index, total)
+        screen.blit(row, vec2((look.W - row.width) // 2,
+                              look.H - look.FOOTER_H + look.FOOTER_H // 2 - 2))
 
 
 # The pips have this much of the width to themselves. A dash shortens as they pack in,
@@ -420,26 +398,41 @@ PIP_ROOM = look.W - look.PAD * 4
 PIP_MAX_W, PIP_GAP, PIP_DOT, PIP_TIGHT = 14, 5, 4, 2
 
 
-def _pips(footer, theme, index, total):
-    """One pip per page, the current one in the accent colour.
+def _pips(theme, index, total):
+    """The pip row as a sprite, one pip per page and the current one in the accent colour.
 
     Shortens to fit, and tightens the spacing before it gives up any more length. Enough
     pages to fill the row even as dots is tough luck: it is a badge with six buttons and
     nobody is paging through forty screens.
+
+    Baked, and no wider than the pips themselves: a rounded rectangle is 0.19ms whatever
+    its size, so a dozen of them every frame is more than the whole footer is worth. The
+    row changes only with the page, so a handful are kept.
     """
+    key = (theme.name, index, total)
+    row = _pip_rows.get(key)
+    if row is not None:
+        return row
+
     gap = PIP_GAP
     pip_w = min(PIP_MAX_W, (PIP_ROOM - (total - 1) * gap) // total)
     if pip_w < PIP_DOT:
         gap = PIP_TIGHT
         pip_w = max(PIP_DOT, min(PIP_MAX_W, (PIP_ROOM - (total - 1) * gap) // total))
 
-    y = look.FOOTER_H // 2 - 2
     span = total * pip_w + (total - 1) * gap
-    x = (look.W - span) // 2
+    row = image(span, 4)
+    row.antialias = image.X4
+    row.pen = brush.erase()
+    row.rectangle(rect(0, 0, span, 4))
     for i in range(total):
-        footer.pen = color.rgb(*(theme.accent if i == index else theme.grid))
-        footer.shape(shape.rounded_rectangle(
-            rect(x + i * (pip_w + gap), y, pip_w, 4), min(2, pip_w // 2)))
+        row.pen = color.rgb(*(theme.accent if i == index else theme.grid))
+        row.shape(shape.rounded_rectangle(
+            rect(i * (pip_w + gap), 0, pip_w, 4), min(2, pip_w // 2)))
+    if len(_pip_rows) > 12:
+        _pip_rows.clear()
+    _pip_rows[key] = row
+    return row
 
 
 # -- widgets ----------------------------------------------------------------
