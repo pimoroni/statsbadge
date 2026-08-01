@@ -31,8 +31,10 @@ WEATHER_FONT = "weather"
 # two of them together have room for.
 ICON_SIZE = 32
 
-CENTRE = (look.W // 2 - 62, look.BODY_TOP + look.BODY_H // 2)
-RADIUS = 82
+# The app's own split layout: where its single gauge sits and how big it may be, so paging
+# from a dial or a ring stack to a clock does not move the thing being looked at.
+CENTRE = look.DIAL_C
+RADIUS = look.DIAL_OUTER
 
 # The dials, each a palette and a set of proportions of the radius. A dial is mostly the
 # weight of its marks against the width of its hands, so these are the whole design.
@@ -305,21 +307,16 @@ def render(page, frame, _history, theme):
         screen.pen = color.rgb(*rgb["second"])
         screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
 
-    # The readouts beside the dial, in the badge's theme rather than the clock's. Placed
-    # off the dial and not off the app's own readout column, which belongs to a gauge of a
-    # different size.
-    x = CENTRE[0] + RADIUS + 14
-    y = look.BODY_TOP + 12
-    if clock.get("time"):
-        draw.blit_label(clock["time"], look.SIZE_BIG, theme.ink, x, y)
-        y += 32
-    if label:
-        # Which city this is, since the point of a second page is that it is elsewhere.
-        draw.blit_label(label, look.SIZE_SMALL, theme.accent, x, y)
-        y += 16
-    if clock.get("date"):
-        draw.blit_label(clock["date"], look.SIZE_SMALL, theme.dim, x, y)
-        y += 24
+    # The readouts beside the dial, in the badge's theme rather than the clock's, and down
+    # the app's own column so they line up with a gauge page's.
+    x = look.READOUT_X
+    # Which city this is, since the point of a second page is that it is elsewhere.
+    y = draw.column_lines((
+        (clock.get("time"), look.SIZE_BIG, theme.ink),
+        (label, look.SIZE_SMALL, theme.accent),
+        (clock.get("date"), look.SIZE_SMALL, theme.dim),
+    ))
+    y += 6
 
     # The symbol beside the reading, not above it: stacked, the column ran on to within a
     # few pixels of the page indicator.
@@ -336,17 +333,13 @@ def render(page, frame, _history, theme):
                             x + (drawn + 8 if drawn else 0), y)
         y += ICON_SIZE + 4
 
-    condition = weather.get("condition")
-    if condition:
-        draw.blit_label(condition, look.SIZE_SMALL, theme.dim, x, y)
-        y += 19
-
+    wind = None
     if weather.get("wind") is not None:
-        draw.blit_label("wind {:.0f} {}".format(weather["wind"],
-                                                weather.get("wind_unit") or ""),
-                        look.SIZE_SMALL, theme.dim, x, y)
+        wind = "wind {:.0f} {}".format(weather["wind"], weather.get("wind_unit") or "")
     elif not weather:
-        draw.blit_label("no location set", look.SIZE_SMALL, theme.dim, x, y)
+        wind = "no location set"
+    draw.column_lines(((weather.get("condition"), look.SIZE_SMALL, theme.dim),
+                       (wind, look.SIZE_SMALL, theme.dim)), top=y)
 
 
 # The badge's clock is set from the host once, and then left alone. A PCF85063A drifts a

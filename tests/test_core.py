@@ -9,6 +9,7 @@ import json
 import os
 import struct
 import pathlib
+import re
 import socket
 import sys
 import tempfile
@@ -1288,12 +1289,41 @@ def test_a_row_of_text_and_a_plot_measures_its_columns(_h):
         body = body[:body.index("\ndef ", 1)]
         assert "column_width(" in body, f"{widget} still lays out to a fixed column"
 
-    # The dial and its readouts sit in the band on one gap, so no part of the pair can be
+    # The gauge and its column sit in the band on one gap, so no part of the pair can be
     # placed on a number of its own.
     look_source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text()
     for name in ("DIAL_C = (DIAL_GAP", "READOUT_X = DIAL_C[0]",
                  "READOUT_W = W - READOUT_X - DIAL_GAP"):
         assert name in look_source, f"{name} is not derived from the dial's gap"
+
+
+@check
+def test_a_split_page_takes_the_layout_it_is_given(_h):
+    """A dial, a ring stack and a clock face all split the band into something round and a
+    column, and the pages are paged between: anything choosing its own centre or margin
+    moves under the reader when they press a button."""
+    app = pathlib.Path(install.app_source_dir())
+
+    # Four rings have to fit the same radius a single gauge draws in.
+    look_source = (app / "look.py").read_text()
+    draw_source = (app / "draw.py").read_text()
+    scope = {}
+    for line in look_source.splitlines():
+        if line.startswith(("DIAL_OUTER", "DIAL_GAP", "READOUT_H", "READOUT_NOTE_H")):
+            exec(line, scope)  # noqa: S102  our own module, four constants off the top
+    band = int(re.search(r"^RING_BAND = (\d+)", draw_source, re.M).group(1))
+    gap = int(re.search(r"^RING_GAP = (\d+)", draw_source, re.M).group(1))
+    innermost = scope["DIAL_OUTER"] - 4 * band - 3 * gap
+    assert innermost >= 8, f"the fourth ring is {innermost} across; it would be dropped"
+
+    # The clock takes both from the app rather than restating them, and puts its column
+    # where every other split page puts it.
+    clock = (pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
+             / "clockface.py").read_text()
+    assert "CENTRE = look.DIAL_C" in clock, "the clock face has a centre of its own"
+    assert "RADIUS = look.DIAL_OUTER" in clock, "the clock face has a radius of its own"
+    assert "look.READOUT_X" in clock and "draw.column_lines" in clock, (
+        "the clock face lays its column out by hand")
 
 
 @check

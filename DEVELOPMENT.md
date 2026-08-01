@@ -120,7 +120,7 @@ So anything repeated is baked and blitted, and only what changes shape is drawn 
 - **A graph** is one `shape.custom` per series, a polyline across the top and back along the bottom. The two series take opposite ends of the ramp - the accent and the ramp at 0.85 are the same orange.
 - **Bars** are raster rectangles. Axis-aligned needs no anti-aliasing, and this is the page that can have thirty-two.
 - **A text column is measured, not fixed.** A page of names down one side and readings down the other cannot know either width in advance: the names are whatever the chosen fields are called and a reading is whatever its unit makes it. `draw.column_width` measures both and the plot takes the rest, so a sparkline page reflows instead of leaving a gap after the names and running the readings over the plots.
-- **The single dial and its readouts sit on one gap.** `look.DIAL_GAP` is the space at the screen edge, between the dial and the readouts, and at the right edge; the positions are worked out from it. The stack hangs off the top of the dial unless there are too many to fit the band.
+- **Every split page draws in the same place.** `look.DIAL_GAP` is the space at the screen edge, between the round half and the column, and at the right edge, and `DIAL_C`, `DIAL_OUTER`, `READOUT_X` and `READOUT_W` are worked out from it. The single dial, the ring stack and the clock face all use those, and all their rows come from `look.readout_rows`, which hangs the stack off the top of the gauge and lifts it only when there are too many rows to fit the band. The ring bands are as thin as it takes for four of them to fit the gauge's own radius, because the alternative was a stack wider than the dial with a legend jammed against it.
 
 A page changes when a poll lands, once a second, so frames in between draw nothing at all: `badge.default_clear = None` leaves the framebuffer standing. A page that animates adds its kind to `pages.ANIMATED`, which is how the clock's second hand sweeps.
 
@@ -166,6 +166,8 @@ macOS is the stingiest host. GPU utilisation and VRAM come from IOAccelerator vi
 A package advertising a `statsbadge.sources` entry point gets two things: a group in the frame, which the built-in page kinds can draw with no badge-side code at all, and optionally badge-side Python. Set `badge_module` to a `.py` and `statsbadge install --with-extensions` copies it into the app's `ext/` directory, where the app imports it at startup and it registers itself in `pages.EXTRA`.
 
 [`extensions/statsbadge-clock`](extensions/statsbadge-clock) is a worked example of both halves, and of why the second exists: its second hand is carried forward from the badge's frame clock between polls, so it sweeps at 45fps off one reading a second.
+
+A badge module draws with the same `draw` and `look` the app uses, and should take its layout from them rather than choosing its own. Pages are paged between, so anything that picks its own centre or margin moves under the reader when they press a button. For a page that splits into something round and a column of text - the single dial, the ring stack, the clock face - that means `look.DIAL_C` and `look.DIAL_OUTER` for the round half, `look.READOUT_X` and `look.READOUT_W` for the column, and rows from `look.readout_rows` drawn with `draw.readout` or, where they are not readings, `draw.column_lines`. `draw.column_width` fits a column to the strings going in it, and `draw.icon_baseline` puts a symbol on the cap band of the words beside it.
 
 ## Packaging
 

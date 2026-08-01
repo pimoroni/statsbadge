@@ -8,6 +8,13 @@ is not new every frame is baked into a sprite once.
 
 The header and footer change only when the page or the theme does, so they are baked
 into two band images per page and blitted over a raster fill of the body.
+
+A page that splits into something round and a column of text beside it - the single dial,
+the ring stack, an extension's clock face - takes its geometry from `look.DIAL_C`,
+`look.DIAL_OUTER` and `look.READOUT_X`, and its rows from `look.readout_rows` and either
+`readout` or `column_lines` here. Nothing in a split page should place text on a number of
+its own: the pages are paged between, and anything choosing its own margin moves under the
+reader when they press a button.
 """
 
 import os
@@ -483,17 +490,25 @@ def dials(theme, entries):
               name, shape_of["value"], shape_of["label"], fraction is None, icon, unit)
 
 
-def readout(theme, index, name, value_text, fraction=None, count=1):
-    """One of the small figures beside a dial, with a thin bar under it.
+def readout(theme, y, name, value_text, fraction=None, note=None, chip=None):
+    """One row of the column beside a gauge: a name, the reading under it, and then either
+    a bar for the level or a line saying what full is.
 
-    `count` is how many there are, because where the stack starts depends on that: it
-    hangs off the top of the dial unless it is too tall to.
+    Every page that draws a gauge and a column draws this row, so nothing moves when you
+    page between them. `chip` is the colour of the ring a row belongs to, which is what ties
+    the two together on a page where the gauge is not the bar.
     """
     x = look.READOUT_X
-    y = look.readout_top(count) + index * look.READOUT_H
     blit_label(name, look.SIZE_SMALL, theme.dim, x, y)
     blit_label(value_text, look.SIZE_VALUE, theme.ink, x, y + 10)
-    if fraction is not None:
+    if chip:
+        screen.pen = color.rgb(*chip)
+        screen.rectangle(rect(x + look.READOUT_W - 10, y + 3, 10, 10))
+    if note:
+        # What a full ring is, for a reading whose scale is not a round number. It takes
+        # the bar's place: the ring it belongs to is already the bar.
+        blit_label(note, look.SIZE_SMALL, theme.dim, x, y + 29)
+    elif fraction is not None:
         width = look.READOUT_W
         fraction = max(0.0, min(1.0, fraction))
         screen.pen = color.rgb(*theme.grid)
@@ -501,6 +516,29 @@ def readout(theme, index, name, value_text, fraction=None, count=1):
         if fraction > 0:
             screen.pen = color.rgb(*theme.at(fraction))
             screen.rectangle(rect(x, y + 28, int(width * fraction), 3))
+
+
+# Between one line of a free-form column and the next, on top of the line's own height.
+COLUMN_LEAD = 3
+
+
+def column_lines(entries, top=None, align=0):
+    """A stack of lines down the column beside a gauge, each `(text, size, rgb)`.
+
+    For a page whose rows are not readouts - a clock's time, place and date - so that it
+    gets the column's left edge and a consistent rhythm without working either out. Empty
+    strings are skipped, so a caller can offer a line it may not have.
+
+    Returns the y after the last line, for a page that has more to place by hand.
+    """
+    y = (look.BODY_TOP + 12) if top is None else top
+    x = look.READOUT_X + (look.READOUT_W if align == 2 else 0)
+    for text_value, size, rgb in entries:
+        if not text_value:
+            continue
+        blit_label(text_value, size, rgb, x, y, align=align)
+        y += int(size * 1.35) + COLUMN_LEAD
+    return y
 
 
 def bars(theme, values, maximum=100.0, field="pct"):
@@ -725,49 +763,39 @@ def toast(theme, message):
 
 # -- rings ------------------------------------------------------------------
 
-# The stack reaches further right than a single dial does, so its legend gets a column of
-# its own instead of the dial's.
-RINGS_C = (look.W // 2 - 46, look.BODY_MID)
-RINGS_OUTER = 84
-RINGS_LEGEND_X = RINGS_C[0] + RINGS_OUTER + 2
+# Thin enough that four rings fit the dial's own radius, which is what keeps this page on
+# the same bounds as a single gauge.
+RING_BAND = 14
+RING_GAP = 4
 
 
 def rings(theme, entries):
     """Concentric sweep gauges, outermost first, with a legend down the side.
 
     One arc per reading, so four readings cost four shapes: the same trick the single
-    gauge uses, at a quarter of the screen each.
+    gauge uses, at a quarter of the screen each. The stack sits where the single dial does
+    and the legend is that page's own column of readouts.
     """
-    centre = RINGS_C
-    outer = RINGS_OUTER
-    band = 15
-    gap = 4
-    # Room for a third line under a reading where one has a peak to state.
-    row = 42 if any(entry[4] for entry in entries[:4]) else 38
-    for index, (name, value_text, fraction, rgb, note) in enumerate(entries[:4]):
-        ring_outer = outer - index * (band + gap)
-        ring_inner = ring_outer - band
-        if ring_inner < 12:
+    rows = entries[:4]
+    height = look.READOUT_NOTE_H if any(entry[4] for entry in rows) else look.READOUT_H
+    for index, ((name, value_text, fraction, rgb, note), y) in enumerate(
+            zip(rows, look.readout_rows(len(rows), height))):
+        ring_outer = look.DIAL_OUTER - index * (RING_BAND + RING_GAP)
+        ring_inner = ring_outer - RING_BAND
+        if ring_inner < 8:
             break
         screen.pen = color.rgb(*theme.grid)
-        screen.shape(shape.arc(vec2(*centre), ring_inner, ring_outer,
+        screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
                                look.DIAL_FROM, look.DIAL_TO))
         if fraction:
             sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * fraction
             screen.pen = color.rgb(*rgb)
-            screen.shape(shape.arc(vec2(*centre), ring_inner, ring_outer,
+            screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
                                    look.DIAL_FROM, sweep))
-
-        # The legend doubles as the reading, so the rings need no labels on them.
-        y = look.BODY_TOP + 12 + index * row
-        text_x = RINGS_LEGEND_X + 14
-        screen.pen = color.rgb(*rgb)
-        screen.rectangle(rect(RINGS_LEGEND_X, y + 6, 8, 8))
-        blit_label(name, look.SIZE_LABEL, theme.dim, text_x, y)
-        blit_label(value_text, look.SIZE_VALUE, theme.ink, text_x, y + 14)
-        if note:
-            # What a full ring is, for a reading whose scale is not a round number.
-            blit_label(note, look.SIZE_SMALL, theme.dim, text_x, y + 30)
+        # The legend doubles as the reading, so the rings need no labels on them. The chip
+        # is only for a row whose scale note has taken the bar's place: where there is a
+        # bar, it is already drawn in this ring's colour.
+        readout(theme, y, name, value_text, fraction, note, chip=rgb if note else None)
 
 
 # -- sparklines -------------------------------------------------------------
