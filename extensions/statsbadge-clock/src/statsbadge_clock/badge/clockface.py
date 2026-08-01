@@ -297,17 +297,16 @@ def _digital(clock, weather, label, theme, spec):
         widest += int(size * draw.CAP * COLON_W) - draw.text_width(":", size, name)
     if widest > span:
         size = int(size * span / widest)
-    digits_left = draw.label(hours, size, theme.ink, name)
-    digits_right = draw.label(minutes or "--", size, theme.ink, name)
+    left_w = draw.text_width(hours, size, name)
+    right_w = draw.text_width(minutes or "--", size, name)
     ink = int(size * draw.CAP)
-    colon = None if dots else draw.label(":", size, theme.accent, name)
-    colon_w = int(ink * COLON_W) if dots else colon.width
+    colon_w = int(ink * COLON_W) if dots else draw.text_width(":", size, name)
     # Justified to the same margins as the rows above and below, so the block lines up with
     # them whichever digits it is showing. Centring it instead insets a narrow time - 10:09
     # is 89% of the width of 44:44 in a proportional face, which is 16px in from each side -
     # and the size cannot follow the time without changing every minute.
     x = left
-    minutes_x = right - digits_right.width
+    minutes_x = right - right_w
     # Centred in the room, not sat at the top of it: the width cap leaves the digits shorter
     # than the height allows, and that slack belongs on both sides of them. The sprite's
     # baseline sits `size` from its own top, which is what the second term takes off.
@@ -315,20 +314,19 @@ def _digital(clock, weather, label, theme, spec):
     # The unlit segments first, which is what a display of them actually shows. The face is
     # monospaced, so a pair of eights covers exactly where either pair's segments fall.
     if spec["ghost"] and name == spec["font"]:
-        unlit = draw.label(spec["ghost"], size, theme.grid, name)
-        screen.blit(unlit, vec2(int(x), int(y)))
-        screen.blit(unlit, vec2(int(minutes_x), int(y)))
-    screen.blit(digits_left, vec2(int(x), int(y)))
-    screen.blit(digits_right, vec2(int(minutes_x), int(y)))
+        draw.blit_label(spec["ghost"], size, theme.grid, x, y, name=name)
+        draw.blit_label(spec["ghost"], size, theme.grid, minutes_x, y, name=name)
+    draw.blit_label(hours, size, theme.ink, x, y, name=name)
+    draw.blit_label(minutes or "--", size, theme.ink, minutes_x, y, name=name)
     # Between the two, wherever justifying them left the middle.
-    colon_x = (x + digits_left.width + minutes_x) / 2.0
+    colon_x = (x + left_w + minutes_x) / 2.0
     if dots:
         ink_top = y + size - ink
         screen.pen = color.rgb(*theme.accent)
         for at in (ink_top + ink * COLON_AT, ink_top + ink * (1.0 - COLON_AT)):
             screen.shape(shape.circle(vec2(colon_x, at), ink * COLON_DOT))
     else:
-        screen.blit(colon, vec2(int(colon_x - colon_w / 2.0), int(y)))
+        draw.blit_label(":", size, theme.accent, colon_x - colon_w / 2.0, y, name=name)
 
     # The weather along the bottom, symbol first so the eye lands on it.
     y = look.BODY_TOP + look.BODY_H - 34

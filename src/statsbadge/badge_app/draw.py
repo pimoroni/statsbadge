@@ -124,14 +124,22 @@ def use_font(name):
 
 # -- text cache -------------------------------------------------------------
 
-# What the baked strings may hold between them. A screen of furniture is a few tens of KB;
-# the ceiling is for the pages that bake something enormous.
-LABEL_CACHE_BYTES = 768 * 1024
-_label_bytes = 0
+# Text this size and over is drawn where it stands and never kept. A sprite is blitted at
+# 187ns a pixel and glyphs rasterise faster than that once they are large: at 104pt the blit
+# is 3.01ms against 1.27ms to draw the text, and the sprite is 130KB. Below it the cache is
+# the right way round - 0.08ms against 0.22ms at 11pt, 0.32ms against 0.64ms at 17pt - and a
+# page that redraws at frame rate takes eight hits a frame off it.
+CACHE_UNDER = 40
 
 
 def label(text_value, size, rgb, name=TEXT):
-    """A string baked into a sprite. Live text is ~1ms a line, a blit is 0.08ms."""
+    """A string baked into a sprite, or None if it is too large to be worth keeping.
+
+    A caller that needs the sprite - to place something against its width - should ask
+    `text_width` and draw with `blit_label`, which handles both sides of that line.
+    """
+    if size >= CACHE_UNDER:
+        return None
     key = (name, text_value, size, rgb)
     cached = _labels.get(key)
     if cached is not None:
@@ -154,28 +162,39 @@ def label(text_value, size, rgb, name=TEXT):
         sprite.text(text_value, vec2(0, 0), size)
     finally:
         screen.font = was
-    global _label_bytes
-    _label_bytes += width * height * 4
-    if len(_labels) > 220 or _label_bytes > LABEL_CACHE_BYTES:
+    if len(_labels) > 220:
         # Values churn; the cache is for furniture, so drop it wholesale rather than
-        # tracking ages. Bounded by bytes as well as by count, because a page drawing a
-        # number the height of the band bakes 400KB a minute and would otherwise hold every
-        # minute it had drawn.
+        # tracking ages.
         _labels.clear()
-        _label_bytes = 0
     _labels[key] = sprite
     return sprite
 
 
 def blit_label(text_value, size, rgb, x, y, align=0, name=TEXT):
-    """Draw a cached string. align 0 left, 1 centre, 2 right, about x.
+    """Draw a string. align 0 left, 1 centre, 2 right, about x.
 
-    Returns the width drawn, or 0 for a font that is not loaded, which is what lets a
-    caller offer an icon and fall back to words without asking first.
+    From a sprite where one is worth keeping and live where it is not, which the caller does
+    not have to know about. Returns the width drawn, or 0 for a font that is not loaded -
+    which is what lets a caller offer an icon and fall back to words without asking first.
     """
+    face = _fonts.get(name)
+    if face is None:
+        return 0
     sprite = label(text_value, size, rgb, name)
     if sprite is None:
-        return 0
+        width = text_width(text_value, size, name)
+        if align == 1:
+            x -= width // 2
+        elif align == 2:
+            x -= width
+        was = screen.font
+        screen.font = face
+        try:
+            screen.pen = color.rgb(*rgb)
+            screen.text(text_value, vec2(int(x), int(y)), size)
+        finally:
+            screen.font = was
+        return width
     if align == 1:
         x -= sprite.width // 2
     elif align == 2:
@@ -190,10 +209,8 @@ def blit_icon(character, size, rgb, x, y, align=0):
 
 
 def clear_cache():
-    global _label_bytes
     _labels.clear()
     _bands.clear()
-    _label_bytes = 0
 
 
 # -- measuring --------------------------------------------------------------
@@ -474,22 +491,21 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
     ink = theme.dim if cold else theme.ink
     top = centre[1] - value_size * 0.62
     unit_size = max(look.SIZE_SMALL, int(value_size * 0.45))
-    reading = label(value_text, value_size, ink)
-    suffix = label(unit, unit_size, theme.dim) if unit else None
-    if suffix and reading.width + suffix.width > inner * 2 - 4:
+    reading_w = text_width(value_text, value_size)
+    suffix_w = text_width(unit, unit_size) if unit else 0
+    if suffix_w and reading_w + suffix_w > inner * 2 - 4:
         # Kept inside the ring rather than allowed over the arc, so a gauge too small for
         # its unit shows the reading and the name under it and nothing else. A scaled
         # figure carries its prefix on the number, so 11.0M still says which 11 it is.
-        suffix = None
-    width = reading.width + (suffix.width if suffix else 0)
-    left = centre[0] - width // 2
-    screen.blit(reading, vec2(int(left), int(top)))
-    if suffix:
-        # Sat on the reading's own baseline, which is where the eye expects a unit. A
-        # sprite puts its baseline `size` from the top, so the drop is the size difference
-        # and not the difference in sprite heights.
-        screen.blit(suffix, vec2(int(left + reading.width),
-                                 int(top + value_size - unit_size)))
+        suffix_w = 0
+    left = centre[0] - (reading_w + suffix_w) // 2
+    blit_label(value_text, value_size, ink, left, top)
+    if suffix_w:
+        # Sat on the reading's own baseline, which is where the eye expects a unit. Text
+        # puts its baseline `size` below where it is drawn, so the drop is the difference
+        # in sizes.
+        blit_label(unit, unit_size, theme.dim, left + reading_w,
+                   top + value_size - unit_size)
     below = centre[1] + value_size * 0.42
     if icon and blit_icon(icon, label_size + 8, theme.dim, centre[0], below, align=1):
         return
@@ -1044,11 +1060,11 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
     something is climbing.
     """
     blit_label(name, look.SIZE_LABEL, theme.dim, look.PAD + 2, look.BODY_TOP + 8)
-    reading = label(value_text, look.SIZE_HUGE, theme.ink)
-    screen.blit(reading, vec2(look.PAD, look.BODY_TOP + 26))
+    reading_w = blit_label(value_text, look.SIZE_HUGE, theme.ink, look.PAD,
+                           look.BODY_TOP + 26)
     if unit_text:
         blit_label(unit_text, look.SIZE_BIG, theme.dim,
-                   look.PAD + reading.width + 4, look.BODY_TOP + 48)
+                   look.PAD + reading_w + 4, look.BODY_TOP + 48)
 
     if delta is not None:
         x = look.W - look.PAD

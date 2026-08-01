@@ -1646,7 +1646,7 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
     # The unlit segments go down before the lit ones, or they cover them.
     body = source[source.index("def _digital"):]
     body = body[:body.index("\ndef ", 1)]
-    assert body.index('spec["ghost"]') < body.index("screen.blit(digits_left"), (
+    assert body.index('spec["ghost"]') < body.index("draw.blit_label(hours,"), (
         "the ghost is drawn over the digits")
 
 
