@@ -380,19 +380,25 @@ def reading(value, field):
     9.2%. A reading that is not there gets no unit: there is no such thing as
     "-- percent".
     """
-    key = (value, field)
-    text = _readings.get(key)
-    if text is not None:
+    # Only a number is remembered. It is what costs, and it is the only kind of value that
+    # can be a key at all: a field can arrive as a list - core loads, a load average - and a
+    # list has no hash.
+    if type(value) is float or type(value) is int:
+        key = (value, field)
+        text = _readings.get(key)
+        if text is not None:
+            return text
+        text = fmt(value, field) + short_unit(field)
+        if len(_readings) > 240:
+            # A reading per field per poll, so this fills with history nobody will ask for
+            # again. Dropped wholesale, like the sprites.
+            _readings.clear()
+        _readings[key] = text
         return text
     text = fmt(value, field)
-    if value is not None and not isinstance(value, (str, bool)):
-        text += short_unit(field)
-    if len(_readings) > 240:
-        # A reading per field per poll, so this fills with history nobody will ask for
-        # again. Dropped wholesale, like the sprites.
-        _readings.clear()
-    _readings[key] = text
-    return text
+    if value is None or isinstance(value, (str, bool)):
+        return text
+    return text + short_unit(field)
 
 
 # -- chrome -----------------------------------------------------------------

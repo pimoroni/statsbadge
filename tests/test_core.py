@@ -1080,6 +1080,16 @@ def test_a_reading_carries_its_unit(_h):
     assert draw.reading(12600, "used_mb") == "12.3GB"
     assert draw.reading(3 * 1024 ** 2, "total_mb") == "3.0TB"
 
+    # A field can arrive as a list - a load average, per-core loads - and a list cannot be a
+    # key, so it must not reach the table that remembers what a number formatted to. This
+    # crashed a CPU dial with a LOADAVG readout on it.
+    assert draw.reading([1.5, 1.2, 0.9], "load") == "[1.5, 1.2, 0.9]"
+
+    import pages
+
+    assert pages.fraction_of("cpu.load", [1.5, 1.2, 0.9]) is None, (
+        "a list cannot sit on a gauge, and asking must not raise")
+
 
 @check
 def test_a_page_carries_only_what_its_kind_declared(_h):
