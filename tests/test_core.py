@@ -1083,7 +1083,13 @@ def test_a_reading_carries_its_unit(_h):
     # A field can arrive as a list - a load average, per-core loads - and a list cannot be a
     # key, so it must not reach the table that remembers what a number formatted to. This
     # crashed a CPU dial with a LOADAVG readout on it.
-    assert draw.reading([1.5, 1.2, 0.9], "load") == "[1.5, 1.2, 0.9]"
+    #
+    # A load average is three figures and reads as the three of them, the way uptime prints
+    # it. No unit: it is a queue length, not a percentage of anything.
+    assert draw.reading([1.52, 1.18, 0.94], "load") == "1.5 1.2 0.9"
+    # Sixteen per-core loads do not go in one slot, and three of the sixteen would be a lie.
+    assert draw.reading([31.0] * 16, "cores") == "16 values"
+    assert draw.reading([], "load") == "--"
 
     import pages
 

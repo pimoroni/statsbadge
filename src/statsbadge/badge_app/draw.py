@@ -296,6 +296,8 @@ def fmt(value, field):
         return "yes" if value else "no"
     if isinstance(value, str):
         return value
+    if isinstance(value, (list, tuple)):
+        return _several(value, field)
     if field.endswith("_bps"):
         return _rate(value)
     if field.endswith("_mb"):
@@ -307,6 +309,23 @@ def fmt(value, field):
     if isinstance(value, float):
         return f"{value:.0f}" if value >= 100 else f"{value:.1f}"
     return str(value)
+
+
+# How many figures a slot will show before it gives up and says how many there are. Three
+# is what a load average is: the run queue averaged over one, five and fifteen minutes, and
+# the three of them together are the reading - the short window above the long one is load
+# climbing. Per-core loads are the other list a field can hold, and sixteen of them do not
+# go in a slot at all; three of the sixteen would be a lie, so the slot says what it has
+# and the reader can put the field on a bars page instead.
+SEVERAL = 3
+
+
+def _several(values, field):
+    if not values:
+        return "--"
+    if len(values) <= SEVERAL:
+        return " ".join(fmt(item, field) for item in values)
+    return f"{len(values)} values"
 
 
 def _rate(bps):
@@ -396,7 +415,9 @@ def reading(value, field):
         _readings[key] = text
         return text
     text = fmt(value, field)
-    if value is None or isinstance(value, (str, bool)):
+    if value is None or isinstance(value, (str, bool, list, tuple)):
+        # No unit on a list: the figures carry their own sense - a load average is a queue
+        # length and not a percentage of anything - and "16 values%" is nonsense.
         return text
     return text + short_unit(field)
 
