@@ -134,6 +134,10 @@ function refSelect(value, refs, onChange) {
 
 // -- pages -----------------------------------------------------------------
 
+// Which cards are open. Collapsed by default so the list reads as an overview and stays
+// short enough to drag around; opening one is how you get at its fields.
+const expanded = new Set();
+
 function renderPages() {
   const list = $("pages");
   list.innerHTML = "";
@@ -141,8 +145,20 @@ function renderPages() {
   refreshPruned();
 }
 
+/** The field slots a kind has. An extension's page declares its own, because only its
+ * renderer knows whether it reads `fields` at all - the clock face draws from its groups
+ * and ignores them, so offering seven pickers was offering seven controls that did
+ * nothing. */
+function shapeFor(kind) {
+  if (SHAPE[kind]) return SHAPE[kind];
+  const declared = (caps.extension_pages || []).find((page) => page.kind === kind);
+  const slots = (declared && declared.slots) || {};
+  return { one: slots.one || null, many: slots.many || null,
+           max: slots.max || 0, label: slots.label || "Values" };
+}
+
 function pageCard(page, index) {
-  const shape = SHAPE[page.kind] || SHAPE.text;
+  const shape = shapeFor(page.kind);
   const item = document.createElement("li");
   item.className = "page";
   item.draggable = true;
@@ -154,6 +170,17 @@ function pageCard(page, index) {
   grip.className = "grip";
   grip.textContent = "⠇";
   top.appendChild(grip);
+
+  const open = expanded.has(page.id);
+  const toggle = document.createElement("button");
+  toggle.className = "small twist";
+  toggle.textContent = open ? "▾" : "▸";
+  toggle.title = open ? "Collapse" : "Configure";
+  toggle.onclick = () => {
+    if (open) expanded.delete(page.id); else expanded.add(page.id);
+    renderPages();               // not markDirty: opening a card changes nothing
+  };
+  top.appendChild(toggle);
 
   const kind = document.createElement("span");
   kind.className = "kind";
@@ -181,7 +208,7 @@ function pageCard(page, index) {
   item.appendChild(top);
 
   const fields = document.createElement("div");
-  fields.className = "fields";
+  fields.className = open ? "fields" : "fields hidden";
 
   if (shape.one) {
     const row = document.createElement("div");
@@ -223,6 +250,25 @@ function pageCard(page, index) {
       };
       fields.appendChild(add);
     }
+  }
+  // What this page in particular can be told, as against what the extension is told
+  // once for every page: a place here, units there.
+  for (const setting of (caps.extension_page_settings || {})[page.kind] || []) {
+    const row = document.createElement("div");
+    row.className = "fieldrow pagesetting";
+    row.appendChild(settingRow(page, setting));
+    fields.appendChild(row);
+  }
+  if (!open) {
+    const summary = document.createElement("div");
+    summary.className = "summary";
+    const refs = shape.one ? [page[shape.one]] : (page[shape.many] || []);
+    const named = refs.filter(Boolean).map((ref) => fieldLabel(ref));
+    const extra = ((caps.extension_page_settings || {})[page.kind] || [])
+      .map((setting) => page[setting.key])
+      .filter(Boolean);
+    summary.textContent = named.concat(extra).join(", ") || "nothing chosen";
+    item.appendChild(summary);
   }
   item.appendChild(fields);
 
@@ -701,7 +747,10 @@ async function boot() {
 
   $("save").onclick = save;
   $("add").onclick = () => {
-    config.pages.push(newPage($("addkind").value));
+    // At the top: added at the bottom it lands off the end of a long list, and the
+    // first thing anyone does with a new page is configure it.
+    config.pages.unshift(newPage($("addkind").value));
+    expanded.add(config.pages[0].id);
     markDirty();
     renderPages();
   };

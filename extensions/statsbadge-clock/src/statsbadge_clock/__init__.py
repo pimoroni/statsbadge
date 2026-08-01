@@ -54,6 +54,20 @@ ICONS = {
 NIGHT_ICONS = {"clear": "b", "fair": "d"}
 
 
+def _clock_at(utc_offset):
+    """The clock fields for a place, from its offset east of UTC."""
+    if utc_offset is None:
+        return {}
+    there = time.gmtime(time.time() + float(utc_offset))
+    return {
+        "time": time.strftime("%H:%M", there),
+        "date": time.strftime("%a %d %b", there),
+        "hour": there.tm_hour,
+        "minute": there.tm_min,
+        "seconds": there.tm_sec,
+    }
+
+
 class Clock(Source):
     name = "clock"
     provides = ("clock", "weather")
@@ -83,11 +97,23 @@ class Clock(Source):
     )
 
     # Offered in the config UI's page list.
+    # No field slots: the renderer draws from its own groups and never reads `fields`,
+    # so offering pickers for them offered controls that did nothing.
     badge_page = {
         "kind": "clockface",
         "title": "Clock",
-        "fields": ["clock.time", "clock.date", "weather.temp", "weather.condition"],
+        "fields": [],
+        "slots": {},
     }
+
+    # Per page, so two clock pages can show two cities. Open-Meteo returns a location's
+    # UTC offset with its forecast, so a place settles the time as well as the weather
+    # and there is no separate timezone to set.
+    page_settings = (
+        {"key": "place", "label": "Place", "type": "text",
+         "hint": "A town or city for this page. Empty uses the one set below, under "
+                 "Extensions"},
+    )
 
     @classmethod
     def available(cls):
@@ -97,9 +123,31 @@ class Clock(Source):
         super().__init__(config)
         self._weather = {}
         self._next_weather = 0.0
+        # Per-place state for the pages, keyed by the place folded to lower case:
+        # {"data": {...}, "next": monotonic}.
+        self._places = {}
+        self._page_places = []
         # Open-Meteo asks for no more than a request every few minutes per location.
         self._interval = float(config.get("weather_interval", 900))
         self._read_settings()
+
+    def pages(self, instances):
+        """The places this source's pages ask for, one entry each.
+
+        Called whenever the config changes, so a place typed in the browser is fetched
+        on the next sample rather than at the next restart.
+        """
+        wanted = []
+        for page in instances:
+            place = (page.get("place") or "").strip()
+            if place and place.lower() not in [w.lower() for w in wanted]:
+                wanted.append(place)
+        self._page_places = wanted
+        # Drop what no page asks for any more, so a renamed place stops being fetched.
+        keep = {place.lower() for place in wanted}
+        for key in list(self._places):
+            if key not in keep:
+                del self._places[key]
 
     def _read_settings(self):
         was = getattr(self, "place", None)
@@ -137,6 +185,9 @@ class Clock(Source):
             "hour": now.tm_hour,
             "minute": now.tm_min,
         }
+        # Before the global place is considered: a page can carry its own, and often the
+        # only places set are the pages'.
+        frame["places"] = self._sample_places()
         where = self._where()
         if where is None:
             frame["weather"] = {}
@@ -148,6 +199,31 @@ class Clock(Source):
             except Exception as exc:
                 self.note_fault(exc)
         frame["weather"] = dict(self._weather)
+
+    def _sample_places(self):
+        """One entry per place a page asked for, weather and that place's own clock.
+
+        The clock fields come from the location's UTC offset, which the forecast returns,
+        so a page showing another city shows its time without the badge knowing anything
+        about timezones.
+        """
+        out = {}
+        for place in self._page_places:
+            key = place.lower()
+            state = self._places.setdefault(key, {"data": {}, "next": 0.0})
+            if time.monotonic() >= state["next"]:
+                state["next"] = time.monotonic() + self._interval
+                try:
+                    found = self._geocode(place)
+                    if found:
+                        state["data"] = self._fetch((found[0], found[1], found[2]),
+                                                    local_time=True)
+                except Exception as exc:
+                    self.note_fault(exc)
+            if state["data"]:
+                out[key] = dict(state["data"], **_clock_at(state["data"]
+                                                           .get("utc_offset")))
+        return out
 
     def _where(self):
         """Coordinates to ask about, and the name to show for them.
@@ -198,7 +274,7 @@ class Clock(Source):
                                             match.get("country_code")) if part)
         return (match["latitude"], match["longitude"], label)
 
-    def _fetch(self, where):
+    def _fetch(self, where, local_time=False):
         latitude, longitude, label = where
         url = (
             "https://api.open-meteo.com/v1/forecast"
@@ -209,6 +285,9 @@ class Clock(Source):
             f"{'fahrenheit' if self.units == 'fahrenheit' else 'celsius'}"
             f"&wind_speed_unit={self.wind_units}"
         )
+        if local_time:
+            # Asks for the location's own offset, which is what a per-place clock needs.
+            url += "&timezone=auto"
         with urllib.request.urlopen(url, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
         current = payload.get("current", {})
@@ -230,4 +309,7 @@ class Clock(Source):
             "temp_unit": TEMPERATURE_UNITS.get(self.units, "C"),
             "wind_unit": WIND_UNITS[self.wind_units],
             "icon": icon or ICONS.get(condition),
+            # Seconds east of UTC for this location, which is what makes a per-place
+            # clock possible. Absent unless timezone=auto was asked for.
+            "utc_offset": payload.get("utc_offset_seconds"),
         }

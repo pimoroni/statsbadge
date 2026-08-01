@@ -137,6 +137,8 @@ statsbadge install
 
 Badge-side modules go on by default, so installing an extension and then running `install` is all of it. `--no-extensions` leaves them off, and `--without NAME` drops one from both the frame and the badge.
 
+An extension can declare settings that belong to *one page* rather than to the extension, so two pages of the same kind can show different things. The clock uses it for a place: point one page at Tokyo and another at home, and each shows that city's weather and its own local time - Open-Meteo returns a location's UTC offset with its forecast, so a place settles the time too and there is no timezone to set. Settings that describe how the extension works, like units or an API key, stay under Extensions where there is one answer per machine.
+
 An extension can ship more than code. `badge_assets` lists further files to push, and the clock uses it for an icon font: its `icons.txt` names the Material Symbols it wants, and `tools/make_icon_font.py` packs them into an `.af` the badge loads with `font.load()`.
 
 ```bash

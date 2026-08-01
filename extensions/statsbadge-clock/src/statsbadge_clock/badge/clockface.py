@@ -128,10 +128,16 @@ def _register_font():
     draw.add_font(WEATHER_FONT, look.APP_DIR + "/ext/icons.af", beside)
 
 
-def render(_page, frame, _history, theme):
+def render(page, frame, _history, theme):
     global _face_cache, _hands_cache
-    clock = frame.get("clock") or {}
-    weather = frame.get("weather") or {}
+    # A page can name its own place, and the host sends that location's clock along with
+    # its weather - so a second clock page shows another city's time without this side
+    # knowing anything about timezones. Empty falls back to the host's own clock.
+    place = ((page or {}).get("place") or "").strip().lower()
+    here = (frame.get("places") or {}).get(place) if place else None
+    clock = here or frame.get("clock") or {}
+    weather = here or frame.get("weather") or {}
+    label = here.get("place") if here else None
 
     if _face_cache is None:
         _register_font()
@@ -160,6 +166,10 @@ def render(_page, frame, _history, theme):
     if clock.get("time"):
         draw.blit_label(clock["time"], look.SIZE_BIG, theme.ink, x, y)
         y += 32
+    if label:
+        # Which city this is, since the point of a second page is that it is elsewhere.
+        draw.blit_label(label, look.SIZE_SMALL, theme.accent, x, y)
+        y += 16
     if clock.get("date"):
         draw.blit_label(clock["date"], look.SIZE_SMALL, theme.dim, x, y)
         y += 24
