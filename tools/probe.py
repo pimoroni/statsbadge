@@ -2,12 +2,15 @@
 
     mpremote connect PORT mount . run tools/probe.py
 
-Mount the repo root, not the app directory: shots go to /remote/shots. Draws every
+Mount the repo root, not the app directory: frames go to /remote/build/shots, which is
+ignored - `tools/shots.py --publish` is what copies the README's own out of there. Draws
+every
 page kind against a canned frame, so it needs no server, then times a real poll if
 the badge happens to be paired.
 """
 
 import gc
+import os
 import sys
 import time
 
@@ -137,8 +140,19 @@ PAGES = [
 ]
 
 
+OUT_DIR = "/remote/build/shots"
+try:
+    os.mkdir("/remote/build")
+except OSError:
+    pass
+try:
+    os.mkdir(OUT_DIR)
+except OSError:
+    pass
+
+
 def shot(name):
-    with open(f"/remote/shots/{name}.raw", "wb") as handle:
+    with open(f"{OUT_DIR}/{name}.raw", "wb") as handle:
         handle.write(screen.raw)
 
 

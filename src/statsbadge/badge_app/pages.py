@@ -46,7 +46,9 @@ SCALE = {
     "up_bps": 12.5e6, "down_bps": 12.5e6, "read_bps": 500e6, "write_bps": 500e6,
 }
 
-PERCENT = ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct")
+# cores is a list of percentages, which is not obvious from the name: without it a
+# per-core page drew bare numbers and scaled its graph from the data.
+PERCENT = ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores")
 
 
 def name_for(ref):
@@ -147,7 +149,7 @@ def _bars(page, frame, _history, theme):
     if not isinstance(values, list):
         values = [] if values is None else [values]
     maximum = float(page.get("max") or 100.0)
-    draw.bars(theme, values, maximum)
+    draw.bars(theme, values, maximum, ref.split(".")[-1])
 
 
 def _graph(page, frame, history, theme):

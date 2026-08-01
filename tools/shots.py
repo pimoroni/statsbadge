@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Turn the badge's raw framebuffer dumps into PNGs.
 
-    python3 tools/shots.py shots
+    python3 tools/shots.py build/shots              # convert what the badge dumped
+    python3 tools/shots.py build/shots --publish    # and copy the README's own into shots/
+
+The badge writes frames into build/shots, which is ignored: a render of every page and
+every theme is a review artefact, and committing all of it means a drawing change shows up
+as forty modified images. Only what the README links is checked in, and --publish reads the
+README to decide which those are, so the set maintains itself.
 
 The dumps are 320x240 straight from `screen.raw`: R G B A per pixel and
 premultiplied, so alpha is divided back out here. Measured, not assumed - a pure red
@@ -9,7 +15,10 @@ premultiplied, so alpha is divided back out here. Measured, not assumed - a pure
 """
 
 import pathlib
+import re
+import shutil
 import struct
+import subprocess
 import sys
 import zlib
 
@@ -63,7 +72,55 @@ def main(directory):
     return None
 
 
+def shrink(path):
+    """Halve a shot with pngquant, where it is installed.
+
+    A palette is plenty for a flat vector render: 256 colours against the thousand or so
+    of antialiasing takes these from about 13KB to 7KB with nothing visible to tell them
+    apart, checked at 2x on the gauges, which are the worst of them.
+
+    Indexed PNGs are fine here, unlike the app's icon: nothing on the badge loads these,
+    and its image.load mis-decodes a palette.
+    """
+    if not shutil.which("pngquant"):
+        return
+    subprocess.run(["pngquant", "--force", "--skip-if-larger", "--strip", "--speed", "1",
+                    "--output", str(path), "--", str(path)], check=False)
+
+
+def linked_by_readme():
+    """The shot names the README shows, which is what earns a place in the repository."""
+    readme = pathlib.Path(__file__).resolve().parent.parent / "README.md"
+    return sorted(set(re.findall(r"shots/([A-Za-z0-9_]+)\.png", readme.read_text())))
+
+
+def publish(source, target="shots"):
+    """Copy the README's shots out of a build directory, and say what is missing."""
+    target = pathlib.Path(target)
+    target.mkdir(parents=True, exist_ok=True)
+    missing = []
+    for name in linked_by_readme():
+        found = pathlib.Path(source) / f"{name}.png"
+        if not found.exists():
+            missing.append(name)
+            continue
+        shutil.copyfile(found, target / f"{name}.png")
+        shrink(target / f"{name}.png")
+    print(f"published {len(linked_by_readme()) - len(missing)} of "
+          f"{len(linked_by_readme())} into {target}")
+    if missing:
+        print("not in " + str(source) + ": " + ", ".join(missing))
+    # Anything checked in that the README no longer shows is only taking up room.
+    extra = sorted(p.stem for p in target.glob("*.png")
+                   if p.stem not in linked_by_readme())
+    if extra:
+        print("checked in but unreferenced: " + ", ".join(extra))
+
+
 if __name__ == "__main__":
-    fault = main(sys.argv[1] if len(sys.argv) > 1 else "shots")
+    where = sys.argv[1] if len(sys.argv) > 1 else "build/shots"
+    fault = main(where)
+    if not fault and "--publish" in sys.argv:
+        publish(where)
     if fault:
         sys.exit(fault)

@@ -182,7 +182,7 @@ mpremote connect PORT mount . run tools/live.py            # against a real serv
 mpremote connect PORT mount . run tools/run.py             # the whole app
 mpremote connect PORT mount . run tools/multihost_test.py  # pairing config
 mpremote connect PORT mount . run tools/failover_test.py   # a changed host IP
-uv run python tools/shots.py shots                         # dumps to PNGs
+uv run python tools/shots.py build/shots --publish          # PNGs, then the README's
 ```
 
 [`tools/probe.py`](tools/probe.py) draws every page kind and theme against a canned frame and needs no server. It also draws a deliberately sparse frame, because "unknown" rendering as `0` is the easiest thing here to break, and every screen that is not a page: the splash, the setup steps, the hosts menu, the error banners. Those call the app's own drawing, so a screenshot cannot go stale against a reworded screen. [`tools/check_app.py`](tools/check_app.py) is what CI runs: the badge compiles these from source, where a syntax error is a crash dialog and nothing else, and it walks the AST for names that are neither defined, imported, nor badge builtins - these modules cannot be imported on the host to find that out.

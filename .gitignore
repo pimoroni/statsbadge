@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 *.egg-info/
 .ruff_cache/
+# The badge dumps frames into build/, which is ignored: a render of every page and
+# theme is a review artefact, and committing all of it turns a drawing change into
+# forty modified images. `tools/shots.py --publish` copies out the ones the README
+# links, and those are the only shots checked in.
 shots/*.raw
 stats/ext/
 build/

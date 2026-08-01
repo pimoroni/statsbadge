@@ -2,12 +2,13 @@
 
     statsbadge serve
     mpremote connect PORT mount . run tools/live_shots.py
-    python3 tools/shots.py shots
+    python3 tools/shots.py build/shots
 
 Unlike tools/probe.py this uses whatever the host actually reports, so it shows what a
 page looks like when a field is missing - which on macOS is every temperature.
 """
 
+import os
 import sys
 import time
 
@@ -18,6 +19,12 @@ import net
 import pages as pages_module
 import look
 import wifi
+
+for directory in ("/remote/build", "/remote/build/shots"):
+    try:
+        os.mkdir(directory)
+    except OSError:
+        pass
 
 badge.mode(HIRES | VSYNC)
 screen.antialias = image.X4
@@ -64,7 +71,7 @@ for index, page in enumerate(pages):
                         frame.get("sys", {}).get("host"))
     took = time.ticks_diff(time.ticks_us(), t0) / 1000
     badge.update()
-    with open("/remote/shots/live_{}.raw".format(page["id"]), "wb") as handle:
+    with open("/remote/build/shots/live_{}.raw".format(page["id"]), "wb") as handle:
         handle.write(screen.raw)
     field = page.get("field") or ",".join(page.get("fields", []))
     print(f"  {page['id']:<8} {page['kind']:<6} {took:6.2f} ms  {field}")

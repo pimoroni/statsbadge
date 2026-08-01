@@ -2,7 +2,7 @@
 
 Your PC's vitals on a Badgeware badge, paged with UP and DOWN. An Afterburner-style panel that is not welded to a keyboard.
 
-![CPU](shots/live_cpu.png) ![Load](shots/gauges.png)
+![CPU](shots/cpu.png) ![Load](shots/gauges.png)
 
 A server on the host measures things and serves them; the badge fetches and draws them. The host also serves a web page for choosing which screens appear, so rearranging the display needs no reinstall.
 
@@ -122,7 +122,7 @@ Eleven kinds and any field can go in any of them. Six show readings as they are:
 
 `waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Ten themes: `dark`, `light`, `frost`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images.
 
-![Cores](shots/live_cores.png) ![Network](shots/live_net.png) ![Disk](shots/live_disk.png) ![Processor](shots/gauges2.png) ![Host](shots/live_host.png) ![Vapor](shots/theme_vapor.png)
+![Cores](shots/cores.png) ![Network](shots/net.png) ![Disk](shots/disk.png) ![Processor](shots/gauges2.png) ![Host](shots/host.png) ![Vapor](shots/theme_vapor.png)
 
 ![Waterfall](shots/waterfall.png) ![Rings](shots/rings.png) ![Sparklines](shots/spark.png) ![Radar](shots/radar.png) ![Trend](shots/trend.png)
 

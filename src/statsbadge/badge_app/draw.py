@@ -221,7 +221,7 @@ def _duration(seconds):
 def short_unit(field):
     if field.endswith("_bps"):
         return "/s"
-    if field in ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"):
+    if field in ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores"):
         return "%"
     if field == "temp":
         return "°C"
@@ -418,9 +418,13 @@ def readout(theme, index, name, value_text, fraction=None):
             screen.rectangle(rect(x, y + 28, int(width * fraction), 3))
 
 
-def bars(theme, values, maximum=100.0):
+def bars(theme, values, maximum=100.0, field="pct"):
     """A stack of horizontal bars. Raster rectangles: no AA needed on an axis-aligned
-    bar, and this is the one page that can have 32 of them."""
+    bar, and this is the one page that can have 32 of them.
+
+    `field` is what the values are, so a per-core load reads as a percentage. Without it
+    every bar was a bare number.
+    """
     if not values:
         return
     count = min(len(values), 16)
@@ -430,7 +434,8 @@ def bars(theme, values, maximum=100.0):
     height = max(4, slot - 3)
     label_w = 26
     x = look.PAD + label_w
-    width = look.W - x - look.PAD - 34
+    # Room on the right for the widest reading plus its unit, which is "100%".
+    width = look.W - x - look.PAD - 40
 
     for i in range(count):
         value = values[i] or 0.0
@@ -442,7 +447,7 @@ def bars(theme, values, maximum=100.0):
         if fraction > 0:
             screen.pen = color.rgb(*theme.at(fraction))
             screen.rectangle(rect(x, y, max(1, int(width * fraction)), height))
-        blit_label(f"{value:.0f}", look.SIZE_SMALL, theme.ink,
+        blit_label(reading(value, field), look.SIZE_SMALL, theme.ink,
                    look.W - look.PAD, y - 1, align=2)
 
 
