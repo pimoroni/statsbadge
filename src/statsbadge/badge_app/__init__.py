@@ -644,6 +644,23 @@ class App:
             # while that is true, so a sweeping page costs a third of a second's drawing
             # and not the whole second.
             self.dirty = True
+        if pages_module.ANIMATE and page is not None and page.get("kind") in pages_module.PLOTS:
+            # A plot walks left the whole time between readings, so unlike a gauge it is
+            # never resting: it wants every frame, the way the waterfall does.
+            pages_module.PHASE = self.poll_phase(now)
+            self.dirty = True
+
+    def poll_phase(self, now):
+        """How far through the interval between polls this frame is, 0 to 1.
+
+        From the reading's own arrival rather than a frame count, so a plot walks at the
+        speed the readings actually come and stops at a sample's width when one is late.
+        """
+        interval = int((self.layout or {}).get("interval_ms", 1000)) or 1000
+        since = time.ticks_diff(now, self._last_ok)
+        if since <= 0:
+            return 0.0
+        return 1.0 if since >= interval else since / interval
 
     def advance_if_idle(self, now):
         """Page on by itself when nobody has pressed anything for a while.

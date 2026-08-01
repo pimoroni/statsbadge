@@ -26,6 +26,14 @@ ANIMATED = set()
 # itself steps either way: the number is the measurement, and one redrawn at frame rate
 # would bake a sprite a frame.
 ANIMATE = False
+# How far through the interval between polls the frame being drawn is, 0 when a reading has
+# just landed and approaching 1 as the next one is due. Set by the app, which is what knows
+# when the last frame arrived and how often they come; used to walk a plot left, so a graph
+# scrolls between readings instead of jumping a sample every second.
+PHASE = 0.0
+# The kinds that draw a series and so move with PHASE, rather than a reading that moves when
+# a new one lands.
+PLOTS = ("graph", "spark", "trend")
 # How long a sweep takes. A reading lands once a second, so this is the fraction of that
 # second the needle is moving for; long enough to read as motion, short enough that the
 # gauge is standing at the measurement most of the time.
@@ -222,6 +230,18 @@ def _bars(page, frame, _history, theme):
               _swept_lanes(ref, values, maximum))
 
 
+def _walk():
+    """How far a plot should have walked left, in samples, or 0 to draw it where it stands.
+
+    The readings arrive a second apart and a plot is a fixed number of them, so between two
+    polls the whole series is one sample out of date at the right hand edge. Walking it left
+    by the fraction of the interval that has passed is what makes it scroll rather than step,
+    and the page asks for frames all the while - a plot in motion is not resting between
+    readings the way a gauge does.
+    """
+    return PHASE if ANIMATE else 0.0
+
+
 def _swept_lanes(ref, values, maximum):
     """Where each bar of a row should be drawn to, or None to draw them at their readings.
 
@@ -249,7 +269,7 @@ def _graph(page, frame, history, theme):
     field = refs[0].split(".")[-1] if refs else "pct"
     maximum = float(page["max"]) if page.get("max") else (
         100.0 if field in PERCENT else None)
-    draw.graph(theme, series, labels, maximum)
+    draw.graph(theme, series, labels, maximum, shift=_walk())
 
 
 def _grid(page, frame, _history, theme):
@@ -375,7 +395,7 @@ def _spark(page, frame, history, theme):
         value = value_of(frame, ref)
         entries.append((labels[index], draw.reading(value, ref.split(".")[-1]),
                         points, peak))
-    draw.sparklines(theme, entries)
+    draw.sparklines(theme, entries, shift=_walk())
 
 
 def _radar(page, frame, _history, theme):
@@ -402,7 +422,8 @@ def _trend(page, frame, history, theme):
             delta = float(value) - float(was)
     fraction = fraction_of(ref, value, page, frame)
     draw.trend(theme, draw.fmt(value, field), draw.short_unit(field), name_for(ref),
-               delta, points, peak, fraction, hot=severity_of(ref, fraction))
+               delta, points, peak, fraction, hot=severity_of(ref, fraction),
+               shift=_walk())
 
 
 # How far between polls the waterfall has got, so it can interpolate rather than step.
