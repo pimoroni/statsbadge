@@ -359,8 +359,12 @@ def render(page, frame, _history, theme):
     # its weather - keyed by page id, so this side looks up what it is drawing rather than
     # deriving a key from a name that may not exist. Nothing there falls back to the
     # host's own clock and the default place.
+    host = frame.get("clock") or {}
     here = (frame.get("places") or {}).get((page or {}).get("id"))
-    clock = here or frame.get("clock") or {}
+    # A place carries a time only once its forecast has landed, that being where its offset
+    # from UTC comes from, so until then the page shows the host's clock rather than nothing:
+    # two places are fetched on their own schedules and one of them is second.
+    clock = here if (here or {}).get("hour") is not None else host
     weather = here or frame.get("weather") or {}
     label = here.get("place") if here else None
 
@@ -378,8 +382,12 @@ def render(page, frame, _history, theme):
         draw.blit_label("no time", look.SIZE_VALUE, theme.dim,
                         CENTRE[0], CENTRE[1] - 8, align=1)
     else:
-        _resync(clock)
-        hour, minute, second = _local_time()
+        # Synced from the host's own clock and never from a place's: there is one hardware
+        # clock, and two pages in two zones would otherwise set it to their own each time
+        # you turned to them. A page elsewhere draws from that clock plus the difference
+        # between the two readings, which is in the frame already.
+        _resync(host, frame.get("seq"))
+        hour, minute, second = _local_time(_zone_offset(host, here))
         hour_hand, minute_hand, second_hand = hands
         _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, rgb["hands"])
         _hand(minute_hand, minute * 6.0 + second * 0.1, rgb["hands"])
@@ -430,13 +438,31 @@ def render(page, frame, _history, theme):
 RESYNC_S = 30
 
 _synced = False
+# The reading the last sync was considered against. A frame is redrawn many times over
+# between polls and carries the same time throughout, so what makes a reading worth
+# comparing to is that it is a new one.
+_synced_seq = None
 
 # Where the local second last changed, so a fraction of it can be worked out.
 _phase_second = None
 _phase_at = 0
 
 
-def _local_time():
+def _zone_offset(host, there):
+    """Seconds between the host's local time and the place a page is showing.
+
+    Worked out from the two readings in the frame rather than from a stored offset, so it
+    costs nothing and cannot go stale, and the shortest way round the day so that either side
+    of midnight is not twenty-three hours.
+    """
+    if not host or not there or there.get("hour") is None or host.get("hour") is None:
+        return 0
+    theirs = there["hour"] * 3600 + there["minute"] * 60 + there.get("seconds", 0)
+    ours = host["hour"] * 3600 + host["minute"] * 60 + host.get("seconds", 0)
+    return (theirs - ours + 43200) % 86400 - 43200
+
+
+def _local_time(offset=0):
     """Hour, minute and a fractional second, from the badge's own clock.
 
     The hands run on hardware, not on the frame. `time.localtime()` costs 14us and its
@@ -455,11 +481,12 @@ def _local_time():
     if whole != _phase_second:
         _phase_second = whole
         _phase_at = now
-    fraction = time.ticks_diff(now, _phase_at) / 1000.0
-    return parts[3], parts[4], whole + min(1.0, fraction)
+    fraction = min(1.0, time.ticks_diff(now, _phase_at) / 1000.0)
+    at = (parts[3] * 3600 + parts[4] * 60 + whole + offset) % 86400
+    return at // 3600, (at % 3600) // 60, at % 60 + fraction
 
 
-def _resync(clock):
+def _resync(clock, seq=None):
     """Set the badge's clock from the host's, on the first reading and rarely after.
 
     The host is the authority, being the machine with a network time source, but a reading
@@ -469,8 +496,19 @@ def _resync(clock):
 
     So the first reading sets it and the rest are ignored until they disagree by RESYNC_S,
     which no amount of pipeline latency can account for.
+
+    Only new readings count. A frame is drawn forty-five times a second and holds the time it
+    was polled at throughout, so with the host away the badge's own clock runs on against a
+    frozen one: left to itself the disagreement reaches RESYNC_S after half a minute and the
+    hands are dragged back to where the last poll left them, again every thirty seconds after
+    that. Setting the clock also lands the sub-second at zero, which restarts the sweep
+    part-way through a second, so a sync nobody needed shows as a stumble even when it is
+    only correcting a fraction.
     """
-    global _synced
+    global _synced, _synced_seq
+    if _synced and seq == _synced_seq:
+        return
+    _synced_seq = seq
     hour = clock.get("hour")
     minute = clock.get("minute")
     second = clock.get("seconds")

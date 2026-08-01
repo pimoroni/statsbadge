@@ -1558,6 +1558,28 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(_h):
 
 
 @check
+def test_the_clock_only_syncs_from_a_fresh_reading(_h):
+    """A frame is drawn forty-five times a second and holds the time it was polled at, so a
+    stale reading treated as authority drags the hands back to it. Measured on the badge: with
+    the reading reconsidered every frame the clock jumped back 30s at 31s, and again after."""
+    badge = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
+    source = (badge / "clockface.py").read_text()
+
+    resync = source[source.index("def _resync("):]
+    resync = resync[:resync.index("\n\n\n") if "\n\n\n" in resync else len(resync)]
+    assert "_synced_seq" in resync, "every frame reconsiders the same reading"
+    assert resync.index("_synced_seq") < resync.index("RTC()"), (
+        "the clock is set before the reading is checked for being a new one")
+
+    # Synced from the host's clock, never a place's: there is one hardware clock and two pages
+    # in two zones would set it to their own each time you turned to them.
+    render = source[source.index("def render(page"):]
+    render = render[:render.index("\n\n\n") if "\n\n\n" in render else len(render)]
+    assert "_resync(host," in render, render[:400]
+    assert "_zone_offset(host, here)" in render, "a page elsewhere is not offset from the host"
+
+
+@check
 def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
     """The face list is host side and the renderers are badge side, so a face added to one
     and not the other is a page that draws the default and says nothing."""
