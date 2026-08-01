@@ -292,16 +292,36 @@ def _bake_bands(theme, title, index, total, subtitle):
     footer.pen = color.rgb(*theme.panel)
     footer.rectangle(rect(0, 0, look.W, look.FOOTER_H))
     if total > 1:
-        # One pip per page, the current one in the accent colour.
-        pip_w, gap = 14, 5
-        span = total * pip_w + (total - 1) * gap
-        x = (look.W - span) // 2
-        y = look.FOOTER_H // 2 - 2
-        for i in range(total):
-            footer.pen = color.rgb(*(theme.accent if i == index else theme.grid))
-            footer.shape(shape.rounded_rectangle(
-                rect(x + i * (pip_w + gap), y, pip_w, 4), 2))
+        _pips(footer, theme, index, total)
     return (header, footer)
+
+
+# The pips have this much of the width to themselves. A dash shortens as they pack in,
+# down to a dot and no further: a mark thinner than it is tall stops reading as a mark.
+PIP_ROOM = look.W - look.PAD * 4
+PIP_MAX_W, PIP_GAP, PIP_DOT, PIP_TIGHT = 14, 5, 4, 2
+
+
+def _pips(footer, theme, index, total):
+    """One pip per page, the current one in the accent colour.
+
+    Shortens to fit, and tightens the spacing before it gives up any more length. Enough
+    pages to fill the row even as dots is tough luck: it is a badge with six buttons and
+    nobody is paging through forty screens.
+    """
+    gap = PIP_GAP
+    pip_w = min(PIP_MAX_W, (PIP_ROOM - (total - 1) * gap) // total)
+    if pip_w < PIP_DOT:
+        gap = PIP_TIGHT
+        pip_w = max(PIP_DOT, min(PIP_MAX_W, (PIP_ROOM - (total - 1) * gap) // total))
+
+    y = look.FOOTER_H // 2 - 2
+    span = total * pip_w + (total - 1) * gap
+    x = (look.W - span) // 2
+    for i in range(total):
+        footer.pen = color.rgb(*(theme.accent if i == index else theme.grid))
+        footer.shape(shape.rounded_rectangle(
+            rect(x + i * (pip_w + gap), y, pip_w, 4), min(2, pip_w // 2)))
 
 
 # -- widgets ----------------------------------------------------------------
