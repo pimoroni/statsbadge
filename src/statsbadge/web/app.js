@@ -23,19 +23,7 @@ const SHAPE = {
   waterfall: { one: "field", many: null, max: 0, label: "", pool: "list" },
 };
 
-// Theme swatches, mirroring stats/look.py so the UI shows what the badge will do.
-const THEME_COLOURS = {
-  dark: ["#12141c", "#38e8d1", "#7ed375", "#ec9f07", "#d71908"],
-  light: ["#faf7f2", "#10919d", "#51924a", "#bc670c", "#8a0316"],
-  frost: ["#f4f8fc", "#0064b9", "#008eb6", "#007d78", "#7d4b00", "#880001"],
-  mono: ["#080808", "#ebebeb", "#6e6e6e", "#9a9a9a", "#cccccc", "#ffffff"],
-  red: ["#1c1210", "#ff523e", "#a50000", "#ff523e", "#ffc7bc"],
-  green: ["#10160f", "#02b900", "#006900", "#02b900", "#4bff39"],
-  cyan: ["#0c161a", "#00a9d4", "#005f79", "#00a9d4", "#8de6ff"],
-  amber: ["#0e0800", "#ffb000", "#8c5000", "#c07800", "#ffb000", "#fff0b4"],
-  blueprint: ["#061022", "#5ab4ff", "#3c82dc", "#78d2ff", "#b4e4ff", "#ffffff"],
-  vapor: ["#12081e", "#ff5ac8", "#5adcff", "#be82ff", "#e65ad2", "#ff50be"],
-};
+// Theme swatches come from the host, which is where the palettes live.
 
 async function api(path, options) {
   const response = await fetch(path, options);
@@ -567,7 +555,12 @@ function bindRange(id, key, format, scale) {
 function swatches() {
   const node = $("swatches");
   node.innerHTML = "";
-  for (const colour of THEME_COLOURS[config.theme] || []) {
+  const palette = ((caps && caps.palettes) || {})[config.theme];
+  const colours = palette
+    ? [palette.bg, palette.ink, palette.accent, ...(palette.ramp || [])].map(rgb =>
+        `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`)
+    : [];
+  for (const colour of colours) {
     const chip = document.createElement("i");
     chip.style.background = colour;
     node.appendChild(chip);

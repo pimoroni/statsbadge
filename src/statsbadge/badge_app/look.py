@@ -142,6 +142,9 @@ class Theme:
         return stops[-1][1]
 
 
+# What the app draws with before its first layout lands, and if one ever arrives without a
+# palette. Every other theme is data on the host, in statsbadge/themes.py, and travels here
+# in the layout - so a palette can be changed or invented with nothing installed.
 THEMES = {
     "dark": Theme(
         "dark",
@@ -151,71 +154,6 @@ THEMES = {
               (0.72, (236, 159, 7)), (1.0, (215, 25, 8))),
         grid=(44, 51, 70), case=0.22,
     ),
-    "light": Theme(
-        "light",
-        bg=(250, 247, 242), panel=(240, 236, 228), ink=(30, 26, 20), dim=(102, 94, 82),
-        accent=(16, 145, 157),
-        ramp=((0.0, (16, 145, 157)), (0.45, (81, 146, 74)),
-              (0.72, (188, 103, 12)), (1.0, (138, 3, 22))),
-        grid=(216, 209, 195), case=0.3,
-    ),
-    "frost": Theme(
-        "frost",
-        bg=(244, 248, 252), panel=(231, 237, 244), ink=(22, 27, 33), dim=(87, 96, 107),
-        accent=(0, 100, 185),
-        ramp=((0.0, (0, 142, 182)), (0.45, (0, 125, 120)),
-              (0.72, (125, 75, 0)), (1.0, (136, 0, 1))),
-        grid=(200, 211, 223), case=0.3,
-    ),
-    "mono": Theme(
-        "mono",
-        bg=(8, 8, 8), panel=(20, 20, 20), ink=(245, 245, 245), dim=(110, 110, 110),
-        accent=(235, 235, 235),
-        ramp=((0.0, (110, 110, 110)), (1.0, (255, 255, 255))),
-        grid=(38, 38, 38), case=0.14,
-    ),
-    "red": Theme(
-        "red",
-        bg=(28, 18, 16), panel=(42, 26, 23), ink=(255, 242, 240), dim=(169, 140, 134),
-        accent=(255, 82, 62),
-        ramp=((0.0, (165, 0, 0)), (0.7, (255, 82, 62)), (1.0, (255, 199, 188))),
-        grid=(68, 45, 41), case=0.24,
-    ),
-    "green": Theme(
-        "green",
-        bg=(16, 22, 15), panel=(24, 34, 22), ink=(240, 248, 239), dim=(135, 154, 133),
-        accent=(2, 185, 0),
-        ramp=((0.0, (0, 105, 0)), (0.7, (2, 185, 0)), (1.0, (75, 255, 57))),
-        grid=(41, 56, 40), case=0.24,
-    ),
-    "cyan": Theme(
-        "cyan",
-        bg=(12, 22, 26), panel=(16, 33, 40), ink=(236, 248, 252), dim=(124, 153, 165),
-        accent=(0, 169, 212),
-        ramp=((0.0, (0, 95, 121)), (0.7, (0, 169, 212)), (1.0, (141, 230, 255))),
-        grid=(30, 56, 65), case=0.24,
-    ),
-    "amber": Theme(
-        "amber",
-        bg=(14, 8, 0), panel=(30, 18, 2), ink=(255, 190, 70), dim=(120, 80, 20),
-        accent=(255, 176, 0),
-        ramp=((0.0, (140, 80, 0)), (0.7, (255, 176, 0)), (1.0, (255, 240, 180))),
-        grid=(56, 34, 4), case=0.26,
-    ),
-    "blueprint": Theme(
-        "blueprint",
-        bg=(6, 16, 34), panel=(12, 28, 56), ink=(214, 232, 255), dim=(88, 120, 170),
-        accent=(90, 180, 255),
-        ramp=((0.0, (60, 130, 220)), (0.6, (120, 210, 255)), (1.0, (255, 255, 255))),
-        grid=(28, 56, 100), case=0.18,
-    ),
-    "vapor": Theme(
-        "vapor",
-        bg=(18, 8, 30), panel=(34, 14, 56), ink=(245, 225, 255), dim=(140, 100, 180),
-        accent=(255, 90, 200),
-        ramp=((0.0, (90, 220, 255)), (0.5, (190, 130, 255)), (1.0, (255, 80, 190))),
-        grid=(56, 26, 90), case=0.24,
-    ),
 }
 
 DEFAULT = "dark"
@@ -223,3 +161,30 @@ DEFAULT = "dark"
 
 def get(name):
     return THEMES.get(name, THEMES[DEFAULT])
+
+
+def from_palette(name, palette):
+    """A theme out of the colours the host sent, or None if they are not usable.
+
+    Anything the badge would go on to hand to `color.rgb` is checked here rather than at
+    the point of drawing: a palette arrives over the network, and a bad one would otherwise
+    be a crash on every frame instead of a page in the theme it booted with.
+    """
+    if not isinstance(palette, dict):
+        return None
+    try:
+        colours = {key: tuple(int(v) for v in palette[key][:3])
+                   for key in ("bg", "panel", "ink", "dim", "accent")}
+        for rgb in colours.values():
+            if len(rgb) != 3:
+                return None
+        grid = palette.get("grid")
+        ramp = tuple((float(pos), tuple(int(v) for v in rgb[:3]))
+                     for pos, rgb in palette["ramp"])
+        if not ramp:
+            return None
+        return Theme(name, ramp=ramp, case=float(palette.get("case", 0.1)),
+                     grid=tuple(int(v) for v in grid[:3]) if grid else None,
+                     **colours)
+    except (TypeError, ValueError, KeyError, IndexError):
+        return None

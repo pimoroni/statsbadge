@@ -329,26 +329,6 @@ def test_a_stale_precompile_is_not_what_gets_installed(_h):
 
 
 @check
-def test_every_offered_theme_exists_on_the_badge(_h):
-    """The UI offers whatever layout.THEMES lists, and the badge has to draw it."""
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src",
-                                    "statsbadge", "badge_app"))
-    import look
-
-    assert set(layout.THEMES) == set(look.THEMES), (
-        set(layout.THEMES) ^ set(look.THEMES))
-    assert layout.DEFAULT_CONFIG["theme"] == look.DEFAULT
-    for name in look.THEMES:
-        theme = look.get(name)
-        assert theme.name == name, theme.name
-        stops = theme.ramp
-        assert stops[0][0] == 0.0 and stops[-1][0] == 1.0, name
-        assert list(stops) == sorted(stops, key=lambda s: s[0]), name
-        for _position, rgb in stops:
-            assert len(rgb) == 3 and all(0 <= v <= 255 for v in rgb), (name, rgb)
-
-
-@check
 def test_badge_provisioned_by_another_process_is_accepted(h):
     """`statsbadge install` writes badges.json while the server is already up.
 
@@ -1342,6 +1322,62 @@ def test_smooth_graphs_are_a_setting_that_reaches_the_badge(_h):
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
     applied = app[app.index("def apply_layout"):]
     assert "draw.SMOOTH" in applied[:applied.index("\n    def ", 1)]
+
+
+@check
+def test_a_theme_travels_as_its_colours(_h):
+    """A theme is a table of colours, so it is config: the badge is sent the palette and not
+    only the name, and one it has never heard of draws as well as one it ships with."""
+    import sys
+
+    from statsbadge import themes
+
+    sys.path.insert(0, install.app_source_dir())
+    import look
+
+    # Every palette is complete, ordered and usable by the badge's own builder.
+    assert layout.DEFAULT_CONFIG["theme"] == themes.DEFAULT
+    for name, palette in themes.PALETTES.items():
+        assert name in layout.THEMES, f"{name} is not offered"
+        built = look.from_palette(name, palette)
+        assert built is not None, f"the badge cannot build {name}"
+        assert built.name == name, built.name
+        stops = built.ramp
+        assert stops[0][0] == 0.0 and stops[-1][0] == 1.0, name
+        assert list(stops) == sorted(stops, key=lambda stop: stop[0]), name
+        for fraction in (0.0, 0.5, 1.0):
+            assert len(built.at(fraction)) == 3, (name, fraction)
+
+    # And the one the app carries to boot with agrees with the host's copy of it, or the
+    # first frame is drawn in colours the config never asked for.
+    assert list(look.THEMES) == [themes.DEFAULT], list(look.THEMES)
+    booted, sent = look.THEMES[themes.DEFAULT], themes.PALETTES[themes.DEFAULT]
+    for key in ("bg", "panel", "ink", "dim", "accent", "grid"):
+        assert tuple(getattr(booted, key)) == tuple(sent[key]), key
+    assert booted.ramp == sent["ramp"]
+
+    # The colours are on the payload the badge fetches, keyed to the theme it chose.
+    config = layout.Config(os.path.join(tempfile.mkdtemp(), "layout.json"))
+    config.replace({"theme": "eva01", "pages": layout.DEFAULT_PAGES})
+    sent = config.for_badge()
+    assert sent["theme"] == "eva01"
+    assert sent["palette"] == themes.PALETTES["eva01"], sent["palette"]
+    assert look.from_palette(sent["theme"], sent["palette"]).accent == (143, 212, 0)
+
+    # Nonsense off the network is refused rather than drawn: a bad palette would otherwise
+    # be a crash on every frame instead of a page in the theme it booted with.
+    for bad in (None, {}, {"bg": "red"}, {"bg": (1, 2, 3), "ramp": ()}):
+        assert look.from_palette("bad", bad) is None, bad
+
+
+@check
+def test_the_ui_takes_its_swatches_from_the_host(_h):
+    """They used to be a table in app.js with a comment asking for it to be kept in step
+    with the badge, which is two places to edit and one to forget."""
+    web = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    assert "THEME_COLOURS" not in web, "the UI still carries its own palettes"
+    assert "caps.palettes" in web, "the UI does not read the host's palettes"
+    assert '"palettes"' in pathlib.Path("src/statsbadge/server.py").read_text()
 
 
 @check

@@ -21,7 +21,7 @@ import sys
 import threading
 import traceback
 
-from . import auth, commands, extensions, identity, layout
+from . import auth, commands, extensions, identity, layout, themes
 from .collect import Collector
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "web")
@@ -96,6 +96,12 @@ class Service:
         caps = self.collector.capabilities()
         caps["commands"] = commands.names()
         caps["themes"] = list(layout.THEMES)
+        # The colours too, so the UI's swatches are the badge's own and cannot drift from
+        # them: they used to be a table in app.js with a comment asking to be kept in step.
+        caps["palettes"] = {name: {"bg": palette["bg"], "accent": palette["accent"],
+                                   "ink": palette["ink"],
+                                   "ramp": [rgb for _pos, rgb in palette["ramp"]]}
+                            for name, palette in themes.PALETTES.items()}
         caps["kinds"] = list(layout.KINDS)
         caps["extension_pages"] = extensions.badge_pages(self.collector.extensions)
         caps["extension_settings"] = self.extension_settings()

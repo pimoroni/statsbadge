@@ -15,6 +15,8 @@ import os
 import threading
 import time
 
+from . import themes
+
 # A page kind the badge knows how to draw, and what it needs.
 #   dial    one field as a sweep gauge, plus up to three readouts beside it
 #   dials   up to four fields as gauges side by side, each named under its reading
@@ -29,8 +31,9 @@ KINDS = ("dial", "dials", "bars", "graph", "grid", "text",
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
               "rings": 4, "spark": 6, "radar": 6}
 
-THEMES = ("dark", "light", "frost", "mono", "red", "green", "cyan",
-          "amber", "blueprint", "vapor")
+# The names, from the palettes themselves: a theme is data, so adding one is a palette and
+# nothing else.
+THEMES = tuple(themes.PALETTES)
 
 # What to show on a machine nobody has configured. Only pages whose fields the host
 # actually produces survive `prune`, so this is a superset on purpose.
@@ -125,11 +128,17 @@ class Config:
         return cleaned["rev"]
 
     def for_badge(self, capabilities=None):
-        """The layout as the badge should see it: pruned to fields that exist."""
+        """The layout as the badge should see it: pruned to fields that exist.
+
+        The chosen theme travels as its colours and not only its name, so the badge draws
+        what this host knows about rather than what its own copy of the app happened to
+        ship with. 213 bytes, on a payload that is only refetched when `rev` moves.
+        """
         data = self.snapshot()
         data.pop("settings", None)
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
+        data["palette"] = themes.PALETTES.get(data.get("theme"), themes.PALETTES[themes.DEFAULT])
         return data
 
 

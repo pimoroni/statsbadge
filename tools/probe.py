@@ -184,10 +184,14 @@ pages_module.render(PAGES[0], FRAME, HISTORY, theme, 0, len(PAGES), "host")
 print("\nfirst draw of a page, cold cache: %.1f ms"
       % (time.ticks_diff(time.ticks_us(), t) / 1000))
 
+# Every palette the host has, built the way the badge builds one from a layout: the app
+# itself only carries the one it boots with.
+sys.path.insert(0, "/remote/src")
+from statsbadge import themes  # noqa: E402
+
 print("\nevery theme, on the CPU dial:")
-for name in ("dark", "light", "frost", "mono", "red", "green", "cyan",
-             "amber", "blueprint", "vapor"):
-    theme = look.get(name)
+for name, palette in themes.PALETTES.items():
+    theme = look.from_palette(name, palette) or look.get(name)
     draw.clear_cache()
     per_frame = time_page(PAGES[0], theme)
     pages_module.render(PAGES[0], FRAME, HISTORY, theme, 0, len(PAGES), "workshop-pc")

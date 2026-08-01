@@ -120,9 +120,9 @@ Eleven kinds and any field can go in any of them. Six show readings as they are:
 | `trend` | one big reading, which way it is going, and where it has been |
 | `waterfall` | a list field as lanes over time, interpolated between polls |
 
-`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Ten themes: `dark`, `light`, `frost`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images.
+`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Sixteen themes: `dark`, `light`, `frost`, `mono`, `red`, `green`, `cyan`, `amber`, `blueprint`, `vapor`, `sakura`, `watermelon`, `shell`, `eva00`, `eva01`, `eva02`. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images - and the palette travels to the badge with the layout, so it is config: [`themes.py`](src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
 
-![Cores](shots/cores.png) ![Network](shots/net.png) ![Disk](shots/disk.png) ![Processor](shots/gauges2.png) ![Host](shots/host.png) ![Vapor](shots/theme_vapor.png)
+![Cores](shots/cores.png) ![Network](shots/net.png) ![Disk](shots/disk.png) ![Processor](shots/gauges2.png) ![Host](shots/host.png) ![Vapor](shots/theme_vapor.png) ![Sakura](shots/theme_sakura.png) ![Watermelon](shots/theme_watermelon.png) ![Shell](shots/theme_shell.png) ![Unit-01](shots/theme_eva01.png)
 
 ![Waterfall](shots/waterfall.png) ![Rings](shots/rings.png) ![Sparklines](shots/spark.png) ![Radar](shots/radar.png) ![Trend](shots/trend.png)
 

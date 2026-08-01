@@ -303,8 +303,11 @@ class App:
 
     def apply_layout(self):
         theme_name = (self.layout or {}).get("theme", look.DEFAULT)
-        theme = look.get(theme_name)
-        if theme is not self.theme:
+        # The host sends the colours, so a theme it has and this app has never heard of
+        # still draws. Only its own name to fall back on, for a host too old to send them.
+        theme = (look.from_palette(theme_name, (self.layout or {}).get("palette"))
+                 or look.get(theme_name))
+        if theme.name != self.theme.name or theme is not self.theme:
             self.theme = theme
             draw.clear_cache()
         backlight(float((self.layout or {}).get("brightness", 0.8)))
