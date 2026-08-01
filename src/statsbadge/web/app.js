@@ -9,17 +9,18 @@ let dirty = false;
 
 // Which field slots each page kind has, and how many.
 const SHAPE = {
-  dial: { one: "field", many: "readouts", max: 3, label: "Readouts" },
-  dials: { one: null, many: "fields", max: 4, label: "Gauges" },
-  bars: { one: "field", many: null, max: 0, label: "" },
-  graph: { one: null, many: "fields", max: 2, label: "Series" },
-  grid: { one: null, many: "fields", max: 6, label: "Values" },
-  text: { one: null, many: "fields", max: 7, label: "Lines" },
-  rings: { one: null, many: "fields", max: 4, label: "Rings" },
-  spark: { one: null, many: "fields", max: 6, label: "Rows" },
-  radar: { one: null, many: "fields", max: 6, label: "Axes" },
-  trend: { one: "field", many: null, max: 0, label: "" },
-  waterfall: { one: "field", many: null, max: 0, label: "" },
+  dial: { one: "field", many: "readouts", max: 3, label: "Readouts",
+          pool: "gauge", manyPool: "any" },
+  dials: { one: null, many: "fields", max: 4, label: "Gauges", manyPool: "gauge" },
+  bars: { one: "field", many: null, max: 0, label: "", pool: "list" },
+  graph: { one: null, many: "fields", max: 2, label: "Series", manyPool: "series" },
+  grid: { one: null, many: "fields", max: 6, label: "Values", manyPool: "any" },
+  text: { one: null, many: "fields", max: 7, label: "Lines", manyPool: "any" },
+  rings: { one: null, many: "fields", max: 4, label: "Rings", manyPool: "gauge" },
+  spark: { one: null, many: "fields", max: 6, label: "Rows", manyPool: "series" },
+  radar: { one: null, many: "fields", max: 6, label: "Axes", manyPool: "gauge" },
+  trend: { one: "field", many: null, max: 0, label: "", pool: "series" },
+  waterfall: { one: "field", many: null, max: 0, label: "", pool: "list" },
 };
 
 // Theme swatches, mirroring stats/look.py so the UI shows what the badge will do.
@@ -75,17 +76,68 @@ function availableRefs() {
  * appeared twice, once qualified by its group and once again below it.
  */
 function preferredRefs() {
-  return [...new Set(numericRefs().concat(availableRefs()))];
+  // Lists are left out of even this: fmt has nothing to do with one but print it, so a
+  // grid cell handed cpu.cores shows a row of Python.
+  const printable = availableRefs().filter(
+    (ref) => !listFields().includes(ref.split(".")[1]));
+  return [...new Set(numericRefs().concat(printable))];
 }
 
-/** Refs that make sense in a gauge: a number, not a name or a list. */
+/** Refs that are a number at all: not a name, a flag or a list. */
 function numericRefs() {
   return availableRefs().filter((ref) => {
     const field = ref.split(".")[1];
-    return !["name", "host", "os", "arch", "cpu_name", "iface", "cores", "load",
-             "charging"].includes(field);
+    return !["name", "host", "os", "arch", "cpu_name", "iface", "charging"]
+      .includes(field) && !listFields().includes(field);
   });
 }
+
+function listFields() {
+  return caps.list_fields || ["cores", "load"];
+}
+
+/** Refs a gauge can place a needle on: a percentage, or something with a top end.
+ *
+ * Being a number is not enough. Uptime is a number and a ring drawn from it is empty
+ * whatever the machine has been doing, because nothing says what a full one would be.
+ */
+function gaugeRefs() {
+  const percent = caps.percent_fields || [];
+  const scaled = Object.keys(caps.full_scale || {});
+  return numericRefs().filter((ref) => {
+    const field = ref.split(".")[1];
+    return percent.includes(field) || scaled.includes(field);
+  });
+}
+
+/** Refs the host keeps a history ring for, which is what a graph needs to say anything.
+ *
+ * Without one the page plots the live value twice and draws a flat line, which looks like
+ * a reading that never changes rather than one nobody is recording.
+ */
+function seriesRefs() {
+  const kept = caps.graphed || [];
+  const withHistory = numericRefs().filter((ref) => kept.includes(ref));
+  return withHistory.length ? withHistory : numericRefs();
+}
+
+/** Refs that are a list, for the kinds that draw one lane or bar per element. */
+function listRefs() {
+  const lists = availableRefs().filter(
+    (ref) => listFields().includes(ref.split(".")[1]));
+  // A waterfall wants a list per sample; the collector keeps rings for some of them.
+  return lists;
+}
+
+// Which pool each slot draws from. "gauge" needs a top end, "series" only needs to be a
+// number since it scales itself from the data, "list" wants one value per element, and
+// "any" prints whatever it is given.
+const POOLS = {
+  gauge: gaugeRefs,
+  series: seriesRefs,
+  list: listRefs,
+  any: preferredRefs,
+};
 
 /** What to call a group, and one of its fields, in a picker. */
 function groupLabel(group) {
@@ -229,10 +281,8 @@ function pageCard(page, index) {
     const tag = document.createElement("span");
     tag.textContent = page.kind === "bars" ? "List" : "Gauge";
     row.appendChild(tag);
-    const refs = page.kind === "bars"
-      ? availableRefs().filter((r) => ["cpu.cores", "cpu.load"].includes(r))
-      : numericRefs();
-    row.appendChild(refSelect(page[shape.one], refs.length ? refs : availableRefs(),
+    const pool = (POOLS[shape.pool] || POOLS.any)();
+    row.appendChild(refSelect(page[shape.one], pool.length ? pool : availableRefs(),
                               (value) => { page[shape.one] = value; }));
     fields.appendChild(row);
   }
@@ -242,7 +292,8 @@ function pageCard(page, index) {
     current.forEach((ref, slot) => {
       const row = document.createElement("div");
       row.className = "fieldrow";
-      row.appendChild(refSelect(ref, preferredRefs(),
+      const pool = (POOLS[shape.manyPool] || POOLS.any)();
+      row.appendChild(refSelect(ref, pool.length ? pool : availableRefs(),
                                 (value) => { current[slot] = value; }));
       const drop = document.createElement("button");
       drop.className = "small";
@@ -256,7 +307,7 @@ function pageCard(page, index) {
       add.className = "small";
       add.textContent = `+ ${shape.label.toLowerCase()}`;
       add.onclick = () => {
-        const pool = numericRefs();
+        const pool = (POOLS[shape.manyPool] || POOLS.any)();
         page[shape.many] = current.concat([pool[0] || availableRefs()[0]]);
         markDirty();
         renderPages();

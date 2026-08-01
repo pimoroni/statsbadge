@@ -68,6 +68,10 @@ PERCENT_FIELDS = frozenset(
     ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct")
 )
 
+# Fields whose value is a list, which only the kinds that draw a lane or a bar each can
+# use. A gauge handed one has nothing to point at.
+LIST_FIELDS = frozenset(("cores", "load"))
+
 # Sensible full-scale values for the rest, used when a page does not override it.
 FULL_SCALE = {
     "temp": 100.0,      # degrees C
@@ -133,6 +137,10 @@ def describe():
         "version": FRAME_VERSION,
         "groups": {name: list(fields) for name, fields in GROUPS.items()},
         "percent_fields": sorted(PERCENT_FIELDS),
+        # Which fields have a top end, so the UI can keep uptime out of a gauge: a
+        # reading with no full scale draws an empty ring and says nothing.
+        "full_scale": dict(FULL_SCALE),
+        "list_fields": sorted(LIST_FIELDS),
         "units": dict(UNITS),
         "group_labels": dict(GROUP_LABELS),
         "field_labels": {group: dict(fields)

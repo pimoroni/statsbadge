@@ -19,7 +19,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from statsbadge import auth, identity, install, layout, server  # noqa: E402
+from statsbadge import auth, identity, install, layout, model, server  # noqa: E402
 
 
 class Harness:
@@ -1186,6 +1186,45 @@ def test_the_field_picker_offers_each_reading_once(_h):
     assert "function preferredRefs()" in ui
     # And refSelect deduplicates whatever it is handed, so no caller can bring it back.
     assert "new Set(refs)" in ui
+
+
+@check
+def test_every_kind_picks_from_a_pool_that_suits_it(_h):
+    """A gauge offered uptime drew an empty ring, and a grid offered cpu.cores printed a
+    list. Each slot now draws from a pool, and every kind has to name one."""
+    ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
+          / "app.js").read_text()
+    shape = ui[ui.index("const SHAPE = {"):ui.index("// Theme swatches")]
+    pools = ui[ui.index("const POOLS = {"):]
+    pools = pools[:pools.index("}")]
+    named = {name for name in ("gauge", "series", "list", "any") if name in pools}
+
+    for kind in layout.KINDS:
+        # An entry may be wrapped over two lines, so take it up to its closing brace
+        # rather than one line of it.
+        start = shape.find(f"  {kind}: {{")
+        assert start != -1, f"{kind} has no shape"
+        entry = shape[start:shape.index("},", start)]
+        for slot, key in (("one", "pool"), ("many", "manyPool")):
+            if f'{slot}: "' in entry:
+                assert f"{key}:" in entry, f"{kind} has a {slot} slot with no {key}"
+        for pool in named:
+            if f'"{pool}"' in entry:
+                break
+        else:
+            raise AssertionError(f"{kind} names no pool from {sorted(named)}: {entry}")
+
+
+@check
+def test_the_ui_is_told_what_a_gauge_can_scale(_h):
+    """It cannot filter uptime out of a gauge without knowing what has a top end."""
+    described = model.describe()
+    assert "full_scale" in described and described["full_scale"], described.keys()
+    assert "temp" in described["full_scale"]
+    assert "uptime_s" not in described["full_scale"]
+    assert "uptime_s" not in described["percent_fields"]
+    # And which fields are a list, so only the kinds that draw lanes are offered them.
+    assert set(described["list_fields"]) >= {"cores", "load"}
 
 
 def _source_of(fn):

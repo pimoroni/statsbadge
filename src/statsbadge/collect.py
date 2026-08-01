@@ -147,6 +147,10 @@ class Collector:
                  "faults": s.faults, "last_fault": s.last_fault}
                 for s in self.sources + self.extensions
             ],
+            # What has a history ring. A graph of anything else can only draw the live
+            # value twice, which is a flat line whatever the machine is doing.
+            "graphed": [f"{group}.{field}" for group, field in _GRAPHED],
+            "series_fields": [f"{group}.{field}" for group, field in _GRAPHED_SERIES],
             "extensions": [e.name for e in self.extensions],
             "interval": self.interval,
             "uptime_s": int(time.time() - self.started_at),

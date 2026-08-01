@@ -52,6 +52,14 @@ self-blit of the same image 11.3ms, a column as `vspan` per lane against 30 rect
 `onebit` 12ms, `bloom` 21ms, `synthwave` 40ms, `edgeglow` 99ms. Fine for a page that
 redraws once a second, not for one that moves.
 
+**Each field slot draws from a pool, not from everything.** A gauge needs a top end, so it
+is offered percentages and the fields in `model.FULL_SCALE` and nothing else - uptime is a
+number and a ring drawn from it is empty whatever the machine is doing. A graph is offered
+what the collector keeps a ring for, or it plots the live value twice and draws a flat line.
+A list field goes only to the kinds that draw one lane or bar per element, since `fmt` has
+nothing to do with a list but print it. `capabilities` carries `full_scale`, `list_fields`
+and `graphed` so the UI can tell these apart, and every kind in `SHAPE` names its pool.
+
 **A page can only carry what its kind declared.** `page_settings` on a source is the same
 shape as `settings`, keyed into the UI and the validator by page kind; `validate` keeps those
 keys and drops the rest, so a page cannot smuggle anything to the badge. A source that needs
