@@ -30,6 +30,10 @@ class Collector:
         # badge having to have been watching.
         self.history_len = history
         self._history = {}
+        # The busiest each rate has been seen to be, which is the only full scale a
+        # throughput has: nothing states what a full one would be, and the link speed is
+        # not reported on every platform.
+        self._peaks = {}
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -81,9 +85,31 @@ class Collector:
         with self._lock:
             self.seq += 1
             frame["seq"] = self.seq
+            self._push_peaks(frame)
             self.frame = frame
             self._push_history(frame)
         return frame
+
+    def _push_peaks(self, frame):
+        """Track the high-water mark of each rate, decaying so it follows the machine.
+
+        Without the decay one overnight transfer flattens the gauge for as long as the
+        server runs. Without a peak at all a rate has to be scaled by a guess: the 100Mbit
+        this used to assume reads as pegged on a gigabit link and as idle on a slow one.
+        """
+        for group, field in _GRAPHED:
+            if not field.endswith("_bps"):
+                continue
+            value = _dig(frame, group, field)
+            if value is None:
+                continue
+            key = f"{group}.{field}"
+            decayed = self._peaks.get(key, 0.0) * PEAK_DECAY
+            self._peaks[key] = max(float(value), decayed, PEAK_FLOOR)
+        if self._peaks:
+            # Not a model group, so it is never offered as a field; it is scale, not a
+            # reading.
+            frame["peaks"] = {key: round(value) for key, value in self._peaks.items()}
 
     def _push_history(self, frame):
         for group, field in _GRAPHED:
@@ -175,6 +201,12 @@ _GRAPHED_SERIES = (
     ("cpu", "cores"),
 )
 SERIES_LEN = 64
+
+# A peak left alone halves in about ten minutes at a sample a second, so the scale follows
+# the machine rather than remembering one busy night. The floor keeps a quiet link from
+# scaling a trickle up to a full ring.
+PEAK_DECAY = 0.99885
+PEAK_FLOOR = 64 * 1024.0
 
 
 def _dig(frame, group, field):

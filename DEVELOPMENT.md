@@ -52,6 +52,15 @@ self-blit of the same image 11.3ms, a column as `vspan` per lane against 30 rect
 `onebit` 12ms, `bloom` 21ms, `synthwave` 40ms, `edgeglow` 99ms. Fine for a page that
 redraws once a second, not for one that moves.
 
+**A throughput has no full scale, so it is scaled by what it has reached.** 12.5MB/s was
+assumed, which reads as pegged on a gigabit link and as idle on a slow one, and no platform
+reliably reports a link speed - `psutil.net_if_stats()` gives 0 for every interface on
+macOS. The collector keeps a high-water mark per rate instead, decaying by half every ten
+minutes so it follows the machine rather than remembering one busy night, floored at 64KB/s
+so a trickle on a quiet link is not a full ring. It travels as `peaks` in the frame, which
+is scale and not a reading, so it is not a model group and never offered as a field. A
+gauge drawn from a rate states its peak, because otherwise nothing says what full means.
+
 **Each field slot draws from a pool, not from everything.** A gauge needs a top end, so it
 is offered percentages and the fields in `model.FULL_SCALE` and nothing else - uptime is a
 number and a ring drawn from it is empty whatever the machine is doing. A graph is offered

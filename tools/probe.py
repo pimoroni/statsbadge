@@ -45,6 +45,9 @@ FRAME = {
     "disk": {"pct": 74.2, "read_bps": 52428800, "write_bps": 8388608,
              "used_mb": 703840, "total_mb": 948584},
     "power": {"battery_pct": 91, "charging": True, "package_w": 44.2},
+    # What the collector sends as the scale for each rate.
+    "peaks": {"net.down_bps": 23068672, "net.up_bps": 2516582,
+              "disk.read_bps": 104857600, "disk.write_bps": 33554432},
     "fans": [{"name": "cpu", "rpm": 1820}],
     "sys": {"host": "workshop-pc", "os": "Windows 11", "arch": "AMD64",
             "cpu_name": "Ryzen 7 7800X3D", "uptime_s": 271830},
@@ -115,6 +118,9 @@ PAGES = [
                 "power.battery_pct", "power.package_w"]},
     {"id": "rings", "kind": "rings", "title": "Load",
      "fields": ["cpu.pct", "mem.pct", "gpu.pct", "disk.pct"]},
+    # Rates, whose full scale is the peak the host has seen and so has to be stated.
+    {"id": "rings_rate", "kind": "rings", "title": "Throughput",
+     "fields": ["net.down_bps", "net.up_bps", "disk.read_bps"]},
     {"id": "spark", "kind": "spark", "title": "At a glance",
      "fields": ["cpu.pct", "cpu.temp", "mem.pct", "gpu.pct", "net.down_bps",
                 "disk.read_bps"]},

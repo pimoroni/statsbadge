@@ -68,8 +68,13 @@ def value_of(frame, ref):
     return holder.get(field)
 
 
-def fraction_of(ref, value, page=None):
-    """Where a value sits on 0-1, for a gauge."""
+def fraction_of(ref, value, page=None, frame=None):
+    """Where a value sits on 0-1, for a gauge.
+
+    A rate is scaled by the busiest the host has seen it, which it sends with the frame:
+    throughput has no full scale of its own, and the fixed one this used to use reads as
+    pegged on a fast link and as idle on a slow one.
+    """
     if value is None or isinstance(value, (str, bool)):
         return None
     field = ref.split(".")[-1]
@@ -78,13 +83,30 @@ def fraction_of(ref, value, page=None):
     elif field in PERCENT:
         top = 100.0
     else:
-        top = SCALE.get(field)
+        top = peak_of(ref, frame) if field.endswith("_bps") else None
+        top = top or SCALE.get(field)
         if top is None:
             return None
     try:
         return max(0.0, min(1.0, float(value) / top))
     except (TypeError, ValueError, ZeroDivisionError):
         return None
+
+
+def peak_of(ref, frame):
+    """What the host has seen this rate reach, or None before it has sent one."""
+    if not frame:
+        return None
+    peak = (frame.get("peaks") or {}).get(ref)
+    return float(peak) if peak else None
+
+
+def scale_note(ref, frame):
+    """"peak 11.4M/s", for a gauge whose full scale is that and not a round number."""
+    peak = peak_of(ref, frame)
+    if peak is None or not ref.split(".")[-1].endswith("_bps"):
+        return None
+    return "peak " + draw.reading(peak, ref.split(".")[-1])
 
 
 def render(page, frame, history, theme, index, total, subtitle=None):
@@ -105,16 +127,18 @@ def render(page, frame, history, theme, index, total, subtitle=None):
 def _dial(page, frame, _history, theme):
     ref = page.get("field", "")
     value = value_of(frame, ref)
-    fraction = fraction_of(ref, value, page)
+    fraction = fraction_of(ref, value, page, frame)
     field = ref.split(".")[-1]
-    draw.dial(theme, fraction, draw.fmt(value, field), draw.short_unit(field),
-              cold=value is None)
+    # The unit slot says what full means where that is not obvious, which for a rate it
+    # never is.
+    under = scale_note(ref, frame) or draw.short_unit(field)
+    draw.dial(theme, fraction, draw.fmt(value, field), under, cold=value is None)
     for i, readout_ref in enumerate(page.get("readouts", [])[:3]):
         readout_value = value_of(frame, readout_ref)
         readout_field = readout_ref.split(".")[-1]
         draw.readout(theme, i, name_for(readout_ref),
                      draw.fmt(readout_value, readout_field),
-                     fraction_of(readout_ref, readout_value))
+                     fraction_of(readout_ref, readout_value, None, frame))
 
 
 def _bars(page, frame, _history, theme):
@@ -151,7 +175,7 @@ def _grid(page, frame, _history, theme):
         value = value_of(frame, ref)
         field = ref.split(".")[-1]
         entries.append((name_for(ref), draw.reading(value, field),
-                        fraction_of(ref, value), icon_for(ref, by_group)))
+                        fraction_of(ref, value, None, frame), icon_for(ref, by_group)))
     draw.grid(theme, entries)
 
 
@@ -190,7 +214,7 @@ def _dials(page, frame, _history, theme):
         field = ref.split(".")[-1]
         entries.append((group.upper() if by_group else name_for(ref),
                         draw.fmt(value, field),
-                        fraction_of(ref, value, page),
+                        fraction_of(ref, value, page, frame),
                         icon_for(ref, by_group),
                         draw.short_unit(field)))
     draw.dials(theme, entries)
@@ -244,11 +268,12 @@ def _rings(page, frame, _history, theme):
     for index, ref in enumerate(refs):
         value = value_of(frame, ref)
         field = ref.split(".")[-1]
-        fraction = fraction_of(ref, value, page)
+        fraction = fraction_of(ref, value, page, frame)
         # Coloured by its own reading, the way every gauge here is: by position in the
         # stack the outermost ring would always look calm and the innermost alarming.
         rgb = theme.at(fraction) if fraction is not None else theme.grid
-        entries.append((labels[index], draw.reading(value, field), fraction, rgb))
+        entries.append((labels[index], draw.reading(value, field), fraction, rgb,
+                        scale_note(ref, frame)))
     draw.rings(theme, entries)
 
 
@@ -271,7 +296,7 @@ def _radar(page, frame, _history, theme):
     for index, ref in enumerate(refs):
         value = value_of(frame, ref)
         entries.append((labels[index], draw.reading(value, ref.split(".")[-1]),
-                        fraction_of(ref, value, page), theme.accent))
+                        fraction_of(ref, value, page, frame), theme.accent))
     draw.radar(theme, entries)
 
 
@@ -287,7 +312,7 @@ def _trend(page, frame, history, theme):
         if was is not None:
             delta = float(value) - float(was)
     draw.trend(theme, draw.fmt(value, field), draw.short_unit(field), name_for(ref),
-               delta, points, peak, fraction_of(ref, value, page))
+               delta, points, peak, fraction_of(ref, value, page, frame))
 
 
 # How far between polls the waterfall has got, so it can interpolate rather than step.

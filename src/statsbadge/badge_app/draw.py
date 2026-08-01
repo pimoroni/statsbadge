@@ -637,7 +637,9 @@ def rings(theme, entries):
     outer = 84
     band = 15
     gap = 4
-    for index, (name, value_text, fraction, rgb) in enumerate(entries[:4]):
+    # Room for a third line under a reading where one has a peak to state.
+    row = 42 if any(entry[4] for entry in entries[:4]) else 38
+    for index, (name, value_text, fraction, rgb, note) in enumerate(entries[:4]):
         ring_outer = outer - index * (band + gap)
         ring_inner = ring_outer - band
         if ring_inner < 12:
@@ -652,11 +654,14 @@ def rings(theme, entries):
                                    look.DIAL_FROM, sweep))
 
         # The legend doubles as the reading, so the rings need no labels on them.
-        y = look.BODY_TOP + 14 + index * 42
+        y = look.BODY_TOP + 12 + index * row
         screen.pen = color.rgb(*rgb)
         screen.rectangle(rect(look.READOUT_X + 4, y + 6, 8, 8))
         blit_label(name, look.SIZE_LABEL, theme.dim, look.READOUT_X + 18, y)
         blit_label(value_text, look.SIZE_VALUE, theme.ink, look.READOUT_X + 18, y + 14)
+        if note:
+            # What a full ring is, for a reading whose scale is not a round number.
+            blit_label(note, look.SIZE_SMALL, theme.dim, look.READOUT_X + 18, y + 30)
 
 
 # -- sparklines -------------------------------------------------------------

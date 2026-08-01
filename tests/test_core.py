@@ -1227,6 +1227,33 @@ def test_the_ui_is_told_what_a_gauge_can_scale(_h):
     assert set(described["list_fields"]) >= {"cores", "load"}
 
 
+@check
+def test_a_rate_is_scaled_by_what_it_has_reached(_h):
+    """Throughput has no full scale of its own, and the fixed one read as pegged.
+
+    12.5MB/s was assumed, so anything over that filled the ring: a 40MB/s transfer and a
+    200MB/s one looked the same. The collector tracks what each rate has reached instead.
+    """
+    from statsbadge.collect import PEAK_DECAY, PEAK_FLOOR
+
+    assert 0.9 < PEAK_DECAY < 1.0
+    peak = 0.0
+    for rate in [40e6] * 5:
+        peak = max(rate, peak * PEAK_DECAY, PEAK_FLOOR)
+    assert peak == 40e6
+    # A trickle afterwards is a small part of the ring, not an eighth of a ring that was
+    # already full.
+    assert (1.5e6 / peak) < 0.05
+    # And the peak comes down again, so one busy night does not flatten it for good.
+    quiet = peak
+    for _ in range(600):
+        quiet = max(0.0, quiet * PEAK_DECAY, PEAK_FLOOR)
+    assert quiet < peak * 0.6, quiet
+
+    # The floor keeps a quiet link from scaling a trickle up to a full ring.
+    assert max(10_000.0, 0.0, PEAK_FLOOR) == PEAK_FLOOR
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)
