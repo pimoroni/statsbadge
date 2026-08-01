@@ -29,25 +29,56 @@ import pages
 WEATHER_FONT = "weather"
 ICON_SIZE = 40
 
-FACE = (245, 245, 242)
-MARKS = (16, 16, 18)
-HANDS = (222, 32, 28)
-SECOND = (24, 24, 26)
-
 CENTRE = (look.W // 2 - 62, look.BODY_TOP + look.BODY_H // 2)
 RADIUS = 82
 
-# Proportions of the radius. Hilfiker's dial is mostly about the weight of the marks
-# against the width of the hands, so these are the whole design.
-HOUR_MARK_LEN, HOUR_MARK_HALF = 0.19, 0.055
-MIN_MARK_LEN, MIN_MARK_HALF = 0.095, 0.019
-HOUR_HAND_LEN, HOUR_HAND_HALF = 0.55, 0.062
-MIN_HAND_LEN, MIN_HAND_HALF = 0.86, 0.048
-SEC_HAND_LEN, SEC_HAND_HALF = 0.76, 0.011
-TAIL = 0.13
+# The dials, each a palette and a set of proportions of the radius. A dial is mostly the
+# weight of its marks against the width of its hands, so these are the whole design.
+#
+#   plate    what the dial sits on: "disc", "squircle" or None for the page background
+#   marks    "bars" for the railway's blocks, "dots" for a dotted minute track
+#   star     a spike opposite each hand, which is what makes the Koppel hub a star
+FACES = {
+    # Hilfiker's station clock, in the Mondaine colourway: red hands over a black
+    # second. The original had black hands throughout.
+    "railway": {
+        "label": "Railway",
+        "face": (245, 245, 242), "marks": (16, 16, 18),
+        "hands": (222, 32, 28), "second": (24, 24, 26),
+        "plate": "disc", "marks_style": "bars", "star": False,
+        "hour_mark": (0.19, 0.055), "min_mark": (0.095, 0.019),
+        "hour_hand": (0.55, 0.062), "min_hand": (0.86, 0.048),
+        "sec_hand": (0.76, 0.011), "tail": 0.13, "hub": 4,
+    },
+    # Koppel's dial for Georg Jensen: a dotted minute track, bigger dots at the five
+    # minutes, needle hands with a spike opposite each so the hub reads as a star.
+    "dots": {
+        "label": "Dots",
+        "face": (250, 250, 248), "marks": (18, 18, 20),
+        "hands": (18, 18, 20), "second": (18, 18, 20),
+        "plate": "disc", "marks_style": "dots", "star": True,
+        "hour_mark": (0.0, 0.042), "min_mark": (0.0, 0.017),
+        "hour_hand": (0.52, 0.019), "min_hand": (0.88, 0.015),
+        "sec_hand": (0.88, 0.009), "tail": 0.24, "hub": 7,
+    },
+    # Nothing historic: the badge's own furniture, on the squircle the firmware draws.
+    # Dark, so it sits in a dark theme rather than on a white disc.
+    "squircle": {
+        "label": "Squircle",
+        "face": (22, 24, 30), "marks": (150, 156, 172),
+        "hands": (238, 240, 245), "second": None,     # None takes the theme's accent
+        "plate": "squircle", "marks_style": "bars", "star": False,
+        "hour_mark": (0.16, 0.030), "min_mark": (0.06, 0.012),
+        "hour_hand": (0.52, 0.040), "min_hand": (0.84, 0.030),
+        "sec_hand": (0.80, 0.010), "tail": 0.16, "hub": 5,
+    },
+}
+DEFAULT_FACE = "railway"
 
-_face_cache = None
-_hands_cache = None
+# Baked dials and hand geometry, per face: a page each side of the list can ask for a
+# different one, and neither should pay for the other's bake.
+_face_cache = {}
+_hands_cache = {}
 
 
 def _bar(inner, outer, half_width):
@@ -76,10 +107,15 @@ def _aim(bar, centre, degrees):
     return bar
 
 
-def _bake_face():
-    """The dial: white disc and sixty marks. Static, so it is baked once and blitted.
+def _dot(radius_at, size):
+    """A dot on the minute track, at twelve, for _aim to point wherever it belongs."""
+    return shape.circle(vec2(0, -radius_at), size)
 
-    Sixty anti-aliased bars costs milliseconds, which would be most of a frame every
+
+def _bake_face(spec):
+    """The dial. Static, so it is baked once per face and blitted.
+
+    Sixty anti-aliased marks costs milliseconds, which would be most of a frame every
     frame. Baked, the dial costs one small blit and only the hands are drawn live.
     Timed by tools/bench_clockface.py.
     """
@@ -90,26 +126,49 @@ def _bake_face():
     face.rectangle(rect(0, 0, size, size))
 
     middle = (size / 2.0, size / 2.0)
-    face.pen = color.rgb(*FACE)
-    face.shape(shape.circle(vec2(*middle), RADIUS))
+    face.pen = color.rgb(*spec["face"])
+    if spec["plate"] == "squircle":
+        face.shape(shape.squircle(vec2(*middle), RADIUS, 4))
+    elif spec["plate"] == "disc":
+        face.shape(shape.circle(vec2(*middle), RADIUS))
 
-    # Two bars, re-aimed and drawn sixty times between them
-    face.pen = color.rgb(*MARKS)
-    hour_mark = _bar(RADIUS * (1.0 - HOUR_MARK_LEN), RADIUS * 0.97, RADIUS * HOUR_MARK_HALF)
-    minute_mark = _bar(RADIUS * (1.0 - MIN_MARK_LEN), RADIUS * 0.97, RADIUS * MIN_MARK_HALF)
-    for tick in range(60):
-        face.shape(_aim(hour_mark if tick % 5 == 0 else minute_mark, middle, tick * 6.0))
+    face.pen = color.rgb(*spec["marks"])
+    hour_len, hour_half = spec["hour_mark"]
+    min_len, min_half = spec["min_mark"]
+    if spec["marks_style"] == "dots":
+        # A dotted minute track: the five-minute dots larger, everything on one circle.
+        track = RADIUS * 0.85
+        big, small = _dot(track, RADIUS * hour_half), _dot(track, RADIUS * min_half)
+        for tick in range(60):
+            face.shape(_aim(big if tick % 5 == 0 else small, middle, tick * 6.0))
+    else:
+        # Two bars, re-aimed and drawn sixty times between them
+        hour_mark = _bar(RADIUS * (1.0 - hour_len), RADIUS * 0.97, RADIUS * hour_half)
+        minute_mark = _bar(RADIUS * (1.0 - min_len), RADIUS * 0.97, RADIUS * min_half)
+        for tick in range(60):
+            face.shape(_aim(hour_mark if tick % 5 == 0 else minute_mark, middle,
+                            tick * 6.0))
 
     return face
 
 
-def _bake_hands():
+def _bake_hands(spec):
     """Hand geometry never changes, only the angle it is drawn at."""
-    return (
-        _bar(-RADIUS * TAIL, RADIUS * HOUR_HAND_LEN, RADIUS * HOUR_HAND_HALF),
-        _bar(-RADIUS * TAIL, RADIUS * MIN_HAND_LEN, RADIUS * MIN_HAND_HALF),
-        _bar(-RADIUS * TAIL, RADIUS * SEC_HAND_LEN, RADIUS * SEC_HAND_HALF),
+    tail = spec["tail"]
+    return tuple(
+        _bar(-RADIUS * tail, RADIUS * length, RADIUS * half)
+        for length, half in (spec["hour_hand"], spec["min_hand"], spec["sec_hand"])
     )
+
+
+def _face(name):
+    """A face's spec, its baked dial and its hands, baking on first use."""
+    spec = FACES.get(name) or FACES[DEFAULT_FACE]
+    key = spec["label"]
+    if key not in _face_cache:
+        _face_cache[key] = _bake_face(spec)
+        _hands_cache[key] = _bake_hands(spec)
+    return spec, _face_cache[key], _hands_cache[key]
 
 
 def _hand(bar, degrees, rgb):
@@ -128,24 +187,81 @@ def _register_font():
     draw.add_font(WEATHER_FONT, look.APP_DIR + "/ext/icons.af", beside)
 
 
+def _digital(clock, weather, label, theme):
+    """No dial: the whole band, laid out as a desk clock and drawn in the theme.
+
+    The colon is drawn as its own label between the two pairs, because a proportional
+    font kerns it into the digits and the whole point is that the numbers line up.
+    """
+    left, right = look.PAD + 2, look.W - look.PAD - 2
+    top = look.BODY_TOP + 6
+
+    if clock.get("date"):
+        draw.blit_label(clock["date"], look.SIZE_VALUE, theme.dim, left, top)
+    if label:
+        draw.blit_label(label, look.SIZE_VALUE, theme.accent, right, top, align=2)
+
+    text = clock.get("time") or "--:--"
+    hours, _, minutes = text.partition(":")
+    # As large as the band allows between the two rows, worked out rather than picked: a
+    # label sprite stands size * 1.35 tall, and there is nothing else competing for the
+    # middle of a digital face.
+    digits_top = look.BODY_TOP + 26
+    room = (look.BODY_TOP + look.BODY_H - 38) - digits_top
+    size = int(room / 1.35)
+    digits_left = draw.label(hours, size, theme.ink)
+    digits_right = draw.label(minutes or "--", size, theme.ink)
+    colon = draw.label(":", size, theme.accent)
+    gap = 10
+    total = digits_left.width + colon.width + digits_right.width + gap * 2
+    x = (look.W - total) // 2
+    y = digits_top
+    screen.blit(digits_left, vec2(int(x), int(y)))
+    screen.blit(colon, vec2(int(x + digits_left.width + gap), int(y)))
+    screen.blit(digits_right,
+                vec2(int(x + digits_left.width + colon.width + gap * 2), int(y)))
+
+    # The weather along the bottom, symbol first so the eye lands on it.
+    y = look.BODY_TOP + look.BODY_H - 34
+    x = left
+    icon = weather.get("icon")
+    if icon:
+        drawn = draw.blit_label(icon, 30, theme.ink, x, y - 2, name=WEATHER_FONT)
+        x += (drawn or 0) + 8
+    if weather.get("temp") is not None:
+        unit = weather.get("temp_unit") or ""
+        x += draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
+                             look.SIZE_BIG, theme.ink, x, y) + 12
+    if weather.get("condition"):
+        draw.blit_label(weather["condition"], look.SIZE_SMALL, theme.dim, x, y + 10)
+    if weather.get("wind") is not None:
+        draw.blit_label("wind {:.0f} {}".format(weather["wind"],
+                                                weather.get("wind_unit") or ""),
+                        look.SIZE_SMALL, theme.dim, right, y + 10, align=2)
+    if not weather:
+        draw.blit_label("no location set", look.SIZE_SMALL, theme.dim, right, y + 10,
+                        align=2)
+
+
 def render(page, frame, _history, theme):
-    global _face_cache, _hands_cache
     # A page can name its own place, and the host sends that location's clock along with
-    # its weather - so a second clock page shows another city's time without this side
-    # knowing anything about timezones. Empty falls back to the host's own clock.
-    place = ((page or {}).get("place") or "").strip().lower()
-    here = (frame.get("places") or {}).get(place) if place else None
+    # its weather - keyed by page id, so this side looks up what it is drawing rather than
+    # deriving a key from a name that may not exist. Nothing there falls back to the
+    # host's own clock and the default place.
+    here = (frame.get("places") or {}).get((page or {}).get("id"))
     clock = here or frame.get("clock") or {}
     weather = here or frame.get("weather") or {}
     label = here.get("place") if here else None
 
-    if _face_cache is None:
-        _register_font()
-        _face_cache = _bake_face()
-        _hands_cache = _bake_hands()
-    size = _face_cache.width
-    screen.blit(_face_cache, vec2(int(CENTRE[0] - size / 2),
-                                  int(CENTRE[1] - size / 2)))
+    _register_font()
+    chosen = ((page or {}).get("face") or DEFAULT_FACE)
+    if chosen == "digital":
+        _digital(clock, weather, label, theme)
+        return
+
+    spec, dial, hands = _face(chosen)
+    size = dial.width
+    screen.blit(dial, vec2(int(CENTRE[0] - size / 2), int(CENTRE[1] - size / 2)))
 
     if clock.get("hour") is None:
         draw.blit_label("no time", look.SIZE_VALUE, theme.dim,
@@ -153,12 +269,15 @@ def render(page, frame, _history, theme):
     else:
         _resync(clock)
         hour, minute, second = _local_time()
-        hour_hand, minute_hand, second_hand = _hands_cache
-        _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, HANDS)
-        _hand(minute_hand, minute * 6.0 + second * 0.1, HANDS)
-        _hand(second_hand, second * 6.0, SECOND)
-        screen.pen = color.rgb(*SECOND)
-        screen.shape(shape.circle(vec2(*CENTRE), 4))
+        hour_hand, minute_hand, second_hand = hands
+        # A face with no second colour of its own takes the theme's accent, which is how
+        # the squircle dial stays part of whatever the badge is wearing.
+        second_rgb = spec["second"] or theme.accent
+        _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, spec["hands"])
+        _hand(minute_hand, minute * 6.0 + second * 0.1, spec["hands"])
+        _hand(second_hand, second * 6.0, second_rgb)
+        screen.pen = color.rgb(*second_rgb)
+        screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
 
     # The readouts beside the dial, in the badge's theme rather than the clock's.
     x = look.READOUT_X - 4

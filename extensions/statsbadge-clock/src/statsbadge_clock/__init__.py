@@ -54,6 +54,23 @@ ICONS = {
 NIGHT_ICONS = {"clear": "b", "fair": "d"}
 
 
+def _page_target(page):
+    """(key, place, latitude, longitude) for a page, or None if it names nowhere.
+
+    Coordinates win over a name, being the more specific answer, which is the rule the
+    extension-wide default follows too. The key is what identifies the *location*, so
+    pages pointed at the same one share a request.
+    """
+    latitude, longitude = page.get("latitude"), page.get("longitude")
+    if latitude is not None and longitude is not None:
+        return (f"{float(latitude):.4f},{float(longitude):.4f}", None,
+                float(latitude), float(longitude))
+    place = (page.get("place") or "").strip()
+    if place:
+        return (place.lower(), place, None, None)
+    return None
+
+
 def _clock_at(utc_offset):
     """The clock fields for a place, from its offset east of UTC."""
     if utc_offset is None:
@@ -84,12 +101,13 @@ class Clock(Source):
     # configure(). Weather is off until a location is set, so the place comes first and
     # carries the explanation; coordinates are for pinning it exactly.
     settings = (
-        {"key": "place", "label": "Place", "type": "text",
-         "hint": "A town or city, and a country if the name is a common one: "
-                 "Sheffield, or Sheffield, US. Weather stays off until one is set"},
-        {"key": "latitude", "label": "Latitude", "type": "number",
-         "hint": "Used instead of the place, for a spot no name lands on"},
-        {"key": "longitude", "label": "Longitude", "type": "number"},
+        {"key": "place", "label": "Default place", "type": "text",
+         "hint": "Used by any clock page that does not name its own. A town or city, "
+                 "and a country if the name is a common one: Sheffield, or "
+                 "Sheffield, US. Weather stays off until somewhere is set"},
+        {"key": "latitude", "label": "Default latitude", "type": "number",
+         "hint": "Instead of the name, for a spot no name lands on"},
+        {"key": "longitude", "label": "Default longitude", "type": "number"},
         {"key": "units", "label": "Temperature", "type": "choice",
          "options": ["celsius", "fahrenheit"], "default": "celsius"},
         {"key": "wind_units", "label": "Wind speed", "type": "choice",
@@ -111,8 +129,15 @@ class Clock(Source):
     # and there is no separate timezone to set.
     page_settings = (
         {"key": "place", "label": "Place", "type": "text",
-         "hint": "A town or city for this page. Empty uses the one set below, under "
-                 "Extensions"},
+         "hint": "Where this page shows. Its weather and its local time both follow "
+                 "from it. Empty falls back to the default place"},
+        {"key": "latitude", "label": "Latitude", "type": "number",
+         "hint": "Instead of the name, for a spot no name lands on"},
+        {"key": "longitude", "label": "Longitude", "type": "number"},
+        {"key": "face", "label": "Face", "type": "choice",
+         "options": ["railway", "dots", "squircle", "digital"], "default": "railway",
+         "hint": "railway is the station clock, dots is a dotted minute track, squircle "
+                 "and digital take the badge's theme"},
     )
 
     @classmethod
@@ -123,31 +148,44 @@ class Clock(Source):
         super().__init__(config)
         self._weather = {}
         self._next_weather = 0.0
-        # Per-place state for the pages, keyed by the place folded to lower case:
-        # {"data": {...}, "next": monotonic}.
-        self._places = {}
-        self._page_places = []
+        # Where the pages look, keyed by location, and which page wants which.
+        self._targets = {}
+        self._page_order = []
         # Open-Meteo asks for no more than a request every few minutes per location.
         self._interval = float(config.get("weather_interval", 900))
         self._read_settings()
 
     def pages(self, instances):
-        """The places this source's pages ask for, one entry each.
+        """Where each of this source's pages wants to look.
 
-        Called whenever the config changes, so a place typed in the browser is fetched
-        on the next sample rather than at the next restart.
+        Called whenever the config changes, so a place typed in the browser is fetched on
+        the next sample rather than at the next restart.
+
+        Two maps, because they answer different questions: pages are keyed by page id, so
+        the badge can find its own entry without deriving a key, and locations are keyed
+        by where they are, so two pages showing one city cost one request.
         """
-        wanted = []
+        order, targets = [], {}
         for page in instances:
-            place = (page.get("place") or "").strip()
-            if place and place.lower() not in [w.lower() for w in wanted]:
-                wanted.append(place)
-        self._page_places = wanted
-        # Drop what no page asks for any more, so a renamed place stops being fetched.
-        keep = {place.lower() for place in wanted}
-        for key in list(self._places):
-            if key not in keep:
-                del self._places[key]
+            page_id = page.get("id")
+            target = _page_target(page)
+            if not page_id or target is None:
+                continue
+            key, place, latitude, longitude = target
+            order.append((page_id, key))
+            targets.setdefault(key, {"place": place, "lat": latitude,
+                                     "lon": longitude})
+        # Carry over what has already been fetched for somewhere still wanted; anywhere
+        # no page asks for now is dropped, along with its timer.
+        for key, spec in targets.items():
+            was = self._targets.get(key) or {}
+            spec["data"] = was.get("data", {})
+            spec["next"] = was.get("next", 0.0)
+            spec["label"] = was.get("label")
+            if spec["lat"] is None:
+                spec["lat"], spec["lon"] = was.get("lat"), was.get("lon")
+        self._page_order = order
+        self._targets = targets
 
     def _read_settings(self):
         was = getattr(self, "place", None)
@@ -201,28 +239,34 @@ class Clock(Source):
         frame["weather"] = dict(self._weather)
 
     def _sample_places(self):
-        """One entry per place a page asked for, weather and that place's own clock.
+        """One entry per page, its weather and that place's own clock, keyed by page id.
 
         The clock fields come from the location's UTC offset, which the forecast returns,
         so a page showing another city shows its time without the badge knowing anything
         about timezones.
         """
+        for spec in self._targets.values():
+            if time.monotonic() < spec["next"]:
+                continue
+            spec["next"] = time.monotonic() + self._interval
+            try:
+                if spec["lat"] is None or spec["lon"] is None:
+                    found = self._geocode(spec["place"])
+                    if not found:
+                        continue
+                    spec["lat"], spec["lon"], spec["label"] = found
+                spec["data"] = self._fetch(
+                    (spec["lat"], spec["lon"], spec["label"] or spec["place"]),
+                    local_time=True)
+            except Exception as exc:
+                self.note_fault(exc)
+
         out = {}
-        for place in self._page_places:
-            key = place.lower()
-            state = self._places.setdefault(key, {"data": {}, "next": 0.0})
-            if time.monotonic() >= state["next"]:
-                state["next"] = time.monotonic() + self._interval
-                try:
-                    found = self._geocode(place)
-                    if found:
-                        state["data"] = self._fetch((found[0], found[1], found[2]),
-                                                    local_time=True)
-                except Exception as exc:
-                    self.note_fault(exc)
-            if state["data"]:
-                out[key] = dict(state["data"], **_clock_at(state["data"]
-                                                           .get("utc_offset")))
+        for page_id, key in self._page_order:
+            spec = self._targets.get(key)
+            if spec and spec["data"]:
+                out[page_id] = dict(spec["data"],
+                                    **_clock_at(spec["data"].get("utc_offset")))
         return out
 
     def _where(self):
