@@ -257,14 +257,9 @@ class App:
         pages_module.sweep_reset()
         style = (self.layout or {}).get("slide") or "off"
         if style != "off" and len(pages) > 1:
-            # The title and the pip go now, so the badge answers the press immediately, and
-            # the body follows once the presses stop. Until then it is left standing: it is
-            # what the slide has to move away from, and drawing the new page there would
-            # give the movement nothing to do.
-            page = self.current_page()
-            if page is not None:
-                draw.furniture(self.theme, page.get("title", page.get("id", "")),
-                               self.page_index, len(pages), self.subtitle())
+            # The movement waits for the presses to stop; until then `render` puts up the
+            # title and the pip for where this is going and leaves the body standing, that
+            # being what the slide travels away from.
             self._slide_at = time.ticks_add(time.ticks_ms(), SLIDE_WAIT_MS)
             self._slide_from = delta < 0
         self.dirty = True
@@ -741,16 +736,21 @@ class App:
             return
 
         subtitle = self.subtitle()
-        if self._slide_at:
-            # A turn is waiting for the presses to stop. The title and the pip are already
-            # the page being gone to; the body stays put, because that is what the slide has
-            # to move away from.
-            pass
-        elif self.sliding is None:
+        if self.sliding is not None:
+            # A slide in flight is drawn first and unconditionally. It used to sit behind the
+            # test below, so a press landing mid-slide stopped it being advanced - and since
+            # a waiting turn will not start over a running one, both stuck: a body that never
+            # redrew again, and every further press only re-arming the wait.
+            self.render_sliding(page, theme, subtitle)
+        elif self._slide_at and time.ticks_diff(self._slide_at, time.ticks_ms()) > 0:
+            # A turn is waiting for the presses to stop. The title and the pip say where it
+            # is going; the body stays put, being what the movement travels away from. Bounded
+            # by the wait, so nothing here can withhold the body for longer than that.
+            draw.furniture(theme, page.get("title", page.get("id", "")),
+                           self.page_index, len(self.page_list), subtitle)
+        else:
             pages_module.render(page, self.frame, self.history, theme,
                                 self.page_index, len(self.page_list), subtitle)
-        else:
-            self.render_sliding(page, theme, subtitle)
         if self.toast_text:
             draw.toast(theme, self.toast_text, self.toast_fade())
 
@@ -767,18 +767,26 @@ class App:
         A blit costs its pixels, so `over` averages half a band a frame and a deck a whole
         one. Nothing is rasterised - the arriving page was drawn once when the turn happened.
         """
+        top, deep = look.BODY_TOP, look.BODY_H
         travel = int(look.W * self.sliding.now)
         if travel >= look.W or self.sliding.done or self.arriving is None:
+            if self.arriving is not None:
+                # Landed: the finished page is already drawn in the image, so it is put down
+                # from there. Drawing the *current* page instead would be a different page
+                # whenever a press arrived mid-slide, which read as a turn going nowhere.
+                screen.blit(self.arriving.window(rect(0, top, look.W, deep)), vec2(0, top))
+            else:
+                pages_module.render(page, self.frame, self.history, theme,
+                                    self.page_index, len(self.page_list), subtitle)
             self.sliding = None
             self.arriving = None
             self.leaving = None
-            pages_module.render(page, self.frame, self.history, theme,
-                                self.page_index, len(self.page_list), subtitle)
+            # One more frame, so the page is redrawn live - or the next turn takes over.
+            self.dirty = True
             return
         if travel <= 0:
             return
         rest = look.W - travel
-        top, deep = look.BODY_TOP, look.BODY_H
         if self.slide_back:
             # Arriving from the left, so its right hand edge is what shows first.
             screen.blit(self.arriving.window(rect(rest, top, travel, deep)), vec2(0, top))

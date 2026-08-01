@@ -1456,13 +1456,25 @@ def test_a_page_can_slide_on_like_a_card(_h):
     turn = app[app.index("def turn"):]
     turn = turn[:turn.index("\n    def ", 1)]
     assert '.get("slide")' in turn and "delta < 0" in turn
-    # A press moves the title and the pip at once and schedules the movement, so a burst is
-    # one slide onto the page it landed on rather than several fighting over the screen.
-    assert "draw.furniture(" in turn, "the press does not answer until the body catches up"
+    # A press schedules the movement, so a burst is one slide onto the page it landed on
+    # rather than several fighting over the screen.
     assert "SLIDE_WAIT_MS" in turn
     due = app[app.index("def slide_due"):]
     due = due[:due.index("\n    def ", 1)]
     assert "self.sliding is not None" in due, "a second slide can start over a running one"
+
+    # The title and the pip answer the press while the body waits, and `render` is what
+    # draws them - a press drawing on the screen itself would put a page's furniture over a
+    # banner. A slide already running is drawn before that test and not behind it: behind
+    # it, a press landing mid-slide stopped the slide being advanced, and since a waiting
+    # turn will not start over a running one, the body never redrew again.
+    body = app[app.index("    def render(self):"):]
+    body = body[:body.index("\n    def ", 1)]
+    assert body.index("self.sliding is not None") < body.index("self._slide_at"), (
+        "a press during a slide freezes it")
+    assert "draw.furniture(" in body, "the press does not answer until the body catches up"
+    assert "time.ticks_diff(self._slide_at" in body, (
+        "the body can be withheld for longer than the wait")
     start = app[app.index("def start_slide"):]
     assert 'style == "deck"' in start[:start.index("\n    def ", 1)]
 
