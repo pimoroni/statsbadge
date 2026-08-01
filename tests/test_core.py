@@ -1254,6 +1254,23 @@ def test_a_rate_is_scaled_by_what_it_has_reached(_h):
     assert max(10_000.0, 0.0, PEAK_FLOOR) == PEAK_FLOOR
 
 
+@check
+def test_setup_waves_through_a_server_already_paired(_h):
+    """Setup is offered after a few failed polls, not only when unpaired, so it is easy to
+    reach with nothing wrong. Asking to pair again then failed for a server the badge was
+    already paired with, because the host was not in pairing mode."""
+    source = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text()
+    assert "_already_paired" in source, "no already-paired path in setup"
+    # Reached before anything is asked of the host.
+    ask = source[source.index("def _ask_to_join"):]
+    assert ask.index("_already_paired") < ask.index("net.enrol("), (
+        "the badge asks to enrol before noticing it is already paired")
+    # A host that has refused this badge is the case where pairing again is the point, so
+    # that must not be waved through.
+    guard = source[source.index("def _already_paired"):source.index("def _ask_to_join")]
+    assert "rejected" in guard, "a refused badge would be waved through with dead credentials"
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

@@ -225,11 +225,38 @@ def draw_hosts(theme, hosts, index, known):
                     theme.dim, look.W // 2, look.H - 18, align=1)
 
 
+def _already_paired(app, chosen):
+    """Whether this badge already holds credentials for this server that it can use.
+
+    Not merely whether it holds any: a host that has forgotten the badge sets `rejected`,
+    and pairing again is then exactly the point.
+    """
+    server_id = chosen.get("id")
+    if not server_id or not (app.config.hosts.get(server_id) or {}).get("secret"):
+        return False
+    return not (app.rejected and server_id == app.config.active)
+
+
 def _ask_to_join(app, chosen):
     """Ask the host to let us in, show its code, and wait. True if approved and saved,
-    False to go back, None to quit."""
+    False to go back, None to quit.
+
+    A server this badge is already paired with is waved through instead. Setup is offered
+    after a few failed polls as well as when unpaired, so this screen is easy to reach with
+    nothing wrong with the pairing at all - and asking again would need the host to be in
+    pairing mode and would mint a second secret for one machine.
+    """
     host, port = chosen["host"], chosen["port"]
     label = chosen.get("name") or host
+
+    if _already_paired(app, chosen):
+        # Its address may have moved since, which is the other thing this screen is for.
+        app.config.note_address(chosen["id"], host, port, chosen.get("name"))
+        app.config.switch(chosen["id"])
+        draw.banner(app.theme, "Already paired", label, "using the credentials it has")
+        badge.update()
+        time.sleep_ms(1200)
+        return True
 
     draw.banner(app.theme, "Asking", label)
     badge.update()
