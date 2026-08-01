@@ -208,9 +208,9 @@ function pageCard(page, index) {
   item.appendChild(top);
 
   const fields = document.createElement("div");
-  fields.className = open ? "fields" : "fields hidden";
+  fields.className = "fields";
 
-  if (shape.one) {
+  if (open && shape.one) {
     const row = document.createElement("div");
     row.className = "fieldrow";
     const tag = document.createElement("span");
@@ -224,7 +224,7 @@ function pageCard(page, index) {
     fields.appendChild(row);
   }
 
-  if (shape.many) {
+  if (open && shape.many) {
     const current = page[shape.many] || [];
     current.forEach((ref, slot) => {
       const row = document.createElement("div");
@@ -253,13 +253,16 @@ function pageCard(page, index) {
   }
   // What this page in particular can be told, as against what the extension is told
   // once for every page: a place here, units there.
-  for (const setting of (caps.extension_page_settings || {})[page.kind] || []) {
+  for (const setting of open
+       ? (caps.extension_page_settings || {})[page.kind] || [] : []) {
     const row = document.createElement("div");
     row.className = "fieldrow pagesetting";
     row.appendChild(settingRow(page, setting));
     fields.appendChild(row);
   }
-  if (!open) {
+  if (open) {
+    item.appendChild(fields);
+  } else {
     const summary = document.createElement("div");
     summary.className = "summary";
     const refs = shape.one ? [page[shape.one]] : (page[shape.many] || []);
@@ -270,7 +273,6 @@ function pageCard(page, index) {
     summary.textContent = named.concat(extra).join(", ") || "nothing chosen";
     item.appendChild(summary);
   }
-  item.appendChild(fields);
 
   item.ondragstart = (event) => {
     item.classList.add("dragging");

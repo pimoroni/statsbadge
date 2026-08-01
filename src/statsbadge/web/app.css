@@ -125,6 +125,9 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 .warn { color: var(--accent); font-size: 12px; margin: 0 0 10px;
         background: var(--panel); border-left: 2px solid var(--accent);
         border-radius: 0 6px 6px 0; padding: 8px 10px; }
+/* One class, so it loses to any two-class rule that sets display - `.page .fields` did,
+   and the fields would not hide. Something with its own display rule has to be left out of
+   the document instead of hidden with this. */
 .hidden { display: none; }
 
 /* -- theme swatches ---------------------------------------------------- */
