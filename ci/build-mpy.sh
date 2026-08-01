@@ -3,6 +3,8 @@
 #
 #   ci/build-mpy.sh [APP_DIR] [OUT_DIR]
 #
+# With no arguments it builds into the package, where the installer looks for it.
+#
 # The badge compiles from source at every launch, which for this app is 763ms off its own
 # flash. Precompiling takes that to 126ms - an 84% saving - at the cost of the app no
 # longer being readable on the badge, so it ships alongside the source zip rather than
@@ -31,7 +33,10 @@
 set -euo pipefail
 
 APP_DIR=${1:-src/statsbadge/badge_app}
-OUT_DIR=${2:-build/mpy}
+# Defaults to the copy inside the package, which is what `statsbadge install`
+# reads and what the wheel ships. build/mpy is for a release artefact, and CI
+# passes that explicitly.
+OUT_DIR=${2:-src/statsbadge/badge_app/mpy}
 BOARD_REPO=${BOARD_REPO:-pimoroni/tufty2350}
 BOARD_REF=${BOARD_REF:-main}
 WORK_DIR=${WORK_DIR:-build/micropython}

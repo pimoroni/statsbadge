@@ -1152,6 +1152,26 @@ def test_an_extension_sees_only_its_own_pages(_h):
     assert seen[-1] == ["Rome"]
 
 
+@check
+def test_the_build_script_defaults_where_the_installer_looks(_h):
+    """Otherwise "rebuild it with ci/build-mpy.sh" is advice that changes nothing.
+
+    The default output used to be build/mpy while the installer reads the copy inside the
+    package, so a bare rebuild left the stale bytecode exactly where it was.
+    """
+    script = (pathlib.Path(__file__).parent.parent / "ci" / "build-mpy.sh").read_text()
+    default = [line for line in script.splitlines() if line.startswith("OUT_DIR=")]
+    assert default, "no OUT_DIR default in the build script"
+    assert "src/statsbadge/badge_app/mpy" in default[0], default[0]
+
+    # And the two places CI wants the packaged copy still say so explicitly.
+    for workflow in ("ci.yml", "publish.yml"):
+        text = (pathlib.Path(__file__).parent.parent / ".github" / "workflows"
+                / workflow).read_text()
+        if "build-mpy.sh" in text:
+            assert "src/statsbadge/badge_app/mpy" in text, workflow
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

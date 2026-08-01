@@ -442,9 +442,14 @@ def choose_app_source(explicit, force_source, badge_mpy):
         return None, "installing sources; no precompiled build in this package"
     stale = _stale_modules(packaged)
     if stale:
-        return None, (f"installing sources: {', '.join(stale)} changed since the bundled "
-                      "build, so that bytecode is the older program. Rebuild it with "
-                      "ci/build-mpy.sh to install bytecode again")
+        note = (f"installing sources: {', '.join(stale)} changed since the bundled build, "
+                "so that bytecode is the older program.")
+        current = _current_build_elsewhere()
+        if current:
+            return None, (f"{note} There is a build matching these sources at {current}: "
+                          f"install it with --mpy {current}, or rebuild in place with "
+                          "ci/build-mpy.sh")
+        return None, f"{note} Rebuild it with ci/build-mpy.sh to install bytecode again"
     try:
         built, count = check_precompiled(packaged, badge_mpy)
     except InstallError as exc:
@@ -495,6 +500,28 @@ def _volume_candidates():
         return [f"{chr(letter)}:\\" for letter in range(ord("D"), ord("Z") + 1)
                 if os.path.isdir(f"{chr(letter)}:\\")]
     return []
+
+
+# Where a build ends up if it was made before the default pointed into the package.
+OTHER_BUILD_DIRS = ("build/mpy",)
+
+
+def _current_build_elsewhere():
+    """A build directory that does match the sources, if one is lying around.
+
+    The build script used to default somewhere the installer does not read, so "rebuild
+    it" could be followed to the letter and change nothing. Saying where the good build is
+    beats leaving that to be worked out.
+    """
+    for candidate in OTHER_BUILD_DIRS:
+        path = pathlib.Path(candidate)
+        if path.is_dir() and not _stale_modules(path):
+            try:
+                next(path.glob("*.mpy"))
+            except StopIteration:
+                continue
+            return candidate
+    return None
 
 
 def _stale_modules(built_dir):
