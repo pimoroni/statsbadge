@@ -29,6 +29,11 @@ Coordinates and the advance are signed and unsigned bytes, so nothing may exceed
 254 respectively. At a cap height of 81 the reference font's widest glyph reaches 90, which
 leaves room; a font whose ascenders or advances are unusually long is reported rather than
 wrapped, because a wrapped advance draws every glyph on the spot.
+
+--wide lifts that to 16 bits and records the em in the header, so the cap can stand in a
+much finer grid. That is what a font drawn at a large point size wants: at a cap of 81 a
+glyph filling a 240px screen quantises to steps of nearly two pixels. The default wide cap
+keeps the same cap-to-em ratio, so a given font_size draws the same height either way.
 """
 
 import argparse
@@ -39,7 +44,8 @@ import unicodedata
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from make_icon_font import (  # noqa: E402
-    Bounds, Glyph, clean_contours, outline_contours, pack, require_font_tools,
+    NARROW_UNITS_PER_EM, WIDE_COORD_MAX, Bounds, Glyph, clean_contours,
+    outline_contours, pack, require_font_tools,
 )
 
 # What the badge actually draws: printable ASCII, the degree sign for a temperature, and
@@ -61,6 +67,10 @@ def default_codepoints():
 
 CAP_HEIGHT = 81           # units a capital stands in the reference font
 MAX_COORD = 127
+# --wide packs coordinates as 16-bit, so the cap can stand in a much finer grid.
+# Eight times the reference, which keeps the cap-to-em ratio exact (648/1024 ==
+# 81/128) so a given font_size draws the same height either way.
+WIDE_CAP_HEIGHT = CAP_HEIGHT * 8
 # Half a unit, so the simplifier gives up no more than the grid the points are
 # rounded to already costs. Scaled with --cap: a tolerance means nothing except
 # against the size of the glyph it is thinning, and at a high cap a fixed one
@@ -127,18 +137,20 @@ def text_glyph(face, codepoint, scale, tolerance):
     return glyph
 
 
-def check(glyphs):
+def check(glyphs, wide=False):
     """Anything the container cannot hold or the badge cannot draw with.
 
     The lower bound on an advance matters as much as the upper one. A glyph with ink and
     no advance is what a units mix-up produces, and it packs and loads perfectly happily -
     it just draws every letter of a word in the same place.
     """
+    max_coord = WIDE_COORD_MAX if wide else MAX_COORD
+    max_advance = 0xFFFF if wide else MAX_ADVANCE
     problems = []
     for glyph in glyphs:
         char = chr(glyph.codepoint)
-        if glyph.advance > MAX_ADVANCE:
-            problems.append(f"{char!r} advance {glyph.advance} over {MAX_ADVANCE}")
+        if glyph.advance > max_advance:
+            problems.append(f"{char!r} advance {glyph.advance} over {max_advance}")
         # Half, not all of it: an accent legitimately overhangs its advance by a few
         # units, where the units mix-up this guards against was out by a factor of sixty.
         if glyph.contours and glyph.advance < glyph.bbox_w * 0.5:
@@ -150,8 +162,8 @@ def check(glyphs):
                                 f"{MAX_CONTOUR}: raise --quality until it is under")
                 break
             worst = max((max(abs(x), abs(y)) for x, y in contour), default=0)
-            if worst > MAX_COORD:
-                problems.append(f"{char!r} reaches {worst}, over {MAX_COORD}")
+            if worst > max_coord:
+                problems.append(f"{char!r} reaches {worst}, over {max_coord}")
                 break
     return problems
 
@@ -166,11 +178,16 @@ def main():
                              "scales with --cap, since a tolerance is only meaningful "
                              "against the size of the glyph it is thinning")
     parser.add_argument("--weight", type=int, help="variable weight axis, e.g. 500")
-    parser.add_argument("--cap", type=int, default=CAP_HEIGHT,
+    parser.add_argument("--wide", action="store_true",
+                        help="pack coordinates as 16-bit and record the em in the header, "
+                             f"so the cap can stand in a far finer grid (default {WIDE_CAP_HEIGHT} "
+                             f"against {CAP_HEIGHT}). Doubles the point storage, and is what a "
+                             "font drawn at a large point size needs: a narrow font's whole em "
+                             "is 128 units, so big glyphs quantise visibly")
+    parser.add_argument("--cap", type=int,
                         help=f"units a capital stands in the output, where the reference "
-                             f"font is {CAP_HEIGHT} (default: {CAP_HEIGHT}). Higher is "
-                             f"finer, since a point is a signed byte either way, and is "
-                             f"for a font drawn large; draw.add_font takes the same number "
+                             f"font is {CAP_HEIGHT} (the default, or {WIDE_CAP_HEIGHT} with "
+                             f"--wide). Higher is finer; draw.add_font takes the same number "
                              f"so a caller still asks for the size it wants")
     parser.add_argument("--chars",
                         help="only these characters, for a font built for one job")
@@ -189,9 +206,13 @@ def main():
         except Exception as exc:  # noqa: BLE001  a static font has no axes
             raise SystemExit(f"--weight needs a variable font: {exc}") from None
 
+    cap = args.cap if args.cap is not None else (WIDE_CAP_HEIGHT if args.wide else CAP_HEIGHT)
+    # The em is the cap on the reference font's terms, so the same font_size draws
+    # the same height whichever width the font was packed at.
+    units_per_em = round(cap * NARROW_UNITS_PER_EM / CAP_HEIGHT) if args.wide else None
     quality = (args.quality if args.quality is not None
-               else QUALITY * args.cap / CAP_HEIGHT)
-    scale = cap_scale(face, cap=args.cap)
+               else QUALITY * cap / CAP_HEIGHT)
+    scale = cap_scale(face, cap=cap)
     wanted = ([ord(c) for c in args.chars] if args.chars
               else default_codepoints())
     glyphs, missing = [], []
@@ -204,17 +225,19 @@ def main():
 
     # A glyph the container cannot hold is left out, not clamped: a missing ligature is a
     # gap, where a clamped one is drawn wrong every time it appears.
-    problems = check(glyphs)
+    problems = check(glyphs, wide=args.wide)
+    limit = WIDE_COORD_MAX if args.wide else MAX_COORD
     overflowing = {chr(g.codepoint) for g in glyphs
-                   if any(max(abs(x), abs(y)) > MAX_COORD
+                   if any(max(abs(x), abs(y)) > limit
                           for c in g.contours for x, y in c)}
     if overflowing:
         glyphs = [g for g in glyphs if chr(g.codepoint) not in overflowing]
-    blob = pack(glyphs)
+    blob = pack(glyphs, units_per_em=units_per_em)
     points = sum(len(c) for g in glyphs for c in g.contours)
     print(f"{args.font}")
-    print(f"  cap height {args.cap} units, {scale:.3f} font units per "
-          f"output unit, tolerance {quality:.3f}")
+    print(f"  {'wide, ' if args.wide else ''}cap height {cap} units"
+          f"{f' of a {units_per_em} unit em' if args.wide else ''}, "
+          f"{scale:.3f} font units per output unit, tolerance {quality:.3f}")
     longest = max((len(c) for g in glyphs for c in g.contours), default=0)
     print(f"  {len(glyphs)} glyphs, {points} points, {len(blob)} bytes "
           f"({len(blob) // max(1, len(glyphs))} each)")

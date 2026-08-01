@@ -58,12 +58,20 @@ def require_font_tools():
 # contours and points, each big-endian u16.
 AF_MAGIC = b"af!?"
 AF_FLAG_16BIT_POINT_COUNT = 0b0000001
+# A wide font stores its bbox, advance and points as 16-bit, and carries a u16
+# units-per-em after the counts. A narrow one gets the whole em in a signed byte,
+# which is what shows as stepped outlines on a glyph drawn a hundred pixels tall.
+AF_FLAG_WIDE = 0b0000010
 GLYPH_STRUCT = ">HbbBBBB"          # codepoint, bbox x, y, w, h, advance, contour count
+GLYPH_STRUCT_WIDE = ">HhhHHHB"
+# What a narrow font's 128-unit em is, so a wide font's own grid can be recorded.
+NARROW_UNITS_PER_EM = 128
 
 # Coordinates and the advance are signed bytes. The reference font keeps every advance
 # under 128, and one over that is read as negative: glyphs then draw on top of each
-# other. So the box an icon fills is limited too.
+# other. So the box an icon fills is limited too. A wide font gets 16 bits for both.
 COORD_MIN, COORD_MAX = -128, 127
+WIDE_COORD_MIN, WIDE_COORD_MAX = -32768, 32767
 # A capital in MonaSans-Medium.af stands 81 units, so this is an icon a little taller
 # than the text beside it.
 ICON_SIZE = 100
@@ -266,8 +274,13 @@ def load_icon(face, codepoint, size, tolerance):
 
 # -- packing ----------------------------------------------------------------
 
-def pack(glyphs):
-    """The .af file: header, glyph table, contour lengths, then points."""
+def pack(glyphs, units_per_em=None):
+    """The .af file: header, glyph table, contour lengths, then points.
+
+    Pass units_per_em to write a wide font, whose bbox, advance and points are 16-bit
+    and whose em is whatever the caller built the glyphs to. Without it the font is
+    narrow, every coordinate is a signed byte and the em is 128 by convention.
+    """
     for glyph in glyphs:
         if glyph.codepoint > MAX_CODEPOINT:
             raise SystemExit(
@@ -275,25 +288,37 @@ def pack(glyphs):
                 "them as u16. Remap it to an ASCII character with a third field in "
                 "icons.txt.")
 
+    wide = units_per_em is not None
+    if wide and not 1 <= units_per_em <= 0xFFFF:
+        raise SystemExit(f"units per em {units_per_em} does not fit the format's u16")
+    low, high = (WIDE_COORD_MIN, WIDE_COORD_MAX) if wide else (COORD_MIN, COORD_MAX)
+    extent_high = 0xFFFF if wide else 255
+
     contours = sum(len(glyph.contours) for glyph in glyphs)
     points = sum(len(contour) for glyph in glyphs for contour in glyph.contours)
+    flags = AF_FLAG_16BIT_POINT_COUNT | (AF_FLAG_WIDE if wide else 0)
     out = bytearray(AF_MAGIC)
-    out += struct.pack(">HHHH", AF_FLAG_16BIT_POINT_COUNT, len(glyphs), contours, points)
+    out += struct.pack(">HHHH", flags, len(glyphs), contours, points)
+    if wide:
+        out += struct.pack(">H", units_per_em)
 
+    glyph_struct = GLYPH_STRUCT_WIDE if wide else GLYPH_STRUCT
     for glyph in glyphs:
-        out += struct.pack(GLYPH_STRUCT, glyph.codepoint,
-                           clamp(glyph.bbox_x), clamp(glyph.bbox_y),
-                           clamp(glyph.bbox_w, 0, 255), clamp(glyph.bbox_h, 0, 255),
-                           clamp(glyph.advance, 0, 255), len(glyph.contours))
+        out += struct.pack(glyph_struct, glyph.codepoint,
+                           clamp(glyph.bbox_x, low, high), clamp(glyph.bbox_y, low, high),
+                           clamp(glyph.bbox_w, 0, extent_high),
+                           clamp(glyph.bbox_h, 0, extent_high),
+                           clamp(glyph.advance, 0, extent_high), len(glyph.contours))
     for glyph in glyphs:
         for contour in glyph.contours:
             if len(contour) > 0xFFFF:
                 raise SystemExit(f"contour of {len(contour)} points is too long to pack")
             out += struct.pack(">H", len(contour))
+    point_struct = ">hh" if wide else ">bb"
     for glyph in glyphs:
         for contour in glyph.contours:
             for x, y in contour:
-                out += struct.pack(">bb", clamp(x), clamp(y))
+                out += struct.pack(point_struct, clamp(x, low, high), clamp(y, low, high))
     return bytes(out)
 
 
@@ -301,13 +326,13 @@ def clamp(value, low=COORD_MIN, high=COORD_MAX):
     return max(low, min(high, int(value)))
 
 
-def out_of_range(glyphs):
-    """Names of glyphs with points outside the signed byte the format packs them into."""
+def out_of_range(glyphs, wide=False):
+    """Names of glyphs with points outside the integer the format packs them into."""
+    low, high = (WIDE_COORD_MIN, WIDE_COORD_MAX) if wide else (COORD_MIN, COORD_MAX)
     over = []
     for glyph in glyphs:
         for contour in glyph.contours:
-            if any(not COORD_MIN <= x <= COORD_MAX or not COORD_MIN <= y <= COORD_MAX
-                   for x, y in contour):
+            if any(not low <= x <= high or not low <= y <= high for x, y in contour):
                 over.append(glyph.codepoint)
                 break
     return over

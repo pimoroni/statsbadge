@@ -19,8 +19,11 @@ import struct
 
 AF_MAGIC = b"af!?"
 AF_FLAG_16BIT_POINT_COUNT = 0b0000001
+AF_FLAG_WIDE = 0b0000010           # 16-bit bbox, advance and points, plus a u16 em
 HEADER = ">HHHH"                   # flags, glyphs, contours, points, after the magic
 GLYPH_STRUCT = ">HbbBBBB"          # codepoint, bbox x, y, w, h, advance, contour count
+GLYPH_STRUCT_WIDE = ">HhhHHHB"
+NARROW_UNITS_PER_EM = 128          # what a narrow font's em is by convention
 
 
 def read(path):
@@ -30,10 +33,17 @@ def read(path):
     flags, glyph_count, contour_count, point_count = struct.unpack_from(HEADER, data, 4)
     at = 4 + struct.calcsize(HEADER)
 
+    wide = bool(flags & AF_FLAG_WIDE)
+    units_per_em = NARROW_UNITS_PER_EM
+    if wide:
+        units_per_em = struct.unpack_from(">H", data, at)[0]
+        at += 2
+
+    glyph_struct = GLYPH_STRUCT_WIDE if wide else GLYPH_STRUCT
     glyphs = []
     for _ in range(glyph_count):
-        fields = struct.unpack_from(GLYPH_STRUCT, data, at)
-        at += struct.calcsize(GLYPH_STRUCT)
+        fields = struct.unpack_from(glyph_struct, data, at)
+        at += struct.calcsize(glyph_struct)
         glyphs.append(dict(zip(
             ("codepoint", "bbox_x", "bbox_y", "bbox_w", "bbox_h", "advance", "contours"),
             fields, strict=True)))
@@ -48,13 +58,16 @@ def read(path):
             at += 1
 
     # Points, in order, so a glyph's own extent can be checked against its bbox
+    point_code, point_size = ("h", 4) if wide else ("b", 2)
     index = 0
     for glyph in glyphs:
         span = sum(lengths[index:index + glyph["contours"]])
-        glyph["points"] = struct.unpack_from(f">{span * 2}b", data, at) if span else ()
+        glyph["points"] = (struct.unpack_from(f">{span * 2}{point_code}", data, at)
+                           if span else ())
         index += glyph["contours"]
-        at += span * 2
-    return {"size": len(data), "flags": flags, "glyphs": glyphs, "points": point_count}
+        at += span * point_size
+    return {"size": len(data), "flags": flags, "glyphs": glyphs, "points": point_count,
+            "wide": wide, "units_per_em": units_per_em}
 
 
 def main():
@@ -82,8 +95,9 @@ def main():
                       for x, y in zip(g["points"][0::2], g["points"][1::2], strict=True)),
                      default=0)
                  for g in glyphs), default=0)
+    print(f"  {'wide' if font['wide'] else 'narrow'}, {font['units_per_em']} units per em")
     print(f"  tallest {chr(tall['codepoint'])!r} at {tall['bbox_h']}, "
-          f"furthest point {reach} of 127")
+          f"furthest point {reach} of {32767 if font['wide'] else 127}")
 
     suspect = [g for g in glyphs
                if g["contours"] and g["advance"] < g["bbox_w"] * 0.5]
