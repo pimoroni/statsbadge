@@ -18,6 +18,7 @@ reader when they press a button.
 """
 
 import os
+from array import array
 
 import look
 
@@ -622,9 +623,13 @@ def bars(theme, values, maximum=100.0, field="pct"):
 # Whether a series is drawn as a curve through its samples or as a polyline between them.
 # Set from the layout, so it is one switch for every graph on the badge.
 SMOOTH = True
-# Points per span between two samples. Four puts a segment about a pixel across on a plot of
-# 48 samples in 250, which is where the corners stop reading.
-CURVE_STEPS = 4
+# Points per span between two samples. Two puts a segment about two pixels across on a plot
+# of 48 samples in 250, which is where the corners stop reading; four was indistinguishable
+# from it against deliberately spiky data and cost 6ms a page.
+CURVE_STEPS = 2
+# A curve needs height to show. Interpolating a sparkline 22px tall gives back the same
+# picture for 1.7ms a series, so a plot shorter than this is drawn straight.
+SMOOTH_MIN_H = 40
 _weights = {}
 
 
@@ -651,14 +656,15 @@ def _basis(steps):
     return table
 
 
-def curve_steps(width, count):
-    """How finely to subdivide `count` samples across `width` pixels.
+def curve_steps(width, height, count):
+    """How finely to subdivide `count` samples across a plot this size. 1 means don't.
 
     A segment shorter than a pixel buys nothing and costs the same as one that shows, so a
-    narrow plot is subdivided less: a sparkline is 180px across where a graph is 250.
+    narrow plot is subdivided less, and a short one not at all: the curve is only visible if
+    there is room for it to bend.
     """
-    if count < 2:
-        return 0
+    if not SMOOTH or count < 3 or height < SMOOTH_MIN_H:
+        return 1
     return max(2, min(CURVE_STEPS, int(width / (count - 1))))
 
 
@@ -677,7 +683,7 @@ def curve(values, steps=CURVE_STEPS):
     of the input: inside that the bulge is what makes a curve read as one, but past the
     lowest sample an area fill would run under its own baseline.
     """
-    if not SMOOTH or steps < 2 or len(values) < 3:
+    if steps < 2 or len(values) < 3:
         return values
     low, high = min(values), max(values)
     table = _basis(steps)
@@ -693,6 +699,42 @@ def curve(values, steps=CURVE_STEPS):
             out.append(low if value < low else (high if value > high else value))
     out.append(values[last])
     return out
+
+
+_points = array("f", b"")
+
+
+def area(left, top, width, height, fractions, base=None):
+    """One filled area from `fractions` (0..1), closed along its base. A shape, or None.
+
+    The plot is smoothed first if it is tall enough to show a curve, then laid out straight
+    into a float buffer: `shape.custom` takes one of those, so no point is boxed as a vec2 -
+    2.3ms against 3.7 for 191 points, and the same pixels. Where the base sits is a caller's
+    business, a sparkline's axis being under its plot rather than at the foot of it.
+    """
+    global _points
+    count = len(fractions)
+    if count < 2:
+        return None
+    steps = curve_steps(width, height, count)
+    if steps > 1:
+        fractions = curve(fractions, steps)
+        count = len(fractions)
+    if len(_points) < (count + 2) * 2:
+        _points = array("f", bytes((count + 2) * 8))
+    step = width / float(count - 1)
+    i = 0
+    for index in range(count):
+        _points[i] = left + index * step
+        _points[i + 1] = top + height - height * fractions[index]
+        i += 2
+    if base is None:
+        base = top + height
+    _points[i] = left + width
+    _points[i + 1] = base
+    _points[i + 2] = left
+    _points[i + 3] = base
+    return shape.custom(memoryview(_points)[:i + 4])
 
 
 def graph(theme, series, labels, maximum=None):
@@ -724,18 +766,11 @@ def graph(theme, series, labels, maximum=None):
     for index, points in enumerate(series):
         if not points or len(points) < 2:
             continue
-        rgb = _series_colour(theme, index)
-        plot = curve([max(0.0, min(1.0, (value or 0.0) / peak)) for value in points],
-                     curve_steps(width, len(points)))
-        step = width / float(len(plot) - 1)
-        contour = [vec2(left + i * step, top + height - height * fraction)
-                   for i, fraction in enumerate(plot)]
-        contour.append(vec2(left + width, top + height))
-        contour.append(vec2(left, top + height))
-        area = shape.custom(contour)
+        filled = area(left, top, width, height,
+                      [max(0.0, min(1.0, (value or 0.0) / peak)) for value in points])
         screen.alpha = _series_alpha(theme, index)
-        screen.pen = color.rgb(*rgb)
-        screen.shape(area)
+        screen.pen = color.rgb(*_series_colour(theme, index))
+        screen.shape(filled)
     screen.alpha = 255
 
     # Scale and legend.
@@ -970,16 +1005,12 @@ def sparklines(theme, entries):
         screen.pen = color.rgb(*theme.grid)
         screen.hspan(plot_x, top + plot_h + 3, plot_w)
         if points and len(points) > 1 and peak:
-            plot = curve([max(0.0, min(1.0, (value or 0.0) / peak)) for value in points],
-                         curve_steps(plot_w, len(points)))
-            step = plot_w / float(len(plot) - 1)
-            contour = [vec2(plot_x + i * step, top + plot_h - plot_h * fraction)
-                       for i, fraction in enumerate(plot)]
-            contour.append(vec2(plot_x + plot_w, top + plot_h + 3))
-            contour.append(vec2(plot_x, top + plot_h + 3))
+            filled = area(plot_x, top, plot_w, plot_h,
+                          [max(0.0, min(1.0, (value or 0.0) / peak)) for value in points],
+                          base=top + plot_h + 3)
             screen.pen = color.rgb(*theme.accent)
             screen.alpha = 190
-            screen.shape(shape.custom(contour))
+            screen.shape(filled)
             screen.alpha = 255
         blit_label(value_text, look.SIZE_LABEL, theme.ink, look.W - look.PAD, mid - 7,
                    align=2)
@@ -1077,16 +1108,11 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
     screen.pen = color.rgb(*theme.grid)
     screen.hspan(left, top + height, width)
     if points and len(points) > 1 and peak:
-        plot = curve([max(0.0, min(1.0, (value or 0.0) / peak)) for value in points],
-                     curve_steps(width, len(points)))
-        step = width / float(len(plot) - 1)
-        contour = [vec2(left + i * step, top + height - height * part)
-                   for i, part in enumerate(plot)]
-        contour.append(vec2(left + width, top + height))
-        contour.append(vec2(left, top + height))
+        filled = area(left, top, width, height,
+                      [max(0.0, min(1.0, (value or 0.0) / peak)) for value in points])
         screen.pen = color.rgb(*theme.accent)
         screen.alpha = 170
-        screen.shape(shape.custom(contour))
+        screen.shape(filled)
         screen.alpha = 255
 
 

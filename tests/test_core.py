@@ -1512,11 +1512,18 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
     assert min(dense) >= min(values) and max(dense) <= max(values), (
         min(dense), max(dense))
 
-    # Fewer than three points cannot be interpolated, and the switch is honoured.
+    # Fewer than three points cannot be interpolated.
     assert draw.curve([0.5, 0.6], steps=4) == [0.5, 0.6]
+
+    # Whether to interpolate at all is `curve_steps`, which answers 1 for "draw it straight":
+    # when the switch is off, when there is nothing to interpolate, and when the plot is too
+    # short for a curve to show - a sparkline is 22px tall and reads the same either way.
+    assert draw.curve_steps(250, 150, len(values)) > 1
+    assert draw.curve_steps(250, 22, len(values)) == 1
+    assert draw.curve_steps(250, 150, 2) == 1
     draw.SMOOTH = False
     try:
-        assert draw.curve(values, steps=4) == values
+        assert draw.curve_steps(250, 150, len(values)) == 1
     finally:
         draw.SMOOTH = True
 
