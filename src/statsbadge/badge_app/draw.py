@@ -450,18 +450,24 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
     start, end = look.DIAL_FROM, look.DIAL_TO
     fraction = 0.0 if fraction is None else max(0.0, min(1.0, fraction))
 
+    # The track is only the part the sweep does not cover. The two abut rather than one
+    # being drawn over the other, which halves the arc a full gauge rasterises, and the join
+    # is under the tick below in any case.
+    lit = not cold and fraction > 0.001
+    sweep = start + (end - start) * fraction if lit else start
     screen.pen = color.rgb(*theme.grid)
-    screen.shape(shape.arc(middle, inner, outer, start, end))
+    if end - sweep > 0.5:
+        screen.shape(shape.arc(middle, inner, outer, sweep, end))
 
-    if not cold and fraction > 0.001:
-        sweep = start + (end - start) * fraction
+    if lit:
         # Solid, in the ramp's colour for this value: a spatial gradient across the
         # arc's box does not follow the curve, so the hue would not track the reading.
         # This way the colour *is* the severity, and it costs one shape.
         screen.pen = color.rgb(*theme.at(fraction if hot is None else hot))
         screen.shape(shape.arc(middle, inner, outer, start, sweep))
 
-        # A brighter tick at the sweep's end, so the exact value is readable.
+        # A brighter tick at the sweep's end, so the exact value is readable, and it lands
+        # on the join between the two arcs.
         screen.pen = color.rgb(*theme.ink)
         screen.shape(shape.arc(middle, inner - 3, outer + 3, sweep - 1.4, sweep + 1.4))
 
@@ -532,11 +538,12 @@ def readout(theme, y, name, value_text, fraction=None, note=None, chip=None, hot
     elif fraction is not None:
         width = look.READOUT_W
         fraction = max(0.0, min(1.0, fraction))
+        filled = int(width * fraction)
         screen.pen = color.rgb(*theme.grid)
-        screen.rectangle(rect(x, y + 28, width, 3))
-        if fraction > 0:
+        screen.rectangle(rect(x + filled, y + 28, width - filled, 3))
+        if filled:
             screen.pen = color.rgb(*theme.at(fraction if hot is None else hot))
-            screen.rectangle(rect(x, y + 28, int(width * fraction), 3))
+            screen.rectangle(rect(x, y + 28, filled, 3))
 
 
 # Between one line of a free-form column and the next, on top of the line's own height.
@@ -591,11 +598,14 @@ def bars(theme, values, maximum=100.0, field="pct"):
         fraction = max(0.0, min(1.0, value / maximum if maximum else 0.0))
         y = top + i * slot
         blit_label(names[i], look.SIZE_SMALL, theme.dim, look.PAD, y - 1)
+        filled = max(1, int(width * fraction)) if fraction > 0 else 0
         screen.pen = color.rgb(*theme.grid)
-        screen.rectangle(rect(x, y, width, height))
-        if fraction > 0:
+        # From where the fill ends, so the two meet instead of overlapping. Exact: an
+        # axis-aligned raster edge is a pixel boundary, not an anti-aliased one.
+        screen.rectangle(rect(x + filled, y, width - filled, height))
+        if filled:
             screen.pen = color.rgb(*theme.at(fraction))
-            screen.rectangle(rect(x, y, max(1, int(width * fraction)), height))
+            screen.rectangle(rect(x, y, filled, height))
         blit_label(readings[i], look.SIZE_SMALL, theme.ink,
                    look.W - look.PAD, y - 1, align=2)
 
@@ -907,11 +917,14 @@ def rings(theme, entries):
         ring_inner = ring_outer - RING_BAND
         if ring_inner < 8:
             break
+        # Track and fill abut, as they do on a single gauge: four rings drawn over their own
+        # tracks is twice the arc for the same picture.
+        sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * (fraction or 0.0)
         screen.pen = color.rgb(*theme.grid)
-        screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
-                               look.DIAL_FROM, look.DIAL_TO))
+        if look.DIAL_TO - sweep > 0.5:
+            screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
+                                   sweep, look.DIAL_TO))
         if fraction:
-            sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * fraction
             screen.pen = color.rgb(*rgb)
             screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
                                    look.DIAL_FROM, sweep))
