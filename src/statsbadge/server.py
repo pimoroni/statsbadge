@@ -17,6 +17,7 @@ import json
 import os
 import socket
 import socketserver
+import sys
 import threading
 import traceback
 
@@ -382,6 +383,21 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     def server_bind(self):
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         super().server_bind()
+
+    def handle_error(self, request, client_address):
+        """A client dropping a pooled connection is not a fault.
+
+        Keep-alive parks a thread in readline waiting for the next request. A peer that
+        closes without shutting down resets the socket instead of ending it cleanly, so
+        that read fails with nothing in flight to lose.
+        """
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, TimeoutError)):
+            if self.verbose:
+                print(f"{client_address[0]} dropped the connection: "
+                      f"{type(exc).__name__}", file=sys.stderr)
+            return
+        super().handle_error(request, client_address)
 
 
 def make_server(service, host="0.0.0.0", port=8420, verbose=False):

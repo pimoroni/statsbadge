@@ -4,6 +4,7 @@ Run with `python3 -m pytest` from `server/`, or `python3 tests/test_core.py` for
 plain run with no pytest installed.
 """
 
+import io
 import json
 import os
 import struct
@@ -243,6 +244,38 @@ def test_response_is_one_write(h):
     assert len(body) == length, (
         f"body split across segments: got {len(body)} of {length} bytes "
         "in the first read")
+
+
+@check
+def test_a_dropped_connection_is_not_reported(h):
+    """SO_LINGER at 0 resets instead of closing, which is what the badge does.
+
+    The handler thread is parked in readline waiting for a following request, so the
+    reset surfaces there with nothing in flight. Only a real fault gets a traceback.
+    """
+    sock = socket.create_connection(("127.0.0.1", h.port), timeout=5)
+    sock.sendall(b"GET /v1/hello HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n")
+    sock.recv(65536)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    caught = io.StringIO()
+    stderr, sys.stderr = sys.stderr, caught
+    try:
+        sock.close()
+        time.sleep(0.4)
+    finally:
+        sys.stderr = stderr
+    assert caught.getvalue() == "", f"reported a dropped connection: {caught.getvalue()}"
+
+    try:
+        raise ValueError("a real handler fault")
+    except ValueError:
+        caught = io.StringIO()
+        stderr, sys.stderr = sys.stderr, caught
+        try:
+            h.httpd.handle_error(None, ("127.0.0.1", 1))
+        finally:
+            sys.stderr = stderr
+    assert "a real handler fault" in caught.getvalue(), "swallowed a real fault"
 
 
 @check
