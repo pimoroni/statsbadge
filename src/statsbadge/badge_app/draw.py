@@ -199,6 +199,29 @@ def text_width(text_value, size, name=TEXT):
     return int(width) + 2
 
 
+# Type metrics, as fractions of the size a string is drawn at. A capital stands CAP above
+# the baseline (../BADGEWARE.md), and tools/make_icon_font.py fits every icon to a box of
+# 100 units sat on the baseline, where a capital is 81 - so an icon's box is a fifth taller
+# than a capital and its ink is centred half way up it.
+CAP = 0.68
+ICON_BOX = CAP * 100.0 / 81.0
+
+
+def icon_baseline(text_y, text_size, icon_size):
+    """Where to draw an icon so it centres on the capitals of text drawn at `text_y`.
+
+    Not on a shared baseline: the icon's box stands taller than a capital and its ink sits
+    in the middle of that box, so sharing a baseline leaves the symbol floating above the
+    words - 4.5px at 32 beside 26pt.
+
+    Against the capitals and not the string's own extent, because a diacritic or a
+    descender would otherwise move the symbol: 16°C would sit lower than 16C for no reason
+    the reader can see.
+    """
+    cap_middle = text_y + text_size * (1.0 - CAP / 2.0)
+    return int(cap_middle - icon_size * (1.0 - ICON_BOX / 2.0))
+
+
 def column_width(texts, size, name=TEXT):
     """How wide a column of these strings has to be.
 

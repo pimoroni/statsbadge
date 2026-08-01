@@ -1296,6 +1296,40 @@ def test_a_row_of_text_and_a_plot_measures_its_columns(_h):
         assert name in look_source, f"{name} is not derived from the dial's gap"
 
 
+@check
+def test_a_symbol_centres_on_the_words_beside_it(_h):
+    """An icon and a string on one baseline do not line up: the icon's box stands a fifth
+    taller than a capital and its ink sits in the middle of that box, so the symbol floats.
+    """
+    import struct
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+
+    # The placement holds only while an icon's ink is centred in a box sat on the baseline,
+    # so that is read out of the fonts rather than assumed.
+    fonts = (pathlib.Path(install.app_source_dir()) / "icons.af",
+             pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge"
+                          "/icons.af"))
+    for path in fonts:
+        data = path.read_bytes()
+        for i in range(struct.unpack(">H", data[6:8])[0]):
+            _cp, _bx, by, _bw, bh, _adv, _nc = struct.unpack(
+                ">HbbBBBB", data[12 + i * 8:20 + i * 8])
+            assert by >= 0 and by + bh <= 100, f"{path.name} glyph {i} is not in its box"
+            assert abs(by - (100 - bh) / 2.0) <= 1, (
+                f"{path.name} glyph {i} is not centred in its box")
+
+    text_y, text_size, icon_size = 100, 26, 32
+    icon_y = draw.icon_baseline(text_y, text_size, icon_size)
+    cap_middle = text_y + text_size * (1.0 - draw.CAP / 2.0)
+    ink_middle = icon_y + icon_size * (1.0 - draw.ICON_BOX / 2.0)
+    assert abs(cap_middle - ink_middle) <= 1, (cap_middle, ink_middle)
+    # Which is lower than a shared baseline puts it, that being the bug.
+    assert icon_y > text_y + text_size - icon_size
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

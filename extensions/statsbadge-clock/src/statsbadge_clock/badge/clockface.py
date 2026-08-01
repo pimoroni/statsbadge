@@ -253,7 +253,8 @@ def _digital(clock, weather, label, theme):
     x = left
     icon = weather.get("icon")
     if icon:
-        drawn = draw.blit_label(icon, ICON_SIZE, theme.ink, x, y - 4,
+        drawn = draw.blit_label(icon, ICON_SIZE, theme.ink, x,
+                                draw.icon_baseline(y, look.SIZE_BIG, ICON_SIZE),
                                 name=WEATHER_FONT)
         x += (drawn or 0) + 8
     if weather.get("temp") is not None:
@@ -324,16 +325,15 @@ def render(page, frame, _history, theme):
     # few pixels of the page indicator.
     icon = weather.get("icon")
     if weather.get("temp") is not None or icon:
-        drawn = draw.blit_label(icon or "", ICON_SIZE, theme.ink, x, y,
+        drawn = draw.blit_label(icon or "", ICON_SIZE, theme.ink, x,
+                                draw.icon_baseline(y, look.SIZE_BIG, ICON_SIZE),
                                 name=WEATHER_FONT)
         if weather.get("temp") is not None:
             # The scale comes with the reading; without one a number is just a number.
             unit = weather.get("temp_unit") or ""
-            # On the symbol's baseline, which a sprite puts its own size from the top.
             draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
                             look.SIZE_BIG, theme.ink,
-                            x + (drawn + 8 if drawn else 0),
-                            y + ICON_SIZE - look.SIZE_BIG)
+                            x + (drawn + 8 if drawn else 0), y)
         y += ICON_SIZE + 4
 
     condition = weather.get("condition")
