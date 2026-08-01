@@ -66,7 +66,7 @@ FRAME = {
                          "wind_unit": "km/h", "place": "Sheffield, GB",
                          "utc_offset": 3600}
                for page_id in ("swiss_clock", "face_dots", "face_squircle",
-                               "face_digital")},
+                               "face_digital", "face_lcd")},
     "weather": {"temp": 16.0, "feels": 14.0, "humidity": 78, "wind": 14.0,
                 "condition": "overcast", "code": 3,
                 # Units travel with the numbers, and the icon is a character in the
@@ -137,6 +137,7 @@ PAGES = [
     {"id": "face_dots", "kind": "clockface", "title": "Clock", "face": "dots"},
     {"id": "face_squircle", "kind": "clockface", "title": "Clock", "face": "squircle"},
     {"id": "face_digital", "kind": "clockface", "title": "Clock", "face": "digital"},
+    {"id": "face_lcd", "kind": "clockface", "title": "Clock", "face": "lcd"},
 ]
 
 

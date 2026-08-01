@@ -1360,6 +1360,41 @@ def test_a_symbol_centres_on_the_words_beside_it(_h):
     assert icon_y > text_y + text_size - icon_size
 
 
+@check
+def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
+    """The face list is host side and the renderers are badge side, so a face added to one
+    and not the other is a page that draws the default and says nothing."""
+    badge = (pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge"))
+    source = (badge / "clockface.py").read_text()
+    try:
+        from statsbadge_clock import Clock
+    except ImportError:
+        return              # the extension is not pip installed in this environment
+
+    offered = next(s for s in Clock.page_settings if s["key"] == "face")["options"]
+    # The dials and the dial-less faces are two tables; between them they are the renderers.
+    drawn = set()
+    for table in ("FACES = {", "DIGITAL = {"):
+        block = source[source.index(table):]
+        block = block[:block.index("\n}\n")]
+        drawn.update(re.findall(r'^    "([a-z]+)": \{', block, re.M))
+    assert set(offered) == drawn, (sorted(offered), sorted(drawn))
+
+    # The seven-segment face needs a font of its own, which is an asset and not code, so it
+    # travels only if it is declared.
+    assert any(path.endswith("lcd.af") for path in Clock.badge_assets), Clock.badge_assets
+    assert (badge / "lcd.af").exists(), "the LCD face's font is not built"
+    # Shipped, so its licence ships with it.
+    licence = pathlib.Path("licences/OFL-DSEG.txt").read_text()
+    assert "keshikan" in licence and "SIL Open Font License" in licence
+
+    # The unlit segments go down before the lit ones, or they cover them.
+    body = source[source.index("def _digital"):]
+    body = body[:body.index("\ndef ", 1)]
+    assert body.index('spec["ghost"]') < body.index("screen.blit(digits_left"), (
+        "the ghost is drawn over the digits")
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

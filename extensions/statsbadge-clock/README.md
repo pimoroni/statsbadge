@@ -35,6 +35,28 @@ Without a location the clock still works and the weather readouts read "no locat
 
 The settings themselves are declared on the source as `settings`, which is what the UI builds its fields from. An extension that declares none gets no section.
 
+## Faces
+
+Each clock page picks one, under its own settings in the config UI:
+
+| Face | What it is |
+| ---- | ---------- |
+| `railway` | Hilfiker's station clock in the Mondaine colourway, keeping its own livery |
+| `dots` | Koppel's dotted minute track, needle hands with a spike opposite each |
+| `squircle` | The badge's own furniture, in the page theme |
+| `digital` | No dial: date, place, the time the height of the band, weather under it |
+| `lcd` | The same layout in seven-segment digits, over their own unlit segments |
+
+The seven segments are [DSEG](https://github.com/keshikan/DSEG) by keshikan - DSEG7 Classic Bold, under the SIL Open Font License, packed into `badge/lcd.af` and pushed to the badge as an asset beside the module:
+
+```bash
+python3 tools/make_text_font.py build/fonts/DSEG7Classic-Bold.ttf \
+        --chars "0123456789: " --cap 122 --cap-from 8 \
+        --out extensions/statsbadge-clock/src/statsbadge_clock/badge/lcd.af
+```
+
+`--cap-from 8` because a face that only draws numbers has no `H` to measure a cap height from, and `--cap 122` packs it at the finest grid a signed byte holds. Its licence is in [licences/OFL-DSEG.txt](../../licences/OFL-DSEG.txt).
+
 ## Working on it
 
 Install it editable, or an edit here does nothing: a plain `uv pip install` copies the package, and installing again over an unchanged version is a no-op, so the code that runs stays the snapshot from the first install.

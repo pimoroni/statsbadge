@@ -93,9 +93,11 @@ class Clock(Source):
     # the app so its page kind is available.
     badge_module = os.path.join(HERE, "badge", "clockface.py")
 
-    # Weather symbols, built from icons.txt by tools/make_icon_font.py. Pushed to the
-    # badge beside the module, which loads it with font.load().
-    badge_assets = (os.path.join(HERE, "badge", "icons.af"),)
+    # Weather symbols, built from icons.txt by tools/make_icon_font.py, and the LCD face's
+    # seven-segment digits. Pushed to the badge beside the module, which loads them with
+    # font.load().
+    badge_assets = (os.path.join(HERE, "badge", "icons.af"),
+                    os.path.join(HERE, "badge", "lcd.af"))
 
     # Offered in the config UI, which stores them and hands them back through
     # configure(). Weather is off until a location is set, so the place comes first and
@@ -135,9 +137,11 @@ class Clock(Source):
          "hint": "Instead of the name, for a spot no name lands on"},
         {"key": "longitude", "label": "Longitude", "type": "number"},
         {"key": "face", "label": "Face", "type": "choice",
-         "options": ["railway", "dots", "squircle", "digital"], "default": "railway",
+         "options": ["railway", "dots", "squircle", "digital", "lcd"],
+         "default": "railway",
          "hint": "railway is the station clock, dots is a dotted minute track, squircle "
-                 "and digital take the badge's theme"},
+                 "and digital take the badge's theme, lcd is seven-segment digits over "
+                 "their own unlit segments"},
     )
 
     @classmethod

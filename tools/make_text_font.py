@@ -191,6 +191,9 @@ def main():
                              f"so a caller still asks for the size it wants")
     parser.add_argument("--chars",
                         help="only these characters, for a font built for one job")
+    parser.add_argument("--cap-from", default="H", metavar="CHAR",
+                        help="the character to measure the cap height from, for a face "
+                             "that has not got an H (default: H)")
     parser.add_argument("--list", action="store_true",
                         help="report coverage and size, and write nothing")
     args = parser.parse_args()
@@ -212,7 +215,7 @@ def main():
     units_per_em = round(cap * NARROW_UNITS_PER_EM / CAP_HEIGHT) if args.wide else None
     quality = (args.quality if args.quality is not None
                else QUALITY * cap / CAP_HEIGHT)
-    scale = cap_scale(face, cap=cap)
+    scale = cap_scale(face, sample=args.cap_from, cap=cap)
     wanted = ([ord(c) for c in args.chars] if args.chars
               else default_codepoints())
     glyphs, missing = [], []

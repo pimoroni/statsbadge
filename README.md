@@ -157,13 +157,20 @@ uv pip install --python .venv/bin/python --no-deps --reinstall-package statsbadg
 
 That one is a worked example: a Swiss railway clock whose second hand sweeps at the badge's frame rate, plus weather from Open-Meteo, which needs no API key.
 
-![Railway](shots/swiss_clock.png) ![Dots](shots/face_dots.png) ![Squircle](shots/face_squircle.png) ![Digital](shots/face_digital.png)
+![Railway](shots/swiss_clock.png) ![Dots](shots/face_dots.png) ![Squircle](shots/face_squircle.png) ![Digital](shots/face_digital.png) ![Digital LCD](shots/face_lcd.png)
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for how to write one.
 
 ## Security
 
 Plain HTTP on the LAN, with every request signed HMAC-SHA256 against a shared secret from pairing, and a counter the host refuses to accept twice. So a command cannot be forged or replayed, and an unpaired device on the network learns nothing. TLS is affordable on this hardware but buys little without certificate validation - [DEVELOPMENT.md](DEVELOPMENT.md) has the measurements. The config API is bound to loopback because it can mint secrets. Host commands only run if you have bound them to a button.
+
+## Fonts
+
+The badge draws with two typefaces, both under the SIL Open Font License, packed into `.af` by `tools/make_text_font.py`:
+
+- [Lexend](https://github.com/googlefonts/lexend) for everything, with the digits packed a second time at a finer grid for the numbers a clock draws the height of the band. [Licence](licences/OFL-Lexend.txt).
+- [DSEG](https://github.com/keshikan/DSEG) by keshikan, DSEG7 Classic Bold, for the LCD clock face's seven segments. [Licence](licences/OFL-DSEG.txt).
 
 ## Names
 

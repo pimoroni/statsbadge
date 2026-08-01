@@ -31,6 +31,14 @@ WEATHER_FONT = "weather"
 # two of them together have room for.
 ICON_SIZE = 32
 
+# Seven-segment digits, shipped beside this module the same way. DSEG7 Classic Bold, under
+# the SIL Open Font License, packed by tools/make_text_font.py --cap 122 --cap-from 8: there
+# is no H in a face that only draws numbers. A digit stands the full 122, so it fills
+# draw.CAP of whatever size it is asked for, like a capital does.
+LCD_FONT = "lcd"
+LCD_FILE = "lcd.af"
+LCD_CAP = 122
+
 # The app's own split layout: where its single gauge sits and how big it may be, so paging
 # from a dial or a ring stack to a clock does not move the thing being looked at.
 CENTRE = look.DIAL_C
@@ -80,6 +88,14 @@ FACES = {
     },
 }
 DEFAULT_FACE = "railway"
+
+# The faces with no dial, where what varies is the typeface the numbers are set in and
+# whether the unlit segments show behind the lit ones. `ghost` is what an unlit pair looks
+# like, which for seven segments is a pair of eights.
+DIGITAL = {
+    "digital": {"label": "Digital", "font": None, "ghost": None},
+    "lcd": {"label": "Digital LCD", "font": LCD_FONT, "ghost": "88"},
+}
 
 # Baked dials and hand geometry, per face: a page each side of the list can ask for a
 # different one, and neither should pay for the other's bake. A themed dial depends on
@@ -216,12 +232,29 @@ def _register_font():
     draw.add_font(WEATHER_FONT, look.APP_DIR + "/ext/icons.af", beside)
 
 
-# What the digits are sized against: 4 is the widest of them in this face, so a time made of
-# them is the one that has to fit.
+# What the digits are sized against: 4 is the widest of them in the app's face, so a time
+# made of them is the one that has to fit. The seven-segment face is monospaced, where any
+# time measures the same.
 WIDEST_TIME = "44:44"
 
 
-def _digital(clock, weather, label, theme):
+def _digits_font(spec):
+    """The font a digital face sets its numbers in, loading it on first use.
+
+    A face with one of its own gets it from beside this module, and an install predating the
+    file falls back to the app's digits: the same numbers, without the segments.
+    """
+    wanted = spec["font"]
+    if not wanted:
+        return draw.DIGITS
+    if not draw.has_font(wanted):
+        here = globals().get("__file__") or ""
+        beside = here.rsplit("/", 1)[0] + "/" + LCD_FILE if "/" in here else LCD_FILE
+        draw.add_font(wanted, look.APP_DIR + "/ext/" + LCD_FILE, beside, cap=LCD_CAP)
+    return wanted if draw.has_font(wanted) else draw.DIGITS
+
+
+def _digital(clock, weather, label, theme, spec):
     """No dial: the whole band, laid out as a desk clock and drawn in the theme.
 
     The colon is drawn as its own label between the two pairs, because a proportional
@@ -248,16 +281,17 @@ def _digital(clock, weather, label, theme):
     # And no wider than the band. Measured against the widest time it could ever have to
     # show rather than the one it is showing, so the digits do not change size from one
     # minute to the next and nothing is ever clipped.
+    # The app's digits font, or the face's own, which is packed at a finer grid than the text
+    # font: at this size that one snaps every point on a curve by most of a pixel, and the
+    # bowls come out lumpy.
+    name = _digits_font(spec)
     span = look.W - look.PAD * 4
-    widest = draw.text_width(WIDEST_TIME, size, draw.DIGITS) + gap * 2
+    widest = draw.text_width(WIDEST_TIME, size, name) + gap * 2
     if widest > span:
         size = int(size * span / widest)
-    # The app's digits font, which is packed at a finer grid. At this size the ordinary one
-    # snaps every point on a curve by most of a pixel: the bowls come out lumpy and the
-    # colon is a pair of hexagons.
-    digits_left = draw.label(hours, size, theme.ink, draw.DIGITS)
-    digits_right = draw.label(minutes or "--", size, theme.ink, draw.DIGITS)
-    colon = draw.label(":", size, theme.accent, draw.DIGITS)
+    digits_left = draw.label(hours, size, theme.ink, name)
+    digits_right = draw.label(minutes or "--", size, theme.ink, name)
+    colon = draw.label(":", size, theme.accent, name)
     total = digits_left.width + colon.width + digits_right.width + gap * 2
     x = (look.W - total) // 2
     # Centred in the room, not sat at the top of it: the width cap leaves the digits shorter
@@ -265,10 +299,16 @@ def _digital(clock, weather, label, theme):
     # baseline sits `size` from its own top, which is what the second term takes off.
     ink = int(size * draw.CAP)
     y = digits_top + (room - ink) // 2 - (size - ink)
+    minutes_x = x + digits_left.width + colon.width + gap * 2
+    # The unlit segments first, which is what a display of them actually shows. The face is
+    # monospaced, so a pair of eights covers exactly where either pair's segments fall.
+    if spec["ghost"] and name == spec["font"]:
+        unlit = draw.label(spec["ghost"], size, theme.grid, name)
+        screen.blit(unlit, vec2(int(x), int(y)))
+        screen.blit(unlit, vec2(int(minutes_x), int(y)))
     screen.blit(digits_left, vec2(int(x), int(y)))
     screen.blit(colon, vec2(int(x + digits_left.width + gap), int(y)))
-    screen.blit(digits_right,
-                vec2(int(x + digits_left.width + colon.width + gap * 2), int(y)))
+    screen.blit(digits_right, vec2(int(minutes_x), int(y)))
 
     # The weather along the bottom, symbol first so the eye lands on it.
     y = look.BODY_TOP + look.BODY_H - 34
@@ -306,8 +346,8 @@ def render(page, frame, _history, theme):
 
     _register_font()
     chosen = ((page or {}).get("face") or DEFAULT_FACE)
-    if chosen == "digital":
-        _digital(clock, weather, label, theme)
+    if chosen in DIGITAL:
+        _digital(clock, weather, label, theme, DIGITAL[chosen])
         return
 
     spec, rgb, dial, hands = _face(chosen, theme)
