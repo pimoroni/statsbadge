@@ -62,11 +62,13 @@ FACES = {
         "sec_hand": (0.88, 0.009), "tail": 0.24, "hub": 7,
     },
     # Nothing historic: the badge's own furniture, on the squircle the firmware draws.
-    # Dark, so it sits in a dark theme rather than on a white disc.
+    # Every colour None, so the dial is built out of the theme and sits against the page
+    # the way the header and footer do - a fixed dark plate lands within a few counts of a
+    # dark theme's background and turns to mud.
     "squircle": {
         "label": "Squircle",
-        "face": (22, 24, 30), "marks": (150, 156, 172),
-        "hands": (238, 240, 245), "second": None,     # None takes the theme's accent
+        "face": None, "marks": None,
+        "hands": None, "second": None,
         "plate": "squircle", "marks_style": "bars", "star": False,
         "hour_mark": (0.16, 0.030), "min_mark": (0.06, 0.012),
         "hour_hand": (0.52, 0.040), "min_hand": (0.84, 0.030),
@@ -76,9 +78,26 @@ FACES = {
 DEFAULT_FACE = "railway"
 
 # Baked dials and hand geometry, per face: a page each side of the list can ask for a
-# different one, and neither should pay for the other's bake.
+# different one, and neither should pay for the other's bake. A themed dial depends on
+# the theme, so the bakes are dropped when that changes rather than kept per theme -
+# four faces across ten themes would be forty dials at 113KB each.
 _face_cache = {}
 _hands_cache = {}
+_baked_for = None
+
+
+def _colours(spec, theme):
+    """A face's colours, with None meaning "whatever the theme says".
+
+    panel for the plate, because that is what the header and footer are drawn in, so a
+    themed dial sits against the page like the rest of the furniture.
+    """
+    return {
+        "face": spec["face"] or theme.panel,
+        "marks": spec["marks"] or theme.dim,
+        "hands": spec["hands"] or theme.ink,
+        "second": spec["second"] or theme.accent,
+    }
 
 
 def _bar(inner, outer, half_width):
@@ -112,7 +131,7 @@ def _dot(radius_at, size):
     return shape.circle(vec2(0, -radius_at), size)
 
 
-def _bake_face(spec):
+def _bake_face(spec, rgb):
     """The dial. Static, so it is baked once per face and blitted.
 
     Sixty anti-aliased marks costs milliseconds, which would be most of a frame every
@@ -126,13 +145,13 @@ def _bake_face(spec):
     face.rectangle(rect(0, 0, size, size))
 
     middle = (size / 2.0, size / 2.0)
-    face.pen = color.rgb(*spec["face"])
+    face.pen = color.rgb(*rgb["face"])
     if spec["plate"] == "squircle":
         face.shape(shape.squircle(vec2(*middle), RADIUS, 4))
     elif spec["plate"] == "disc":
         face.shape(shape.circle(vec2(*middle), RADIUS))
 
-    face.pen = color.rgb(*spec["marks"])
+    face.pen = color.rgb(*rgb["marks"])
     hour_len, hour_half = spec["hour_mark"]
     min_len, min_half = spec["min_mark"]
     if spec["marks_style"] == "dots":
@@ -161,14 +180,20 @@ def _bake_hands(spec):
     )
 
 
-def _face(name):
-    """A face's spec, its baked dial and its hands, baking on first use."""
+def _face(name, theme):
+    """A face's colours, its baked dial and its hands, baking on first use."""
+    global _baked_for
+    if _baked_for != theme.name:
+        _face_cache.clear()
+        _hands_cache.clear()
+        _baked_for = theme.name
     spec = FACES.get(name) or FACES[DEFAULT_FACE]
+    rgb = _colours(spec, theme)
     key = spec["label"]
     if key not in _face_cache:
-        _face_cache[key] = _bake_face(spec)
+        _face_cache[key] = _bake_face(spec, rgb)
         _hands_cache[key] = _bake_hands(spec)
-    return spec, _face_cache[key], _hands_cache[key]
+    return spec, rgb, _face_cache[key], _hands_cache[key]
 
 
 def _hand(bar, degrees, rgb):
@@ -259,7 +284,7 @@ def render(page, frame, _history, theme):
         _digital(clock, weather, label, theme)
         return
 
-    spec, dial, hands = _face(chosen)
+    spec, rgb, dial, hands = _face(chosen, theme)
     size = dial.width
     screen.blit(dial, vec2(int(CENTRE[0] - size / 2), int(CENTRE[1] - size / 2)))
 
@@ -270,13 +295,10 @@ def render(page, frame, _history, theme):
         _resync(clock)
         hour, minute, second = _local_time()
         hour_hand, minute_hand, second_hand = hands
-        # A face with no second colour of its own takes the theme's accent, which is how
-        # the squircle dial stays part of whatever the badge is wearing.
-        second_rgb = spec["second"] or theme.accent
-        _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, spec["hands"])
-        _hand(minute_hand, minute * 6.0 + second * 0.1, spec["hands"])
-        _hand(second_hand, second * 6.0, second_rgb)
-        screen.pen = color.rgb(*second_rgb)
+        _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, rgb["hands"])
+        _hand(minute_hand, minute * 6.0 + second * 0.1, rgb["hands"])
+        _hand(second_hand, second * 6.0, rgb["second"])
+        screen.pen = color.rgb(*rgb["second"])
         screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
 
     # The readouts beside the dial, in the badge's theme rather than the clock's.
