@@ -39,6 +39,11 @@ SLIDE_STYLES = ("off", "over", "deck")
 # hairline between them, or nothing.
 ROW_STYLES = ("zebra", "rules", "none")
 
+# How the gauge on a dial page fills: one colour, the ramp's for the reading, or the whole ramp
+# swept round the arc with what the reading has not reached left faint. Only that gauge, being
+# the only one with a page to itself and the only one large enough to read a ramp off.
+GAUGE_FILLS = ("solid", "ramp")
+
 # The names, from the palettes themselves: a theme is data, so adding one is a palette and
 # nothing else. The tinted pair are the ones not written down anywhere - a whole palette derived
 # from the one accent kept in `tint`, so what is stored is the choice and not its result, and a
@@ -94,6 +99,7 @@ DEFAULT_CONFIG = {
     "plot_animation": False,
     "slide": "off",
     "rows": "zebra",
+    "gauge_fill": "solid",
     "auto_brightness": False,
     "idle_advance_s": 0,
     "advance_every_s": 10,
@@ -250,6 +256,10 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # read as one plot with six traces otherwise.
     rows = incoming.get("rows", "zebra")
     out["rows"] = rows if rows in ROW_STYLES else "zebra"
+    # How the dial page's gauge fills. One colour by default: the reading is one value, and
+    # the ramp behind it is worth showing on some machines and clutter on others.
+    fill = incoming.get("gauge_fill", "solid")
+    out["gauge_fill"] = fill if fill in GAUGE_FILLS else "solid"
     # Whether the badge takes its brightness down to suit a dim room. Off by default: it is
     # the badge's own sensor and not every board has one.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))

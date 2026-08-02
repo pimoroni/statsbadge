@@ -220,6 +220,7 @@ def clear_cache():
     _labels.clear()
     _pip_rows.clear()
     _readings.clear()
+    _gradients.clear()
     waterfall_reset()
 
 
@@ -512,8 +513,55 @@ def _pips(theme, index, total):
 
 # -- widgets ----------------------------------------------------------------
 
+# How the big gauge fills, from the layout. "solid" is the ramp's colour for the reading;
+# "ramp" lays the whole ramp round the arc and leaves what the reading has not reached faint,
+# so the scale it is climbing shows behind it.
+GAUGE_FILL = "solid"
+# How faint that is. Per stop, because a gradient brush ignores screen.alpha: measured, a solid
+# pen blends at a layer alpha and a gradient does not move.
+TRACK_ALPHA = 32
+_gradients = {}
+
+
+def swept_pens(theme, centre, radius, backwards=False):
+    """The theme's ramp round a gauge: what fills the sweep, and what sits behind it.
+
+    A conical's stops are fractions of a whole turn, so a 270 degree gauge lays the ramp over
+    three quarters of one, and the brush's second point is the direction it starts in -
+    DIAL_FROM clockwise from straight up, which is the convention arc() uses, so the two line up
+    with no fixup. Unlike a linear gradient it follows the curve, which is what makes the hue
+    track the reading.
+
+    `backwards` is for a field whose severity runs the other way, a battery not being in trouble
+    at 100%: the colour comes from the angle here and not from a lookup, so the ramp itself has
+    to be reversed for the sweep's end to be the reading's own colour.
+
+    Cached: a pair built from OKLCH stops is 3.4ms, where the arc costs the same to draw either
+    way.
+    """
+    key = (theme.name, centre, radius, backwards)
+    pens = _gradients.get(key)
+    if pens is None:
+        import math
+
+        turn = (look.DIAL_TO - look.DIAL_FROM) / 360.0
+        stops = [(pos * turn, pen) for pos, pen in theme.ramp]
+        if backwards:
+            stops = [(turn - pos, pen) for pos, pen in reversed(stops)]
+        angle = math.radians(look.DIAL_FROM)
+        towards = (centre[0] + math.sin(angle) * radius,
+                   centre[1] - math.cos(angle) * radius)
+        pens = _gradients[key] = tuple(
+            brush.gradient(brush.CONICAL, centre[0], centre[1], towards[0], towards[1],
+                           tuple((pos, pen if alpha == 255 else pen.with_alpha(alpha))
+                                 for pos, pen in stops))
+            for alpha in (255, TRACK_ALPHA))
+    return pens
+
+
 def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
-          value_size=None, label_size=None, cold=False, icon=None, unit=None, hot=None):
+          value_size=None, label_size=None, cold=False, icon=None, unit=None, hot=None,
+          swept=None):
     """One sweep gauge, with a line of text inside it.
 
     `shape.arc(centre, inner, outer, from, to)` - angles start at the top and run
@@ -528,27 +576,32 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
     to. `unit` is a small suffix on the reading, for a gauge whose slot below is already
     spoken for - the single dial puts its unit below instead, having nothing else to put
     there. It is dropped rather than allowed to spill out of a small ring.
+
+    `swept` is a (fill, track) pair from `swept_pens`, for a gauge showing the whole ramp round
+    its arc. Without one the sweep is the single ramp colour for the reading and the track is
+    the grid.
     """
     value_size = value_size or look.SIZE_HUGE
     label_size = label_size or look.SIZE_LABEL
     middle = vec2(*centre)
     start, end = look.DIAL_FROM, look.DIAL_TO
     fraction = 0.0 if fraction is None else max(0.0, min(1.0, fraction))
+    fill, track = swept if swept else (None, None)
 
     # The track is only the part the sweep does not cover. The two abut rather than one
     # being drawn over the other, which halves the arc a full gauge rasterises, and the join
     # is under the tick below in any case.
     lit = not cold and fraction > 0.001
     sweep = start + (end - start) * fraction if lit else start
-    screen.pen = theme.grid
+    screen.pen = theme.grid if track is None or cold else track
     if end - sweep > 0.5:
         screen.shape(shape.arc(middle, inner, outer, sweep, end))
 
     if lit:
-        # Solid, in the ramp's colour for this value: a spatial gradient across the
-        # arc's box does not follow the curve, so the hue would not track the reading.
-        # This way the colour *is* the severity, and it costs one shape.
-        screen.pen = theme.at(fraction if hot is None else hot)
+        # One colour is where this reading sits on the ramp, so the colour *is* the severity;
+        # the swept fill is the whole ramp laid round the arc, so the scale shows as well as
+        # the reading. Either costs one shape.
+        screen.pen = (theme.at(fraction if hot is None else hot) if fill is None else fill)
         screen.shape(shape.arc(middle, inner, outer, start, sweep))
 
         # A brighter tick at the sweep's end, so the exact value is readable, and it lands
@@ -581,10 +634,16 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
         blit_label(under, label_size, theme.dim, centre[0], below, align=1)
 
 
-def dial(theme, fraction, value_text, unit_text, cold=False, hot=None):
-    """The single gauge of a `dial` page, with its readouts beside it."""
+def dial(theme, fraction, value_text, unit_text, cold=False, hot=None, backwards=False):
+    """The single gauge of a `dial` page, with its readouts beside it.
+
+    The one gauge with a page to itself, and the only one big enough for a ramp round it to be
+    read, so this is where the swept fill is offered.
+    """
     gauge(theme, look.DIAL_C, look.DIAL_OUTER, look.DIAL_INNER, fraction, value_text,
-          unit_text, cold=cold, hot=hot)
+          unit_text, cold=cold, hot=hot,
+          swept=swept_pens(theme, look.DIAL_C, look.DIAL_OUTER, backwards)
+          if GAUGE_FILL == "ramp" else None)
 
 
 def dials(theme, entries):

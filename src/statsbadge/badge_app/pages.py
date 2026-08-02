@@ -238,7 +238,7 @@ def _dial(page, frame, _history, theme):
     # never is.
     under = scale_note(ref, frame) or draw.short_unit(field)
     draw.dial(theme, fraction, draw.fmt(value, field), under, cold=value is None,
-              hot=severity_of(ref, fraction))
+              hot=severity_of(ref, fraction), backwards=field in GOOD_HIGH)
     readouts = page.get("readouts", [])[:3]
     for readout_ref, y in zip(readouts, look.readout_rows(len(readouts))):
         readout_value = value_of(frame, readout_ref)

@@ -514,6 +514,12 @@ function renderLook() {
   rows.value = config.rows || "zebra";
   rows.onchange = () => { config.rows = rows.value; markDirty(); };
 
+  // How the dial page's gauge fills: the ramp's colour for the reading, or the whole ramp
+  // swept round the arc with what the reading has not reached left faint.
+  const gaugefill = $("gaugefill");
+  gaugefill.value = config.gauge_fill || "solid";
+  gaugefill.onchange = () => { config.gauge_fill = gaugefill.value; markDirty(); };
+
   // The badge's own light sensor, taking the brightness above down to suit a dim room.
   const autobright = $("autobright");
   autobright.checked = !!config.auto_brightness;

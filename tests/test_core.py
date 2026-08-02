@@ -1799,6 +1799,82 @@ def sections_of(page):
 
 
 @check
+def test_the_big_gauge_can_show_the_whole_ramp(_h):
+    """A conical gradient follows the arc, so the ramp can be laid round the gauge with what
+    the reading has not reached left faint: the scale shows as well as the reading. Only the
+    dial page's gauge, that being the one with a page to itself."""
+    import sys
+
+    for fill in layout.GAUGE_FILLS:
+        assert layout.validate({"gauge_fill": fill,
+                                "pages": layout.DEFAULT_PAGES})["gauge_fill"] == fill
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid", (
+        "one colour by default")
+    assert layout.validate({"gauge_fill": "rainbow",
+                            "pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid"
+
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="gaugefill"' in (web / "index.html").read_text(), "no control in the UI"
+    assert "config.gauge_fill" in (web / "app.js").read_text(), "the control is not bound"
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    applied = app[app.index("def apply_layout"):]
+    assert "draw.GAUGE_FILL" in applied[:applied.index("\n    def ", 1)]
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+    import look
+
+    theme = look.get("dark")
+    turn = (look.DIAL_TO - look.DIAL_FROM) / 360.0
+    fill, track = draw.swept_pens(theme, look.DIAL_C, look.DIAL_OUTER)
+    assert fill.kind == FakeBrush.CONICAL
+    # Fractions of a whole turn, so a 270 degree gauge lays the ramp over three quarters of
+    # one, and the ramp's own positions in order.
+    assert [pos for pos, _ in fill.stops] == [pos * turn for pos, _ in theme.ramp]
+    assert [pen for _, pen in fill.stops] == [pen for _, pen in theme.ramp]
+    # The track is the same ramp, dimmed by the colours themselves: a gradient brush ignores
+    # screen.alpha.
+    assert [pos for pos, _ in track.stops] == [pos for pos, _ in fill.stops]
+    assert {pen.a for _, pen in track.stops} == {draw.TRACK_ALPHA}
+    assert {pen.a for _, pen in fill.stops} == {255}
+
+    # Read backwards for a field whose severity is, so the sweep's end is still the reading's
+    # own colour: a battery at 100% is not a machine in trouble.
+    backwards, _ = draw.swept_pens(theme, look.DIAL_C, look.DIAL_OUTER, True)
+    positions = [pos for pos, _ in backwards.stops]
+    assert positions == sorted(positions), positions
+    assert backwards.stops[0][1] == theme.ramp[-1][1], "it does not start at the hot end"
+    assert backwards.stops[-1][1] == theme.ramp[0][1]
+    pages_source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text()
+    assert "backwards=field in GOOD_HIGH" in pages_source, (
+        "nothing tells the gradient which way the field is read"
+    )
+
+    # Built once a theme: a pair from OKLCH stops is 3.4ms, where moving the geometry is 12us
+    # and the arc costs the same to draw either way.
+    assert draw.swept_pens(theme, look.DIAL_C, look.DIAL_OUTER)[0] is fill
+    draw.clear_cache()
+    assert draw.swept_pens(theme, look.DIAL_C, look.DIAL_OUTER)[0] is not fill, (
+        "a theme change would leave the old ramp round the gauge")
+
+    # And the setting is what decides, with the solid fill asking for no brush at all.
+    seen = {}
+    real = draw.gauge
+    draw.gauge = lambda *args, **named: seen.update(named)
+    try:
+        draw.GAUGE_FILL = "solid"
+        draw.dial(theme, 0.5, "50", "%")
+        assert seen["swept"] is None
+        draw.GAUGE_FILL = "ramp"
+        draw.dial(theme, 0.5, "50", "%")
+        assert seen["swept"] is not None and len(seen["swept"]) == 2
+    finally:
+        draw.gauge = real
+        draw.GAUGE_FILL = "solid"
+        draw.clear_cache()
+
+
+@check
 def test_the_settings_are_grouped_by_what_they_do(_h):
     """One list of every control read as a soup. What a setting governs is the heading it sits
     under, so the panel can be read by what somebody came to change."""
@@ -1806,7 +1882,8 @@ def test_the_settings_are_grouped_by_what_they_do(_h):
     sections = sections_of(page)
     wanted = {
         "Look": ("theme", "preview", "accents", "slide", "interval"),
-        "Graphs &amp; Gauges": ("points", "smooth", "plotanim", "rows", "animate"),
+        "Graphs &amp; Gauges": ("points", "smooth", "plotanim", "rows", "animate",
+                                "gaugefill"),
         "Auto Advance": ("idle", "advance"),
         "Backlight &amp; Case Lights": ("brightness", "autobright", "caselights"),
     }

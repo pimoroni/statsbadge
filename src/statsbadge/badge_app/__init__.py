@@ -535,6 +535,7 @@ class App:
         self._lit = True
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
         draw.ROWS = (self.layout or {}).get("rows", "zebra")
+        draw.GAUGE_FILL = (self.layout or {}).get("gauge_fill", "solid")
         pages_module.PLOT_ANIMATION = bool(
             (self.layout or {}).get("plot_animation", False))
         animate = bool((self.layout or {}).get("animate", False))
