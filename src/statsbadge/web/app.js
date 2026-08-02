@@ -37,6 +37,21 @@ async function api(path, options) {
   return body;
 }
 
+// Words that stay lowercase inside a title, the first one never being one of them. Dropdown
+// options are labels rather than sentences, so they are cased like labels throughout.
+const MINOR = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on",
+                       "or", "the", "to", "with"]);
+
+/** Title case for a name that arrives as a word or a slug. What an extension declared is left
+ * as it declared it: those are its own strings, and "kmh" is not "Kmh". */
+function title(text) {
+  return String(text).replace(/[-_]+/g, " ").trim().split(/\s+/)
+    .map((word, index) => (index && MINOR.has(word.toLowerCase())
+      ? word.toLowerCase()
+      : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
 function toast(message, bad) {
   const node = document.createElement("div");
   node.className = "toast" + (bad ? " bad" : "");
@@ -140,7 +155,9 @@ function groupLabel(group) {
 function fieldLabel(ref) {
   const [group, field] = ref.split(".");
   const labels = (caps.field_labels || {})[group] || {};
-  return labels[field] || field.replace(/_/g, " ");
+  // The host's own label where there is one - "Used %" is cased the way it wants - and the
+  // field name titled where there is not.
+  return labels[field] || title(field);
 }
 
 /** One dropdown, grouped by category, so a field can be found rather than hunted for.
@@ -472,7 +489,10 @@ function extensionBox(extension, settings) {
 
 function settingRow(stored, setting) {
   const label = document.createElement("label");
-  label.textContent = setting.label || setting.key;
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = setting.label || setting.key;
+  label.appendChild(name);
   const current = stored[setting.key] !== undefined
     ? stored[setting.key] : setting.default;
 
@@ -503,6 +523,9 @@ function settingRow(stored, setting) {
     };
   }
   label.appendChild(input);
+  // A statement with a checkbox is one row of a form like any other: the name to the left, the
+  // control on the same edge everything else sits on.
+  if (setting.type === "bool") label.className = "check";
   return label;
 }
 
@@ -515,7 +538,7 @@ function renderLook() {
   for (const name of caps.themes) {
     const option = document.createElement("option");
     option.value = name;
-    option.textContent = name.replace("-", " ");
+    option.textContent = title(name);
     if (name === config.theme) option.selected = true;
     theme.appendChild(option);
   }
@@ -576,7 +599,7 @@ function renderLook() {
   // is false, true, or a field ref, so the option values carry it directly.
   const caselights = $("caselights");
   caselights.innerHTML = "";
-  const options = [["off", "Off"], ["theme", "Follow the theme"]];
+  const options = [["off", "Off"], ["theme", "Follow the Theme"]];
   for (const ref of numericRefs()) {
     options.push([ref, `${groupLabel(ref.split(".")[0])} - ${fieldLabel(ref)}`]);
   }
@@ -605,19 +628,19 @@ function renderLook() {
     select.innerHTML = "";
     const none = document.createElement("option");
     none.value = "";
-    none.textContent = "(nothing)";
+    none.textContent = "Nothing";
     select.appendChild(none);
     // The badge's own first, being the ones that need no host at all.
     for (const local of caps.local_actions || []) {
       const option = document.createElement("option");
       option.value = local.action;
-      option.textContent = `${local.label} (on the badge)`;
+      option.textContent = `${title(local.label)} (on the badge)`;
       select.appendChild(option);
     }
     for (const name of caps.commands) {
       const option = document.createElement("option");
       option.value = name;
-      option.textContent = name.replace(/_/g, " ");
+      option.textContent = title(name);
       select.appendChild(option);
     }
     select.value = (config.buttons && config.buttons[which]) || "";
