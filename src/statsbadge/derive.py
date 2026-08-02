@@ -74,6 +74,14 @@ DIM_RATIO = 4.5
 SIGNAL_HUE = 30.0
 SIGNAL_NEAR = 45.0
 
+# The second accent, and how it is chosen: a colour used sparingly beside the first - a graph's
+# second series is the whole of it - so a page has somewhere else to go without a second theme.
+# `same` is the accent again, which is what a palette without one gets. The rotations are the
+# wheel's own; `contrasting` is measured instead, being whichever of the twelve offered hues
+# lands furthest from the accent once lightness and chroma are counted too.
+ACCENT_B_RULES = ("same", "complementary", "triadic", "contrasting")
+ACCENT_B_TURNS = {"same": 0.0, "triadic": 120.0, "complementary": 180.0}
+
 
 def to_linear(c):
     c /= 255.0
@@ -213,6 +221,40 @@ def offered():
     return [tuple(accent) for family in ACCENT_FAMILIES for accent in accents(family)]
 
 
+def apart(one, other):
+    """How far two sRGB colours are in OKLab, black to white being 100.
+
+    The same scale the firmware's `difference` reports, so a threshold means the same thing
+    here as it does on the badge.
+    """
+    def lab(colour):
+        lightness, chroma, hue = oklch(colour)
+        radians = math.radians(hue)
+        return (lightness, chroma * math.cos(radians), chroma * math.sin(radians))
+
+    first, second = lab(one), lab(other)
+    return 100.0 * math.sqrt(sum((a - b) ** 2 for a, b in zip(first, second, strict=True)))
+
+
+def second_accent(accent, rule="same"):
+    """The accent used sparingly beside the first, by one of the rules.
+
+    Kept in the accent's own family: the same lightness and the same share of what its hue can
+    hold, so the two read as one palette's two colours rather than as two palettes.
+    """
+    lightness, chroma, hue = oklch(accent)
+    if rule not in ACCENT_B_RULES or rule == "same":
+        return tuple(accent)
+    limit = max_chroma(lightness, hue)
+    part = min(1.0, chroma / limit) if limit else 0.0
+    if rule == "contrasting":
+        offers = [rgb(lightness, max_chroma(lightness, float(turn)) * part, float(turn))
+                  for turn in ACCENT_HUES]
+        return max(offers, key=lambda offer: apart(accent, offer))
+    turned = (hue + ACCENT_B_TURNS[rule]) % 360.0
+    return rgb(lightness, max_chroma(lightness, turned) * part, turned)
+
+
 def ramp_for(accent):
     """Which ramp suits this accent: `signal` where it has somewhere to travel, else `mono`.
 
@@ -289,15 +331,16 @@ def _bold_ramp(lightness, chroma, hue, shape):
     return tuple(stops)
 
 
-def palette(accent, mode="dark", bold=False):
+def palette(accent, mode="dark", bold=False, second="same"):
     """A whole palette from one accent, as `themes.PALETTES` holds them.
 
     The greys carry a little of the accent's hue so the furniture belongs to it, and `ink` and
     `dim` are placed by contrast rather than by taste: 7 is AAA for body text and 4.5 is AA,
     which is what a label wants when it is only naming the thing beside it.
 
-    `bold` is the other variant: the accent at its hue's own limit and a ramp that stays in the
-    hue, sweeping lightness instead of travelling to red.
+    `bold` is the other variant: a ramp that stays in the accent's hue, sweeping lightness
+    instead of travelling to red. `second` is how the second accent is chosen - the colour a
+    graph's second series is drawn in, and the only place a palette says anything twice.
     """
     if mode not in MODES:
         mode = "dark"
@@ -317,6 +360,7 @@ def palette(accent, mode="dark", bold=False):
         "ink": readable_on(shape["ink"], tint * 0.7, hue, background, INK_RATIO),
         "dim": readable_on(shape["dim"], tint * 1.8, hue, background, DIM_RATIO),
         "accent": rgb(lightness, chroma, hue),
+        "accent_b": second_accent(rgb(lightness, chroma, hue), second),
         "grid": rgb(shape["grid"], tint * 1.5, hue),
         "case": shape["case"],
         "ramp": build(lightness, chroma, hue, shape),

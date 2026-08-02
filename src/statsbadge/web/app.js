@@ -702,6 +702,12 @@ function renderTint() {
   accents.classList.toggle("hidden", !tinted);
   const hint = $("tinthint");
   hint.classList.toggle("hidden", !tinted);
+  // How the second accent is picked, which only a derived palette works out: a written-down
+  // one either names its own or has none.
+  $("secondrow").classList.toggle("hidden", !tinted);
+  const second = $("accentb");
+  second.value = config.accent_b || "same";
+  second.onchange = () => { config.accent_b = second.value; markDirty(); renderTint(); };
   // What the ramp does is the difference between the two pairs, so the hint says which.
   hint.textContent = (caps.bold || []).includes(config.theme)
     ? "The rest of the palette is worked out from this colour, and the ramp stays in its hue, "
@@ -747,7 +753,10 @@ function renderTint() {
 
 async function preview() {
   const query = new URLSearchParams({ theme: config.theme || "dark" });
-  if ((caps.tinted || {})[config.theme]) query.set("accent", (config.tint || []).join(","));
+  if ((caps.tinted || {})[config.theme]) {
+    query.set("accent", (config.tint || []).join(","));
+    query.set("second", config.accent_b || "same");
+  }
   const mine = ++previewWanted;
   let shown;
   try {
@@ -766,6 +775,8 @@ async function preview() {
   set("--pv-accent", palette.accent);
   set("--pv-grid", palette.grid);
   paintDial(node.querySelector(".pv-dial"), palette);
+  // The second accent as the rule resolved it, beside the rule.
+  $("accentbchip").style.background = `rgb(${(palette.accent_b || palette.accent).join(", ")})`;
   // And the three bars, each at the ramp colour for its own reading.
   for (const [name, at] of [["--pv-r62", 0.62], ["--pv-r46", 0.46], ["--pv-r78", 0.78]]) {
     set(name, rampAt(palette.ramp, at));

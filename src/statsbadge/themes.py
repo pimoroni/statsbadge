@@ -103,7 +103,10 @@ PALETTES = {
     "watermelon-light": {
         "bg": (247, 222, 232), "panel": (242, 201, 210),
         "ink": (26, 58, 45), "dim": (120, 90, 94),
-        "accent": (203, 59, 84), "grid": (230, 192, 204),
+        # The rind, as the second colour: on a page this pink the mint only appears at the cold
+        # end of the ramp, which a steady reading never reaches, so a graph's second series
+        # takes it instead of another pink nobody can tell from the first.
+        "accent": (203, 59, 84), "accent_b": (74, 158, 124), "grid": (230, 192, 204),
         "case": 0.3,
         "ramp": ((0.0, (133, 192, 163)),
                  (0.4, (224, 143, 168)),

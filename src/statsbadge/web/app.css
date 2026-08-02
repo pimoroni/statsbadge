@@ -239,6 +239,8 @@ header .pairing { position: absolute; top: 100%; right: 20px; width: 340px;
    would use. Not a rendering of the app - it is here so a choice can be judged before it is
    sent, so what matters is that the colours sit next to each other the way they will. */
 .accents { margin: 8px 0 4px; }
+/* The second accent, beside the rule that picked it. */
+.col > label > .chip { width: 18px; height: 18px; justify-self: end; }
 /* Which family of accents is showing: four rows of twelve, one at a time. */
 .accents .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
 .accents .tabs button {

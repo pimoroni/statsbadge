@@ -44,6 +44,11 @@ ROW_STYLES = ("zebra", "rules", "none")
 # the only one with a page to itself and the only one large enough to read a ramp off.
 GAUGE_FILLS = ("solid", "ramp")
 
+# How a derived theme picks its second accent - the colour used sparingly beside the first, which
+# is a graph's second series and nothing else. A written-down palette names its own, or gets the
+# accent again.
+ACCENT_B_RULES = derive.ACCENT_B_RULES
+
 # The names, from the palettes themselves: a theme is data, so adding one is a palette and
 # nothing else. The tinted pair are the ones not written down anywhere - a whole palette derived
 # from the one accent kept in `tint`, so what is stored is the choice and not its result, and a
@@ -155,6 +160,7 @@ DEFAULT_CONFIG = {
     "slide": "off",
     "rows": "zebra",
     "gauge_fill": "solid",
+    "accent_b": "same",
     "auto_brightness": False,
     "idle_advance_s": 0,
     "advance_every_s": 10,
@@ -335,7 +341,8 @@ class Config:
         data.pop("settings", None)
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
-        data["palette"] = palette_for(data.get("theme"), data["tint"])
+        data["palette"] = palette_for(data.get("theme"), data["tint"],
+                                      data.get("accent_b", "same"))
         return data
 
 
@@ -357,11 +364,11 @@ def tint_accent(incoming, current):
     return list(current)
 
 
-def palette_for(theme, tint):
+def palette_for(theme, tint, second="same"):
     """The palette a theme draws with, derived for the tinted four and looked up for the rest."""
     theme, tint = resolve_theme(theme, tint)
     if theme in TINTED:
-        return derive.palette(tuple(tint), TINTED[theme], theme in BOLD)
+        return derive.palette(tuple(tint), TINTED[theme], theme in BOLD, second)
     return themes.PALETTES.get(theme, themes.PALETTES[themes.DEFAULT])
 
 
@@ -425,6 +432,10 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # the ramp behind it is worth showing on some machines and clutter on others.
     fill = incoming.get("gauge_fill", "solid")
     out["gauge_fill"] = fill if fill in GAUGE_FILLS else "solid"
+    # How a derived theme picks the colour it uses beside the accent. The same colour by
+    # default, which is what a palette that names none has always had.
+    second = incoming.get("accent_b", "same")
+    out["accent_b"] = second if second in ACCENT_B_RULES else "same"
     # Whether the badge takes its brightness down to suit a dim room. Off by default: it is
     # the badge's own sensor and not every board has one.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))

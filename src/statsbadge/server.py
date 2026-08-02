@@ -363,8 +363,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 except ValueError:
                     return self._fail(400, "accent must be three numbers")
                 tint = layout.tint_accent(wanted, tint)
-            return self._json(200, {"theme": theme, "tint": tint,
-                                    "palette": layout.palette_for(theme, tint)})
+            second = query.get("second") or "same"
+            if second not in layout.ACCENT_B_RULES:
+                return self._fail(400, f"unknown second accent rule: {second!r}")
+            return self._json(200, {"theme": theme, "tint": tint, "second": second,
+                                    "palette": layout.palette_for(theme, tint, second)})
 
         # One layout per badge, and a default for a badge that has not been given its own.
         # `?badge=` says whose; without it, the default.

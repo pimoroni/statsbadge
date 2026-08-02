@@ -149,6 +149,10 @@ class Theme:
     `ramp` is what a gauge fills with as it climbs, so a theme decides whether 90%
     CPU is alarming or just bright. `track` is the unfilled part of any gauge.
 
+    `accent_b` is a second colour used sparingly, for a page that needs somewhere else to go:
+    a graph's second series takes it where a palette names one, and works one out of the ramp
+    where it does not.
+
     `stripe` is worked out from the rest rather than named in a palette: it is a step from
     the page, and a palette that had to state it could state it wrong.
 
@@ -158,13 +162,16 @@ class Theme:
     """
 
     def __init__(self, name, bg, panel, ink, dim, accent, ramp, grid=None,
-                 case=0.1):
+                 case=0.1, accent_b=None):
         self.name = name
         self.bg = color.rgb(*bg)
         self.panel = color.rgb(*panel)
         self.ink = color.rgb(*ink)
         self.dim = color.rgb(*dim)
         self.accent = color.rgb(*accent)
+        # One more colour, used sparingly - a graph's second series is the whole of it. The
+        # accent again where a palette names none, which is what every theme had before.
+        self.accent_b = color.rgb(*accent_b) if accent_b else self.accent
         # Stops in OKLCH, so the table interpolates through it rather than through sRGB,
         # which drags blue along the green-to-amber leg and turns it olive: 39 counts adrift
         # at 0.64 of the ramp, which is where a gauge spends its time. The palette still
@@ -235,12 +242,14 @@ def from_palette(name, palette):
             if len(rgb) != 3:
                 return None
         grid = palette.get("grid")
+        second = palette.get("accent_b")
         ramp = tuple((float(pos), tuple(int(v) for v in rgb[:3]))
                      for pos, rgb in palette["ramp"])
         if not ramp:
             return None
         return Theme(name, ramp=ramp, case=float(palette.get("case", 0.1)),
                      grid=tuple(int(v) for v in grid[:3]) if grid else None,
+                     accent_b=tuple(int(v) for v in second[:3]) if second else None,
                      **colours)
     except (TypeError, ValueError, KeyError, IndexError):
         return None

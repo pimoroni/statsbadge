@@ -1069,10 +1069,15 @@ def _series_colour(theme, index):
     """
     if index == 0:
         return theme.accent
+    alpha = _series_alpha(theme, index)
+    # A palette's own second colour, where it has one: the theme said what to use here, so
+    # nothing has to be worked out from the ramp. It is still checked against the page.
+    if theme.accent_b != theme.accent:
+        if theme.bg.difference(theme.accent_b.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
+            return theme.accent_b
     cold, hot = theme.at(0.0), theme.at(1.0)
     order = ((cold, hot) if theme.accent.difference(cold) >= theme.accent.difference(hot)
              else (hot, cold))
-    alpha = _series_alpha(theme, index)
     for pen in order:
         if theme.bg.difference(pen.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
             return pen

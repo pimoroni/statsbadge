@@ -89,6 +89,17 @@ class FakeColour:
     def over(self, background):
         return self.with_alpha(255).mix(background, 255 - self.a)
 
+    def difference(self, other):
+        """Near enough to order two candidates: sRGB distance scaled so black to white is 100.
+
+        The firmware's is perceptual, and what it reports for a given pair is measured on the
+        badge - this only has to put "obviously different" above a threshold and "nearly the
+        same" below it.
+        """
+        gap = sum((a - b) ** 2 for a, b in ((self.r, other.r), (self.g, other.g),
+                                            (self.b, other.b))) ** 0.5
+        return 100.0 * gap / (3 * 255 ** 2) ** 0.5
+
     def __eq__(self, other):
         return isinstance(other, FakeColour) and self.parts() == other.parts()
 
@@ -1863,6 +1874,72 @@ def test_a_theme_travels_as_its_colours(_h):
     # be a crash on every frame instead of a page in the theme it booted with.
     for bad in (None, {}, {"bg": "red"}, {"bg": (1, 2, 3), "ramp": ()}):
         assert look.from_palette("bad", bad) is None, bad
+
+
+@check
+def test_a_palette_can_carry_a_second_accent(h):
+    """One more colour, used sparingly: a graph's second series is the whole of it, which is
+    where the app used to hunt through the ramp for something that would show. A palette that
+    names none gets the accent again, which is what every theme had before."""
+    import sys
+
+    from statsbadge import derive, themes
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+    import look
+
+    for rule in layout.ACCENT_B_RULES:
+        assert layout.validate({"accent_b": rule,
+                                "pages": layout.DEFAULT_PAGES})["accent_b"] == rule
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["accent_b"] == "same"
+    assert layout.validate({"accent_b": "clashing",
+                            "pages": layout.DEFAULT_PAGES})["accent_b"] == "same"
+
+    # Each rule keeps the accent's own family - the same lightness and the same share of what
+    # its hue can hold - so the two read as one palette's two colours.
+    accent = derive.accents("normal")[6]
+    assert tuple(derive.second_accent(accent, "same")) == tuple(accent)
+    lightness, chroma, hue = derive.oklch(accent)
+    for rule in ("complementary", "triadic", "contrasting"):
+        other = derive.second_accent(accent, rule)
+        second = derive.oklch(other)
+        assert abs(second[0] - lightness) < 0.03, (rule, second[0], lightness)
+        assert derive.apart(accent, other) > 10.0, (rule, derive.apart(accent, other))
+    # Complementary is the wheel's opposite; contrasting is whichever offered hue lands
+    # furthest away once lightness and chroma are counted, so it is never nearer.
+    opposite = derive.second_accent(accent, "complementary")
+    furthest = derive.second_accent(accent, "contrasting")
+    assert derive.apart(accent, furthest) >= derive.apart(accent, opposite)
+    turn = derive.oklch(opposite)[2] - hue
+    assert abs((turn - 180.0 + 180.0) % 360.0 - 180.0) < 2.0, turn
+
+    # And it reaches the badge in the palette, where a second series takes it.
+    palette = layout.palette_for("tinted-dark", accent, "contrasting")
+    theme = look.from_palette("tinted", palette)
+    assert theme is not None
+    assert theme.accent_b == FakeColour.rgb(*palette["accent_b"])
+    assert draw._series_colour(theme, 1) == theme.accent_b
+    assert draw._series_colour(theme, 0) == theme.accent
+    # A palette with none: the accent again, and the ramp still answers for the second series.
+    plain = look.from_palette("dark", themes.PALETTES["dark"])
+    assert plain.accent_b == plain.accent
+    assert draw._series_colour(plain, 1) != plain.accent
+
+    # The one written-down palette that needed it: a page that pink shows its green nowhere
+    # else, the ramp's cold end being a reading nothing sits at.
+    melon = look.from_palette("watermelon-light", themes.PALETTES["watermelon-light"])
+    assert melon.accent_b != melon.accent
+    assert derive.apart(themes.PALETTES["watermelon-light"]["accent_b"],
+                        themes.PALETTES["watermelon-light"]["accent"]) > 20.0
+
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="accentb"' in (web / "index.html").read_text(), "no control in the UI"
+    assert "config.accent_b" in (web / "app.js").read_text(), "the control is not bound"
+    status, shown = h.raw("GET", "/api/theme?theme=tinted-dark&second=triadic")
+    assert status == 200 and shown["palette"]["accent_b"] != shown["palette"]["accent"]
+    status, _bad = h.raw("GET", "/api/theme?theme=tinted-dark&second=nonesuch")
+    assert status == 400, status
 
 
 @check
