@@ -2267,7 +2267,11 @@ def test_the_ui_takes_its_colours_from_the_host(_h):
     web = pathlib.Path("src/statsbadge/web/app.js").read_text()
     assert "THEME_COLOURS" not in web, "the UI still carries its own palettes"
     assert "/api/theme?" in web, "the UI does not ask the host for a palette"
-    assert "--pv-ramp" in web, "the preview does not paint the ramp"
+    # The gauge's gradient is built where the stops are: a stop list handed to a gradient
+    # through a custom property and then given positions of its own parses as invalid, and the
+    # whole gauge vanished.
+    assert "paintDial" in web, "the preview does not paint the gauge"
+    assert "--pv-ramp" not in web + pathlib.Path("src/statsbadge/web/app.css").read_text()
     assert '"palettes"' in pathlib.Path("src/statsbadge/server.py").read_text()
 
 

@@ -265,13 +265,12 @@ header .pairing { position: absolute; top: 100%; right: 20px; width: 340px;
 .pv-title { color: var(--pv-ink); font-size: 15px; letter-spacing: 0.06em; }
 .pv-host { color: var(--pv-dim); }
 .pv-body { flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 12px; }
+/* The gauge. Its background is built in app.js, where the ramp's stops are: a stop list cannot
+   be handed to a gradient through a custom property and then given positions of its own - the
+   declaration parses as invalid and the whole gauge disappears, which is what it did. */
 .pv-dial {
   width: 96px; height: 96px; border-radius: 50%; flex: none;
   display: grid; place-items: center;
-  background:
-    radial-gradient(closest-side, var(--pv-bg) 74%, transparent 75%),
-    conic-gradient(from 225deg, var(--pv-ramp) 0 68%, var(--pv-grid) 68% 75%,
-                   var(--pv-bg) 75%);
 }
 .pv-reading { color: var(--pv-ink); font-size: 21px; }
 .pv-rows { flex: 1; display: grid; gap: 10px; }

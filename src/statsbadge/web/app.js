@@ -765,13 +765,33 @@ async function preview() {
   set("--pv-dim", palette.dim);
   set("--pv-accent", palette.accent);
   set("--pv-grid", palette.grid);
-  // The dial's sweep, as the ramp's own stops so the gradient is the ramp and not a guess.
-  node.style.setProperty("--pv-ramp", palette.ramp
-    .map(([at, rgb]) => `rgb(${rgb.join(", ")}) ${(at * 68).toFixed(1)}%`).join(", "));
+  paintDial(node.querySelector(".pv-dial"), palette);
   // And the three bars, each at the ramp colour for its own reading.
   for (const [name, at] of [["--pv-r62", 0.62], ["--pv-r46", 0.46], ["--pv-r78", 0.78]]) {
     set(name, rampAt(palette.ramp, at));
   }
+}
+
+// The gauge the preview draws: a 270 degree sweep from the lower left, filled to the reading
+// the panel shows, in the ramp's own colours - so what it says about a palette is what the
+// badge will do with it.
+const PV_SWEEP = 0.75;                  // of a whole turn, the gap centred on the bottom
+const PV_READING = 0.635;               // the reading printed inside it
+
+function paintDial(dial, palette) {
+  if (!dial) return;
+  const colour = (rgb) => `rgb(${rgb.join(", ")})`;
+  const bg = colour(palette.bg);
+  const filled = PV_SWEEP * PV_READING;
+  const at = (part) => `${(part * 100).toFixed(1)}%`;
+  const stops = palette.ramp.map(
+    ([position, rgb]) => `${colour(rgb)} ${at(position * filled)}`);
+  // A bright tick where the sweep ends, as the badge draws, then the unlit track and the page.
+  stops.push(`${colour(palette.ink)} ${at(filled - 0.006)} ${at(filled)}`,
+             `${colour(palette.grid)} ${at(filled)} ${at(PV_SWEEP)}`,
+             `${bg} ${at(PV_SWEEP)}`);
+  dial.style.background = `radial-gradient(closest-side, ${bg} 74%, transparent 75%), `
+    + `conic-gradient(from 225deg, ${stops.join(", ")})`;
 }
 
 function rampAt(stops, at) {
