@@ -86,6 +86,7 @@ DEFAULT_CONFIG = {
     "graph_points": 48,
     "smooth": True,
     "animate": False,
+    "plot_animation": False,
     "slide": "off",
     "rows": "zebra",
     "auto_brightness": False,
@@ -203,6 +204,9 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # that arrives once a second and moves for a third of it is a choice, and on a noisy
     # field - a throughput that halves between polls - the sweep reads as lag.
     out["animate"] = bool(incoming.get("animate", False))
+    # Whether a plot moves between readings: a graph scrolls, a sparkline slides its points
+    # along y. A separate choice from a gauge sweeping, and off for the same reason.
+    out["plot_animation"] = bool(incoming.get("plot_animation", False))
     # How a page turn moves: not at all, the next page sliding over this one, or the two
     # travelling together like a card off a deck. Off by default, since it is a fifth of a
     # second before what the reader pressed for can be read. A bool is taken as well, from

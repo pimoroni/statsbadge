@@ -101,14 +101,29 @@ class FakeColour:
         return "color.rgb({}, {}, {}, {})".format(*self.parts())
 
 
+class FakeOutline:
+    """Stands in for a shape, so the functions that build one can be called here. What it
+    rasterises to is the badge's business; this only has to be handed around."""
+
+    def __init__(self, points):
+        self.points = list(points)
+
+    def stroke(self, _weight, _flags=0, _miter_limit=4.0):
+        return self
+
+
 class FakeShape:
-    """The stroke flags draw.py names at import. Mirrors picovector's `stroke_flags_t`,
-    though nothing here depends on the values: only the badge draws with them."""
+    """The stroke flags draw.py names at import, and enough of the rest to build a shape.
+    Mirrors picovector's `stroke_flags_t`, though nothing here depends on the values."""
 
     PATH_OPEN = 1 << 2
     ALIGN_CENTER = 2
     JOIN_MITER = 0
     CAP_BUTT = 0
+
+    @staticmethod
+    def custom(*contours):
+        return FakeOutline(contours[0] if contours else ())
 
 
 # Where the badge finds them, and before anything imports look or draw.
@@ -278,6 +293,24 @@ def test_layout_and_history(h):
     status, body = h.signed("GET", "/v1/history?keys=cpu.pct&points=8")
     assert status == 200, status
     assert "cpu.pct" in body, body
+
+    # v=2 says where the points sit in time: their spacing, and how old the newest is. Without
+    # it the old shape comes back, so an app copy older than this host is unaffected.
+    status, aged = h.signed("GET", "/v1/history?keys=cpu.pct&points=8&v=2")
+    assert status == 200, status
+    assert aged["every_ms"] == 200, aged["every_ms"]
+    assert 0 <= aged["age_ms"] <= 2000, aged["age_ms"]
+    assert len(aged["series"]["cpu.pct"]) == len(body["cpu.pct"]), "the same ring, said twice"
+
+    # Every ring gains a point per sample, whenever it started - a rate has nothing to report
+    # on the first one - so positions counted back from the newest mean the same time in all of
+    # them. A field that drops out gets a None rather than being skipped, which is what keeps
+    # that true and what a plot draws a gap for.
+    before = {key: len(ring) for key, ring in h.service.collector.history(None, 160).items()}
+    time.sleep(0.5)
+    after = {key: len(ring) for key, ring in h.service.collector.history(None, 160).items()}
+    grew = {after[key] - length for key, length in before.items()}
+    assert len(grew) == 1, (before, after)
 
 
 @check
@@ -1855,100 +1888,57 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
 
 
 @check
-def test_a_plot_walks_at_the_pace_the_host_samples(_h):
-    """Three periods are in play and only one is the plot's: the host samples every
-    `serve --interval`, the badge polls every `interval_ms`, and it refetches the series on its
-    own timer. The walk has to run at the host's pace, over as many samples as an update
-    brings, from the moment the series actually moves."""
+def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
+    """Three clocks are in play - the host samples every `serve --interval`, the badge polls
+    every `interval_ms`, and neither knows the other's rate - so a plot animated off an index
+    axis has to guess, and did: it walked at the wrong pace, paused, and jumped. The host sends
+    how far apart its points are and how old the newest is, and everything follows from that."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
     import draw
     import pages
 
-    def update(seq, stamp, now):
-        """A poll that saw a new sample, and the series moving because of it."""
-        steps = pages.note_sample({"seq": seq, "t": stamp}, now)
-        if steps:
-            pages.note_update(now)
-        return steps
+    # How many of the host's points a poll of ours covers: both known, nothing measured.
+    pages.note_spacing(1000, 1000)
+    assert (pages.EVERY_MS, pages.LEAD) == (1000, 1)
+    pages.note_spacing(1000, 5000)
+    assert pages.LEAD == 5, "a 5s refresh against a 1s host is handed five at a time"
+    pages.note_spacing(250, 1000)
+    assert pages.LEAD == 4
+    pages.note_spacing(1000, 1250)
+    assert pages.LEAD == 2, "rounded up, or the plot is short of room"
 
-    # A host on three seconds, a badge polling every one: two polls in three are a repeat of a
-    # sample already seen, and 0 says so.
-    pages.sample_reset()
-    seen = [update(clock // 3000, clock, clock)
-            for clock in range(1000, 10000, 1000)]
-    assert seen == [1, 0, 1, 0, 0, 1, 0, 0, 1], seen
+    # How far back in the series now is: the age the host quoted plus our own elapsed time.
+    pages.note_spacing(1000, 1000)
+    assert pages.behind_at(0, 0) == 0.0
+    assert abs(pages.behind_at(200, 300) - 0.5) < 0.001
+    assert abs(pages.behind_at(0, 2500) - 2.5) < 0.001
+    # And a host that has stopped answering does not scroll a plot off into nothing.
+    assert pages.behind_at(0, 600_000) == pages.BEHIND_MAX
 
-    # The pace is the host's, taken from its own clock, and exact on the first pair.
-    pages.sample_reset()
-    update(10, 1_000_000, 5_000)
-    update(11, 1_003_000, 5_400)
-    assert pages.SAMPLE_MS == 3000, pages.SAMPLE_MS
+    # Nothing moves unless the setting says so, and it is its own setting: sweeping a gauge and
+    # animating a plot are different choices.
+    was = pages.PLOT_ANIMATION
+    try:
+        pages.PLOT_ANIMATION = False
+        assert pages._walk() is None
+        pages.PLOT_ANIMATION = True
+        pages.BEHIND = 0.5
+        assert pages._walk() == 0.5
+    finally:
+        pages.PLOT_ANIMATION = was
+        pages.BEHIND = 0.0
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["plot_animation"] is False
+    assert layout.validate({"plot_animation": True,
+                            "pages": layout.DEFAULT_PAGES})["plot_animation"] is True
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="plotanim"' in (web / "index.html").read_text(), "no control in the UI"
+    assert "config.plot_animation" in (web / "app.js").read_text(), "it is not bound"
 
-    # A sample the badge never saw must not read as the host slowing down, or every plot walks
-    # at half pace and lurches to catch up.
-    pages.sample_reset()
-    update(1, 0, 0)
-    assert update(3, 6000, 6000) == 2, "it answers how many arrived"
-    assert pages.SAMPLE_MS == 3000, pages.SAMPLE_MS
-
-    # A host that restarted counts from the beginning again: nothing before it compares.
-    pages.sample_reset()
-    update(900, 90_000, 0)
-    update(1, 100, 3000)
-    assert pages.SAMPLE_MS == 0, pages.SAMPLE_MS
-
-    # Neither a sleeping badge's gap nor a frame without a seq is taken as the pace.
-    pages.sample_reset()
-    update(1, 0, 0)
-    update(2, 500_000, 500_000)
-    assert pages.SAMPLE_MS == 0, pages.SAMPLE_MS
-    assert pages.note_sample({}, 1000) == 0
-
-    # The walk runs 0 to 1 over one sample and waits at the edge rather than marching off.
-    pages.sample_reset()
-    update(1, 10_000, 10_000)
-    update(2, 13_000, 13_000)
-    assert pages.SAMPLE_MS == 3000 and pages.SAMPLE_STEPS == 1
-    assert pages.phase_at(13_000) == 0.0
-    assert abs(pages.phase_at(15_000) - 2 / 3.0) < 0.01, pages.phase_at(15_000)
-    assert pages.phase_at(16_000) == 1.0
-    assert pages.phase_at(25_000) == 1.0, "a late update must not walk a plot off the side"
-
-    # Polling slower than the host samples brings several at once, and the walk covers all of
-    # them: covering one and waiting was a pause of about a second at a 2s refresh.
-    pages.sample_reset()
-    for tick in range(6):
-        update(tick * 2, tick * 2000, tick * 2000)
-    assert (pages.SAMPLE_MS, pages.SAMPLE_STEPS) == (1000, 2), (pages.SAMPLE_MS,
-                                                                pages.SAMPLE_STEPS)
-    landed = 10_000
-    assert abs(pages.phase_at(landed + 1000) - 1.0) < 0.01, "one sample in, one to go"
-    assert abs(pages.phase_at(landed + 2000) - 2.0) < 0.01, "and the second by the next poll"
-    assert pages.phase_at(landed + 5000) == 2.0, "then it waits"
-
-    # A badge coming back from sleep sees hundreds go by at once. Taken as the refresh rate
-    # that would hand a plot more headroom than it has samples, so it is not.
-    update(900, 1_000_000, landed + 600_000)
-    assert pages.SAMPLE_STEPS <= pages.SAMPLE_STEPS_MAX, pages.SAMPLE_STEPS
-
-    # The walk restarts when the series *moves*, not when the frame arrives. Where the badge
-    # is behind the host it cannot fill the series in itself, so it comes from the sync a pass
-    # later - and restarting the walk on the frame drew the old series at a new walk's shift,
-    # which is a jump backwards until the sync caught up.
-    pages.sample_reset()
-    update(1, 0, 0)
-    update(3, 2000, 2000)
-    was = pages.phase_at(3000)
-    assert pages.note_sample({"seq": 5, "t": 4000}, 4000) == 2, "a frame the badge is behind"
-    assert pages.phase_at(3000) == was, "the frame alone must not restart the walk"
-    pages.note_update(4000)
-    assert pages.phase_at(4000) == 0.0, "the series moving does"
-
-    # A walking plot is laid out with room for a whole update past its right edge, so those
-    # samples slide in. Laid across the width alone the whole plot shifts left instead and the
-    # gap it leaves grows to a sample's width before snapping back, which reads as shrinking.
+    # A graph keeps room on its right for the samples still coming in, so the box stays full
+    # while it moves. Laid across the width alone it would shift left and leave a gap that
+    # grows and snaps back, which reads as the plot shrinking.
     flat = [50.0] * 48
 
     def ends(shift, lead=1):
@@ -1956,44 +1946,39 @@ def test_a_plot_walks_at_the_pace_the_host_samples(_h):
         try:
             written = draw._lay_out(60, 40, 250, 150, flat, 100.0, shift)
         finally:
-            draw.WALK_LEAD = 1
+            draw.WALK_LEAD = 2
         return draw._points[0], draw._points[written - 2]
 
     first, last = ends(None)
     assert abs(first - 60) < 0.01 and abs(last - 310) < 0.01, (first, last)
-    # Walking is a different layout, not a shift of zero: at zero the samples of this update
-    # are still to come in from the right, and one update later they have arrived.
-    first, last = ends(0.0)
-    assert abs(first - 60) < 0.01 and last > 314, (first, last)
-    first, last = ends(1.0)
-    assert abs(last - 310) < 0.01 and first < 55, (first, last)
-    # Two samples an update needs twice the room, and the box is full the whole way either way.
-    for lead, top in ((1, 1.0), (2, 2.0)):
+    for lead in (1, 2, 5):
         for tenth in range(11):
-            _first, last = ends(top * tenth / 10.0, lead)
+            _first, last = ends(lead * tenth / 10.0, lead)
             assert last >= 310 - 0.01, (lead, tenth, last)
-    # And never further than the headroom it was given, or that gap comes back.
-    _first, last = ends(9.0, 2)
-    assert abs(last - 310) < 0.01, last
 
-    # The badge only fills the series in itself when it saw every sample: appending one point
-    # where the host added five leaves it behind, and the next sync jumps it forward.
+    # A sparkline is drawn still whatever the setting says: 22px tall with a sample every 5px,
+    # it has nowhere to scroll, and interpolating it at fixed x is a horizontal translation
+    # whatever it is called - which reads as a jump and not as points settling.
+    assert pages.SCROLLS == ("graph", "trend"), pages.SCROLLS
+    assert "spark" in pages.PLOTS, "it still wants a series fetched for it"
+    sparks = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    body = sparks[sparks.index("def sparklines("):]
+    body = body[:body.index("\n# --", 1)]
+    assert "shift" not in body, "a sparkline is still being handed an offset"
+    assert "if trace is not None:" in body, "a None can still reach the renderer"
+    # Two readings is what a field with no history yet falls back to, and it must still draw.
+    assert draw.line(0, 0, 470, 30, [5.0, 5.0], 47.0) is not None
+    assert draw.line(0, 0, 470, 30, [5.0], 47.0) is None
+
+    # Every page that draws a series asks for one, not only the graph pages: a sparkline was
+    # plotting the live value twice, a flat line whatever the machine was doing.
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
-    assert "note_sample(payload, now) == 1" in app, "the series is advanced when it cannot be"
-    assert "pages_module.note_update" in app, "nothing tells it the series moved"
-    appended = app[app.index("def append_sample"):]
-    appended = appended[:appended.index("\n    def ", 1)]
-    assert "pages_module.value_of(self.frame" in appended
-    assert "graph_points" in appended, "the ring is not trimmed to what the plot holds"
-
-    # The series is refetched as well as the stats and never instead of them: a skipped stats
-    # poll is a sample the badge never sees.
-    polling = app[app.index("    def poll(self):"):]
-    polling = polling[:polling.index("\n    def ", 1)]
-    assert 'self._queued = ("history"' in polling, "history still takes the stats' turn"
-    assert polling.count('self._start("stats"') == 1
-    assert "elif" not in polling, "the fetches are still exclusive"
-    pages.sample_reset()
+    keys = app[app.index("    def _graph_keys(self):"):]
+    keys = keys[:keys.index("\n    def ", 1)]
+    assert "pages_module.PLOTS" in keys, "only the graph pages ask for a series"
+    # And it comes with its age, every poll, rather than on a timer of its own.
+    assert "&v=2" in app, "the series is fetched without the times it needs"
+    assert "note_spacing" in app and "behind_at" in app
 
 
 @check

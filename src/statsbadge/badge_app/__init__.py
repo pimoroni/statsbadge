@@ -226,6 +226,10 @@ class App:
         # A request to make on the very next pass rather than at the next interval, so the
         # series can be refetched *as well as* the stats and not instead of them.
         self._queued = None
+        # How old the newest point in the series was when the host answered, and when that
+        # answer landed here: between them, how far back in the series `now` is.
+        self._series_age = 0
+        self._series_at = 0
         self._last_ok = 0
         self._was_stale = False
         self._next_hunt = 0
@@ -398,14 +402,13 @@ class App:
         # the walk knowing, which is a jump. Queued rather than sent now because one request
         # is in flight at a time, and it has to be the stats: they are what pairs a new
         # sample with the walk being restarted.
-        # Every poll while the badge is behind the host, since then it cannot fill the series
-        # in itself and the host's copy is the only complete one; otherwise on its own timer.
-        behind = pages_module.SAMPLE_STEPS > 1
-        if (behind or time.ticks_diff(now, self._history_due) >= 0) and self._graph_keys():
+        # Every poll, since it is the series a plot draws and the host is the only thing that
+        # knows it: v=2 carries the spacing and the age of the newest point with it.
+        if self._graph_keys():
             keys = ",".join(self._graph_keys())
             points = (self.layout or {}).get("graph_points", 48)
-            self._history_due = time.ticks_add(now, 5000)
-            self._queued = ("history", f"/v1/history?keys={keys}&points={points}")
+            self._queued = ("history",
+                            f"/v1/history?keys={keys}&points={points}&v=2")
         self._start("stats", "/v1/stats")
 
     def hunt(self):
@@ -441,9 +444,7 @@ class App:
                     self.layout = None
                     self.history = {}
                     self._queued = None
-                    # Another host samples at its own pace, and its seq starts wherever it
-                    # has got to.
-                    pages_module.sample_reset()
+                    self._series_at = 0
                     draw.clear_cache()
                     self.note(self.config.name or "switched host")
                     self.dirty = True
@@ -485,10 +486,7 @@ class App:
             # every sample: polling slower than the host samples means several arrived at
             # once and this frame holds the last of them, so appending one point would leave
             # the series behind the host's and the next sync would jump it forward.
-            now = time.ticks_ms()
-            if pages_module.note_sample(payload, now) == 1:
-                self.append_sample()
-                pages_module.note_update(now)
+
             # Only meaningful when the lights follow a reading, and cheap once a second.
             self.apply_caselights()
         elif what == "layout":
@@ -497,19 +495,29 @@ class App:
             self.frame["layout_rev"] = self.layout_rev
             self.apply_layout()
         elif what == "history":
-            self.history = payload
-            # The series has moved, which is what a plot walks away from - and when the badge
-            # is behind the host this is the only thing that moves it.
-            pages_module.note_update(time.ticks_ms())
+            # v=2 wraps the series in the two things a plot needs to place it in time: how far
+            # apart the points are, and how old the newest was when the host answered.
+            self.history = payload.get("series", payload)
+            self._series_age = int(payload.get("age_ms", 0) or 0)
+            self._series_at = time.ticks_ms()
+            pages_module.note_spacing(payload.get("every_ms", 1000),
+                                      (self.layout or {}).get("interval_ms", 1000))
         self.dirty = True
 
     def _graph_keys(self):
+        """Every field a page draws a series of, which is not only the graph pages.
+
+        A sparkline and a trend draw one too, and asking only for the graphs' fields left
+        those pages plotting the live value twice - a flat line whatever the machine was
+        doing.
+        """
         keys = []
         for page in self.page_list:
-            if page.get("kind") == "graph":
-                for ref in page.get("fields", []):
-                    if ref not in keys:
-                        keys.append(ref)
+            if page.get("kind") not in pages_module.PLOTS:
+                continue
+            for ref in page.get("fields", []) + [page.get("field")]:
+                if ref and ref not in keys:
+                    keys.append(ref)
         return keys[:6]
 
     def apply_layout(self):
@@ -527,6 +535,8 @@ class App:
         self._lit = True
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
         draw.ROWS = (self.layout or {}).get("rows", "zebra")
+        pages_module.PLOT_ANIMATION = bool(
+            (self.layout or {}).get("plot_animation", False))
         animate = bool((self.layout or {}).get("animate", False))
         if animate != pages_module.ANIMATE:
             pages_module.ANIMATE = animate
@@ -720,33 +730,13 @@ class App:
             # while that is true, so a sweeping page costs a third of a second's drawing
             # and not the whole second.
             self.dirty = True
-        if pages_module.ANIMATE and page is not None and page.get("kind") in pages_module.PLOTS:
+        if (pages_module.PLOT_ANIMATION and page is not None
+                and page.get("kind") in pages_module.SCROLLS):
             # A plot walks left the whole time between readings, so unlike a gauge it is
             # never resting: it wants every frame, the way the waterfall does.
-            pages_module.PHASE = pages_module.phase_at(now)
+            pages_module.BEHIND = pages_module.behind_at(
+                self._series_age, time.ticks_diff(now, self._series_at))
             self.dirty = True
-
-    def append_sample(self):
-        """Put this sample on the end of every series the badge is holding.
-
-        The host is authoritative and re-sends the whole ring every five seconds; between
-        those this keeps the plots moving from what the frame already carries, so no extra
-        request is made for data that is already in hand. A field with nothing in it is
-        skipped rather than padded, which is what the host's own ring does, so two series
-        can be different lengths and each is laid out on its own.
-        """
-        if not self.history:
-            return
-        keep = int((self.layout or {}).get("graph_points", 48)) or 48
-        for ref, points in self.history.items():
-            value = pages_module.value_of(self.frame, ref)
-            if type(value) is not float and type(value) is not int:
-                continue
-            points.append(round(float(value), 1))
-            if len(points) > keep:
-                del points[0:len(points) - keep]
-
-
 
     def advance_if_idle(self, now):
         """Page on by itself when nobody has pressed anything for a while.

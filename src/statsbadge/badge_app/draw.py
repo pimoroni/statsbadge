@@ -784,11 +784,9 @@ def curve(values, steps=CURVE_STEPS):
 
 _points = array("f", b"")
 
-# How many samples a walking plot has to make room for on its right: one per update normally,
-# and however many arrive at once when the badge polls slower than the host samples. Set from
-# pages, which is what knows the two rates. Held still between updates on purpose - deriving it
-# from the current shift would resize the plot on every frame.
-WALK_LEAD = 1
+# How many samples of room a moving plot keeps on its right for the ones still coming in. Held
+# still rather than derived from the current offset, which would resize the plot every frame.
+WALK_LEAD = 2
 
 
 def _lay_out(left, top, width, height, values, peak, shift):
@@ -798,7 +796,7 @@ def _lay_out(left, top, width, height, values, peak, shift):
 
     `shift` is how far the plot has walked left since its last update, in samples: 0 is just
     after one landed. `None` means the plot is not walking at all, which is a different layout
-    and not the same as a shift of zero - a walking plot is laid out `WALK_LEAD` samples wider
+    and not the same as a shift of zero - a moving plot is laid out `WALK_LEAD` samples wider
     than its box and clipped to it, so the samples still to come slide in at the right as the
     oldest leave at the left.
 
@@ -838,11 +836,10 @@ def _lay_out(left, top, width, height, values, peak, shift):
     step = width / float(span)
     scale = height / float(peak or 1.0)
     bottom = top + height
+    # Past the headroom the plot really is short of data, and the honest thing is to let it
+    # move and leave the gap: `graph` draws that region as one rather than pretending the
+    # newest reading is now.
     away = shift * step * per_sample if walking else 0.0
-    # Never further than the headroom laid out for it, or the newest sample is pulled back
-    # inside the box and the gap at the right returns. It waits at the edge instead.
-    if away > lead * step:
-        away = lead * step
     start = left - away
     i = 0
     for index in range(count):
@@ -944,10 +941,22 @@ def graph(theme, series, labels, maximum=None, shift=None):
         y = top + int(height * i / 4.0)
         screen.hspan(left, y, width)
 
+    # Where the series has run out: the host has not answered for longer than a plot can cover
+    # with what it holds. Drawn rather than papered over, because a stalled host and an idle
+    # machine are otherwise the same flat line.
+    if shift is not None and shift > WALK_LEAD:
+        stale = min(width, int((shift - WALK_LEAD) * width / float(len(series[0]) or 1)))
+        if stale > 1:
+            screen.pen = theme.grid
+            for y in range(top, top + height, 4):
+                screen.hspan(left + width - stale, y, stale)
+
     for index, points in enumerate(series):
         if not points or len(points) < 2:
             continue
         filled = area(left, top, width, height, points, peak, shift=shift)
+        if filled is None:
+            continue
         screen.alpha = _series_alpha(theme, index)
         screen.pen = _series_colour(theme, index)
         was = screen.clip
@@ -1188,7 +1197,7 @@ ROWS = "zebra"
 ROW_NONE = "none"
 
 
-def sparklines(theme, entries, shift=None):
+def sparklines(theme, entries):
     """A row per reading: name, current value, and its history as a small line.
 
     Six of these fit the body band, which is the point - one page that says what every
@@ -1197,6 +1206,10 @@ def sparklines(theme, entries, shift=None):
     A line rather than a filled area, at 1.2ms a page more: a plot 22px tall filled to its
     axis is a slab of colour on any reading that holds steady, which says the level over
     again where the reading beside it already does, and says nothing about the shape.
+
+    Still between readings, whatever the animation setting says. Six plots this small have
+    nowhere to scroll - a sample is 5px - and interpolating them at fixed x is a horizontal
+    translation whatever it is called, which reads as a jump rather than as points settling.
 
     The axis rule under each plot is drawn only when nothing else separates the rows: with a
     band or a hairline there it is a second line saying the same thing, and the row it
@@ -1234,8 +1247,9 @@ def sparklines(theme, entries, shift=None):
         if ROWS == ROW_NONE:
             screen.pen = theme.grid
             screen.hspan(plot_x, top + plot_h + 3, plot_w)
-        if points and len(points) > 1 and peak:
-            trace = line(plot_x, top, plot_w, plot_h, points, peak, shift=shift)
+        trace = (line(plot_x, top, plot_w, plot_h, points, peak)
+                 if points and len(points) > 1 and peak else None)
+        if trace is not None:
             screen.pen = theme.accent
             was = screen.clip
             screen.clip = rect(plot_x, look.BODY_TOP, plot_w, look.BODY_H)
@@ -1336,8 +1350,9 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
     width = look.W - look.PAD * 2
     screen.pen = theme.grid
     screen.hspan(left, top + height, width)
-    if points and len(points) > 1 and peak:
-        filled = area(left, top, width, height, points, peak, shift=shift)
+    filled = (area(left, top, width, height, points, peak, shift=shift)
+              if points and len(points) > 1 and peak else None)
+    if filled is not None:
         screen.pen = theme.accent
         screen.alpha = 170
         was = screen.clip

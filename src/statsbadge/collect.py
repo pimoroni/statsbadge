@@ -16,6 +16,8 @@ from .sources import discover
 class Collector:
     def __init__(self, interval=1.0, config=None, history=90):
         self.interval = interval
+        # When the newest point in every ring was taken, so a reply can say how old it is.
+        self._history_at = 0
         self.config = config or {}
         self.sources = discover(self.config)
         self.extensions = extensions.load(self.config)
@@ -112,15 +114,25 @@ class Collector:
             frame["peaks"] = {key: round(value) for key, value in self._peaks.items()}
 
     def _push_history(self, frame):
+        """One point per sample per field, aligned to the sample clock.
+
+        A field with nothing in it gets None rather than being skipped: the ring's positions
+        are what a plot reads times off, so leaving a sample out of one ring and not the others
+        would draw an intermittent field's history compressed and mis-timed. A None is also
+        what a plot needs to draw a gap where there was no reading.
+        """
+        self._history_at = frame["t"]
         for group, field in _GRAPHED:
             value = _dig(frame, group, field)
-            if value is None:
-                continue
             key = f"{group}.{field}"
             ring = self._history.get(key)
             if ring is None:
+                if value is None:
+                    # Nothing has ever been read for this field; do not start a ring of Nones
+                    # for a machine that has no such sensor.
+                    continue
                 ring = self._history[key] = []
-            ring.append(round(float(value), 1))
+            ring.append(None if value is None else round(float(value), 1))
             if len(ring) > self.history_len:
                 del ring[0 : len(ring) - self.history_len]
 
@@ -150,6 +162,26 @@ class Collector:
                 for key in wanted
                 if key in self._history
             }
+
+    def history_at(self, keys=None, points=48):
+        """The same rings, plus when they were taken.
+
+        `every_ms` is the spacing of the positions and `age_ms` how old the newest is, so a
+        plot can place every point on a time axis without knowing anything about this host's
+        clock or about how often the badge asked. Ages rather than timestamps: nothing has to
+        be aligned between two machines, and the only error left is the trip back.
+        """
+        with self._lock:
+            wanted = keys or list(self._history)
+            series = {
+                key: self._history.get(key, [])[-points:]
+                for key in wanted
+                if key in self._history
+            }
+            age = 0
+            if self._history_at:
+                age = max(0, int(time.monotonic() * 1000) - self._history_at)
+        return {"every_ms": int(self.interval * 1000), "age_ms": age, "series": series}
 
     def capabilities(self):
         """Which fields this host actually produced, for the config UI to offer.

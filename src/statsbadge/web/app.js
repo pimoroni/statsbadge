@@ -506,6 +506,10 @@ function renderLook() {
     : (config.slide ? "over" : "off");
   slide.onchange = () => { config.slide = slide.value; markDirty(); };
 
+  const plotanim = $("plotanim");
+  plotanim.checked = !!config.plot_animation;
+  plotanim.onchange = () => { config.plot_animation = plotanim.checked; markDirty(); };
+
   const rows = $("rows");
   rows.value = config.rows || "zebra";
   rows.onchange = () => { config.rows = rows.value; markDirty(); };
