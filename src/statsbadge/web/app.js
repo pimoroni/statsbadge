@@ -592,7 +592,11 @@ function renderLook() {
   // swept round the arc with what the reading has not reached left faint.
   const gaugefill = $("gaugefill");
   gaugefill.value = config.gauge_fill || "solid";
-  gaugefill.onchange = () => { config.gauge_fill = gaugefill.value; markDirty(); };
+  gaugefill.onchange = () => {
+    config.gauge_fill = gaugefill.value;
+    markDirty();
+    preview();                          // the preview draws the gauge the way the badge will
+  };
 
   // The badge's own light sensor, taking the brightness above down to suit a dim room.
   const autobright = $("autobright");
@@ -775,7 +779,7 @@ async function preview() {
   // The header's rule and the current pip, which on the badge take the second accent.
   set("--pv-accent", palette.accent_b || palette.accent);
   set("--pv-grid", palette.grid);
-  paintDial(node.querySelector(".pv-dial"), palette);
+  paintDial(node.querySelector(".pv-dial"), palette, config.gauge_fill);
   // The second accent as the rule resolved it, beside the rule.
   $("accentbchip").style.background = `rgb(${(palette.accent_b || palette.accent).join(", ")})`;
   // And the three bars, each at the ramp colour for its own reading.
@@ -790,18 +794,42 @@ async function preview() {
 const PV_SWEEP = 0.75;                  // of a whole turn, the gap centred on the bottom
 const PV_READING = 0.635;               // the reading printed inside it
 
-function paintDial(dial, palette) {
+// How faint the part past the reading is when the whole ramp is shown, matching draw.TRACK_ALPHA
+// on the badge. A gradient there is drawn over the page rather than composited, so the colours
+// are mixed towards it here.
+const PV_TRACK_ALPHA = 32 / 255;
+
+function paintDial(dial, palette, fill) {
   if (!dial) return;
   const colour = (rgb) => `rgb(${rgb.join(", ")})`;
+  const faint = (rgb) => colour(rgb.map((part, index) =>
+    Math.round(part * PV_TRACK_ALPHA + palette.bg[index] * (1 - PV_TRACK_ALPHA))));
   const bg = colour(palette.bg);
   const filled = PV_SWEEP * PV_READING;
   const at = (part) => `${(part * 100).toFixed(1)}%`;
-  const stops = palette.ramp.map(
-    ([position, rgb]) => `${colour(rgb)} ${at(position * filled)}`);
-  // A bright tick where the sweep ends, as the badge draws, then the unlit track and the page.
-  stops.push(`${colour(palette.ink)} ${at(filled - 0.006)} ${at(filled)}`,
-             `${colour(palette.grid)} ${at(filled)} ${at(PV_SWEEP)}`,
-             `${bg} ${at(PV_SWEEP)}`);
+  const reached = rampAt(palette.ramp, PV_READING);
+
+  const stops = [];
+  if (fill === "ramp") {
+    // The whole ramp laid round the arc, as the conical gradient does it: a colour's place is
+    // its place on the ramp, so the sweep ends at the reading's own colour and the rest of the
+    // ramp shows faintly beyond it.
+    for (const [position, rgb] of palette.ramp) {
+      if (position < PV_READING) stops.push(`${colour(rgb)} ${at(position * PV_SWEEP)}`);
+    }
+    stops.push(`${colour(reached)} ${at(filled)}`);
+    stops.push(`${colour(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`);
+    stops.push(`${faint(reached)} ${at(filled + 0.004)}`);
+    for (const [position, rgb] of palette.ramp) {
+      if (position > PV_READING) stops.push(`${faint(rgb)} ${at(position * PV_SWEEP)}`);
+    }
+  } else {
+    // One colour, the ramp's for this reading, and the unlit track beyond it.
+    stops.push(`${colour(reached)} ${at(filled)}`);
+    stops.push(`${colour(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`);
+    stops.push(`${colour(palette.grid)} ${at(filled + 0.004)}`);
+  }
+  stops.push(`${colour(palette.grid)} ${at(PV_SWEEP)}`, `${bg} ${at(PV_SWEEP)}`);
   dial.style.background = `radial-gradient(closest-side, ${bg} 74%, transparent 75%), `
     + `conic-gradient(from 225deg, ${stops.join(", ")})`;
 }
