@@ -126,9 +126,30 @@ class FakeShape:
         return FakeOutline(contours[0] if contours else ())
 
 
+class FakeBrush:
+    """`brush.gradient` far enough to see what a gauge was built from. What the firmware makes
+    of the stops is measured on the badge; here they only have to be readable back."""
+
+    CONICAL = "conical"
+    LINEAR = "linear"
+    RADIAL = "radial"
+
+    def __init__(self, kind, points, stops):
+        self.kind, self.points, self.stops = kind, points, list(stops)
+
+    @classmethod
+    def gradient(cls, kind, x1, y1, x2, y2, stops):
+        return cls(kind, (x1, y1, x2, y2), stops)
+
+    @staticmethod
+    def erase():
+        return "erase"
+
+
 # Where the badge finds them, and before anything imports look or draw.
 builtins.color = FakeColour
 builtins.shape = FakeShape
+builtins.brush = FakeBrush
 
 # MicroPython's tick helpers, which the app uses for every interval it measures. ticks_ms
 # wraps on the badge and ticks_diff is what copes with that; here the clocks are handed in by
@@ -1766,14 +1787,37 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     # than the last reply, or the panel shows a colour nobody chose.
     assert "previewWanted" in script, "a stale preview reply can win"
 
-    # The plot settings sit under their own heading rather than in with the rest of the look.
-    graphs = page[page.index("<h2>Graphs</h2>"):]
-    graphs = graphs[:graphs.index("</section>")]
-    for control in ('id="points"', 'id="smooth"', 'id="plotanim"', 'id="rows"'):
-        assert control in graphs, control
-    look_section = page[page.index("<h2>Look</h2>"):page.index("<h2>Graphs</h2>")]
-    for control in ('id="theme"', 'id="brightness"', 'id="slide"', 'id="animate"'):
-        assert control in look_section, control
+
+def sections_of(page):
+    """The config UI's sections, keyed by heading. Only the ones that are a `section`: the
+    page list is a column of its own and would otherwise swallow the heading after it."""
+    found = {}
+    for part in page.split("<h2>")[1:]:
+        heading, rest = part.split("</h2>", 1)
+        found[heading] = rest.split("</section>")[0]
+    return found
+
+
+@check
+def test_the_settings_are_grouped_by_what_they_do(_h):
+    """One list of every control read as a soup. What a setting governs is the heading it sits
+    under, so the panel can be read by what somebody came to change."""
+    page = pathlib.Path("src/statsbadge/web/index.html").read_text()
+    sections = sections_of(page)
+    wanted = {
+        "Look": ("theme", "preview", "accents", "slide", "interval"),
+        "Graphs &amp; Gauges": ("points", "smooth", "plotanim", "rows", "animate"),
+        "Auto Advance": ("idle", "advance"),
+        "Backlight &amp; Case Lights": ("brightness", "autobright", "caselights"),
+    }
+    for heading, controls in wanted.items():
+        assert heading in sections, heading
+        for control in controls:
+            assert f'id="{control}"' in sections[heading], (heading, control)
+            # And in that one only, so a moved control is moved rather than copied.
+            for other in wanted:
+                assert other == heading or f'id="{control}"' not in sections[other], (
+                    control, other)
 
 
 def themes_bg(name):
