@@ -491,6 +491,7 @@ class App:
         self.apply_backlight(self._lit)
         self._lit = True
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
+        draw.ROWS = (self.layout or {}).get("rows", "zebra")
         animate = bool((self.layout or {}).get("animate", False))
         if animate != pages_module.ANIMATE:
             pages_module.ANIMATE = animate

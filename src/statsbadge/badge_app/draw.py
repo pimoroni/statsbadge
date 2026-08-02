@@ -1120,6 +1120,14 @@ def rings(theme, entries):
 
 # -- sparklines -------------------------------------------------------------
 
+# How one row is told from the next: a band behind every other row, a hairline between
+# them, or nothing but the plots. Set from the layout. Banded by default - six lines on one
+# page read as one plot with six traces otherwise. The colours are the theme's own
+# `stripe`, which is a step from the page rather than a colour of its own, and `grid`.
+ROWS = "zebra"
+ROW_NONE = "none"
+
+
 def sparklines(theme, entries, shift=0.0):
     """A row per reading: name, current value, and its history as a small line.
 
@@ -1129,6 +1137,10 @@ def sparklines(theme, entries, shift=0.0):
     A line rather than a filled area, at 1.2ms a page more: a plot 22px tall filled to its
     axis is a slab of colour on any reading that holds steady, which says the level over
     again where the reading beside it already does, and says nothing about the shape.
+
+    The axis rule under each plot is drawn only when nothing else separates the rows: with a
+    band or a hairline there it is a second line saying the same thing, and the row it
+    belongs to is no longer in doubt.
     """
     rows = entries[:6]
     if not rows:
@@ -1140,14 +1152,28 @@ def sparklines(theme, entries, shift=0.0):
     value_w = column_width([row[1] for row in rows], look.SIZE_LABEL)
     plot_x = look.PAD + name_w + COLUMN_GAP
     plot_w = max(40, look.W - plot_x - COLUMN_GAP - value_w - look.PAD)
+    # Behind everything, and the whole width of the row: a band that stopped at the plot
+    # would leave the name and the reading it belongs to outside it.
+    if ROWS == "zebra":
+        screen.pen = theme.stripe
+        for index in range(1, len(rows), 2):
+            screen.rectangle(rect(0, look.BODY_TOP + 2 + index * height, look.W, height))
+    elif ROWS == "rules":
+        # What a rule is drawn in everywhere else, this being one: the palette's `grid` is
+        # the unfilled part of a gauge and a graph's rules.
+        screen.pen = theme.grid
+        for index in range(1, len(rows)):
+            screen.hspan(look.PAD, look.BODY_TOP + 2 + index * height,
+                         look.W - look.PAD * 2)
     for index, (name, value_text, points, peak) in enumerate(rows):
         top = look.BODY_TOP + 6 + index * height
         mid = top + height // 2
         blit_label(name, look.SIZE_LABEL, theme.dim, look.PAD, mid - 7)
 
         plot_h = height - 8
-        screen.pen = theme.grid
-        screen.hspan(plot_x, top + plot_h + 3, plot_w)
+        if ROWS == ROW_NONE:
+            screen.pen = theme.grid
+            screen.hspan(plot_x, top + plot_h + 3, plot_w)
         if points and len(points) > 1 and peak:
             trace = line(plot_x, top, plot_w, plot_h, points, peak, shift=shift)
             screen.pen = theme.accent

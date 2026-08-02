@@ -48,6 +48,13 @@ class FakeColour:
     def with_alpha(self, a):
         return FakeColour(self.r, self.g, self.b, a)
 
+    def lighten(self, n):
+        clamp = lambda v: max(0, min(255, v))  # noqa: E731
+        return FakeColour(clamp(self.r + n), clamp(self.g + n), clamp(self.b + n), self.a)
+
+    def darken(self, n):
+        return self.lighten(-n)
+
     def over(self, background):
         return self.with_alpha(255).mix(background, 255 - self.a)
 
@@ -1792,6 +1799,59 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
     sparks = sparks[:sparks.index("\ndef ", 1)]
     assert "line(plot_x" in sparks, "the sparkline page is not drawing lines"
     assert "screen.alpha" not in sparks, "a line does not need to let the page through"
+
+
+@check
+def test_sparkline_rows_can_be_told_apart(_h):
+    """Six lines on one page read as one plot with six traces, so the rows are banded.
+
+    The band is worked out from the theme rather than named in a palette: a step of
+    lightness from the page, which is a step in the same direction whatever the page is.
+    """
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+    import look
+
+    for style in layout.ROW_STYLES:
+        assert layout.validate({"rows": style,
+                                "pages": layout.DEFAULT_PAGES})["rows"] == style
+    assert layout.validate({"pages": layout.DEFAULT_PAGES})["rows"] == "zebra", (
+        "banded by default")
+    assert layout.validate({"rows": "stripey",
+                            "pages": layout.DEFAULT_PAGES})["rows"] == "zebra"
+
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="rows"' in (web / "index.html").read_text(), "no control in the UI"
+    assert "config.rows" in (web / "app.js").read_text(), "the control is not bound"
+    for style in layout.ROW_STYLES:
+        assert f'value="{style}"' in (web / "index.html").read_text(), style
+
+    # And the badge applies it where it applies the rest of the layout.
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    applied = app[app.index("def apply_layout"):]
+    assert "draw.ROWS" in applied[:applied.index("\n    def ", 1)]
+
+    # A lift, not the panel colour: a panel can be a different hue as well as a different
+    # level, which on a near-black page reads as a stripe of colour.
+    dark = look.THEMES["dark"]
+    assert (dark.stripe.r - dark.bg.r == dark.stripe.g - dark.bg.g
+            == dark.stripe.b - dark.bg.b == look.STRIPE), "the band shifts hue"
+    # Toward the ink on a dark page and away from it on a pale one, since lighten has
+    # nowhere to go on a background that is already near white.
+    from statsbadge import themes
+
+    pale = look.from_palette("light", themes.PALETTES["light"])
+    assert pale.pale and not dark.pale
+    assert pale.stripe.r < pale.bg.r and dark.stripe.r > dark.bg.r
+
+    # The axis rule under a plot is only drawn when nothing else separates the rows.
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    sparks = source[source.index("def sparklines("):]
+    sparks = sparks[:sparks.index("\ndef ", 1)]
+    assert "if ROWS == ROW_NONE:" in sparks, "the axis is drawn whatever separates the rows"
+    assert draw.ROWS == "zebra" and draw.ROW_NONE == "none"
 
 
 @check

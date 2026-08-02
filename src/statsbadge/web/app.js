@@ -506,6 +506,10 @@ function renderLook() {
     : (config.slide ? "over" : "off");
   slide.onchange = () => { config.slide = slide.value; markDirty(); };
 
+  const rows = $("rows");
+  rows.value = config.rows || "zebra";
+  rows.onchange = () => { config.rows = rows.value; markDirty(); };
+
   // The badge's own light sensor, taking the brightness above down to suit a dim room.
   const autobright = $("autobright");
   autobright.checked = !!config.auto_brightness;

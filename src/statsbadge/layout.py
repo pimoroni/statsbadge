@@ -35,6 +35,10 @@ _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
 # them together, the outgoing page leaving to the left.
 SLIDE_STYLES = ("off", "over", "deck")
 
+# How the sparkline page tells one row from the next: a band behind every other row, a
+# hairline between them, or nothing.
+ROW_STYLES = ("zebra", "rules", "none")
+
 # The names, from the palettes themselves: a theme is data, so adding one is a palette and
 # nothing else.
 THEMES = tuple(themes.PALETTES)
@@ -83,6 +87,7 @@ DEFAULT_CONFIG = {
     "smooth": True,
     "animate": False,
     "slide": "off",
+    "rows": "zebra",
     "auto_brightness": False,
     "idle_advance_s": 0,
     "advance_every_s": 10,
@@ -206,6 +211,10 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     if isinstance(slide, bool):
         slide = "over" if slide else "off"
     out["slide"] = slide if slide in SLIDE_STYLES else "off"
+    # How the sparkline page separates its rows. Banded by default: six lines on one page
+    # read as one plot with six traces otherwise.
+    rows = incoming.get("rows", "zebra")
+    out["rows"] = rows if rows in ROW_STYLES else "zebra"
     # Whether the badge takes its brightness down to suit a dim room. Off by default: it is
     # the badge's own sensor and not every board has one.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))

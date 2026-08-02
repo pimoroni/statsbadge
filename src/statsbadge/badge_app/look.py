@@ -135,12 +135,22 @@ RAMP_STEPS = 65
 # A background this bright or brighter counts as a pale page, as the sum of its channels.
 PALE_SUM = 384
 
+# How far a banded row sits from the page, in counts of lightness. Not the panel colour,
+# though that is the other surface a theme names: a panel may be a different hue as well as a
+# different level - the default theme's is 15 counts bluer than its background and 8 lighter -
+# and on a near-black page that reads as a stripe of colour rather than as a quieter row. A
+# lift moves all three channels together, so a band is only ever the page a step away.
+STRIPE = 10
+
 
 class Theme:
     """A palette plus the two decisions that make it look like one thing.
 
     `ramp` is what a gauge fills with as it climbs, so a theme decides whether 90%
     CPU is alarming or just bright. `track` is the unfilled part of any gauge.
+
+    `stripe` is worked out from the rest rather than named in a palette: it is a step from
+    the page, and a palette that had to state it could state it wrong.
 
     Built from palette data, which is what arrives in a layout, and held as `color`
     objects, which is what a pen takes: building one per pen set was 36.5us against 18.4
@@ -161,6 +171,9 @@ class Theme:
         # fraction each. badge.caselights takes one value for all four or four values.
         self.case = case
         self.pale = sum(bg) >= PALE_SUM
+        # A banded row: toward the ink on a dark page and away from it on a pale one,
+        # `lighten` having nowhere to go on a background that is already near white.
+        self.stripe = self.bg.darken(STRIPE) if self.pale else self.bg.lighten(STRIPE)
         self.steps = tuple(self._blend(step / (RAMP_STEPS - 1.0))
                            for step in range(RAMP_STEPS))
 
