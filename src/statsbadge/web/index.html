@@ -10,7 +10,11 @@
 <header>
   <h1>statsbadge</h1>
   <div class="host" id="hostline">loading&hellip;</div>
+  <button id="pair">Pair a badge&hellip;</button>
   <button id="save" class="primary" disabled>Save to badge</button>
+  <!-- Under the button that opened it: the code to match is what somebody is looking at
+       while they hold the badge, and it was at the bottom of a column. -->
+  <div id="pairing" class="pairing hidden"></div>
 </header>
 
 <main>
@@ -133,8 +137,6 @@
     <h2>Badges</h2>
     <section class="col">
       <div id="badges"></div>
-      <button id="pair" class="right">Pair a badge&hellip;</button>
-      <div id="pairing" class="pairing hidden"></div>
     </section>
 
     <h2>This Host</h2>
