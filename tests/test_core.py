@@ -1866,6 +1866,29 @@ def test_a_theme_travels_as_its_colours(_h):
 
 
 @check
+def test_the_themes_are_offered_light_and_dark(h):
+    """Which of them suits a lit room is the first thing anybody chooses between, so the picker
+    groups them by that - read off each palette's own background, since a theme that had to
+    declare its mode could declare it wrong."""
+    records = {record["name"]: record for record in layout.theme_records()}
+    assert set(records) == set(layout.THEMES)
+    for name, mode in (("dark", "dark"), ("light", "light"), ("frost", "light"),
+                       ("sakura", "light"), ("luminescence", "light"), ("shell", "dark"),
+                       ("mono", "dark"), ("tinted-light", "light")):
+        assert records[name]["mode"] == mode, (name, records[name])
+    # The two nothing was designed around are named for what they are.
+    assert records["dark"]["label"] == "Default Dark"
+    assert records["light"]["label"] == "Default Light"
+    assert records["sakura"]["label"] is None, "a theme is titled by the UI unless it is named"
+
+    _status, caps = h.raw("GET", "/api/capabilities")
+    assert {record["name"] for record in caps["themes"]} == set(layout.THEMES)
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    assert "optgroup" in script, "the picker is still one flat list"
+    assert "record.label || title(record.name)" in script
+
+
+@check
 def test_a_theme_can_be_derived_from_one_accent(h):
     """The tinted pair are the themes that are not written down: a whole palette from the one
     accent chosen, so what is stored is the choice and not its result. Restricted on purpose -

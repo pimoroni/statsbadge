@@ -96,7 +96,9 @@ class Service:
     def capabilities(self):
         caps = self.collector.capabilities()
         caps["commands"] = commands.names()
-        caps["themes"] = list(layout.THEMES)
+        # With the label and the mode each wants in a picker, so the UI groups the dark ones
+        # with the dark ones and does not have to know which is which.
+        caps["themes"] = layout.theme_records()
         # What a button can be bound to that the badge does itself, labelled: the UI offers
         # them in the same list as the commands, which is where someone looks for them.
         caps["local_actions"] = [{"action": action, "label": label}

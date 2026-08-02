@@ -535,12 +535,19 @@ function settingRow(stored, setting) {
 function renderLook() {
   const theme = $("theme");
   theme.innerHTML = "";
-  for (const name of caps.themes) {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = title(name);
-    if (name === config.theme) option.selected = true;
-    theme.appendChild(option);
+  // Grouped by mode: which of them suit a lit room is the first thing anybody is choosing
+  // between, and a flat list of twenty had the pairs scattered through it.
+  for (const [mode, heading] of [["dark", "Dark"], ["light", "Light"]]) {
+    const group = document.createElement("optgroup");
+    group.label = heading;
+    for (const record of caps.themes.filter((entry) => entry.mode === mode)) {
+      const option = document.createElement("option");
+      option.value = record.name;
+      option.textContent = record.label || title(record.name);
+      if (record.name === config.theme) option.selected = true;
+      group.appendChild(option);
+    }
+    if (group.children.length) theme.appendChild(group);
   }
   theme.onchange = () => { config.theme = theme.value; markDirty(); renderTint(); };
   renderTint();

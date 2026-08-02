@@ -51,6 +51,30 @@ GAUGE_FILLS = ("solid", "ramp")
 TINTED = {"tinted-dark": "dark", "tinted-light": "light"}
 THEMES = tuple(themes.PALETTES) + tuple(TINTED)
 
+# What a picker calls a theme, where that is not its own name title cased. `dark` and `light` are
+# the two nothing was designed around, so they are named for what they are.
+THEME_LABELS = {"dark": "Default Dark", "light": "Default Light"}
+# Where a page stops being dark and starts being light, as OKLCH lightness of the background.
+PALE_FROM = 0.5
+
+
+def theme_records():
+    """Every theme with the label and the mode a picker needs.
+
+    The mode is read off the palette rather than named in it: a background is either pale or it
+    is not, and a theme that had to declare which could declare it wrong.
+    """
+    records = []
+    for name in THEMES:
+        palette = palette_for(name, DEFAULT_CONFIG["tint"])
+        lightness = derive.oklch(palette["bg"])[0]
+        records.append({
+            "name": name,
+            "label": THEME_LABELS.get(name),
+            "mode": "light" if lightness >= PALE_FROM else "dark",
+        })
+    return records
+
 # Button bindings the badge answers itself, and never sends here: paging and the panel are its
 # own business, and a round trip would be slower than the press. Offered to the UI alongside
 # the host's commands, which is the only reason this list is on this side at all.
