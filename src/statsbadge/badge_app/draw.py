@@ -1157,7 +1157,7 @@ def banner(theme, title, message, detail=None):
 
     # Trim anything that will not fit, so a long error reads as truncated instead of
     # running off the edge of the box.
-    trimmed = [(_fit(text, size, room), size, pen) for text, size, pen in lines]
+    trimmed = [(fit(text, size, room), size, pen) for text, size, pen in lines]
     widest = max(screen.measure_text(text, font_size=size)[0]
                  for text, size, _ in trimmed)
     box_w = min(look.W - 24, max(200, int(widest) + pad_x * 2))
@@ -1177,8 +1177,12 @@ def banner(theme, title, message, detail=None):
         cursor += height + gap
 
 
-def _fit(text, size, room):
-    """Shorten a string until it fits `room` pixels, with an ellipsis if cut."""
+def fit(text, size, room):
+    """Shorten a string until it fits `room` pixels, with an ellipsis if cut.
+
+    Public because an extension drawing what the host sent needs it: a place name off a
+    feed is whatever length it is.
+    """
     if screen.measure_text(text, font_size=size)[0] <= room:
         return text
     cut = text

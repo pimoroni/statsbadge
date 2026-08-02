@@ -20,6 +20,18 @@ import pages as pages_module
 import look
 import wifi
 
+# The badge modules an extension had pushed, imported the way the app imports them, so a page
+# kind an extension registers can be shot as well. From the badge's own ext directory, since
+# that is where an asset beside a module was installed to.
+EXT_DIR = look.APP_DIR + "/ext"
+try:
+    sys.path.insert(0, EXT_DIR)
+    for name in sorted(os.listdir(EXT_DIR)):
+        if name.endswith(".py") and not name.startswith("_"):
+            __import__(name[:-3])
+except OSError:
+    pass
+
 for directory in ("/remote/build", "/remote/build/shots"):
     try:
         os.mkdir(directory)
@@ -60,7 +72,10 @@ for page in layout["pages"]:
 keys = ",".join(graph_keys) or "cpu.pct"
 history = get(f"/v1/history?keys={keys}&points={layout.get('graph_points', 48)}")
 
-theme = look.get(layout.get("theme", look.DEFAULT))
+# The colours the host sent, not the one theme this app was built with: a page drawn in the
+# default dark is not what the badge is showing.
+theme = (look.from_palette(layout.get("theme", look.DEFAULT), layout.get("palette"))
+         or look.get(layout.get("theme", look.DEFAULT)))
 pages = layout["pages"]
 print(f"theme {layout.get('theme')}, {len(pages)} pages, "
       f"host {frame.get('sys', {}).get('host')}")
