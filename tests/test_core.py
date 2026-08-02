@@ -1866,6 +1866,32 @@ def test_a_theme_travels_as_its_colours(_h):
 
 
 @check
+def test_a_theme_with_a_counterpart_has_one_in_the_other_mode(_h):
+    """Four of the hand-written themes come as a pair, one for a lit room and one for a dark
+    one. Not inverted channel by channel - that lands ink on a white page at the wrong
+    lightness - so each is placed against its own background and measured here."""
+    from statsbadge import derive, themes
+
+    modes = {record["name"]: record["mode"] for record in layout.theme_records()}
+    for dark, light in (("mono", "mono-light"), ("watermelon", "watermelon-light"),
+                        ("shell", "shell-light"), ("luminescence-dark", "luminescence")):
+        assert modes[dark] == "dark" and modes[light] == "light", (dark, light)
+
+    # No palette is allowed to be worse than the worst already shipped: AAA for ink, since it
+    # is what a reading is drawn in, and a hot end that can be seen against the page at all.
+    for name, palette in themes.PALETTES.items():
+        ink = derive.contrast(palette["ink"], palette["bg"])
+        dim = derive.contrast(palette["dim"], palette["bg"])
+        hot = derive.contrast(palette["ramp"][-1][1], palette["bg"])
+        assert ink >= 7.0, (name, ink)
+        assert dim >= 2.5, (name, dim)
+        assert hot >= 1.9, (name, hot)
+        cold = palette["ramp"][0][1]
+        apart = sum((a - b) ** 2 for a, b in zip(cold, palette["ramp"][-1][1], strict=True))
+        assert apart > 1600, (name, apart)
+
+
+@check
 def test_the_themes_are_offered_light_and_dark(h):
     """Which of them suits a lit room is the first thing anybody chooses between, so the picker
     groups them by that - read off each palette's own background, since a theme that had to

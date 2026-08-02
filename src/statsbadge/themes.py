@@ -52,6 +52,17 @@ PALETTES = {
         "ramp": ((0.0, (110, 110, 110)),
                  (1.0, (255, 255, 255))),
     },
+    # Mono the other way up. Nothing is inverted channel by channel - that lands ink on white at
+    # the wrong lightness - so the levels are placed against the page the way every other light
+    # theme's are, and the ramp darkens because that is the direction away from a pale page.
+    "mono-light": {
+        "bg": (250, 250, 250), "panel": (238, 238, 238),
+        "ink": (16, 16, 16), "dim": (108, 108, 108),
+        "accent": (36, 36, 36), "grid": (214, 214, 214),
+        "case": 0.3,
+        "ramp": ((0.0, (108, 108, 108)),
+                 (1.0, (0, 0, 0))),
+    },
     "red": {
         "bg": (28, 18, 16), "panel": (42, 26, 23),
         "ink": (255, 242, 240), "dim": (169, 140, 134),
@@ -131,6 +142,19 @@ PALETTES = {
                  (0.72, (252, 157, 154)),
                  (1.0, (254, 67, 101))),
     },
+    # The same five colours on paper: the palest pink as the page, the deeper flesh as the one
+    # colour that shows, and the rind green as its ink - which is the only thing dark enough to
+    # read on a page that pale. The ramp is still rind to flesh, so a full gauge is cerise.
+    "watermelon-light": {
+        "bg": (247, 222, 232), "panel": (242, 201, 210),
+        "ink": (26, 58, 45), "dim": (120, 90, 94),
+        "accent": (203, 59, 84), "grid": (230, 192, 204),
+        "case": 0.3,
+        "ramp": ((0.0, (133, 192, 163)),
+                 (0.4, (224, 143, 168)),
+                 (0.72, (228, 74, 99)),
+                 (1.0, (171, 21, 66))),
+    },
     # Unit-00 as it came back from the repair: navy armour, orange trim. The ramp is that
     # trim warming to the red of a Rei eye.
     "eva00": {
@@ -176,6 +200,19 @@ PALETTES = {
                  (0.7, (182, 222, 181)),
                  (1.0, (218, 163, 60))),
     },
+    # The same palette off the screen and onto paper: the navy becomes the ink, the mint stays
+    # the one colour that means anything, and the gold has to darken to bronze to be seen at
+    # all on a pale page. The ramp keeps the film's order - slate, mint, green, gold.
+    "shell-light": {
+        "bg": (233, 243, 237), "panel": (216, 231, 222),
+        "ink": (25, 38, 75), "dim": (73, 107, 126),
+        "accent": (34, 133, 92), "grid": (197, 214, 204),
+        "case": 0.3,
+        "ramp": ((0.0, (137, 177, 200)),
+                 (0.4, (38, 136, 95)),
+                 (0.7, (64, 105, 64)),
+                 (1.0, (114, 77, 7))),
+    },
     # A Casio electroluminescent watch face: the panel glows one colour and everything on it
     # is that colour's ink at different weights, so the ramp darkens instead of changing hue,
     # the way mono's does. The ink is a dark slate green and not the black of a segment, which
@@ -189,6 +226,19 @@ PALETTES = {
                  (0.45, (58, 130, 110)),
                  (0.75, (34, 82, 70)),
                  (1.0, (20, 46, 40))),
+    },
+    # The same watch in the dark, with the backlight on: the glow is the ink now, so the ramp
+    # brightens where the lit one darkens. One hue throughout either way - that is what makes
+    # it read as a panel and not as a page with things on it.
+    "luminescence-dark": {
+        "bg": (4, 24, 18), "panel": (9, 37, 28),
+        "ink": (158, 240, 206), "dim": (89, 148, 128),
+        "accent": (138, 227, 192), "grid": (24, 58, 47),
+        "case": 0.22,
+        "ramp": ((0.0, (46, 113, 94)),
+                 (0.45, (82, 161, 135)),
+                 (0.75, (119, 203, 172)),
+                 (1.0, (163, 250, 214))),
     },
 }
 
