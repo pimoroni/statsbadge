@@ -15,7 +15,7 @@ import os
 import threading
 import time
 
-from . import themes
+from . import derive, themes
 
 # A page kind the badge knows how to draw, and what it needs.
 #   dial    one field as a sweep gauge, plus up to three readouts beside it
@@ -40,8 +40,11 @@ SLIDE_STYLES = ("off", "over", "deck")
 ROW_STYLES = ("zebra", "rules", "none")
 
 # The names, from the palettes themselves: a theme is data, so adding one is a palette and
-# nothing else.
-THEMES = tuple(themes.PALETTES)
+# nothing else. `custom` is the one that is not written down anywhere - it is derived from the
+# accent, mode and ramp style kept in `custom`, so what is stored is the choices and not their
+# result, and a change to how a theme is derived reaches a badge that already had one.
+CUSTOM = "custom"
+THEMES = tuple(themes.PALETTES) + (CUSTOM,)
 
 # Button bindings the badge answers itself, and never sends here: paging and the panel are its
 # own business, and a round trip would be slower than the press. Offered to the UI alongside
@@ -80,6 +83,7 @@ DEFAULT_PAGES = [
 DEFAULT_CONFIG = {
     "rev": 1,
     "theme": "dark",
+    "custom": {"accent": [35, 190, 167], "mode": "dark", "ramp": "signal"},
     "interval_ms": 1000,
     "brightness": 0.8,
     "caselights": True,
@@ -162,8 +166,43 @@ class Config:
         data.pop("settings", None)
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
-        data["palette"] = themes.PALETTES.get(data.get("theme"), themes.PALETTES[themes.DEFAULT])
+        if data.get("theme") == CUSTOM:
+            chosen = data["custom"]
+            data["palette"] = derive.palette(tuple(chosen["accent"]), chosen["mode"],
+                                             chosen["ramp"])
+        else:
+            data["palette"] = themes.PALETTES.get(data.get("theme"),
+                                                  themes.PALETTES[themes.DEFAULT])
         return data
+
+
+def custom_choices(incoming, current):
+    """The accent, mode and ramp a derived theme is built from, checked against what is offered.
+
+    Restricted on purpose: every accent on the list has been measured to give a legible theme in
+    both modes, so a chosen one cannot produce a page nobody can read. Anything unrecognised
+    falls back to what was already stored rather than raising - this arrives from a UI, and a
+    theme is not worth refusing a whole config over.
+    """
+    chosen = dict(current)
+    if isinstance(incoming, dict):
+        accent = incoming.get("accent")
+        if isinstance(accent, (list, tuple)) and len(accent) >= 3:
+            try:
+                wanted = tuple(max(0, min(255, int(part))) for part in accent[:3])
+            except (TypeError, ValueError):
+                wanted = None
+            if wanted in derive.offered():
+                chosen["accent"] = list(wanted)
+        if incoming.get("mode") in derive.MODES:
+            chosen["mode"] = incoming["mode"]
+        if incoming.get("ramp") in derive.RAMPS:
+            chosen["ramp"] = incoming["ramp"]
+    # A ramp the accent cannot carry - `signal` on a red one, which has nowhere to travel.
+    offered = derive.ramps_for(tuple(chosen["accent"]))
+    if chosen["ramp"] not in offered:
+        chosen["ramp"] = offered[0]
+    return chosen
 
 
 def validate(incoming, extra_kinds=(), settings_schema=None,
@@ -187,6 +226,7 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     if theme not in THEMES:
         raise ValueError(f"unknown theme: {theme!r}")
     out["theme"] = theme
+    out["custom"] = custom_choices(incoming.get("custom"), out["custom"])
 
     interval = int(incoming.get("interval_ms", out["interval_ms"]))
     # Under about 250ms the badge spends its whole frame budget on HTTP.

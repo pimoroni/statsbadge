@@ -21,7 +21,7 @@ import sys
 import threading
 import traceback
 
-from . import auth, commands, extensions, identity, layout, themes
+from . import auth, commands, derive, extensions, identity, layout, themes
 from .collect import Collector
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "web")
@@ -102,6 +102,12 @@ class Service:
                                  for action, label in layout.LOCAL_ACTIONS]
         # The colours too, so the UI's swatches are the badge's own and cannot drift from
         # them: they used to be a table in app.js with a comment asking to be kept in step.
+        # What a derived theme can be built from, so the UI can offer exactly what will work.
+        caps["accents"] = {mode: [list(accent) for accent in derive.accents(mode)]
+                           for mode in derive.MODES}
+        caps["accent_ramps"] = {",".join(str(part) for part in accent):
+                                derive.ramps_for(accent) for accent in derive.offered()}
+        caps["modes"] = list(derive.MODES)
         caps["palettes"] = {name: {"bg": palette["bg"], "accent": palette["accent"],
                                    "ink": palette["ink"],
                                    "ramp": [rgb for _pos, rgb in palette["ramp"]]}
@@ -321,6 +327,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/capabilities" and method == "GET":
             return self._json(200, service.capabilities())
+
+        # The palette a set of choices comes out as, so the UI can show it before it is saved.
+        # Derived here and not in the browser: what travels to the badge is worked out in one
+        # place, and what is stored is the choices rather than their result.
+        if path == "/api/theme" and method == "GET":
+            query = self._query()
+            try:
+                accent = tuple(int(part) for part in (query.get("accent") or "").split(",")[:3])
+            except ValueError:
+                return self._fail(400, "accent must be three numbers")
+            if len(accent) != 3:
+                return self._fail(400, "accent must be three numbers")
+            chosen = layout.custom_choices({"accent": list(accent), "mode": query.get("mode"),
+                                     "ramp": query.get("ramp")},
+                                    layout.DEFAULT_CONFIG["custom"])
+            return self._json(200, {
+                "custom": chosen,
+                "palette": derive.palette(tuple(chosen["accent"]), chosen["mode"],
+                                          chosen["ramp"]),
+            })
 
         if path == "/api/config":
             if method == "GET":

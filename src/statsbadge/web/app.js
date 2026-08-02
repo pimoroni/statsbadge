@@ -475,8 +475,14 @@ function renderLook() {
     if (name === config.theme) option.selected = true;
     theme.appendChild(option);
   }
-  theme.onchange = () => { config.theme = theme.value; markDirty(); swatches(); };
+  theme.onchange = () => {
+    config.theme = theme.value;
+    markDirty();
+    swatches();
+    renderCustom();
+  };
   swatches();
+  renderCustom();
 
   bindRange("interval", "interval_ms", (v) => `${v} ms`);
   bindRange("brightness", "brightness", (v) => `${v}%`, 100);
@@ -606,6 +612,128 @@ function swatches() {
     chip.style.background = colour;
     node.appendChild(chip);
   }
+}
+
+// -- the custom theme ------------------------------------------------------
+//
+// The palette is derived by the host and asked for here, rather than worked out in the
+// browser: what travels to the badge is decided in one place, and what gets stored is the
+// choices rather than their result, so a change to how a theme is derived reaches a badge
+// that already had one.
+
+let previewing = null;
+
+function renderCustom() {
+  const custom = config.theme === "custom";
+  $("configure").classList.toggle("hidden", !custom);
+  if (!custom) $("custompanel").classList.add("hidden");
+  if (!custom) return;
+
+  $("configure").onclick = () => {
+    $("custompanel").classList.toggle("hidden");
+    if (!$("custompanel").classList.contains("hidden")) preview();
+  };
+
+  const chosen = config.custom || {};
+  const accents = $("accents");
+  accents.innerHTML = "";
+  // Per mode: the same hue is darker on a pale page, and a swatch should be the colour that
+  // will actually be used rather than one of them standing in for both.
+  const offered = (caps.accents || {})[chosen.mode || "dark"] || [];
+  for (const accent of offered) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.style.background = `rgb(${accent.join(", ")})`;
+    chip.title = `rgb(${accent.join(", ")})`;
+    if (String(chosen.accent) === String(accent)) chip.classList.add("on");
+    chip.onclick = () => {
+      config.custom = Object.assign({}, config.custom, { accent: accent.slice() });
+      markDirty();
+      renderCustom();
+      preview();
+    };
+    accents.appendChild(chip);
+  }
+
+  fill("custommode", caps.modes || ["dark"], chosen.mode, (value) => {
+    // The accent moves with the mode, so the one at the same place on the wheel is kept.
+    const was = ((caps.accents || {})[chosen.mode || "dark"] || [])
+      .findIndex((one) => String(one) === String(chosen.accent));
+    const now = (caps.accents || {})[value] || [];
+    config.custom = Object.assign({}, config.custom, { mode: value },
+                                  was >= 0 && now[was] ? { accent: now[was].slice() } : {});
+  });
+  // Only the ramps this accent can carry: `signal` travels to red, so a red one cannot.
+  const ramps = (caps.accent_ramps || {})[String(chosen.accent || [])] || ["mono"];
+  fill("customramp", ramps, chosen.ramp, (value) => {
+    config.custom = Object.assign({}, config.custom, { ramp: value });
+  });
+  $("ramphint").textContent = ramps.length > 1
+    ? "signal travels to red as the reading climbs; mono stays in the accent's own hue."
+    : "This accent is already at the hot end, so only mono is offered.";
+}
+
+function fill(id, values, chosen, apply) {
+  const node = $(id);
+  node.innerHTML = "";
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    if (value === chosen) option.selected = true;
+    node.appendChild(option);
+  }
+  node.onchange = () => { apply(node.value); markDirty(); renderCustom(); preview(); };
+}
+
+async function preview() {
+  const chosen = config.custom || {};
+  const query = new URLSearchParams({
+    accent: (chosen.accent || []).join(","),
+    mode: chosen.mode || "dark",
+    ramp: chosen.ramp || "signal",
+  });
+  const key = query.toString();
+  if (previewing === key) return;
+  previewing = key;
+  let shown;
+  try {
+    shown = await api(`/api/theme?${query}`);
+  } catch (error) {
+    previewing = null;
+    return;
+  }
+  const palette = shown.palette;
+  const node = $("preview");
+  const set = (name, rgb) => node.style.setProperty(name, `rgb(${rgb.join(", ")})`);
+  set("--pv-bg", palette.bg);
+  set("--pv-panel", palette.panel);
+  set("--pv-ink", palette.ink);
+  set("--pv-dim", palette.dim);
+  set("--pv-accent", palette.accent);
+  set("--pv-grid", palette.grid);
+  // The dial's sweep, as the ramp's own stops so the gradient is the ramp and not a guess.
+  node.style.setProperty("--pv-ramp", palette.ramp
+    .map(([at, rgb]) => `rgb(${rgb.join(", ")}) ${(at * 68).toFixed(1)}%`).join(", "));
+  // And the three bars, each at the ramp colour for its own reading.
+  for (const [name, at] of [["--pv-r62", 0.62], ["--pv-r46", 0.46], ["--pv-r78", 0.78]]) {
+    set(name, rampAt(palette.ramp, at));
+  }
+  previewing = null;
+}
+
+function rampAt(stops, at) {
+  let [low, first] = stops[0];
+  for (const [position, colour] of stops) {
+    if (at <= position) {
+      const span = position - low;
+      const part = span <= 0 ? 0 : (at - low) / span;
+      return first.map((from, index) =>
+        Math.round(from + (colour[index] - from) * part));
+    }
+    [low, first] = [position, colour];
+  }
+  return stops[stops.length - 1][1];
 }
 
 // -- badges ----------------------------------------------------------------

@@ -1689,6 +1689,87 @@ def test_a_theme_travels_as_its_colours(_h):
 
 
 @check
+def test_a_theme_can_be_derived_from_one_accent(h):
+    """`custom` is the theme that is not written down: it is derived from an accent, a mode and
+    a ramp style, so what is stored is the choices and not their result. Restricted on purpose -
+    every combination on offer is checked here, so a pickable one cannot make a page nobody can
+    read."""
+    import sys
+
+    from statsbadge import derive
+
+    sys.path.insert(0, install.app_source_dir())
+    import look
+
+    assert layout.CUSTOM in layout.THEMES
+    assert len(derive.accents("dark")) == len(derive.ACCENT_HUES) == 12
+
+    # Every accent, in both modes, with every ramp style it is offered.
+    checked = 0
+    for mode in derive.MODES:
+        for accent in derive.accents(mode):
+            for ramp in derive.ramps_for(accent):
+                palette = derive.palette(accent, mode, ramp)
+                assert derive.contrast(palette["ink"], palette["bg"]) >= derive.INK_RATIO
+                assert derive.contrast(palette["dim"], palette["bg"]) >= derive.DIM_RATIO
+                # The hot end has to be seen against the page, or a gauge says nothing when it
+                # matters most - which is the fault the shipped `cyan` ramp has.
+                assert derive.contrast(palette["ramp"][-1][1], palette["bg"]) >= 1.9
+                cold, hot = palette["ramp"][0][1], palette["ramp"][-1][1]
+                apart = sum((a - b) ** 2 for a, b in zip(cold, hot, strict=True))
+                assert apart > 1600, (mode, accent, ramp, apart)
+                # And the badge can build it, which is what the app actually does with it.
+                assert look.from_palette("custom", palette) is not None
+                checked += 1
+    assert checked == 42, checked
+
+    # `signal` travels to red, so an accent already there is only offered `mono`.
+    reds = [a for a in derive.accents("dark") if derive.ramps_for(a) == ["mono"]]
+    assert reds, "every accent claims it can travel to red"
+    assert derive.ramps_for(derive.accents("dark")[6]) == ["signal", "mono"]
+
+    # A choice that was never offered falls back rather than raising: this arrives from a UI,
+    # and a theme is not worth refusing a whole config over.
+    kept = layout.validate({"theme": "custom", "custom": {"accent": [7, 7, 7]},
+                            "pages": layout.DEFAULT_PAGES})
+    assert tuple(kept["custom"]["accent"]) in derive.offered()
+    forced = layout.validate({"theme": "custom",
+                              "custom": {"accent": list(reds[0]), "ramp": "signal"},
+                              "pages": layout.DEFAULT_PAGES})
+    assert forced["custom"]["ramp"] == "mono", forced["custom"]
+
+    # What travels is a palette like any other, so the badge never knows it was derived.
+    config = layout.Config(os.path.join(tempfile.mkdtemp(), "layout.json"))
+    config.replace({"theme": "custom", "pages": layout.DEFAULT_PAGES,
+                    "custom": {"accent": list(derive.accents("light")[8]), "mode": "light",
+                               "ramp": "signal"}})
+    sent = config.for_badge()
+    assert sent["theme"] == "custom"
+    assert set(sent["palette"]) >= {"bg", "panel", "ink", "dim", "accent", "grid", "ramp"}
+    assert look.from_palette("custom", sent["palette"]) is not None
+
+    # And the host derives it for the UI as well, so the preview cannot drift from the badge.
+    picked = ",".join(str(part) for part in derive.accents("light")[8])
+    status, shown = h.raw("GET", f"/api/theme?accent={picked}&mode=light&ramp=signal")
+    assert status == 200, (status, shown)
+    assert shown["custom"]["mode"] == "light"
+    assert shown["palette"]["bg"] == list(sent["palette"]["bg"]), "the preview would differ"
+    status, bad = h.raw("GET", "/api/theme?accent=nonsense")
+    assert status == 400, status
+
+    # The UI offers exactly what the host will accept, and nothing it will not.
+    status, caps = h.raw("GET", "/api/capabilities")
+    assert sorted(caps["accents"]) == sorted(derive.MODES)
+    assert caps["accents"]["dark"] == [list(a) for a in derive.accents("dark")]
+    web = pathlib.Path("src/statsbadge/web")
+    page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
+    assert 'id="configure"' in page and 'id="accents"' in page, "no picker in the UI"
+    assert 'id="preview"' in page, "no preview of the badge"
+    assert "caps.accents" in script and "/api/theme?" in script
+    assert "config.custom" in script, "the choices are not bound"
+
+
+@check
 def test_the_ui_takes_its_swatches_from_the_host(_h):
     """They used to be a table in app.js with a comment asking for it to be kept in step
     with the badge, which is two places to edit and one to forget."""

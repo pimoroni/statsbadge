@@ -43,6 +43,28 @@
         <select id="theme"></select>
       </label>
       <div class="swatches" id="swatches"></div>
+      <button id="configure" class="hidden">Configure custom theme</button>
+
+      <div id="custompanel" class="hidden">
+        <div class="preview" id="preview">
+          <div class="pv-head"><span class="pv-title">CPU</span><span class="pv-host">host</span></div>
+          <div class="pv-body">
+            <div class="pv-dial"><span class="pv-reading">63.5</span></div>
+            <div class="pv-rows">
+              <div class="pv-row"><i>TEMP</i><b>71.0&deg;C</b><u><s></s></u></div>
+              <div class="pv-row"><i>MEM</i><b>58.0%</b><u><s></s></u></div>
+              <div class="pv-row"><i>DISK</i><b>74.2%</b><u><s></s></u></div>
+            </div>
+          </div>
+          <div class="pv-foot"><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="accents" id="accents"></div>
+        <div class="row">
+          <label>Page <select id="custommode"></select></label>
+          <label>Ramp <select id="customramp"></select></label>
+        </div>
+        <p class="hint" id="ramphint"></p>
+      </div>
       <label>Refresh
         <input type="range" id="interval" min="250" max="5000" step="250">
         <output id="intervalout"></output>

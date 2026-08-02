@@ -186,3 +186,48 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
   font-weight: 600; box-shadow: 0 6px 20px #0009;
 }
 .toast.bad { background: var(--bad); color: #fff; }
+
+/* The custom theme's picker, and a loose impression of the badge drawn in the palette it
+   would use. Not a rendering of the app - it is here so a choice can be judged before it is
+   sent, so what matters is that the colours sit next to each other the way they will. */
+.accents { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.accents button {
+  width: 30px; height: 30px; padding: 0; border: 2px solid transparent; cursor: pointer;
+}
+.accents button.on { border-color: var(--ink); }
+
+.preview {
+  width: 320px; height: 240px; display: flex; flex-direction: column;
+  background: var(--pv-bg); font-size: 11px; overflow: hidden; margin: 4px 0;
+}
+.pv-head {
+  height: 30px; background: var(--pv-panel); border-bottom: 2px solid var(--pv-accent);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 10px;
+}
+.pv-title { color: var(--pv-ink); font-size: 15px; letter-spacing: 0.06em; }
+.pv-host { color: var(--pv-dim); }
+.pv-body { flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 12px; }
+.pv-dial {
+  width: 96px; height: 96px; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background:
+    radial-gradient(closest-side, var(--pv-bg) 74%, transparent 75%),
+    conic-gradient(from 225deg, var(--pv-ramp) 0 68%, var(--pv-grid) 68% 75%,
+                   var(--pv-bg) 75%);
+}
+.pv-reading { color: var(--pv-ink); font-size: 21px; }
+.pv-rows { flex: 1; display: grid; gap: 10px; }
+.pv-row { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; }
+.pv-row i { color: var(--pv-dim); font-style: normal; }
+.pv-row b { color: var(--pv-ink); font-weight: 500; }
+.pv-row u { grid-column: 1 / -1; height: 3px; background: var(--pv-grid); text-decoration: none; }
+.pv-row s { display: block; height: 100%; text-decoration: none; }
+.pv-row:nth-child(1) s { width: 62%; background: var(--pv-r62); }
+.pv-row:nth-child(2) s { width: 46%; background: var(--pv-r46); }
+.pv-row:nth-child(3) s { width: 78%; background: var(--pv-r78); }
+.pv-foot {
+  height: 20px; background: var(--pv-panel); display: flex; align-items: center;
+  justify-content: center; gap: 6px;
+}
+.pv-foot i { width: 14px; height: 4px; background: var(--pv-grid); }
+.pv-foot i:first-child { background: var(--pv-accent); width: 18px; }
