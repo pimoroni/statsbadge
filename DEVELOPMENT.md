@@ -44,7 +44,9 @@ Two halves sharing one small contract: the host decides *what* to show, the badg
 
 **The ramp runs calm to alarming, so a battery is read backwards.** Nearly every field is a load or a temperature where high is bad, and `power.battery_pct` is not: at 100% it was drawn in the ramp's red. `pages.severity_of` inverts the fraction for those fields and it colours only - a gauge's sweep and a bar's length are still the reading itself.
 
-**A theme is config, so the badge carries one.** The palette for the chosen theme travels in the layout - 213 bytes, on a payload only refetched when `rev` moves - and `look.from_palette` builds a `Theme` from it, checking anything that would reach `color.rgb` because a bad palette off the network would otherwise be a crash on every frame instead of a page in the theme it booted with. So [`themes.py`](src/statsbadge/themes.py) is the only place a palette is written down: the app keeps `dark` for its first frame, `layout.THEMES` is the names from the same data, and the UI's swatches come from the host over `/api/capabilities` where they used to be a table in `app.js` with a comment asking for it to be kept in step.
+**A theme is config, so the badge carries one.** The palette for the chosen theme travels in the layout - 213 bytes, on a payload only refetched when `rev` moves - and `look.from_palette` builds a `Theme` from it, checking it there because a bad palette off the network would otherwise be a crash on every frame instead of a page in the theme it booted with. So [`themes.py`](src/statsbadge/themes.py) is the only place a palette is written down: the app keeps `dark` for its first frame, `layout.THEMES` is the names from the same data, and the UI's swatches come from the host over `/api/capabilities` where they used to be a table in `app.js` with a comment asking for it to be kept in step.
+
+**A theme holds `color` objects, built from that palette data.** It held tuples while a colour could not be read back or interpolated, which meant rebuilding one at every pen set: 36.5us against 18.4 for a colour already made, and a ramp lookup 54.6 against 11.9, worth 0.2 to 2ms a page. A colour is immutable, so one instance is handed out repeatedly; `==` compares as rendered and `hash` agrees, so a colour is safe in the label cache's key. `mix` is the ramp's interpolation, `with_alpha().over(bg)` is what a translucent series actually lands as, and `.r/.g/.b` are what `draw._apart` measures a series colour against the page with. The palettes themselves stay plain data, here and in the clock's own dials, since that is what travels and what is edited.
 
 **The debug probe shares Raspberry Pi's USB vendor id** with the board it is attached to, so port detection filters on product id and product string. Talking MicroPython to a CMSIS-DAP interface just times out.
 
@@ -168,13 +170,13 @@ Two things it turns on. `screen` is a *builtin*, so it is rebound for the offscr
 | Page | Draw |
 | ---- | ---- |
 | CPU dial | 12.4ms |
-| Cores, sixteen bars | 15.2ms |
-| Network graph | 18.6ms |
-| Disk grid | 16.2ms |
+| Cores, sixteen bars | 14.5ms |
+| Network graph | 17.7ms |
+| Disk grid | 15.4ms |
 | Host, text | 10.2ms |
-| Swiss clock | 14.7ms |
-| At a glance, six sparklines | 25.5ms |
-| page turn, cold caches | 39.7ms |
+| Swiss clock | 14.2ms |
+| At a glance, six sparklines | 26.9ms |
+| page turn, cold caches | 37.5ms |
 | nothing changed | 0ms |
 
 `display.update()` blocks on vsync, which rounds a frame up to a whole 90Hz period, so a page has to draw in under 14.7ms for 45fps and under 25.8ms to hold 30. A signed `/v1/stats` round trip is 14ms, worst single step 2.85ms - the step carrying the HMAC.
