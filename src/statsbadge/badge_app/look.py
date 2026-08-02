@@ -132,36 +132,44 @@ DIALS = {
 # Sixty-five is a quarter of a percent of 100, and steps of one or two in a channel.
 RAMP_STEPS = 65
 
+# A background this bright or brighter counts as a pale page, as the sum of its channels.
+PALE_SUM = 384
+
 
 class Theme:
     """A palette plus the two decisions that make it look like one thing.
 
     `ramp` is what a gauge fills with as it climbs, so a theme decides whether 90%
     CPU is alarming or just bright. `track` is the unfilled part of any gauge.
+
+    Built from palette data, which is what arrives in a layout, and held as `color`
+    objects, which is what a pen takes: building one per pen set was 36.5us against 18.4
+    for one already made, and a ramp lookup 54.6 against 11.9.
     """
 
     def __init__(self, name, bg, panel, ink, dim, accent, ramp, grid=None,
                  case=0.1):
         self.name = name
-        self.bg = bg
-        self.panel = panel
-        self.ink = ink
-        self.dim = dim
-        self.accent = accent
-        self.ramp = ramp          # ((position 0-1, (r, g, b)), ...) cold to hot
-        self.grid = grid or dim
+        self.bg = color.rgb(*bg)
+        self.panel = color.rgb(*panel)
+        self.ink = color.rgb(*ink)
+        self.dim = color.rgb(*dim)
+        self.accent = color.rgb(*accent)
+        self.ramp = tuple((pos, color.rgb(*rgb)) for pos, rgb in ramp)
+        self.grid = color.rgb(*grid) if grid else self.dim
         # The four case lights are single-channel PWM, not RGB: one brightness
         # fraction each. badge.caselights takes one value for all four or four values.
         self.case = case
+        self.pale = sum(bg) >= PALE_SUM
         self.steps = tuple(self._blend(step / (RAMP_STEPS - 1.0))
                            for step in range(RAMP_STEPS))
 
     def at(self, fraction):
         """The ramp colour for a 0-1 value, off a table built with the theme.
 
-        Interpolating per call was 102us, and a page with sixteen bars asks sixteen times
-        a frame. RAMP_STEPS across the ramp is finer than the eye reads a gauge fill and
-        finer than most of the ramps have stops.
+        Interpolating per call is 30us against 12 for a lookup, and a page with sixteen
+        bars asks sixteen times a frame. RAMP_STEPS across the ramp is finer than the eye
+        reads a gauge fill and finer than most of the ramps have stops.
         """
         if fraction <= 0.0:
             return self.steps[0]
@@ -175,16 +183,12 @@ class Theme:
         if fraction <= stops[0][0]:
             return stops[0][1]
         for i in range(1, len(stops)):
-            pos, rgb = stops[i]
+            pos, colour = stops[i]
             if fraction <= pos:
-                prev_pos, prev_rgb = stops[i - 1]
+                prev_pos, prev = stops[i - 1]
                 span = pos - prev_pos
                 t = 0.0 if span <= 0 else (fraction - prev_pos) / span
-                return (
-                    int(prev_rgb[0] + (rgb[0] - prev_rgb[0]) * t),
-                    int(prev_rgb[1] + (rgb[1] - prev_rgb[1]) * t),
-                    int(prev_rgb[2] + (rgb[2] - prev_rgb[2]) * t),
-                )
+                return prev.mix(colour, int(t * 255 + 0.5))
         return stops[-1][1]
 
 
@@ -212,9 +216,9 @@ def get(name):
 def from_palette(name, palette):
     """A theme out of the colours the host sent, or None if they are not usable.
 
-    Anything the badge would go on to hand to `color.rgb` is checked here rather than at
-    the point of drawing: a palette arrives over the network, and a bad one would otherwise
-    be a crash on every frame instead of a page in the theme it booted with.
+    A palette arrives over the network, so it is checked here and the colours are built
+    here: a bad one would otherwise be a crash on every frame instead of a page in the
+    theme it booted with.
     """
     if not isinstance(palette, dict):
         return None

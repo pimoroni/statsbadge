@@ -4,6 +4,7 @@ Run with `python3 -m pytest` from `server/`, or `python3 tests/test_core.py` for
 plain run with no pytest installed.
 """
 
+import builtins
 import io
 import json
 import os
@@ -21,6 +22,50 @@ import urllib.request
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from statsbadge import auth, identity, install, layout, model, server  # noqa: E402
+
+
+class FakeColour:
+    """Enough of the badge's `color` for the app modules to be imported here.
+
+    A theme holds `color` objects, so `look` cannot be imported without one. Only what the
+    app calls of it, and only far enough to be compared: what the firmware does is measured
+    on the badge, not here.
+    """
+
+    def __init__(self, r, g, b, a=255):
+        self.r, self.g, self.b, self.a = int(r) & 255, int(g) & 255, int(b) & 255, a
+
+    @classmethod
+    def rgb(cls, r, g, b, a=255):
+        return cls(r, g, b, a)
+
+    def mix(self, other, t):
+        part = t / 255.0
+        return FakeColour(*(a + (b - a) * part
+                            for a, b in ((self.r, other.r), (self.g, other.g),
+                                         (self.b, other.b), (self.a, other.a))))
+
+    def with_alpha(self, a):
+        return FakeColour(self.r, self.g, self.b, a)
+
+    def over(self, background):
+        return self.with_alpha(255).mix(background, 255 - self.a)
+
+    def __eq__(self, other):
+        return isinstance(other, FakeColour) and self.parts() == other.parts()
+
+    def __hash__(self):
+        return hash(self.parts())
+
+    def parts(self):
+        return (self.r, self.g, self.b, self.a)
+
+    def __repr__(self):
+        return "color.rgb({}, {}, {}, {})".format(*self.parts())
+
+
+# Where the badge finds it, and before anything imports look.
+builtins.color = FakeColour
 
 
 class Harness:
@@ -1523,17 +1568,21 @@ def test_a_theme_travels_as_its_colours(_h):
         assert built.name == name, built.name
         stops = built.ramp
         assert stops[0][0] == 0.0 and stops[-1][0] == 1.0, name
-        assert list(stops) == sorted(stops, key=lambda stop: stop[0]), name
+        assert [pos for pos, _pen in stops] == sorted(pos for pos, _pen in stops), name
+        # A theme is built out of palette data and holds `color` objects, so a pen takes
+        # what it is handed and nothing rebuilds a colour to draw with it.
         for fraction in (0.0, 0.5, 1.0):
-            assert len(built.at(fraction)) == 3, (name, fraction)
+            assert isinstance(built.at(fraction), builtins.color), (name, fraction)
+        assert built.at(0.0) == stops[0][1] and built.at(1.0) == stops[-1][1], name
 
     # And the one the app carries to boot with agrees with the host's copy of it, or the
     # first frame is drawn in colours the config never asked for.
     assert list(look.THEMES) == [themes.DEFAULT], list(look.THEMES)
     booted, sent = look.THEMES[themes.DEFAULT], themes.PALETTES[themes.DEFAULT]
     for key in ("bg", "panel", "ink", "dim", "accent", "grid"):
-        assert tuple(getattr(booted, key)) == tuple(sent[key]), key
-    assert booted.ramp == sent["ramp"]
+        assert getattr(booted, key) == builtins.color.rgb(*sent[key]), key
+    assert booted.ramp == tuple((pos, builtins.color.rgb(*rgb))
+                                for pos, rgb in sent["ramp"])
 
     # The colours are on the payload the badge fetches, keyed to the theme it chose.
     config = layout.Config(os.path.join(tempfile.mkdtemp(), "layout.json"))
@@ -1541,7 +1590,8 @@ def test_a_theme_travels_as_its_colours(_h):
     sent = config.for_badge()
     assert sent["theme"] == "eva01"
     assert sent["palette"] == themes.PALETTES["eva01"], sent["palette"]
-    assert look.from_palette(sent["theme"], sent["palette"]).accent == (143, 212, 0)
+    assert look.from_palette(sent["theme"], sent["palette"]).accent == \
+        builtins.color.rgb(143, 212, 0)
 
     # Nonsense off the network is refused rather than drawn: a bad palette would otherwise
     # be a crash on every frame instead of a page in the theme it booted with.

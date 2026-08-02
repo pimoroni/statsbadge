@@ -133,7 +133,7 @@ def use_font(name):
 CACHE_UNDER = 40
 
 
-def label(text_value, size, rgb, name=TEXT):
+def label(text_value, size, pen, name=TEXT):
     """A string baked into a sprite, or None if it is too large to be worth keeping.
 
     A caller that needs the sprite - to place something against its width - should ask
@@ -141,7 +141,7 @@ def label(text_value, size, rgb, name=TEXT):
     """
     if size >= CACHE_UNDER:
         return None
-    key = (name, text_value, size, rgb)
+    key = (name, text_value, size, pen)
     cached = _labels.get(key)
     if cached is not None:
         return cached
@@ -159,7 +159,7 @@ def label(text_value, size, rgb, name=TEXT):
         sprite.pen = brush.erase()
         sprite.rectangle(rect(0, 0, width, height))
         sprite.antialias = image.X4
-        sprite.pen = color.rgb(*rgb)
+        sprite.pen = pen
         sprite.text(text_value, vec2(0, 0), size)
     finally:
         screen.font = was
@@ -171,7 +171,7 @@ def label(text_value, size, rgb, name=TEXT):
     return sprite
 
 
-def blit_label(text_value, size, rgb, x, y, align=0, name=TEXT):
+def blit_label(text_value, size, pen, x, y, align=0, name=TEXT):
     """Draw a string. align 0 left, 1 centre, 2 right, about x.
 
     From a sprite where one is worth keeping and live where it is not, which the caller does
@@ -181,7 +181,7 @@ def blit_label(text_value, size, rgb, x, y, align=0, name=TEXT):
     face = _fonts.get(name)
     if face is None:
         return 0
-    sprite = label(text_value, size, rgb, name)
+    sprite = label(text_value, size, pen, name)
     if sprite is None:
         width = text_width(text_value, size, name)
         if align == 1:
@@ -191,7 +191,7 @@ def blit_label(text_value, size, rgb, x, y, align=0, name=TEXT):
         was = screen.font
         screen.font = face
         try:
-            screen.pen = color.rgb(*rgb)
+            screen.pen = pen
             screen.text(text_value, vec2(int(x), int(y)), size)
         finally:
             screen.font = was
@@ -204,9 +204,9 @@ def blit_label(text_value, size, rgb, x, y, align=0, name=TEXT):
     return sprite.width
 
 
-def blit_icon(character, size, rgb, x, y, align=0):
+def blit_icon(character, size, pen, x, y, align=0):
     """Draw one symbol from the icon font. 0 if there is no icon font."""
-    return blit_label(character, size, rgb, x, y, align, ICONS)
+    return blit_label(character, size, pen, x, y, align, ICONS)
 
 
 def clear_cache():
@@ -441,7 +441,7 @@ def background(theme, title, index, total, subtitle=None):
     row is baked, because a rounded rectangle apiece is 0.19ms and there can be a dozen
     of them.
     """
-    screen.pen = color.rgb(*theme.bg)
+    screen.pen = theme.bg
     screen.rectangle(rect(0, look.HEADER_H, look.W, look.BODY_H))
     furniture(theme, title, index, total, subtitle)
 
@@ -453,10 +453,10 @@ def furniture(theme, title, index, total, subtitle=None):
     pip are the page you are on, and during a slide - or while a burst of presses settles -
     they should already be the page you pressed for.
     """
-    screen.pen = color.rgb(*theme.panel)
+    screen.pen = theme.panel
     screen.rectangle(rect(0, 0, look.W, look.HEADER_H))
     screen.rectangle(rect(0, look.H - look.FOOTER_H, look.W, look.FOOTER_H))
-    screen.pen = color.rgb(*theme.accent)
+    screen.pen = theme.accent
     screen.rectangle(rect(0, look.HEADER_H - 2, look.W, 2))
     blit_label(title.upper(), look.SIZE_TITLE, theme.ink, look.PAD, 4)
     if subtitle:
@@ -501,7 +501,7 @@ def _pips(theme, index, total):
     row.pen = brush.erase()
     row.rectangle(rect(0, 0, span, 4))
     for i in range(total):
-        row.pen = color.rgb(*(theme.accent if i == index else theme.grid))
+        row.pen = theme.accent if i == index else theme.grid
         row.shape(shape.rounded_rectangle(
             rect(i * (pip_w + gap), 0, pip_w, 4), min(2, pip_w // 2)))
     if len(_pip_rows) > 12:
@@ -540,7 +540,7 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
     # is under the tick below in any case.
     lit = not cold and fraction > 0.001
     sweep = start + (end - start) * fraction if lit else start
-    screen.pen = color.rgb(*theme.grid)
+    screen.pen = theme.grid
     if end - sweep > 0.5:
         screen.shape(shape.arc(middle, inner, outer, sweep, end))
 
@@ -548,12 +548,12 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
         # Solid, in the ramp's colour for this value: a spatial gradient across the
         # arc's box does not follow the curve, so the hue would not track the reading.
         # This way the colour *is* the severity, and it costs one shape.
-        screen.pen = color.rgb(*theme.at(fraction if hot is None else hot))
+        screen.pen = theme.at(fraction if hot is None else hot)
         screen.shape(shape.arc(middle, inner, outer, start, sweep))
 
         # A brighter tick at the sweep's end, so the exact value is readable, and it lands
         # on the join between the two arcs.
-        screen.pen = color.rgb(*theme.ink)
+        screen.pen = theme.ink
         screen.shape(shape.arc(middle, inner - 3, outer + 3, sweep - 1.4, sweep + 1.4))
 
     ink = theme.dim if cold else theme.ink
@@ -613,7 +613,7 @@ def readout(theme, y, name, value_text, fraction=None, note=None, chip=None, hot
     blit_label(name, look.SIZE_SMALL, theme.dim, x, y)
     blit_label(value_text, look.SIZE_VALUE, theme.ink, x, y + 10)
     if chip:
-        screen.pen = color.rgb(*chip)
+        screen.pen = chip
         screen.rectangle(rect(x + look.READOUT_W - 10, y + 3, 10, 10))
     if note:
         # What a full ring is, for a reading whose scale is not a round number. It takes
@@ -623,10 +623,10 @@ def readout(theme, y, name, value_text, fraction=None, note=None, chip=None, hot
         width = look.READOUT_W
         fraction = max(0.0, min(1.0, fraction))
         filled = int(width * fraction)
-        screen.pen = color.rgb(*theme.grid)
+        screen.pen = theme.grid
         screen.rectangle(rect(x + filled, y + 28, width - filled, 3))
         if filled:
-            screen.pen = color.rgb(*theme.at(fraction if hot is None else hot))
+            screen.pen = theme.at(fraction if hot is None else hot)
             screen.rectangle(rect(x, y + 28, filled, 3))
 
 
@@ -635,7 +635,7 @@ COLUMN_LEAD = 3
 
 
 def column_lines(entries, top=None, align=0):
-    """A stack of lines down the column beside a gauge, each `(text, size, rgb)`.
+    """A stack of lines down the column beside a gauge, each `(text, size, pen)`.
 
     For a page whose rows are not readouts - a clock's time, place and date - so that it
     gets the column's left edge and a consistent rhythm without working either out. Empty
@@ -645,10 +645,10 @@ def column_lines(entries, top=None, align=0):
     """
     y = (look.BODY_TOP + 12) if top is None else top
     x = look.READOUT_X + (look.READOUT_W if align == 2 else 0)
-    for text_value, size, rgb in entries:
+    for text_value, size, pen in entries:
         if not text_value:
             continue
-        blit_label(text_value, size, rgb, x, y, align=align)
+        blit_label(text_value, size, pen, x, y, align=align)
         y += int(size * 1.35) + COLUMN_LEAD
     return y
 
@@ -690,12 +690,12 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
         y = top + i * slot
         blit_label(names[i], look.SIZE_SMALL, theme.dim, look.PAD, y - 1)
         filled = max(1, int(width * fraction)) if fraction > 0 else 0
-        screen.pen = color.rgb(*theme.grid)
+        screen.pen = theme.grid
         # From where the fill ends, so the two meet instead of overlapping. Exact: an
         # axis-aligned raster edge is a pixel boundary, not an anti-aliased one.
         screen.rectangle(rect(x + filled, y, width - filled, height))
         if filled:
-            screen.pen = color.rgb(*theme.at(fraction))
+            screen.pen = theme.at(fraction)
             screen.rectangle(rect(x, y, filled, height))
         blit_label(readings[i], look.SIZE_SMALL, theme.ink,
                    look.W - look.PAD, y - 1, align=2)
@@ -853,7 +853,7 @@ def graph(theme, series, labels, maximum=None, shift=0.0):
     width = look.W - left - look.PAD
     height = look.BODY_H - 26
 
-    screen.pen = color.rgb(*theme.grid)
+    screen.pen = theme.grid
     for i in range(5):
         y = top + int(height * i / 4.0)
         screen.hspan(left, y, width)
@@ -863,7 +863,7 @@ def graph(theme, series, labels, maximum=None, shift=0.0):
             continue
         filled = area(left, top, width, height, points, peak, shift=shift)
         screen.alpha = _series_alpha(theme, index)
-        screen.pen = color.rgb(*_series_colour(theme, index))
+        screen.pen = _series_colour(theme, index)
         was = screen.clip
         # The plot is drawn a sample wider than its box while it walks left, so the oldest
         # reading leaves at the gutter rather than over it.
@@ -876,10 +876,10 @@ def graph(theme, series, labels, maximum=None, shift=0.0):
     blit_label(peak_text, look.SIZE_SMALL, theme.dim, look.PAD, top - 4)
     blit_label("0", look.SIZE_SMALL, theme.dim, look.PAD, top + height - 8)
     for index, (name, _field) in enumerate(labels[:2]):
-        rgb = _series_colour(theme, index)
+        pen = _series_colour(theme, index)
         x = left + index * 110
         y = look.H - look.FOOTER_H - 14
-        screen.pen = color.rgb(*rgb)
+        screen.pen = pen
         screen.rectangle(rect(x, y + 3, 10, 4))
         blit_label(name, look.SIZE_SMALL, theme.dim, x + 14, y - 2)
 
@@ -895,7 +895,7 @@ SERIES_FLOOR = 8000
 
 
 def _series_alpha(theme, index):
-    return SERIES_ALPHA[0] if index == 0 or sum(theme.bg) > 384 else SERIES_ALPHA[1]
+    return SERIES_ALPHA[0] if index == 0 or theme.pale else SERIES_ALPHA[1]
 
 
 def _series_colour(theme, index):
@@ -913,19 +913,13 @@ def _series_colour(theme, index):
     # A theme built out of one hue has the page at one end of its own ramp, and an area drawn
     # in that is not there at all. The dim colour is the way out: it does not track a reading,
     # so it is not the first choice, but it is a step in value from both page and accent.
-    drawn = _blend(pick, theme.bg, _series_alpha(theme, index))
+    drawn = pick.with_alpha(_series_alpha(theme, index)).over(theme.bg)
     return theme.dim if _apart(theme.bg, drawn) < SERIES_FLOOR else pick
-
-
-def _blend(rgb, bg, alpha):
-    """A colour as it lands on the page it is drawn over."""
-    part = alpha / 255.0
-    return tuple(int(c * part + b * (1.0 - part)) for c, b in zip(rgb, bg))
 
 
 def _apart(a, b):
     """How far apart two colours are, as squared RGB distance."""
-    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
+    return (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2
 
 
 def grid(theme, entries):
@@ -948,11 +942,10 @@ def grid(theme, entries):
         row = i // columns
         x = look.PAD + column * (cell_w + 6)
         y = look.BODY_TOP + 6 + row * (cell_h + 6)
-        screen.pen = color.rgb(*theme.panel)
+        screen.pen = theme.panel
         screen.shape(shape.rounded_rectangle(rect(x, y, cell_w, cell_h), 5))
         if fraction is not None:
-            screen.pen = color.rgb(*theme.at(max(0.0, min(1.0,
-                                            fraction if hot is None else hot))))
+            screen.pen = theme.at(max(0.0, min(1.0, fraction if hot is None else hot)))
             screen.rectangle(rect(x, y + cell_h - 3, int(cell_w * max(0.0, min(1.0, fraction))), 3))
         # Both: a cell has room for the name and for a symbol in the far corner, so the
         # symbol is another way to find the tile rather than the only one. A gauge has
@@ -972,7 +965,7 @@ def lines(theme, entries):
         blit_label(value_text, look.SIZE_VALUE, theme.ink, look.W - look.PAD, y,
                    align=2)
         y += 24
-        screen.pen = color.rgb(*theme.grid)
+        screen.pen = theme.grid
         screen.hspan(look.PAD, y - 5, look.W - look.PAD * 2)
 
 
@@ -997,23 +990,23 @@ def banner(theme, title, message, detail=None):
 
     # Trim anything that will not fit, so a long error reads as truncated instead of
     # running off the edge of the box.
-    trimmed = [(_fit(text, size, room), size, rgb) for text, size, rgb in lines]
+    trimmed = [(_fit(text, size, room), size, pen) for text, size, pen in lines]
     widest = max(screen.measure_text(text, font_size=size)[0]
                  for text, size, _ in trimmed)
     box_w = min(look.W - 24, max(200, int(widest) + pad_x * 2))
     x = (look.W - box_w) // 2
     y = (look.H - box_h) // 2
 
-    screen.pen = color.rgb(*theme.bg)
+    screen.pen = theme.bg
     screen.rectangle(rect(0, 0, look.W, look.H))
-    screen.pen = color.rgb(*theme.accent)
+    screen.pen = theme.accent
     screen.shape(shape.rounded_rectangle(rect(x, y, box_w, box_h), 8))
-    screen.pen = color.rgb(*theme.bg)
+    screen.pen = theme.bg
     screen.shape(shape.rounded_rectangle(rect(x + 2, y + 2, box_w - 4, box_h - 4), 7))
 
     cursor = y + pad_y
-    for (text, size, rgb), height in zip(trimmed, heights):
-        blit_label(text, size, rgb, look.W // 2, cursor, align=1)
+    for (text, size, pen), height in zip(trimmed, heights):
+        blit_label(text, size, pen, look.W // 2, cursor, align=1)
         cursor += height + gap
 
 
@@ -1048,7 +1041,7 @@ def toast(theme, message, fade=1.0):
     y = look.H - look.FOOTER_H - 26
     if fade < 1.0:
         screen.alpha = int(255 * fade)
-    screen.pen = color.rgb(*theme.accent)
+    screen.pen = theme.accent
     screen.shape(shape.rounded_rectangle(rect(x, y, width, 22), 6))
     blit_label(message, look.SIZE_LABEL, theme.bg, look.W // 2, y + 4, align=1)
     screen.alpha = 255
@@ -1071,7 +1064,7 @@ def rings(theme, entries):
     """
     rows = entries[:4]
     height = look.READOUT_NOTE_H if any(entry[4] for entry in rows) else look.READOUT_H
-    for index, ((name, value_text, fraction, rgb, note), y) in enumerate(
+    for index, ((name, value_text, fraction, pen, note), y) in enumerate(
             zip(rows, look.readout_rows(len(rows), height))):
         ring_outer = look.DIAL_OUTER - index * (RING_BAND + RING_GAP)
         ring_inner = ring_outer - RING_BAND
@@ -1080,18 +1073,18 @@ def rings(theme, entries):
         # Track and fill abut, as they do on a single gauge: four rings drawn over their own
         # tracks is twice the arc for the same picture.
         sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * (fraction or 0.0)
-        screen.pen = color.rgb(*theme.grid)
+        screen.pen = theme.grid
         if look.DIAL_TO - sweep > 0.5:
             screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
                                    sweep, look.DIAL_TO))
         if fraction:
-            screen.pen = color.rgb(*rgb)
+            screen.pen = pen
             screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
                                    look.DIAL_FROM, sweep))
         # The legend doubles as the reading, so the rings need no labels on them. The chip
         # is only for a row whose scale note has taken the bar's place: where there is a
         # bar, it is already drawn in this ring's colour.
-        readout(theme, y, name, value_text, fraction, note, chip=rgb if note else None)
+        readout(theme, y, name, value_text, fraction, note, chip=pen if note else None)
 
 
 # -- sparklines -------------------------------------------------------------
@@ -1118,12 +1111,12 @@ def sparklines(theme, entries, shift=0.0):
         blit_label(name, look.SIZE_LABEL, theme.dim, look.PAD, mid - 7)
 
         plot_h = height - 8
-        screen.pen = color.rgb(*theme.grid)
+        screen.pen = theme.grid
         screen.hspan(plot_x, top + plot_h + 3, plot_w)
         if points and len(points) > 1 and peak:
             filled = area(plot_x, top, plot_w, plot_h, points, peak,
                           base=top + plot_h + 3, shift=shift)
-            screen.pen = color.rgb(*theme.accent)
+            screen.pen = theme.accent
             screen.alpha = 190
             was = screen.clip
             screen.clip = rect(plot_x, look.BODY_TOP, plot_w, look.BODY_H)
@@ -1162,7 +1155,7 @@ def radar(theme, entries):
         return vec2(centre[0] + math.cos(angle) * radius_x * fraction,
                     centre[1] + math.sin(angle) * radius_y * fraction)
 
-    screen.pen = color.rgb(*theme.grid)
+    screen.pen = theme.grid
     for step in (0.5, 1.0):
         web = [point(i, step) for i in range(count)]
         for i in range(count):
@@ -1172,14 +1165,14 @@ def radar(theme, entries):
         screen.line(vec2(*centre), point(i, 1.0), 1)
 
     filled = [point(i, row[2] or 0.0) for i, row in enumerate(rows)]
-    screen.pen = color.rgb(*theme.accent)
+    screen.pen = theme.accent
     screen.alpha = 150
     screen.shape(shape.custom(filled))
     screen.alpha = 255
     for corner in filled:
         screen.shape(shape.circle(corner, 3))
 
-    for i, (name, value_text, _fraction, _rgb) in enumerate(rows):
+    for i, (name, value_text, _fraction, _pen) in enumerate(rows):
         anchor = point(i, 1.34)
         align = 1
         if anchor.x < centre[0] - 20:
@@ -1223,11 +1216,11 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
     height = look.BODY_H - 100
     left = look.PAD
     width = look.W - look.PAD * 2
-    screen.pen = color.rgb(*theme.grid)
+    screen.pen = theme.grid
     screen.hspan(left, top + height, width)
     if points and len(points) > 1 and peak:
         filled = area(left, top, width, height, points, peak, shift=shift)
-        screen.pen = color.rgb(*theme.accent)
+        screen.pen = theme.accent
         screen.alpha = 170
         was = screen.clip
         screen.clip = rect(left, look.BODY_TOP, width, look.BODY_H)
@@ -1240,16 +1233,15 @@ def _arrow(theme, x, y, delta, fraction):
     """A triangle for the direction, flat where the reading is holding still."""
     half, height = 9, 11
     if delta > 0.05:
-        screen.pen = color.rgb(*(theme.at(fraction) if fraction is not None
-                                 else theme.ink))
+        screen.pen = theme.at(fraction) if fraction is not None else theme.ink
         screen.shape(shape.custom([vec2(x, y - height), vec2(x + half, y),
                                    vec2(x - half, y)]))
     elif delta < -0.05:
-        screen.pen = color.rgb(*theme.dim)
+        screen.pen = theme.dim
         screen.shape(shape.custom([vec2(x, y), vec2(x + half, y - height),
                                    vec2(x - half, y - height)]))
     else:
-        screen.pen = color.rgb(*theme.dim)
+        screen.pen = theme.dim
         screen.rectangle(rect(x - half, y - height // 2 - 2, half * 2, 4))
 
 
@@ -1290,7 +1282,7 @@ def waterfall(theme, lanes, labels=None):
     height = look.BODY_H - 14
     if _wf_image is None or _wf_lanes != len(lanes):
         _wf_image = image(width, height)
-        _wf_image.pen = color.rgb(*theme.bg)
+        _wf_image.pen = theme.bg
         _wf_image.rectangle(rect(0, 0, width, height))
         _wf_cursor = 0
         _wf_lanes = len(lanes)
@@ -1300,7 +1292,7 @@ def waterfall(theme, lanes, labels=None):
         part = 0.0 if fraction is None else max(0.0, min(1.0, fraction))
         top = int(index * lane_h)
         bottom = int((index + 1) * lane_h)
-        _wf_image.pen = color.rgb(*theme.at(part))
+        _wf_image.pen = theme.at(part)
         # vspan, not a rectangle: one call for the lane's whole run of pixels.
         _wf_image.vspan(_wf_cursor, top, max(1, bottom - top))
     _wf_cursor = (_wf_cursor + 1) % width

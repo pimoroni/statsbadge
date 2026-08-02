@@ -20,17 +20,17 @@ BASE_BELOW_CENTRE = 14
 
 def show():
     theme = look.get(look.DEFAULT)
-    screen.pen = color.rgb(*theme.bg)
+    screen.pen = theme.bg
     screen.clear()
 
     centre = vec2(look.W // 2, look.H // 2)
-    screen.pen = color.rgb(*theme.grid)
+    screen.pen = theme.grid
     screen.shape(shape.arc(centre, INNER, OUTER, look.DIAL_FROM, look.DIAL_TO))
-    screen.pen = color.rgb(*theme.accent)
+    screen.pen = theme.accent
     sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * SWEEP
     screen.shape(shape.arc(centre, INNER, OUTER, look.DIAL_FROM, sweep))
 
-    screen.pen = color.rgb(*theme.ink)
+    screen.pen = theme.ink
     span = 3 * BAR_W + 2 * BAR_GAP
     left = look.W // 2 - span // 2
     base = look.H // 2 + BASE_BELOW_CENTRE

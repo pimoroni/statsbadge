@@ -106,7 +106,7 @@ def _pick_row(app, rows):
 
 
 def draw_rows(theme, shown, index):
-    screen.pen = color.rgb(*theme.bg)
+    screen.pen = theme.bg
     screen.rectangle(rect(0, 0, look.W, look.H))
     draw.blit_label("HOSTS", look.SIZE_TITLE, theme.ink, look.PAD, 10)
     draw.blit_label("A close", look.SIZE_SMALL, theme.dim,
@@ -117,7 +117,7 @@ def draw_rows(theme, shown, index):
     for i, row in enumerate(shown):
         y = top + i * height
         selected = i == index
-        screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
+        screen.pen = theme.accent if selected else theme.panel
         screen.shape(shape.rounded_rectangle(rect(look.PAD, y, look.W - look.PAD * 2,
                                                   height - 4), 4))
         ink = theme.bg if selected else theme.ink
@@ -206,14 +206,14 @@ def _choose_host(app, hosts):
 
 
 def draw_hosts(theme, hosts, index, known):
-    screen.pen = color.rgb(*theme.bg)
+    screen.pen = theme.bg
     screen.rectangle(rect(0, 0, look.W, look.H))
     draw.blit_label("CHOOSE A HOST", look.SIZE_TITLE, theme.ink,
                     look.W // 2, 16, align=1)
     for i, found in enumerate(hosts[:MAX_HOSTS]):
         y = 56 + i * 30
         selected = i == index
-        screen.pen = color.rgb(*(theme.accent if selected else theme.panel))
+        screen.pen = theme.accent if selected else theme.panel
         screen.shape(shape.rounded_rectangle(rect(24, y, look.W - 48, 26), 5))
         ink = theme.bg if selected else theme.ink
         label = found.get("name") or found["host"]
@@ -325,13 +325,13 @@ def _remember(app, chosen, outcome, host, port):
 
 def draw_code(theme, code, label):
     """Draw the code and what to do with it."""
-    screen.pen = color.rgb(*theme.bg)
+    screen.pen = theme.bg
     screen.rectangle(rect(0, 0, look.W, look.H))
     draw.blit_label("APPROVE ON THE HOST", look.SIZE_TITLE, theme.ink,
                     look.W // 2, 12, align=1)
     draw.blit_label(label, look.SIZE_SMALL, theme.dim, look.W // 2, 36, align=1)
 
-    screen.pen = color.rgb(*theme.accent)
+    screen.pen = theme.accent
     screen.shape(shape.rounded_rectangle(rect(34, 60, look.W - 68, 64), 8))
     # Spaced for readability, unless that overflows the box.
     spaced = " ".join(code)

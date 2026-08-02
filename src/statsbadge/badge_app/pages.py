@@ -379,9 +379,9 @@ def _rings(page, frame, _history, theme):
         fraction = fraction_of(ref, value, page, frame)
         # Coloured by its own reading, the way every gauge here is: by position in the
         # stack the outermost ring would always look calm and the innermost alarming.
-        rgb = (theme.at(severity_of(ref, fraction)) if fraction is not None
+        pen = (theme.at(severity_of(ref, fraction)) if fraction is not None
                else theme.grid)
-        entries.append((labels[index], draw.reading(value, field), fraction, rgb,
+        entries.append((labels[index], draw.reading(value, field), fraction, pen,
                         scale_note(ref, frame)))
     draw.rings(theme, entries)
 
