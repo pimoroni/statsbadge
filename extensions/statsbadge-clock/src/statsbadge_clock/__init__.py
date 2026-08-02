@@ -14,6 +14,7 @@ whatever the config gives, or a guess from the host's timezone.
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -22,6 +23,14 @@ import urllib.request
 from statsbadge.sources.base import Source
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# How long a failed lookup waits before it is tried again. Open-Meteo's geocoder rate limits
+# and its forecast asks for no more than a request every few minutes per location, so a failure
+# is not worth retrying at the sample rate - and not worth waiting out the whole interval
+# either, a connection dropping on a laptop being over in seconds.
+RETRY_AFTER = 60.0
+# How often the fetcher looks for something due.
+FETCH_POLL = 1.0
 
 # What Open-Meteo calls a unit, against what it should be labelled as on the badge.
 TEMPERATURE_UNITS = {"celsius": "C", "fahrenheit": "F"}
@@ -154,12 +163,51 @@ class Clock(Source):
         super().__init__(config)
         self._weather = {}
         self._next_weather = 0.0
-        # Where the pages look, keyed by location, and which page wants which.
+        self._retry_at = 0.0
+        # Where the pages look, keyed by location, and which page wants which. Read while
+        # sampling and replaced when the config changes, so both go through the lock.
         self._targets = {}
         self._page_order = []
+        self._lock = threading.Lock()
         # Open-Meteo asks for no more than a request every few minutes per location.
         self._interval = float(config.get("weather_interval", 900))
+        self._fetcher = None
+        self._wake = threading.Event()
+        self._stop = threading.Event()
         self._read_settings()
+
+    def start(self):
+        """A thread for the fetching, so nothing here waits on the network in `sample`.
+
+        Every source shares the collector's thread and the first sample is taken while the
+        server is starting up, so a lookup that hangs holds up the whole app: a flaky
+        connection stalled startup for as long as the geocoder took to answer. `urlopen`'s
+        timeout is no guard either, since it does not cover name resolution, which is where a
+        dropping connection stops.
+        """
+        if self._fetcher is None:
+            self._stop.clear()
+            self._fetcher = threading.Thread(target=self._fetch_loop, daemon=True,
+                                             name="statsbadge-clock")
+            self._fetcher.start()
+
+    def stop(self):
+        self._stop.set()
+        self._wake.set()
+        if self._fetcher is not None:
+            self._fetcher.join(timeout=2.0)
+            self._fetcher = None
+
+    def _fetch_loop(self):
+        while not self._stop.is_set():
+            try:
+                self._refresh()
+            except Exception as exc:
+                # The fetcher must not die: the pages would go on drawing the last reading
+                # with nothing ever replacing it.
+                self.note_fault(exc)
+            self._wake.wait(FETCH_POLL)
+            self._wake.clear()
 
     def pages(self, instances):
         """Where each of this source's pages wants to look.
@@ -181,17 +229,20 @@ class Clock(Source):
             order.append((page_id, key))
             targets.setdefault(key, {"place": place, "lat": latitude,
                                      "lon": longitude})
-        # Carry over what has already been fetched for somewhere still wanted; anywhere
-        # no page asks for now is dropped, along with its timer.
-        for key, spec in targets.items():
-            was = self._targets.get(key) or {}
-            spec["data"] = was.get("data", {})
-            spec["next"] = was.get("next", 0.0)
-            spec["label"] = was.get("label")
-            if spec["lat"] is None:
-                spec["lat"], spec["lon"] = was.get("lat"), was.get("lon")
-        self._page_order = order
-        self._targets = targets
+        with self._lock:
+            # Carry over what has already been fetched for somewhere still wanted; anywhere
+            # no page asks for now is dropped, along with its timer.
+            for key, spec in targets.items():
+                was = self._targets.get(key) or {}
+                spec["data"] = was.get("data", {})
+                spec["next"] = was.get("next", 0.0)
+                spec["label"] = was.get("label")
+                if spec["lat"] is None:
+                    spec["lat"], spec["lon"] = was.get("lat"), was.get("lon")
+            self._page_order = order
+            self._targets = targets
+        # A place typed in the browser should show up on the badge, not in a quarter of an hour.
+        self._wake.set()
 
     def _read_settings(self):
         was = getattr(self, "place", None)
@@ -219,8 +270,11 @@ class Clock(Source):
         super().configure(settings)
         self._read_settings()
         self._next_weather = 0.0
+        self._retry_at = 0.0
+        self._wake.set()
 
     def sample(self, frame, dt):
+        """Whatever the fetcher has already brought back. Nothing here touches the network."""
         now = time.localtime()
         frame["clock"] = {
             "time": time.strftime("%H:%M", now),
@@ -229,69 +283,86 @@ class Clock(Source):
             "hour": now.tm_hour,
             "minute": now.tm_min,
         }
-        # Before the global place is considered: a page can carry its own, and often the
-        # only places set are the pages'.
-        frame["places"] = self._sample_places()
-        where = self._where()
-        if where is None:
-            frame["weather"] = {}
-            return
-        if time.monotonic() >= self._next_weather:
-            self._next_weather = time.monotonic() + self._interval
-            try:
-                self._weather = self._fetch(where)
-            except Exception as exc:
-                self.note_fault(exc)
+        frame["places"] = self._places()
         frame["weather"] = dict(self._weather)
 
-    def _sample_places(self):
+    def _places(self):
         """One entry per page, its weather and that place's own clock, keyed by page id.
 
         The clock fields come from the location's UTC offset, which the forecast returns,
         so a page showing another city shows its time without the badge knowing anything
         about timezones.
         """
-        for spec in self._targets.values():
-            if time.monotonic() < spec["next"]:
-                continue
-            spec["next"] = time.monotonic() + self._interval
-            try:
-                if spec["lat"] is None or spec["lon"] is None:
-                    found = self._geocode(spec["place"])
-                    if not found:
-                        continue
-                    spec["lat"], spec["lon"], spec["label"] = found
-                spec["data"] = self._fetch(
-                    (spec["lat"], spec["lon"], spec["label"] or spec["place"]),
-                    local_time=True)
-            except Exception as exc:
-                self.note_fault(exc)
-
+        with self._lock:
+            order, targets = list(self._page_order), dict(self._targets)
         out = {}
-        for page_id, key in self._page_order:
-            spec = self._targets.get(key)
+        for page_id, key in order:
+            spec = targets.get(key)
             if spec and spec["data"]:
                 out[page_id] = dict(spec["data"],
                                     **_clock_at(spec["data"].get("utc_offset")))
         return out
 
+    def _refresh(self):
+        """Fetch whatever is due, on the fetcher's own thread.
+
+        A failure waits RETRY_AFTER rather than the whole interval, and rather than never:
+        the timer used to be set before the attempt, so one refused lookup at startup left a
+        page with no weather until the next save.
+        """
+        where = self._where()
+        if where is None:
+            self._weather = {}
+        elif time.monotonic() >= self._next_weather:
+            try:
+                self._weather = self._fetch(where)
+                self._next_weather = time.monotonic() + self._interval
+            except Exception as exc:
+                self._next_weather = time.monotonic() + RETRY_AFTER
+                self.note_fault(exc)
+        # The pages' own places, which are often the only ones set. Fetched outside the lock,
+        # against a snapshot: a spec dropped meanwhile is written to and discarded.
+        with self._lock:
+            specs = list(self._targets.values())
+        for spec in specs:
+            if time.monotonic() < spec["next"]:
+                continue
+            try:
+                if spec["lat"] is None or spec["lon"] is None:
+                    found = self._geocode(spec["place"])
+                    if not found:
+                        spec["next"] = time.monotonic() + RETRY_AFTER
+                        continue
+                    spec["lat"], spec["lon"], spec["label"] = found
+                spec["data"] = self._fetch(
+                    (spec["lat"], spec["lon"], spec["label"] or spec["place"]),
+                    local_time=True)
+                spec["next"] = time.monotonic() + self._interval
+            except Exception as exc:
+                spec["next"] = time.monotonic() + RETRY_AFTER
+                self.note_fault(exc)
+
     def _where(self):
         """Coordinates to ask about, and the name to show for them.
 
-        Coordinates win where they are given, being the more specific answer. Otherwise
-        the place name is looked up once and kept, because it cannot change until the
-        setting does.
+        Coordinates win where they are given, being the more specific answer. Otherwise the
+        place name is looked up and kept, since it cannot change until the setting does - but a
+        lookup that failed is tried again once the backoff is out, the geocoder being the thing
+        here most likely to be rate limited or briefly unreachable.
         """
         if self.latitude is not None and self.longitude is not None:
             return (self.latitude, self.longitude, None)
         if not self.place:
             return None
-        if self._located_for != self.place:
+        if self._located is None or self._located_for != self.place:
+            if time.monotonic() < self._retry_at:
+                return None
             self._located_for = self.place
             try:
                 self._located = self._geocode(self.place)
             except Exception as exc:
                 self._located = None
+                self._retry_at = time.monotonic() + RETRY_AFTER
                 self.note_fault(exc)
         return self._located
 

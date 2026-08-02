@@ -1157,6 +1157,63 @@ def test_icon_font_corpus_and_packing(_h):
 
 
 @check
+def test_a_slow_lookup_does_not_hold_up_a_frame(_h):
+    """Sources share the collector's thread and the first sample is taken while the server is
+    starting, so a weather lookup on that thread stalled the whole launch for as long as the
+    geocoder took to answer - which on a flaky connection is longer than urlopen's timeout,
+    that not covering name resolution."""
+    try:
+        import statsbadge_clock as clock
+    except ImportError:
+        return              # the extension is not pip installed in this environment
+
+    source = clock.Clock({"place": "Sheffield"})
+    asked = []
+
+    def slow(_where, **_named):
+        asked.append(time.monotonic())
+        time.sleep(0.4)
+        return {"temp": 11.0, "place": "Sheffield", "utc_offset": 0}
+
+    source._fetch = slow
+    source._geocode = lambda _place: (53.38, -1.47, "Sheffield, GB")
+    source.pages([{"id": "clock1", "kind": "clockface", "place": "Sheffield"}])
+    source.start()
+    try:
+        frame = {}
+        started = time.monotonic()
+        source.sample(frame, 1.0)
+        assert time.monotonic() - started < 0.1, "sampling waited on the fetch"
+        assert frame["clock"]["time"], "no clock in the frame"
+        # And what it brings back does reach a frame, once it has.
+        for _ in range(40):
+            time.sleep(0.1)
+            source.sample(frame, 1.0)
+            if frame["weather"] and frame["places"]:
+                break
+        assert frame["weather"]["temp"] == 11.0, frame["weather"]
+        assert frame["places"]["clock1"]["temp"] == 11.0, frame["places"]
+    finally:
+        source.stop()
+    assert asked, "nothing was ever fetched"
+
+    # A refused lookup is tried again rather than giving up until the next save: the timer used
+    # to be set before the attempt, so one failure at startup left the page with no weather.
+    refused = clock.Clock({"place": "Sheffield"})
+    tries = []
+
+    def failing(place):
+        tries.append(place)
+        raise OSError("rate limited")
+
+    refused._geocode = failing
+    assert refused._where() is None and refused.faults == 1
+    assert refused._where() is None and len(tries) == 1, "hammered a rate limited geocoder"
+    refused._retry_at = 0.0
+    assert refused._where() is None and len(tries) == 2, "never tried again"
+
+
+@check
 def test_clock_weather_units_and_icons(_h):
     """Units travel with the readings, and each condition has a symbol."""
     try:
@@ -1860,7 +1917,7 @@ def test_the_big_gauge_can_show_the_whole_ramp(_h):
     # And the setting is what decides, with the solid fill asking for no brush at all.
     seen = {}
     real = draw.gauge
-    draw.gauge = lambda *args, **named: seen.update(named)
+    draw.gauge = lambda *_args, **named: seen.update(named)
     try:
         draw.GAUGE_FILL = "solid"
         draw.dial(theme, 0.5, "50", "%")

@@ -67,6 +67,10 @@ class Source:
         `frame` is a dict from model.empty_frame(); mutate it. `dt` is seconds since
         the previous sample, for anything that needs a rate. Only set a field if the
         value is real - leave it absent so a later source can fill it.
+
+        Be prompt: every source shares the collector's thread and the first sample is taken
+        while the server is starting up, so anything that waits on a network belongs in a
+        thread of its own, started by `start`, with this serving what it last brought back.
         """
         raise NotImplementedError
 
