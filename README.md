@@ -169,6 +169,10 @@ Two are vendored as worked examples. [statsbadge-clock](extensions/statsbadge-cl
 
 ![Quakes](shots/quakes.png) ![Quakes pulled out](shots/quakes_wide.png)
 
+[statsbadge-iss](extensions/statsbadge-iss/) tracks the space station across the same map, with an orbit of ground track either side of it and the day and night terminator washed over the half the sun is not on. The sub-solar point arrives with the position, so the terminator costs two numbers and no almanac.
+
+![ISS](shots/iss.png) ![ISS following](shots/iss_follow.png)
+
 See [DEVELOPMENT.md](DEVELOPMENT.md) for how to write one.
 
 ## Security
