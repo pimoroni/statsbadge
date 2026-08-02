@@ -13,23 +13,36 @@ lightness, c spans 0-0.35 chroma, h is 256 counts to a turn.
 
 import math
 
-# The accents on offer: twelve hues evenly round the wheel at one chroma, so no choice is more
-# saturated than another and none can be out of gamut. A taste call rather than a derivation -
-# these are the twelve a wheel gives, not the twelve a designer would pick, and the list is the
-# thing to argue with. The lightness comes from the mode, so what is offered on a pale page is
-# darker than the same hue on a dark one; a swatch shows the colour that will actually be used.
-ACCENT_C = 0.15
+# The accents on offer: twelve hues evenly round the wheel, in four families. A taste call
+# rather than a derivation - these are the twelve a wheel gives, not the twelve a designer would
+# pick, and the list is the thing to argue with.
 ACCENT_HUES = tuple(range(0, 360, 30))
+# The four families of accent, as (lightness, how much of the hue's own chroma limit to take).
+# Twelve hues each, so forty-eight colours: the family says how loud the accent is and the hue
+# is the choice. `saturated` is where the single-hue themes sat - every one of them within 0.003
+# of its hue's limit - and `normal` is a little short of it, which is where one fixed chroma for
+# all twelve used to land. How much chroma a hue can hold varies enormously (0.128 at cyan
+# against 0.287 at magenta on a dark page), so a fraction of the limit keeps a family looking
+# like one family where a fixed number does not.
+ACCENT_FAMILIES = {
+    "pastel": (0.86, 0.34),
+    "normal": (0.72, 0.62),
+    "saturated": (0.68, 0.98),
+    "dark": (0.45, 0.85),
+}
+DEFAULT_FAMILY = "normal"
+# What an accent has to clear against the page it is going on. Not a text ratio - an accent is
+# a rule, a pip and a plot, none of which is read - but a pastel on a pale page is nothing at
+# all, so the lightness moves away from the page until it is something.
+ACCENT_RATIO = 1.8
 # How much of its chroma the hot end of a ramp gains over its cold end, and how much a mono ramp
 # moves along the lightness scale. Both from the shipped palettes: their hot ends sit around
 # 0.21 chroma where the cold ends are nearer 0.14.
 HOT_C = 0.21
 MONO_TRAVEL = 0.30
-# The bold variant: how much of its hue's own limit an accent takes, and how far its ramp sweeps
-# either side of it - toward the page first, then away. Both from the single-hue themes this
-# replaces, whose ramps run a dark version of the accent, the accent, then a pale one: measured,
-# 0.23 of lightness below and 0.20 above.
-BOLD_C = 0.98
+# How far a bold ramp sweeps either side of the accent - toward the page first, then away. From
+# the single-hue themes this replaces, whose ramps run a dark version of the accent, the accent,
+# then a pale one: measured, 0.23 of lightness below and 0.20 above.
 BOLD_TOWARD = 0.23
 BOLD_AWAY = 0.20
 
@@ -173,28 +186,31 @@ def readable_on(lightness, chroma, hue, background, ratio):
     return rgb(1.0 if away > 0 else 0.0, 0.0, hue)
 
 
-def accents(mode="dark", bold=False):
-    """The accents on offer for a mode, as sRGB triples.
+def accents(family=DEFAULT_FAMILY):
+    """The twelve accents of one family, as sRGB triples.
 
-    A pale page wants a darker accent than a dark one does - the shipped light theme's is 0.60
-    where dark's is 0.72 - so the same hue is a different colour in each, and the picker shows
-    whichever will be used.
-
-    `bold` takes each hue as far as sRGB allows instead of holding them all at one chroma. The
-    even set reads as one family; the bold set is what the hand-written single-hue themes were,
-    every one of them within 0.003 of its hue's own limit.
+    The same twelve whichever page they are going on: what the family sets is the lightness and
+    the chroma, so a swatch is the colour that will be used and not a stand-in for it. Where one
+    would be lost against the page it is going on, `palette` moves it - the swatch says which
+    colour was chosen, the palette says what that means on a particular page.
     """
-    lightness = MODES.get(mode, MODES["dark"])["accent"]
-    if bold:
-        return [rgb(lightness, max_chroma(lightness, float(hue)) * BOLD_C, float(hue))
-                for hue in ACCENT_HUES]
-    return [rgb(lightness, ACCENT_C, float(hue)) for hue in ACCENT_HUES]
+    lightness, part = ACCENT_FAMILIES.get(family, ACCENT_FAMILIES[DEFAULT_FAMILY])
+    return [rgb(lightness, max_chroma(lightness, float(hue)) * part, float(hue))
+            for hue in ACCENT_HUES]
+
+
+def family_of(accent):
+    """Which family a stored accent came from, or the default if it came from none."""
+    wanted = tuple(accent)
+    for family in ACCENT_FAMILIES:
+        if wanted in [tuple(offer) for offer in accents(family)]:
+            return family
+    return DEFAULT_FAMILY
 
 
 def offered():
-    """Every accent any mode and variant offers, for checking a stored one against."""
-    return [tuple(accent) for mode in MODES for bold in (False, True)
-            for accent in accents(mode, bold)]
+    """Every accent every family offers, for checking a stored one against."""
+    return [tuple(accent) for family in ACCENT_FAMILIES for accent in accents(family)]
 
 
 def ramp_for(accent):
@@ -241,11 +257,17 @@ def _mono_ramp(lightness, chroma, hue, shape):
     Away from the page, not towards it. A ramp that darkens on a dark page has its hot end
     receding into the background just as the reading gets interesting - which is what the
     shipped `cyan` does, and why its second graph series falls back to grey.
+
+    The whole travel always happens: where the accent is already near the top of the scale - a
+    pastel on a dark page - the window slides down instead of being squashed against the
+    ceiling, which left the two ends of the ramp all but the same colour.
     """
     away = MONO_TRAVEL if shape["bg"] < 0.5 else -MONO_TRAVEL
+    hot = min(0.98, max(0.06, lightness + away))
+    cold = min(0.98, max(0.06, hot - away))
     stops = []
     for position, part in ((0.0, 0.0), (0.5, 0.5), (1.0, 1.0)):
-        stops.append((position, rgb(min(0.98, max(0.06, lightness + away * part)),
+        stops.append((position, rgb(cold + (hot - cold) * part,
                                     chroma + (HOT_C - chroma) * part, hue)))
     return tuple(stops)
 
@@ -281,14 +303,13 @@ def palette(accent, mode="dark", bold=False):
         mode = "dark"
     ramp = ramp_for(accent)
     shape = MODES[mode]
-    _lightness, chroma, hue = oklch(accent)
-    # Placed at the mode's own accent lightness, so the same hue is picked in either mode and
-    # comes out suited to the page it is going on.
-    lightness = shape["accent"]
-    if bold:
-        chroma = max_chroma(lightness, hue) * BOLD_C
+    lightness, chroma, hue = oklch(accent)
     tint = shape["chroma"]
     background = rgb(shape["bg"], tint, hue)
+    # As picked, unless the page it is going on would swallow it: a pastel is nothing on a pale
+    # page and a dark accent nothing on a dark one, and the same swatch is offered for both.
+    placed = readable_on(lightness, chroma, hue, background, ACCENT_RATIO)
+    lightness, chroma, _hue = oklch(placed)
     build = _bold_ramp if bold else (_signal_ramp if ramp == "signal" else _mono_ramp)
     return {
         "bg": background,

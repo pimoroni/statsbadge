@@ -107,12 +107,12 @@ class Service:
         # them: they used to be a table in app.js with a comment asking to be kept in step.
         # What a tinted theme can be built from, so the UI can offer exactly what will work.
         caps["tinted"] = dict(layout.TINTED)
-        # Keyed by theme rather than by mode: which accents are on offer depends on the variant
-        # as well - the bold one takes each hue as far as sRGB allows - so the UI asks by name.
-        caps["accents"] = {
-            theme: [list(accent) for accent in derive.accents(mode, theme in layout.BOLD)]
-            for theme, mode in layout.TINTED.items()
-        }
+        caps["bold"] = list(layout.BOLD)
+        # Four families of twelve, the same for every page: what a family sets is how loud the
+        # accent is, and the hue is the choice. The picker shows them as tabs.
+        caps["accents"] = {family: [list(accent) for accent in derive.accents(family)]
+                           for family in derive.ACCENT_FAMILIES}
+        caps["accent_family"] = derive.DEFAULT_FAMILY
         caps["palettes"] = {name: {"bg": palette["bg"], "accent": palette["accent"],
                                    "ink": palette["ink"],
                                    "ramp": [rgb for _pos, rgb in palette["ramp"]]}

@@ -238,11 +238,19 @@ header .pairing { position: absolute; top: 100%; right: 20px; width: 340px;
 /* The custom theme's picker, and a loose impression of the badge drawn in the palette it
    would use. Not a rendering of the app - it is here so a choice can be judged before it is
    sent, so what matters is that the colours sit next to each other the way they will. */
-.accents { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-.accents button {
+.accents { margin: 8px 0 4px; }
+/* Which family of accents is showing: four rows of twelve, one at a time. */
+.accents .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
+.accents .tabs button {
+  flex: 1; padding: 4px 2px; font-size: 11px; color: var(--dim);
+  background: var(--panel2); border-bottom: 2px solid transparent;
+}
+.accents .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+.accents .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.accents .swatches button {
   width: 30px; height: 30px; padding: 0; border: 2px solid transparent; cursor: pointer;
 }
-.accents button.on { border-color: var(--ink); }
+.accents .swatches button.on { border-color: var(--ink); }
 
 /* The badge's own 4:3, down to whatever the column allows: at 320px it is life size. */
 .preview {

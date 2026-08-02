@@ -684,38 +684,50 @@ function bindRange(id, key, format, scale) {
 // click, and the panel ends up showing a colour nobody chose.
 let previewWanted = 0;
 
-/** Keep the chosen hue when the theme changes to one offering a different set of accents.
- *
- * Every variant offers the same twelve hues in the same order, so the position is the choice
- * and the colour at it is what that variant makes of it. Without this, switching between
- * tinted and tinted bold left a stored accent that is not on the new list, which the host
- * would fall back on rather than honour. */
-function alignTint() {
-  const offered = (caps.accents || {})[config.theme] || [];
-  if (!offered.length) return;
-  const stored = String(config.tint);
-  if (offered.some((accent) => String(accent) === stored)) return;
-  for (const list of Object.values(caps.accents || {})) {
-    const at = list.findIndex((accent) => String(accent) === stored);
-    if (at >= 0) {
-      config.tint = offered[at].slice();
-      return;
-    }
+/** Which family of accents the picker is showing. Follows the stored one when the panel opens,
+ * so what is on screen is the row the chosen colour came from. */
+let family = null;
+
+function familyOf(accent) {
+  const stored = String(accent);
+  for (const [name, list] of Object.entries(caps.accents || {})) {
+    if (list.some((offer) => String(offer) === stored)) return name;
   }
-  config.tint = offered[0].slice();
+  return caps.accent_family || "normal";
 }
 
 function renderTint() {
   const tinted = (caps.tinted || {})[config.theme];
   const accents = $("accents");
   accents.classList.toggle("hidden", !tinted);
-  $("tinthint").classList.toggle("hidden", !tinted);
+  const hint = $("tinthint");
+  hint.classList.toggle("hidden", !tinted);
+  // What the ramp does is the difference between the two pairs, so the hint says which.
+  hint.textContent = (caps.bold || []).includes(config.theme)
+    ? "The rest of the palette is worked out from this colour, and the ramp stays in its hue, "
+      + "sweeping from a dark version through it to a pale one."
+    : "The rest of the palette is worked out from this colour, and the ramp travels to red "
+      + "unless the colour is already there.";
   accents.innerHTML = "";
   if (tinted) {
-    alignTint();
-    // Per theme: the same hue is darker on a pale page and bolder in the bold variant, and a
-    // swatch should be the colour that will be used rather than one standing in for all of them.
-    for (const accent of (caps.accents || {})[config.theme] || []) {
+    if (!family) family = familyOf(config.tint);
+    // Four rows of twelve, one row at a time: the family is how loud the accent is and the hue
+    // is the choice. A swatch is the colour that will be used, not a stand-in for it.
+    const tabs = document.createElement("div");
+    tabs.className = "tabs";
+    for (const name of Object.keys(caps.accents || {})) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.textContent = title(name);
+      if (name === family) tab.classList.add("on");
+      tab.onclick = () => { family = name; renderTint(); };   // a look, not yet a change
+      tabs.appendChild(tab);
+    }
+    accents.appendChild(tabs);
+
+    const strip = document.createElement("div");
+    strip.className = "swatches";
+    for (const accent of (caps.accents || {})[family] || []) {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.style.background = `rgb(${accent.join(", ")})`;
@@ -726,8 +738,9 @@ function renderTint() {
         markDirty();
         renderTint();
       };
-      accents.appendChild(chip);
+      strip.appendChild(chip);
     }
+    accents.appendChild(strip);
   }
   preview();
 }

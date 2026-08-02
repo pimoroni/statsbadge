@@ -70,14 +70,17 @@ THEME_ALIASES = {
 
 
 def resolve_theme(theme, tint):
-    """A theme name and accent, with a retired name mapped onto what replaced it."""
+    """A theme name and accent, with a retired name mapped onto what replaced it.
+
+    The accent comes from the saturated family, which is where each of those palettes had its
+    own: measured, all five sat within 0.003 of their hue's chroma limit.
+    """
     aliased = THEME_ALIASES.get(theme)
     if not aliased:
         return theme, tint
     name, hue = aliased
-    return name, list(derive.rgb(derive.MODES[TINTED[name]]["accent"],
-                                 derive.max_chroma(derive.MODES[TINTED[name]]["accent"], hue)
-                                 * derive.BOLD_C, hue))
+    at = derive.ACCENT_HUES.index(int(hue))
+    return name, list(derive.accents("saturated")[at])
 
 # What a picker calls a theme, where that is not its own name title cased. `dark` and `light` are
 # the two nothing was designed around, so they are named for what they are.
@@ -141,7 +144,7 @@ DEFAULT_CONFIG = {
     "rev": 1,
     "theme": "dark",
     # Taken from the offered list rather than written out, so it cannot drift from it.
-    "tint": list(derive.accents("dark")[6]),
+    "tint": list(derive.accents()[6]),
     "interval_ms": 1000,
     "brightness": 0.8,
     "caselights": True,

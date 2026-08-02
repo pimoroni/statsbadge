@@ -1902,17 +1902,15 @@ def test_the_single_hue_themes_are_the_bold_variant_now(_h):
         "tinted-bold-dark")
     shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
-    # The bold accents are what the retired ones were: at the limit, and different per hue.
-    for mode in ("dark", "light"):
-        lightness = derive.MODES[mode]["accent"]
-        for accent in derive.accents(mode, True):
-            _l, chroma, hue = derive.oklch(accent)
-            limit = derive.max_chroma(lightness, hue)
-            assert chroma >= limit * 0.9, (mode, hue, chroma, limit)
-    spread = [round(derive.oklch(a)[1], 3) for a in derive.accents("dark", True)]
+    # The saturated family is what the retired ones were: at the limit, and different per hue.
+    lightness = derive.ACCENT_FAMILIES["saturated"][0]
+    for accent in derive.accents("saturated"):
+        _l, chroma, hue = derive.oklch(accent)
+        assert chroma >= derive.max_chroma(lightness, hue) * 0.9, (hue, chroma)
+    spread = [round(derive.oklch(a)[1], 3) for a in derive.accents("saturated")]
     assert max(spread) - min(spread) > 0.1, spread
-    # And its ramp stays in the accent's hue, where the even variant's travels to red.
-    for accent in derive.accents("dark", True):
+    # And a bold ramp stays in the accent's hue, where the even variant's travels to red.
+    for accent in derive.accents("saturated"):
         ramp = derive.palette(accent, "dark", True)["ramp"]
         hues = [derive.oklch(rgb)[2] for _pos, rgb in ramp]
         span = max(abs((hue - hues[0] + 180.0) % 360.0 - 180.0) for hue in hues)
@@ -1984,14 +1982,16 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     assert set(layout.TINTED) <= set(layout.THEMES)
     assert set(layout.TINTED.values()) == set(derive.MODES)
     assert set(layout.BOLD) <= set(layout.TINTED)
-    assert len(derive.accents("dark")) == len(derive.ACCENT_HUES) == 12
+    assert len(derive.accents()) == len(derive.ACCENT_HUES) == 12
+    assert len(derive.ACCENT_FAMILIES) == 4
 
-    # Every accent, in both modes and both variants. The ramp is not a choice: the even variant
-    # travels to red where the accent has somewhere to travel and stays in its own hue where it
-    # has not, and the bold one always stays in it.
+    # Every accent of every family, in both modes and both variants. The ramp is not a choice:
+    # the even variant travels to red where the accent has somewhere to travel and stays in its
+    # own hue where it has not, and the bold one always stays in it.
     checked = 0
-    for theme, mode in layout.TINTED.items():
-        for accent in derive.accents(mode, theme in layout.BOLD):
+    for theme in layout.TINTED:
+      for family in derive.ACCENT_FAMILIES:
+        for accent in derive.accents(family):
             palette = layout.palette_for(theme, accent)
             assert derive.contrast(palette["ink"], palette["bg"]) >= derive.INK_RATIO
             assert derive.contrast(palette["dim"], palette["bg"]) >= derive.DIM_RATIO
@@ -2004,11 +2004,11 @@ def test_a_theme_can_be_derived_from_one_accent(h):
             # And the badge can build it, which is what the app actually does with it.
             assert look.from_palette("tinted", palette) is not None
             checked += 1
-    assert checked == 48, checked
+    assert checked == 192, checked
 
-    reds = [a for a in derive.accents("dark") if derive.ramp_for(a) == "mono"]
+    reds = [a for a in derive.accents() if derive.ramp_for(a) == "mono"]
     assert reds, "every accent claims it can travel to red"
-    assert derive.ramp_for(derive.accents("dark")[6]) == "signal"
+    assert derive.ramp_for(derive.accents()[6]) == "signal"
 
     # An accent that was never offered falls back rather than raising: this arrives from a UI,
     # and a theme is not worth refusing a whole config over.
@@ -2019,7 +2019,7 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     # What travels is a palette like any other, so the badge never knows it was derived.
     config = layout.Config(os.path.join(tempfile.mkdtemp(), "layout.json"))
     config.replace({"theme": "tinted-light", "pages": layout.DEFAULT_PAGES,
-                    "tint": list(derive.accents("light")[8])})
+                    "tint": list(derive.accents("saturated")[8])})
     sent = config.for_badge()
     assert sent["theme"] == "tinted-light"
     assert set(sent["palette"]) >= {"bg", "panel", "ink", "dim", "accent", "grid", "ramp"}
@@ -2027,7 +2027,7 @@ def test_a_theme_can_be_derived_from_one_accent(h):
 
     # One preview path for every theme, tinted or not, so what is shown and what reaches the
     # badge cannot drift apart.
-    picked = ",".join(str(part) for part in derive.accents("light")[8])
+    picked = ",".join(str(part) for part in derive.accents("saturated")[8])
     status, shown = h.raw("GET", f"/api/theme?theme=tinted-light&accent={picked}")
     assert status == 200, (status, shown)
     assert shown["palette"]["bg"] == list(sent["palette"]["bg"]), "the preview would differ"
@@ -2039,9 +2039,8 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     # The UI offers exactly what the host will accept, and nothing it will not.
     status, caps = h.raw("GET", "/api/capabilities")
     assert caps["tinted"] == layout.TINTED
-    assert caps["accents"]["tinted-dark"] == [list(a) for a in derive.accents("dark")]
-    assert caps["accents"]["tinted-bold-dark"] == [
-        list(a) for a in derive.accents("dark", True)]
+    assert set(caps["accents"]) == set(derive.ACCENT_FAMILIES)
+    assert caps["accents"]["saturated"] == [list(a) for a in derive.accents("saturated")]
     web = pathlib.Path("src/statsbadge/web")
     page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
     assert 'id="accents"' in page and 'id="preview"' in page, "no picker or preview in the UI"
