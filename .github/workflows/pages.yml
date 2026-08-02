@@ -1,0 +1,52 @@
+name: Pages
+
+# Publishes index.html and the screenshots it uses to GitHub Pages. Nothing else from the
+# repository goes up. Enable it once at Settings > Pages with the source set to Actions.
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - shots/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time, and let a newer push finish rather than queueing behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Only the images index.html asks for, so an unused shot does not get published.
+      - name: Stage the site
+        run: |
+          mkdir -p site/shots
+          cp index.html site/
+          grep -o 'src="shots/[^"]*"' index.html | sed 's/src="//;s/"$//' | sort -u \
+            | xargs -I{} cp {} site/shots/
+          ls site site/shots
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v5

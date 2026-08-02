@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>statsbadge - your PC's vitals on a Badgeware badge</title>
+<meta name="description" content="A standalone hardware monitor for Windows, macOS and Linux. A server on the host measures the machine; the badge fetches and draws it, across eleven kinds of page.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#12141c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://pimoroni.github.io/stats-badge/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="statsbadge">
+<meta property="og:title" content="statsbadge">
+<meta property="og:description" content="A standalone hardware monitor for Windows, macOS and Linux. A server on the host measures the machine; the badge fetches and draws it, across eleven kinds of page.">
+<meta property="og:url" content="https://pimoroni.github.io/stats-badge/">
+<meta property="og:image" content="https://pimoroni.github.io/stats-badge/shots/cpu.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="320">
+<meta property="og:image:height" content="240">
+<meta property="og:image:alt" content="A badge screen showing CPU load, temperature and clock speed.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap">
+
+<style>
+:root {
+  color-scheme: light dark;
+
+  /* statsbadge's Default Light and Default Dark, from src/statsbadge/themes.py */
+  --bg: light-dark(#faf7f2, #12141c);
+  --panel: light-dark(#f0ece4, #1a1e2b);
+  --ink: light-dark(#1e1a14, #f2f5ff);
+  --dim: light-dark(#665e52, #8b93ab);
+  --accent: light-dark(#10919d, #38e8d1);
+  --grid: light-dark(#d8d1c3, #2c3346);
+
+  /* The ramp a gauge fills with, cold to hot */
+  --ramp-0: light-dark(#10919d, #38e8d1);
+  --ramp-1: light-dark(#51924a, #7ed375);
+  --ramp-2: light-dark(#bc670c, #ec9f07);
+  --ramp-3: light-dark(#8a0316, #d71908);
+
+  --measure: 62ch;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 2rem 1.25rem 4rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Lexend, system-ui, sans-serif;
+  font-weight: 300;
+  font-size: clamp(1rem, 0.95rem + 0.25vw, 1.0625rem);
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+
+body > * {
+  max-width: 64rem;
+  margin-inline: auto;
+}
+
+h1, h2, h3 { font-weight: 500; line-height: 1.2; text-wrap: balance; }
+p, li { text-wrap: pretty; }
+p { max-width: var(--measure); }
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: from-font;
+}
+a:hover { color: var(--ink); }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+header {
+  padding-block: 2rem 1rem;
+
+  h1 {
+    margin: 0;
+    font-size: clamp(2.75rem, 2rem + 4vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    background: linear-gradient(100deg, var(--ramp-0), var(--ramp-1) 45%, var(--ramp-2) 72%, var(--ramp-3));
+    background-clip: text;
+    color: transparent;
+    width: fit-content;
+  }
+
+  > p:first-of-type {
+    margin-block: 0.75rem 1rem;
+    font-size: clamp(1.125rem, 1rem + 1vw, 1.5rem);
+    color: var(--ink);
+  }
+
+  > p + p {
+    margin-block: 0 1.5rem;
+    color: var(--dim);
+  }
+}
+
+nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+nav a {
+  display: inline-block;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--grid);
+  border-radius: 100px;
+  background: var(--panel);
+  text-decoration: none;
+  font-weight: 400;
+}
+nav a:hover { border-color: var(--accent); color: var(--accent); }
+
+section {
+  padding-block: 2.5rem;
+  border-top: 1px solid var(--grid);
+
+  > h2 {
+    margin-block: 0 0.5rem;
+    font-size: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+  }
+
+  > h2 + p { margin-top: 0; color: var(--dim); }
+}
+
+pre {
+  overflow-x: auto;
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--grid);
+  border-radius: 0.75rem;
+  background: var(--panel);
+  line-height: 1.8;
+}
+pre code { color: var(--ink); }
+pre b { font-weight: 400; color: var(--accent); }
+pre i { font-style: normal; color: var(--dim); }
+
+/* Screens are 320x240 framebuffer dumps, so they scale up as pixels and not as blur. */
+figure {
+  margin: 0;
+
+  img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    border: 1px solid var(--grid);
+    border-radius: 0.5rem;
+    background: var(--panel);
+    image-rendering: pixelated;
+  }
+
+  figcaption {
+    margin-top: 0.5rem;
+    color: var(--dim);
+    font-size: 0.9rem;
+
+    b { font-weight: 500; color: var(--ink); }
+  }
+}
+
+/* Every gallery: one column on a phone, filling out as the page widens. */
+section > ul:has(figure) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+dl {
+  display: grid;
+  gap: 0.25rem 1.5rem;
+  margin: 0;
+
+  dt {
+    font-weight: 500;
+    color: var(--accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.95rem;
+  }
+
+  dd { margin: 0 0 0.75rem; color: var(--dim); }
+}
+
+@media (width >= 40rem) {
+  dl {
+    grid-template-columns: 7rem 1fr;
+    dd { margin-bottom: 0.25rem; }
+  }
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+
+  th, td {
+    padding: 0.5rem 1rem 0.5rem 0;
+    border-bottom: 1px solid var(--grid);
+    vertical-align: top;
+  }
+
+  th { font-weight: 500; }
+  tbody th { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95rem; white-space: nowrap; }
+  td { color: var(--dim); }
+}
+
+footer {
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--grid);
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>statsbadge</h1>
+  <p>Your PC's vitals on a Badgeware badge. A hardware monitor for Windows, macOS and Linux that stands on its own, beside the keyboard.</p>
+  <p>Runs on <a href="https://badgewa.re/buy">Badgeware's Tufty</a>, featuring a 2.8" 320x240 colour IPS display.</p>
+  <nav>
+    <ul>
+      <li><a href="https://github.com/pimoroni/stats-badge">Source</a></li>
+      <li><a href="https://pypi.org/project/statsbadge/">PyPI</a></li>
+      <li><a href="https://github.com/pimoroni/stats-badge/blob/main/README.md">Docs</a></li>
+      <li><a href="https://github.com/pimoroni/stats-badge/blob/main/DEVELOPMENT.md">How it works</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main>
+
+<section>
+  <h2>Install</h2>
+  <p>A server on the host measures things and serves them; the badge fetches and draws them.</p>
+  <pre><code><b>uv tool install</b> statsbadge
+<b>statsbadge serve</b>
+<b>statsbadge install</b>            <i># with the badge on USB</i></code></pre>
+  <p>Then open <code>http://127.0.0.1:8420/</code> to pick screens, themes and button bindings. No cable? <code>statsbadge pair</code> and the badge finds the host by itself.</p>
+</section>
+
+<section>
+  <h2>What it reports</h2>
+  <p>A field the host cannot measure is null, and pages that need it are dropped.</p>
+  <dl>
+    <dt>cpu</dt><dd>load, per-core, temperature, clock, load average, processes</dd>
+    <dt>mem</dt><dd>used, total, percentage, swap</dd>
+    <dt>gpu</dt><dd>load, temperature, VRAM, power, clock, fan</dd>
+    <dt>net</dt><dd>up/down rate and totals, interface</dd>
+    <dt>disk</dt><dd>used, total, read/write rate</dd>
+    <dt>power</dt><dd>battery, charging, package watts</dd>
+    <dt>fans</dt><dd>RPM</dd>
+    <dt>sys</dt><dd>host, OS, CPU name, uptime</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Eleven page kinds</h2>
+  <p>Point any field at any of them. Six draw a reading plainly, as a dial, a bar, a graph or a number. The other five draw its history, its motion or its shape.</p>
+  <ul>
+    <li>
+      <figure>
+        <img src="shots/cpu.png" alt="Processor page: load percentage, temperature, clock and a history graph." width="320" height="240" loading="lazy">
+        <figcaption>Dials and a graph, on one page.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/waterfall.png" alt="Per-core load as coloured lanes scrolling right to left." width="320" height="240" loading="lazy">
+        <figcaption><b>waterfall</b> - a list field as lanes over time, interpolated between polls at 28fps.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/rings.png" alt="Four concentric ring gauges." width="320" height="240" loading="lazy">
+        <figcaption><b>rings</b> - up to four readings as concentric gauges, each coloured by its own value.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/spark.png" alt="Six rows, each a name, a value and a sparkline." width="320" height="240" loading="lazy">
+        <figcaption><b>spark</b> - six readings at once, name, current value and recent history a row each.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/radar.png" alt="A polygon plotted across six axes." width="320" height="240" loading="lazy">
+        <figcaption><b>radar</b> - the shape of the load, not its size.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/trend.png" alt="One large reading with a direction arrow and a history graph." width="320" height="240" loading="lazy">
+        <figcaption><b>trend</b> - one big reading, which way it is going, and where it has been.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/cores.png" alt="A bar per processor core." width="320" height="240" loading="lazy">
+        <figcaption><b>bars</b> - a core each.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/net.png" alt="Network up and down rates with a graph." width="320" height="240" loading="lazy">
+        <figcaption><b>graph</b> - two series over time.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/host.png" alt="Host name, operating system, processor and uptime as text." width="320" height="240" loading="lazy">
+        <figcaption><b>text</b> - what the machine is.</figcaption>
+      </figure>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sixteen themes, and forty-eight accents</h2>
+  <p>Everything is drawn as vector shapes taking their colours from one table, so everything can be coloured from a selection of finessed themes, and four you can tune yourself.</p>
+  <ul>
+    <li>
+      <figure>
+        <img src="shots/theme_vapor.png" alt="A badge page in pink and cyan on deep violet." width="320" height="240" loading="lazy">
+        <figcaption>Vapor</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/theme_sakura.png" alt="A badge page in blossom pink on off-white." width="320" height="240" loading="lazy">
+        <figcaption>Sakura</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/theme_watermelon.png" alt="A badge page in cerise and mint on dark green." width="320" height="240" loading="lazy">
+        <figcaption>Watermelon</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/theme_shell.png" alt="A badge page in mint and gold on night navy." width="320" height="240" loading="lazy">
+        <figcaption>Shell</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/theme_eva01.png" alt="A badge page in acid green on violet." width="320" height="240" loading="lazy">
+        <figcaption>Unit-01</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/theme_luminescence.png" alt="A badge page in dark green on a glowing mint panel." width="320" height="240" loading="lazy">
+        <figcaption>Luminescence</figcaption>
+      </figure>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>Extensions</h2>
+  <p>An extension is a pip install. It adds data to the frame, and optionally badge-side code for a page the built-in kinds cannot draw. We've built a beautiful clock as an example: a Swiss railway face whose second hand sweeps at the badge's frame rate, plus dots, squircle, digital and seven-segment LCD faces, and weather from Open-Meteo.</p>
+  <ul>
+    <li>
+      <figure>
+        <img src="shots/swiss_clock.png" alt="A Swiss railway clock face with the weather beside it." width="320" height="240" loading="lazy">
+        <figcaption>Railway</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/face_dots.png" alt="A clock face marked with dots." width="320" height="240" loading="lazy">
+        <figcaption>Dots</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/face_squircle.png" alt="A clock face marked with rounded squares." width="320" height="240" loading="lazy">
+        <figcaption>Squircle</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/face_digital.png" alt="A clock showing the time as large digits." width="320" height="240" loading="lazy">
+        <figcaption>Digital</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/face_lcd.png" alt="A seven-segment digital clock face." width="320" height="240" loading="lazy">
+        <figcaption>Digital LCD</figcaption>
+      </figure>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>On the badge</h2>
+  <table>
+    <thead>
+      <tr><th scope="col">Button</th><th scope="col">What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr><th scope="row">UP/DOWN</th><td>previous/next page</td></tr>
+      <tr><th scope="row">A B C</th><td>whatever the host has bound them to, if anything</td></tr>
+      <tr><th scope="row">HOME</th><td>open the hosts menu</td></tr>
+      <tr><th scope="row">HOME, held</th><td>leave the app</td></tr>
+    </tbody>
+  </table>
+  <p>Pair with more than one machine and the badge uses whichever it can reach, switching by itself when the current one goes quiet. Credentials are keyed on a server id, so a host that changes address is followed and not re-paired.</p>
+</section>
+
+<section>
+  <h2>Security</h2>
+  <p>Plain HTTP on the LAN, with every request signed HMAC-SHA256 against a shared secret from pairing, and a counter the host refuses to accept twice. So a command cannot be forged or replayed, and an unpaired device on the network learns nothing. The config API is bound to loopback because it can mint secrets.</p>
+</section>
+
+</main>
+
+<footer>
+  <p>MIT licensed. <a href="https://github.com/pimoroni/stats-badge">github.com/pimoroni/stats-badge</a></p>
+</footer>
+
+</body>
+</html>
