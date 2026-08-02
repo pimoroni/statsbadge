@@ -684,6 +684,27 @@ function bindRange(id, key, format, scale) {
 // click, and the panel ends up showing a colour nobody chose.
 let previewWanted = 0;
 
+/** Keep the chosen hue when the theme changes to one offering a different set of accents.
+ *
+ * Every variant offers the same twelve hues in the same order, so the position is the choice
+ * and the colour at it is what that variant makes of it. Without this, switching between
+ * tinted and tinted bold left a stored accent that is not on the new list, which the host
+ * would fall back on rather than honour. */
+function alignTint() {
+  const offered = (caps.accents || {})[config.theme] || [];
+  if (!offered.length) return;
+  const stored = String(config.tint);
+  if (offered.some((accent) => String(accent) === stored)) return;
+  for (const list of Object.values(caps.accents || {})) {
+    const at = list.findIndex((accent) => String(accent) === stored);
+    if (at >= 0) {
+      config.tint = offered[at].slice();
+      return;
+    }
+  }
+  config.tint = offered[0].slice();
+}
+
 function renderTint() {
   const tinted = (caps.tinted || {})[config.theme];
   const accents = $("accents");
@@ -691,9 +712,10 @@ function renderTint() {
   $("tinthint").classList.toggle("hidden", !tinted);
   accents.innerHTML = "";
   if (tinted) {
-    // Per mode: the same hue is darker on a pale page, and a swatch should be the colour that
-    // will actually be used rather than one of them standing in for both.
-    for (const accent of (caps.accents || {})[tinted] || []) {
+    alignTint();
+    // Per theme: the same hue is darker on a pale page and bolder in the bold variant, and a
+    // swatch should be the colour that will be used rather than one standing in for all of them.
+    for (const accent of (caps.accents || {})[config.theme] || []) {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.style.background = `rgb(${accent.join(", ")})`;

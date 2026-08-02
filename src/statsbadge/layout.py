@@ -48,8 +48,36 @@ GAUGE_FILLS = ("solid", "ramp")
 # nothing else. The tinted pair are the ones not written down anywhere - a whole palette derived
 # from the one accent kept in `tint`, so what is stored is the choice and not its result, and a
 # change to how one is derived reaches a badge that already has it.
-TINTED = {"tinted-dark": "dark", "tinted-light": "light"}
+TINTED = {"tinted-dark": "dark", "tinted-light": "light",
+          "tinted-bold-dark": "dark", "tinted-bold-light": "light"}
+# Which of them take each hue as far as sRGB allows and keep the ramp in it, as against holding
+# every hue at one chroma and sending the ramp to red.
+BOLD = ("tinted-bold-dark", "tinted-bold-light")
 THEMES = tuple(themes.PALETTES) + tuple(TINTED)
+
+# Themes that were a palette each and are now one of the derived pair with an accent. Measured
+# against the derived ones they replace: `red` and tinted bold dark at the same hue differ by 8
+# counts in the accent and nothing anywhere else, and each of the five sat within 0.003 of its
+# hue's own chroma limit - which is what the bold variant does for all twelve. A stored name
+# still resolves, so a badge already showing one carries on showing it.
+THEME_ALIASES = {
+    "red": ("tinted-bold-dark", 30.0),
+    "green": ("tinted-bold-dark", 150.0),
+    "cyan": ("tinted-bold-dark", 210.0),
+    "amber": ("tinted-bold-dark", 60.0),
+    "blueprint": ("tinted-bold-dark", 240.0),
+}
+
+
+def resolve_theme(theme, tint):
+    """A theme name and accent, with a retired name mapped onto what replaced it."""
+    aliased = THEME_ALIASES.get(theme)
+    if not aliased:
+        return theme, tint
+    name, hue = aliased
+    return name, list(derive.rgb(derive.MODES[TINTED[name]]["accent"],
+                                 derive.max_chroma(derive.MODES[TINTED[name]]["accent"], hue)
+                                 * derive.BOLD_C, hue))
 
 # What a picker calls a theme, where that is not its own name title cased. `dark` and `light` are
 # the two nothing was designed around, so they are named for what they are.
@@ -168,6 +196,13 @@ class Config:
                 for badge_id, block in (stored.get("badges") or {}).items()
                 if isinstance(block, dict)
             }
+            # Retired theme names are resolved here, once, so nothing downstream - a picker, a
+            # palette lookup, a badge - has to know they ever existed.
+            for block in [merged] + list(merged["badges"].values()):
+                name, accent = resolve_theme(block.get("theme"), None)
+                block["theme"] = name
+                if accent:
+                    block["tint"] = accent
             self.data = merged
 
     def save(self):
@@ -320,9 +355,10 @@ def tint_accent(incoming, current):
 
 
 def palette_for(theme, tint):
-    """The palette a theme draws with, derived for the tinted pair and looked up for the rest."""
+    """The palette a theme draws with, derived for the tinted four and looked up for the rest."""
+    theme, tint = resolve_theme(theme, tint)
     if theme in TINTED:
-        return derive.palette(tuple(tint), TINTED[theme])
+        return derive.palette(tuple(tint), TINTED[theme], theme in BOLD)
     return themes.PALETTES.get(theme, themes.PALETTES[themes.DEFAULT])
 
 
@@ -343,11 +379,13 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
 
     out = copy.deepcopy(DEFAULT_CONFIG)
 
-    theme = incoming.get("theme", out["theme"])
+    theme, aliased = resolve_theme(incoming.get("theme", out["theme"]), None)
     if theme not in THEMES:
         raise ValueError(f"unknown theme: {theme!r}")
     out["theme"] = theme
-    out["tint"] = tint_accent(incoming.get("tint"), out["tint"])
+    # A retired name brings its own accent with it: it named a colour, so that is the choice
+    # being kept, not whatever tint happened to be stored beside it.
+    out["tint"] = tint_accent(aliased or incoming.get("tint"), out["tint"])
 
     interval = int(incoming.get("interval_ms", out["interval_ms"]))
     # Under about 250ms the badge spends its whole frame budget on HTTP.

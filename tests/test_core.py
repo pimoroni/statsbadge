@@ -374,12 +374,12 @@ def test_bad_config_is_rejected(h):
 def test_layout_rev_moves_on_change(h):
     _, before = h.signed("GET", "/v1/layout")
     status, config = h.raw("GET", "/api/config")
-    config["theme"] = "amber"
+    config["theme"] = "vapor"
     h.raw("PUT", "/api/config", json.dumps(config).encode(),
           {"Content-Type": "application/json"})
     _, after = h.signed("GET", "/v1/layout")
     assert after["rev"] > before["rev"], (before["rev"], after["rev"])
-    assert after["theme"] == "amber"
+    assert after["theme"] == "vapor"
 
 
 @check
@@ -1866,6 +1866,60 @@ def test_a_theme_travels_as_its_colours(_h):
 
 
 @check
+def test_the_single_hue_themes_are_the_bold_variant_now(_h):
+    """Red, green, cyan, amber and blueprint were five palettes doing one thing: everything in
+    one hue, the accent as saturated as sRGB allows, and a ramp that sweeps lightness inside
+    that hue instead of travelling to red. Measured, each sat within 0.003 of its hue's own
+    chroma limit, and `red` differed from the derived palette at the same hue by 8 counts in
+    the accent and nothing else. So they are the bold variant with an accent, and the names
+    still resolve."""
+    from statsbadge import derive, themes
+
+    for retired in layout.THEME_ALIASES:
+        assert retired not in themes.PALETTES, f"{retired} is still a palette of its own"
+        name, accent = layout.resolve_theme(retired, None)
+        assert name in layout.BOLD, (retired, name)
+        assert tuple(accent) in derive.offered(), (retired, accent)
+
+    # A stored name keeps drawing: resolved once when the file is read, so nothing downstream
+    # has to know it ever existed.
+    path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-alias-"), "layout.json")
+    with open(path, "w") as handle:
+        json.dump({"rev": 3, "theme": "amber", "pages": layout.DEFAULT_PAGES,
+                   "badges": {"badgeone": {"rev": 4, "theme": "cyan",
+                                           "pages": layout.DEFAULT_PAGES}}}, handle)
+    stored = layout.Config(path)
+    assert stored.layout_for()["theme"] == "tinted-bold-dark"
+    assert stored.layout_for("badgeone")["theme"] == "tinted-bold-dark"
+    # And each brings the colour it named, not whatever tint was stored beside it.
+    amber = derive.oklch(stored.layout_for()["tint"])[2]
+    cyan = derive.oklch(stored.layout_for("badgeone")["tint"])[2]
+    assert abs(amber - 60.0) < 1.0 and abs(cyan - 210.0) < 1.0, (amber, cyan)
+    assert stored.for_badge()["palette"]["ramp"][-1][1] != list(
+        themes.PALETTES["dark"]["ramp"][-1][1])
+    # A PUT carrying an old name is taken as well, an open browser being older than the host.
+    assert layout.validate({"theme": "red", "pages": layout.DEFAULT_PAGES})["theme"] == (
+        "tinted-bold-dark")
+    shutil.rmtree(os.path.dirname(path), ignore_errors=True)
+
+    # The bold accents are what the retired ones were: at the limit, and different per hue.
+    for mode in ("dark", "light"):
+        lightness = derive.MODES[mode]["accent"]
+        for accent in derive.accents(mode, True):
+            _l, chroma, hue = derive.oklch(accent)
+            limit = derive.max_chroma(lightness, hue)
+            assert chroma >= limit * 0.9, (mode, hue, chroma, limit)
+    spread = [round(derive.oklch(a)[1], 3) for a in derive.accents("dark", True)]
+    assert max(spread) - min(spread) > 0.1, spread
+    # And its ramp stays in the accent's hue, where the even variant's travels to red.
+    for accent in derive.accents("dark", True):
+        ramp = derive.palette(accent, "dark", True)["ramp"]
+        hues = [derive.oklch(rgb)[2] for _pos, rgb in ramp]
+        span = max(abs((hue - hues[0] + 180.0) % 360.0 - 180.0) for hue in hues)
+        assert span < 20.0, (accent, hues)
+
+
+@check
 def test_a_theme_with_a_counterpart_has_one_in_the_other_mode(_h):
     """Four of the hand-written themes come as a pair, one for a lit room and one for a dark
     one. Not inverted channel by channel - that lands ink on a white page at the wrong
@@ -1928,14 +1982,16 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     import look
 
     assert set(layout.TINTED) <= set(layout.THEMES)
-    assert sorted(layout.TINTED.values()) == sorted(derive.MODES)
+    assert set(layout.TINTED.values()) == set(derive.MODES)
+    assert set(layout.BOLD) <= set(layout.TINTED)
     assert len(derive.accents("dark")) == len(derive.ACCENT_HUES) == 12
 
-    # Every accent, in both modes. The ramp is not a choice: it travels to red where the accent
-    # has somewhere to travel, and stays in the accent's own hue where it has not.
+    # Every accent, in both modes and both variants. The ramp is not a choice: the even variant
+    # travels to red where the accent has somewhere to travel and stays in its own hue where it
+    # has not, and the bold one always stays in it.
     checked = 0
     for theme, mode in layout.TINTED.items():
-        for accent in derive.accents(mode):
+        for accent in derive.accents(mode, theme in layout.BOLD):
             palette = layout.palette_for(theme, accent)
             assert derive.contrast(palette["ink"], palette["bg"]) >= derive.INK_RATIO
             assert derive.contrast(palette["dim"], palette["bg"]) >= derive.DIM_RATIO
@@ -1948,7 +2004,7 @@ def test_a_theme_can_be_derived_from_one_accent(h):
             # And the badge can build it, which is what the app actually does with it.
             assert look.from_palette("tinted", palette) is not None
             checked += 1
-    assert checked == 24, checked
+    assert checked == 48, checked
 
     reds = [a for a in derive.accents("dark") if derive.ramp_for(a) == "mono"]
     assert reds, "every accent claims it can travel to red"
@@ -1983,7 +2039,9 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     # The UI offers exactly what the host will accept, and nothing it will not.
     status, caps = h.raw("GET", "/api/capabilities")
     assert caps["tinted"] == layout.TINTED
-    assert caps["accents"]["dark"] == [list(a) for a in derive.accents("dark")]
+    assert caps["accents"]["tinted-dark"] == [list(a) for a in derive.accents("dark")]
+    assert caps["accents"]["tinted-bold-dark"] == [
+        list(a) for a in derive.accents("dark", True)]
     web = pathlib.Path("src/statsbadge/web")
     page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
     assert 'id="accents"' in page and 'id="preview"' in page, "no picker or preview in the UI"

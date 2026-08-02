@@ -25,6 +25,13 @@ ACCENT_HUES = tuple(range(0, 360, 30))
 # 0.21 chroma where the cold ends are nearer 0.14.
 HOT_C = 0.21
 MONO_TRAVEL = 0.30
+# The bold variant: how much of its hue's own limit an accent takes, and how far its ramp sweeps
+# either side of it - toward the page first, then away. Both from the single-hue themes this
+# replaces, whose ramps run a dark version of the accent, the accent, then a pale one: measured,
+# 0.23 of lightness below and 0.20 above.
+BOLD_C = 0.98
+BOLD_TOWARD = 0.23
+BOLD_AWAY = 0.20
 
 # What a mode decides: where the page sits on the lightness scale, which way its panel steps,
 # and how much of the accent's hue the greys carry. A page with none of it reads as a different
@@ -79,6 +86,24 @@ def oklch(rgb):
             math.degrees(math.atan2(blue_yellow, green_red)) % 360.0)
 
 
+def _linear(lightness, chroma, hue):
+    """Linear-light RGB for an OKLCH colour, outside 0-1 where it is outside the gamut."""
+    radians = math.radians(hue)
+    green_red = math.cos(radians) * chroma
+    blue_yellow = math.sin(radians) * chroma
+    long = lightness + 0.3963377774 * green_red + 0.2158037573 * blue_yellow
+    medium = lightness - 0.1055613458 * green_red - 0.0638541728 * blue_yellow
+    short = lightness - 0.0894841775 * green_red - 1.2914855480 * blue_yellow
+    long, medium, short = long ** 3, medium ** 3, short ** 3
+    return (4.0767416621 * long - 3.3077115913 * medium + 0.2309699292 * short,
+            -1.2684380046 * long + 2.6097574011 * medium - 0.3413193965 * short,
+            -0.0041960863 * long - 0.7034186147 * medium + 1.7076147010 * short)
+
+
+def _in_gamut(linear):
+    return all(-0.0015 <= channel <= 1.0015 for channel in linear)
+
+
 def rgb(lightness, chroma, hue):
     """An sRGB triple for an OKLCH colour, with the chroma brought into gamut if it is not.
 
@@ -86,20 +111,29 @@ def rgb(lightness, chroma, hue):
     ramp shows up as a leg that changes colour where it was only meant to darken.
     """
     for attempt in range(12):
-        radians = math.radians(hue)
-        green_red = math.cos(radians) * chroma
-        blue_yellow = math.sin(radians) * chroma
-        long = lightness + 0.3963377774 * green_red + 0.2158037573 * blue_yellow
-        medium = lightness - 0.1055613458 * green_red - 0.0638541728 * blue_yellow
-        short = lightness - 0.0894841775 * green_red - 1.2914855480 * blue_yellow
-        long, medium, short = long ** 3, medium ** 3, short ** 3
-        linear = (4.0767416621 * long - 3.3077115913 * medium + 0.2309699292 * short,
-                  -1.2684380046 * long + 2.6097574011 * medium - 0.3413193965 * short,
-                  -0.0041960863 * long - 0.7034186147 * medium + 1.7076147010 * short)
-        if all(-0.0015 <= channel <= 1.0015 for channel in linear) or not chroma:
+        linear = _linear(lightness, chroma, hue)
+        if _in_gamut(linear) or not chroma:
             return tuple(to_srgb(channel) for channel in linear)
         chroma *= 0.92 if attempt else 0.98
     return tuple(to_srgb(channel) for channel in linear)
+
+
+def max_chroma(lightness, hue):
+    """The most chroma sRGB can hold at that lightness and hue.
+
+    How much that is depends entirely on the hue - measured over the twelve offered, from 0.128
+    at cyan to 0.287 at magenta on a dark page - which is why one fixed chroma for all of them
+    leaves some looking tame and others flat. Found by bisection, the gamut being convex along
+    chroma for a fixed lightness and hue.
+    """
+    low, high = 0.0, 0.4
+    for _ in range(16):
+        middle = (low + high) / 2.0
+        if _in_gamut(_linear(lightness, middle, hue)):
+            low = middle
+        else:
+            high = middle
+    return low
 
 
 def contrast(one, other):
@@ -139,20 +173,28 @@ def readable_on(lightness, chroma, hue, background, ratio):
     return rgb(1.0 if away > 0 else 0.0, 0.0, hue)
 
 
-def accents(mode="dark"):
+def accents(mode="dark", bold=False):
     """The accents on offer for a mode, as sRGB triples.
 
     A pale page wants a darker accent than a dark one does - the shipped light theme's is 0.60
     where dark's is 0.72 - so the same hue is a different colour in each, and the picker shows
     whichever will be used.
+
+    `bold` takes each hue as far as sRGB allows instead of holding them all at one chroma. The
+    even set reads as one family; the bold set is what the hand-written single-hue themes were,
+    every one of them within 0.003 of its hue's own limit.
     """
     lightness = MODES.get(mode, MODES["dark"])["accent"]
+    if bold:
+        return [rgb(lightness, max_chroma(lightness, float(hue)) * BOLD_C, float(hue))
+                for hue in ACCENT_HUES]
     return [rgb(lightness, ACCENT_C, float(hue)) for hue in ACCENT_HUES]
 
 
 def offered():
-    """Every accent any mode offers, for checking a stored one against."""
-    return [tuple(accent) for mode in MODES for accent in accents(mode)]
+    """Every accent any mode and variant offers, for checking a stored one against."""
+    return [tuple(accent) for mode in MODES for bold in (False, True)
+            for accent in accents(mode, bold)]
 
 
 def ramp_for(accent):
@@ -208,12 +250,32 @@ def _mono_ramp(lightness, chroma, hue, shape):
     return tuple(stops)
 
 
-def palette(accent, mode="dark"):
+def _bold_ramp(lightness, chroma, hue, shape):
+    """One hue swept through the range it has: a dark version of the accent, the accent, a pale
+    one - or the other way round on a pale page, away from it being the direction that shows.
+
+    What the single-hue themes did. Their ramps put the accent at 0.7 and travelled further
+    below it than above, which is what makes the top of the sweep read as the reading getting
+    away from you rather than as the gauge simply filling.
+    """
+    toward = BOLD_TOWARD if shape["bg"] < 0.5 else -BOLD_TOWARD
+    stops = []
+    for position, level, part in ((0.0, lightness - toward, 0.9),
+                                  (0.7, lightness, 1.0),
+                                  (1.0, lightness + toward * (BOLD_AWAY / BOLD_TOWARD), 0.85)):
+        stops.append((position, rgb(min(0.97, max(0.06, level)), chroma * part, hue)))
+    return tuple(stops)
+
+
+def palette(accent, mode="dark", bold=False):
     """A whole palette from one accent, as `themes.PALETTES` holds them.
 
     The greys carry a little of the accent's hue so the furniture belongs to it, and `ink` and
     `dim` are placed by contrast rather than by taste: 7 is AAA for body text and 4.5 is AA,
     which is what a label wants when it is only naming the thing beside it.
+
+    `bold` is the other variant: the accent at its hue's own limit and a ramp that stays in the
+    hue, sweeping lightness instead of travelling to red.
     """
     if mode not in MODES:
         mode = "dark"
@@ -223,9 +285,11 @@ def palette(accent, mode="dark"):
     # Placed at the mode's own accent lightness, so the same hue is picked in either mode and
     # comes out suited to the page it is going on.
     lightness = shape["accent"]
+    if bold:
+        chroma = max_chroma(lightness, hue) * BOLD_C
     tint = shape["chroma"]
     background = rgb(shape["bg"], tint, hue)
-    build = _signal_ramp if ramp == "signal" else _mono_ramp
+    build = _bold_ramp if bold else (_signal_ramp if ramp == "signal" else _mono_ramp)
     return {
         "bg": background,
         "panel": rgb(shape["panel"], tint, hue),
