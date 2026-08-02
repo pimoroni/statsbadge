@@ -1933,6 +1933,16 @@ def test_a_palette_can_carry_a_second_accent(h):
     assert derive.apart(themes.PALETTES["watermelon-light"]["accent_b"],
                         themes.PALETTES["watermelon-light"]["accent"]) > 20.0
 
+    # Where it shows: the chrome takes it, so the first accent is left for what a reading is
+    # drawn in. A palette with none has the two the same colour and nothing moves.
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    header = source[source.index("def furniture("):]
+    header = header[:header.index("\ndef ", 1)]
+    assert "screen.pen = theme.accent_b" in header, "the header rule is not the second accent"
+    pips = source[source.index("def _pips("):]
+    pips = pips[:pips.index("\ndef ", 1)]
+    assert "theme.accent_b if i == index" in pips, "the current pip is not the second accent"
+
     web = pathlib.Path("src/statsbadge/web")
     assert 'id="accentb"' in (web / "index.html").read_text(), "no control in the UI"
     assert "config.accent_b" in (web / "app.js").read_text(), "the control is not bound"

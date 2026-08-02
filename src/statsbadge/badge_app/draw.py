@@ -457,7 +457,10 @@ def furniture(theme, title, index, total, subtitle=None):
     screen.pen = theme.panel
     screen.rectangle(rect(0, 0, look.W, look.HEADER_H))
     screen.rectangle(rect(0, look.H - look.FOOTER_H, look.W, look.FOOTER_H))
-    screen.pen = theme.accent
+    # The chrome takes the second accent where a palette has one, leaving the first for what a
+    # reading is drawn in. Where it has none the two are the same colour, which is every theme
+    # that was written down before there was a second.
+    screen.pen = theme.accent_b
     screen.rectangle(rect(0, look.HEADER_H - 2, look.W, 2))
     blit_label(title.upper(), look.SIZE_TITLE, theme.ink, look.PAD, 4)
     if subtitle:
@@ -502,7 +505,7 @@ def _pips(theme, index, total):
     row.pen = brush.erase()
     row.rectangle(rect(0, 0, span, 4))
     for i in range(total):
-        row.pen = theme.accent if i == index else theme.grid
+        row.pen = theme.accent_b if i == index else theme.grid
         row.shape(shape.rounded_rectangle(
             rect(i * (pip_w + gap), 0, pip_w, 4), min(2, pip_w // 2)))
     if len(_pip_rows) > 12:

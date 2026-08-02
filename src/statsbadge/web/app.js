@@ -772,7 +772,8 @@ async function preview() {
   set("--pv-panel", palette.panel);
   set("--pv-ink", palette.ink);
   set("--pv-dim", palette.dim);
-  set("--pv-accent", palette.accent);
+  // The header's rule and the current pip, which on the badge take the second accent.
+  set("--pv-accent", palette.accent_b || palette.accent);
   set("--pv-grid", palette.grid);
   paintDial(node.querySelector(".pv-dial"), palette);
   // The second accent as the rule resolved it, beside the rule.

@@ -86,6 +86,11 @@ main {
 .col > label > .name { color: var(--ink); grid-column-start: 1; }
 .col > label.check > .name { grid-column: 1 / 3; }
 .col > label > select { grid-column: 2 / -1; justify-self: start; max-width: 100%; }
+/* A control with something beside it - a swatch showing what the choice resolved to - takes the
+   two tracks together and lays the pair out itself, so the select still sizes to its options. */
+.col > label > .pair { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px;
+                       min-width: 0; }
+.col > label > .pair > select { max-width: 100%; }
 .col > label > input[type=text] { grid-column: 2 / -1; }
 .col > label > input[type=checkbox] { justify-self: end; margin: 0; }
 .col > label > input[type=range] { width: 100%; }
@@ -240,7 +245,7 @@ header .pairing { position: absolute; top: 100%; right: 20px; width: 340px;
    sent, so what matters is that the colours sit next to each other the way they will. */
 .accents { margin: 8px 0 4px; }
 /* The second accent, beside the rule that picked it. */
-.col > label > .chip { width: 18px; height: 18px; justify-self: end; }
+.col .chip { width: 18px; height: 18px; flex: none; }
 /* Which family of accents is showing: four rows of twelve, one at a time. */
 .accents .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
 .accents .tabs button {
