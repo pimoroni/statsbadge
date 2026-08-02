@@ -1,6 +1,6 @@
 """The badge side of the clock extension: a Swiss railway station clock.
 
-Installed into the app's `ext/` directory by `statsbadge install --with-extensions` and
+Installed into the app's `ext/` directory by `statsbadge install` and
 imported by the app, which is when it registers itself.
 
 This is the reason for shipping code rather than pictures: the second hand sweeps at

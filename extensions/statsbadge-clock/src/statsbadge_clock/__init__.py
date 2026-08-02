@@ -5,7 +5,7 @@ Three things an extension can do, all shown here:
 1. Put data in the frame under its own group name. The badge's built-in page kinds can
    draw it with no badge-side code at all - `clock.time` in a `text` page just works.
 2. Ship badge-side Python for a page the built-in kinds cannot draw. `badge/clockface.py`
-   registers a `clockface` kind, and `statsbadge install --with-extensions` pushes it
+   registers a `clockface` kind, and `statsbadge install` pushes it
    into the app's `ext/` directory.
 3. Keep what it worked out. `self.store` is a namespaced dict the host persists, and the
    coordinates a place name resolved to go in it: a town does not move, so the geocoder is
@@ -104,7 +104,7 @@ class Clock(Source):
     name = "clock"
     provides = ("clock", "weather")
 
-    # Pushed to the badge by `statsbadge install --with-extensions`, and imported by
+    # Pushed to the badge by `statsbadge install`, and imported by
     # the app so its page kind is available.
     badge_module = os.path.join(HERE, "badge", "clockface.py")
 

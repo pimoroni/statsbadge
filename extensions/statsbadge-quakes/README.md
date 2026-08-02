@@ -1,6 +1,6 @@
 # statsbadge-quakes
 
-Recent earthquakes on a world map, as a [statsbadge](../../README.md) extension.
+Recent earthquakes on a world map, as a [statsbadge](https://github.com/pimoroni/stats-badge) extension.
 
 ```bash
 uv pip install --no-deps ./extensions/statsbadge-quakes

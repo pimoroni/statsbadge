@@ -227,7 +227,7 @@ macOS is the stingiest host. GPU utilisation and VRAM come from IOAccelerator vi
 
 ## Extensions
 
-A package advertising a `statsbadge.sources` entry point gets two things: a group in the frame, which the built-in page kinds can draw with no badge-side code at all, and optionally badge-side Python. Set `badge_module` to a `.py` and `statsbadge install --with-extensions` copies it into the app's `ext/` directory, where the app imports it at startup and it registers itself in `pages.EXTRA`.
+A package advertising a `statsbadge.sources` entry point gets two things: a group in the frame, which the built-in page kinds can draw with no badge-side code at all, and optionally badge-side Python. Set `badge_module` to a `.py` and `statsbadge install` copies it into the app's `ext/` directory, where the app imports it at startup and it registers itself in `pages.EXTRA`.
 
 [`extensions/statsbadge-clock`](extensions/statsbadge-clock) is a worked example of both halves, and of why the second exists: its second hand is carried forward from the badge's frame clock between polls, so it sweeps at 45fps off one reading a second.
 

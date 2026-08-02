@@ -1,15 +1,16 @@
 # statsbadge-clock
 
-A worked example of a [statsbadge](../../README.md) extension, showing both halves of the mechanism:
+A worked example of a [statsbadge](https://github.com/pimoroni/stats-badge) extension, showing all three parts of the mechanism:
 
 1. **Data in the frame.** A `clock` group and a `weather` group, which the badge's built-in page kinds can draw with no badge-side code at all - `clock.time` in a `text` page just works.
-2. **Badge-side code**, for a page the built-in kinds cannot draw. `src/statsbadge_clock/badge/clockface.py` registers a `clockface` kind, and `statsbadge install --with-extensions` pushes it to the badge.
+2. **Badge-side code**, for a page the built-in kinds cannot draw. `src/statsbadge_clock/badge/clockface.py` registers a `clockface` kind, and `statsbadge install` pushes it to the badge.
+3. **Keeping what it worked out.** `self.store` is a namespaced dict the host persists, and the coordinates a place name resolved to go in it: a town does not move, so the geocoder is asked once per name rather than once per launch.
 
-The second half is the point: the clock's second hand is carried forward from the badge's frame clock between polls, so it sweeps at 45fps off one reading a second. An image over the wire would tick once a second and cost a fetch each time.
+The second is the point: the clock's second hand is carried forward from the badge's frame clock between polls, so it sweeps at 45fps off one reading a second. An image over the wire would tick once a second and cost a fetch each time.
 
 ```bash
 uv pip install --no-deps ./extensions/statsbadge-clock
-statsbadge install --with-extensions
+statsbadge install
 ```
 
 Weather comes from [Open-Meteo](https://open-meteo.com), which needs no API key. Set a **Place** under Extensions in the config UI - a town or city, and a country after a comma if the name is a common one:
@@ -55,7 +56,7 @@ python3 tools/make_text_font.py build/fonts/DSEG7Classic-Bold.ttf \
         --out extensions/statsbadge-clock/src/statsbadge_clock/badge/lcd.af
 ```
 
-`--cap-from 8` because a face that only draws numbers has no `H` to measure a cap height from, and `--cap 122` packs it at the finest grid a signed byte holds. Its licence is in [licences/OFL-DSEG.txt](../../licences/OFL-DSEG.txt).
+`--cap-from 8` because a face that only draws numbers has no `H` to measure a cap height from, and `--cap 122` packs it at the finest grid a signed byte holds. Its licence is in [licences/OFL-DSEG.txt](https://github.com/pimoroni/stats-badge/blob/main/licences/OFL-DSEG.txt).
 
 ## Working on it
 
