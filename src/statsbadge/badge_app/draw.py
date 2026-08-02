@@ -919,10 +919,11 @@ def graph(theme, series, labels, maximum=None, shift=0.0):
 # through, so two areas that overlap still read as two - except on a pale page, where a
 # translucent area washes out towards it and the second may as well be as solid as the first.
 SERIES_ALPHA = (200, 150)
-# How far from the page a series has to land, as squared RGB distance, to count as visible.
-# Measured against the themes: mono's grey clears it at 10.8k and luminescence's pale ramp end
-# fails at 3.3k, which is the case it is here for.
-SERIES_FLOOR = 8000
+# How far from the page a series has to land, as `difference` measures it, to count as
+# visible: black to white is 100, and about 5 is where a difference becomes obvious. Measured
+# against every theme, only luminescence falls through, at 13.8, and the next nearest is mono
+# at 24.9 - so the threshold sits between them with room either side.
+SERIES_FLOOR = 20
 
 
 def _series_alpha(theme, index):
@@ -931,26 +932,30 @@ def _series_alpha(theme, index):
 
 def _series_colour(theme, index):
     """Colours for the two graph series: the accent, and whichever end of the ramp is
-    furthest from it.
+    furthest from it that can actually be seen.
 
     The two areas overlap and are drawn semi-transparent, so a near miss reads as one
     series and takes the legend with it. Which end is further depends on the theme:
     the default theme's teal accent takes the hot end, mono's near-white the cold one.
+
+    Both ends are tried, furthest first. A theme built out of one hue has the page at one
+    end of its own ramp, and an area drawn in that is not there at all - but the other end
+    usually is, and taking it beats giving up on the ramp. Measured across the themes,
+    trying both leaves none of them needing the fallback, where taking the furthest end
+    and no other left four of them either invisible or grey.
     """
     if index == 0:
         return theme.accent
     cold, hot = theme.at(0.0), theme.at(1.0)
-    pick = cold if _apart(theme.accent, cold) >= _apart(theme.accent, hot) else hot
-    # A theme built out of one hue has the page at one end of its own ramp, and an area drawn
-    # in that is not there at all. The dim colour is the way out: it does not track a reading,
-    # so it is not the first choice, but it is a step in value from both page and accent.
-    drawn = pick.with_alpha(_series_alpha(theme, index)).over(theme.bg)
-    return theme.dim if _apart(theme.bg, drawn) < SERIES_FLOOR else pick
-
-
-def _apart(a, b):
-    """How far apart two colours are, as squared RGB distance."""
-    return (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2
+    order = ((cold, hot) if theme.accent.difference(cold) >= theme.accent.difference(hot)
+             else (hot, cold))
+    alpha = _series_alpha(theme, index)
+    for pen in order:
+        if theme.bg.difference(pen.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
+            return pen
+    # Neither end shows, which takes a palette whose ramp is the page at both ends. The dim
+    # colour does not track a reading, so it is the last resort rather than a choice.
+    return theme.dim
 
 
 def grid(theme, entries):

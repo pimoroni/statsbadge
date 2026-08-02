@@ -55,6 +55,36 @@ class FakeColour:
     def darken(self, n):
         return self.lighten(-n)
 
+    def to_oklch(self):
+        # The app converts a palette's stops so the ramp interpolates perceptually. Nothing
+        # here depends on the components, only on a colour coming back, so this stands in
+        # without pretending to be the transform: what it does is measured on the badge.
+        return self
+
+    def to_rgb(self):
+        return self
+
+    @staticmethod
+    def ramp(stops, count):
+        """`color.ramp`: count colours sampled across the stops, endpoints included."""
+        out = []
+        for step in range(count):
+            fraction = step / (count - 1.0) if count > 1 else 0.0
+            if fraction <= stops[0][0]:
+                out.append(stops[0][1])
+                continue
+            for index in range(1, len(stops)):
+                position, colour = stops[index]
+                if fraction <= position:
+                    previous, before = stops[index - 1]
+                    span = position - previous
+                    t = 0.0 if span <= 0 else (fraction - previous) / span
+                    out.append(before.mix(colour, int(t * 255 + 0.5)))
+                    break
+            else:
+                out.append(stops[-1][1])
+        return out
+
     def over(self, background):
         return self.with_alpha(255).mix(background, 255 - self.a)
 
