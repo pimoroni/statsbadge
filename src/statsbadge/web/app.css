@@ -77,7 +77,7 @@ main {
    control on the page to the right. */
 .col {
   background: var(--panel); padding: 16px;
-  display: grid; grid-template-columns: max-content minmax(0, 1fr) auto;
+  display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
   gap: 9px 10px; align-items: center;
 }
 .col > label { display: contents; }

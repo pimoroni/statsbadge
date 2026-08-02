@@ -559,11 +559,12 @@ function renderLook() {
   bindRange("idle", "idle_advance_s", (v) => (v ? `${v}s idle` : "off"));
   bindRange("advance", "advance_every_s", (v) => `${v}s`);
 
-  // Whether a graph curves through its samples or joins them with straight lines. One
-  // switch for every graph, since it is a drawing choice and not a property of a page.
+  // Whether a plot is a curve through its samples or a polyline between them. One choice for
+  // every graph, since it is a drawing choice and not a property of a page. Stored as a flag,
+  // offered as the two things it looks like.
   const smooth = $("smooth");
-  smooth.checked = config.smooth !== false;
-  smooth.onchange = () => { config.smooth = smooth.checked; markDirty(); };
+  smooth.value = config.smooth === false ? "straight" : "curved";
+  smooth.onchange = () => { config.smooth = smooth.value === "curved"; markDirty(); };
 
   // Whether a gauge eases to each new reading or steps to it. Off by default: a reading
   // arrives once a second, and on a field that swings between polls - a throughput, say -

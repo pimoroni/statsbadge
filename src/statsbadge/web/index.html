@@ -82,7 +82,8 @@
     <h2>Graphs &amp; Gauges</h2>
     <section class="col">
       <p class="hint">The pages that plot a history - the graph, the trend and the sparklines -
-        and the gauges everything else is drawn with.</p>
+        and the gauges everything else is drawn with. A curve needs room to bend, so a
+        sparkline is drawn straight whatever is chosen here.</p>
       <label><span class="name">Readings kept</span>
         <input type="range" id="points" min="8" max="160" step="8">
         <output id="pointsout"></output>
@@ -92,12 +93,14 @@
         <option value="rules">Ruled</option>
         <option value="none">Nothing</option>
       </select></label>
-      <label><span class="name">Dial page gauge</span><select id="gaugefill">
+      <label><span class="name">Dial gauge</span><select id="gaugefill">
         <option value="solid">One Colour</option>
         <option value="ramp">The Whole Ramp</option>
       </select></label>
-      <label class="check"><span class="name">Curve through the readings</span>
-        <input type="checkbox" id="smooth"></label>
+      <label><span class="name">Plot line</span><select id="smooth">
+        <option value="curved">Curved</option>
+        <option value="straight">Straight</option>
+      </select></label>
       <label class="check"><span class="name">Scroll between readings</span>
         <input type="checkbox" id="plotanim"></label>
       <label class="check"><span class="name">Sweep gauges to each reading</span>
