@@ -22,11 +22,18 @@ import os
 import sys
 from importlib.metadata import entry_points
 
+from . import state
+
 GROUP = "statsbadge.sources"
 
 
-def load(config=None):
-    """Every installed extension that loads cleanly."""
+def load(config=None, state_dir=None):
+    """Every installed extension that loads cleanly.
+
+    `state_dir` is where each one's store is kept, one file per extension named after it.
+    Without one they get a store that keeps what they learn in memory, which is what a
+    one-shot load wants: `install` builds these only to ask what badge modules they ship.
+    """
     config = config or {}
     disabled = set(config.get("disabled_extensions", ()))
     loaded = []
@@ -48,6 +55,10 @@ def load(config=None):
                   file=sys.stderr)
             continue
         source.name = getattr(source, "name", entry.name)
+        # Namespaced by the entry point name rather than by whatever the class calls itself:
+        # the entry point is what pip installed and what --without names, so it is the one
+        # thing that cannot collide with another extension's.
+        source.store = state.for_source(state_dir, entry.name)
         loaded.append(source)
     return loaded
 

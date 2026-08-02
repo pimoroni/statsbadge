@@ -11,6 +11,7 @@ import os
 import struct
 import pathlib
 import re
+import shutil
 import socket
 import sys
 import tempfile
@@ -1157,6 +1158,64 @@ def test_icon_font_corpus_and_packing(_h):
 
 
 @check
+def test_a_source_keeps_what_it_worked_out(_h):
+    """Settings are what a source is told; a store is what it found out - a resolved location,
+    a token, a high-water mark. Namespaced by the entry point name and written by the host, so
+    an extension asks for a value rather than picking a filename in the config directory."""
+    from statsbadge import state
+
+    directory = tempfile.mkdtemp(prefix="statsbadge-state-")
+    store = state.for_source(directory, "clock")
+    assert store.path == os.path.join(directory, "clock.json")
+    store.set("geocoded", {"sheffield": [53.38, -1.47, "Sheffield, GB"]})
+    store.update({"kept": 1, "dropped": 2})
+    store.forget("dropped")
+
+    again = state.for_source(directory, "clock")
+    assert again.get("geocoded")["sheffield"][2] == "Sheffield, GB"
+    assert again.get("kept") == 1 and again.get("dropped") is None
+    assert again.all() == store.all()
+    # A different source cannot see it, or read it by accident.
+    assert state.for_source(directory, "other").all() == {}
+
+    # Nowhere to write is a store all the same, so a source needs no special case: `install`
+    # loads every extension only to ask what it ships, and nothing it learns is worth keeping.
+    memory = state.for_source(None, "clock")
+    memory.set("geocoded", {})
+    assert memory.get("geocoded") == {} and memory.path is None
+
+    # Refused before the store changes, so what is in memory always matches what is on disk.
+    try:
+        store.set("no", object())
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("stored something that cannot be written")
+    assert "no" not in state.for_source(directory, "clock").all()
+    assert store.get("no") is None, "the store kept a value the file did not"
+
+    # A cache keyed by something a user types grows by one on every typo.
+    for index in range(state.MAX_KEYS + 8):
+        store.set(f"key{index}", index)
+    assert len(store.all()) == state.MAX_KEYS
+    assert store.get(f"key{state.MAX_KEYS + 7}") == state.MAX_KEYS + 7, "dropped the newest"
+
+    # A name that is not a filename still cannot be one: this ends up as a path.
+    assert state.for_source(directory, "../etc/passwd").path == os.path.join(
+        directory, "___etc_passwd.json")
+
+    # Every source has one from the start, in memory until the host hands over a better.
+    from statsbadge.sources import base
+
+    class Nothing(base.Source):
+        def sample(self, frame, dt):
+            pass
+
+    assert Nothing({}).store.path is None
+    shutil.rmtree(directory, ignore_errors=True)
+
+
+@check
 def test_a_slow_lookup_does_not_hold_up_a_frame(_h):
     """Sources share the collector's thread and the first sample is taken while the server is
     starting, so a weather lookup on that thread stalled the whole launch for as long as the
@@ -1211,6 +1270,35 @@ def test_a_slow_lookup_does_not_hold_up_a_frame(_h):
     assert refused._where() is None and len(tries) == 1, "hammered a rate limited geocoder"
     refused._retry_at = 0.0
     assert refused._where() is None and len(tries) == 2, "never tried again"
+
+    # A town does not move, so a name is looked up once ever and not once a launch: with the
+    # coordinates in the store, a badge comes up knowing where it is looking even if the
+    # geocoder is refusing everyone.
+    from statsbadge import extensions, state
+
+    directory = tempfile.mkdtemp(prefix="statsbadge-clock-")
+    kept = clock.Clock({"place": "Sheffield"})
+    kept.store = state.for_source(directory, "clock")
+    calls = []
+    kept._fetch = lambda where, **_named: calls.append(where) or {"temp": 9.0}
+    real_urlopen = clock.urllib.request.urlopen
+    clock.urllib.request.urlopen = lambda *_args, **_named: (_ for _ in ()).throw(
+        AssertionError("asked the geocoder for a place it had already resolved"))
+    try:
+        state.for_source(directory, "clock").set(
+            clock.GEOCODED, {"sheffield": [53.38, -1.47, "Sheffield, GB"]})
+        kept.store = state.for_source(directory, "clock")
+        assert kept._where() == (53.38, -1.47, "Sheffield, GB")
+    finally:
+        clock.urllib.request.urlopen = real_urlopen
+
+    # And the host is what decides where that file goes, one per extension name.
+    loaded = extensions.load({"extensions": {}}, directory)
+    for source in loaded:
+        assert source.store.path == os.path.join(directory, f"{source.name}.json"), (
+            source.name, source.store.path)
+    assert any(source.name == "clock" for source in loaded), "the clock was not loaded"
+    shutil.rmtree(directory, ignore_errors=True)
 
 
 @check

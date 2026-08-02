@@ -14,13 +14,15 @@ from .sources import discover
 
 
 class Collector:
-    def __init__(self, interval=1.0, config=None, history=90):
+    def __init__(self, interval=1.0, config=None, history=90, state_dir=None):
         self.interval = interval
         # When the newest point in every ring was taken, so a reply can say how old it is.
         self._history_at = 0
         self.config = config or {}
         self.sources = discover(self.config)
-        self.extensions = extensions.load(self.config)
+        # Each extension gets a store of its own under here, for what it works out as against
+        # what it is told. Nothing is written until one asks for something to be kept.
+        self.extensions = extensions.load(self.config, state_dir)
         self.frame = model.empty_frame()
         self.seq = 0
         self.started_at = time.time()

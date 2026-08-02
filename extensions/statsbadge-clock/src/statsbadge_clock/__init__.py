@@ -1,12 +1,15 @@
 """A clock and weather page, as a worked example of an extension.
 
-Two things an extension can do, both shown here:
+Three things an extension can do, all shown here:
 
 1. Put data in the frame under its own group name. The badge's built-in page kinds can
    draw it with no badge-side code at all - `clock.time` in a `text` page just works.
 2. Ship badge-side Python for a page the built-in kinds cannot draw. `badge/clockface.py`
    registers a `clockface` kind, and `statsbadge install --with-extensions` pushes it
    into the app's `ext/` directory.
+3. Keep what it worked out. `self.store` is a namespaced dict the host persists, and the
+   coordinates a place name resolved to go in it: a town does not move, so the geocoder is
+   asked once per name rather than once per launch.
 
 Weather comes from Open-Meteo, which needs no API key and no account. Location is
 whatever the config gives, or a guess from the host's timezone.
@@ -31,6 +34,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RETRY_AFTER = 60.0
 # How often the fetcher looks for something due.
 FETCH_POLL = 1.0
+# Where resolved place names are kept in this source's store, so a launch does not re-ask the
+# geocoder for a town it has already found. Coordinates keyed by the name as typed.
+GEOCODED = "geocoded"
 
 # What Open-Meteo calls a unit, against what it should be labelled as on the badge.
 TEMPERATURE_UNITS = {"celsius": "C", "fahrenheit": "F"}
@@ -372,7 +378,17 @@ class Clock(Source):
         No key and no account, like the forecast. A name after a comma is matched against
         the country, so "Sheffield, US" gets Alabama and "Sheffield" gets the one most
         people mean: results arrive ordered by how well known they are.
+
+        Answered from the store where it can be. A town does not move, so the lookup is worth
+        doing once per name ever rather than once per launch: the geocoder is the part of this
+        most likely to be rate limited, and a name already resolved needs it not to answer at
+        all. Both callers come through here, so it is one cache for the default place and the
+        pages' own.
         """
+        key = place.strip().lower()
+        cached = (self.store.get(GEOCODED) or {}).get(key)
+        if cached and len(cached) == 3:
+            return (cached[0], cached[1], cached[2])
         name, _, country = place.partition(",")
         name = name.strip()
         country = country.strip().lower()
@@ -393,7 +409,11 @@ class Clock(Source):
                     break
         label = ", ".join(part for part in (match.get("name"),
                                             match.get("country_code")) if part)
-        return (match["latitude"], match["longitude"], label)
+        located = (match["latitude"], match["longitude"], label)
+        table = dict(self.store.get(GEOCODED) or {})
+        table[key] = list(located)
+        self.store.set(GEOCODED, table)
+        return located
 
     def _fetch(self, where, local_time=False):
         latitude, longitude, label = where

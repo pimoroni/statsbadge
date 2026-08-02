@@ -139,6 +139,8 @@ Badge-side modules go on by default, so installing an extension and then running
 
 An extension can declare settings that belong to *one page* rather than to the extension, so two pages of the same kind can show different things. The clock uses it for a place and a face: point one page at Tokyo and another at home, and each shows that city's weather and its own local time - Open-Meteo returns a location's UTC offset with its forecast, so a place settles the time too and there is no timezone to set. `latitude` and `longitude` are there per page as well, for a spot no name lands on. Settings that describe how the extension works, like units or an API key, stay under Extensions where there is one answer per machine, and the place set there is the default for any page that names none.
 
+Settings are what an extension is told. What it works out is `self.store`, a small dict the host keeps between runs: `store.get(key)` and `store.set(key, value)`, namespaced by the extension's entry point name and written under the config directory, so an extension never picks a filename or manages a directory of its own. It is in place by the time `start` runs. The clock keeps the coordinates a place name resolved to, since a town does not move: the geocoder is asked once per name ever rather than once per launch, and a badge coming up with the geocoder rate limited still knows where it is looking.
+
 An extension can ship more than code. `badge_assets` lists further files to push, and the clock uses it for an icon font: its `icons.txt` names the Material Symbols it wants, and `tools/make_icon_font.py` packs them into an `.af` the badge loads with `font.load()`.
 
 ```bash

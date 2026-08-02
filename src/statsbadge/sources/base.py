@@ -1,5 +1,7 @@
 """What a source has to implement."""
 
+from .. import state
+
 
 class Source:
     name = "source"
@@ -34,6 +36,11 @@ class Source:
         self.config = config
         self.faults = 0
         self.last_fault = None
+        # What this source worked out, as against what it was told: `store.get`/`store.set`,
+        # namespaced by source name and written by the host, so nothing here has to know
+        # where the config lives. The one made here keeps everything in memory; the
+        # persistent one is in place by the time `start` runs, which is where to read it.
+        self.store = state.Store()
 
     def configure(self, settings):
         """Take settings while running, on every save rather than only on a change.
@@ -56,7 +63,7 @@ class Source:
         return False
 
     def start(self):
-        """Called once before the first sample. Spawn helpers here."""
+        """Called once before the first sample. Spawn helpers here, and read `store` here."""
 
     def stop(self):
         """Called on shutdown. Reap helpers here."""

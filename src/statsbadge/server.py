@@ -56,7 +56,8 @@ class Service:
         source_config = dict(source_config or {})
         source_config["extensions"] = layout.merge_settings(
             source_config.get("extensions"), self.config.snapshot().get("settings"))
-        self.collector = Collector(interval=interval, config=source_config)
+        self.collector = Collector(interval=interval, config=source_config,
+                                   state_dir=os.path.join(config_dir, "extensions"))
         self.started = threading.Event()
 
     def start(self):
