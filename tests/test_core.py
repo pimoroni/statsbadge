@@ -1332,7 +1332,7 @@ def test_every_kind_picks_from_a_pool_that_suits_it(_h):
     list. Each slot now draws from a pool, and every kind has to name one."""
     ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
           / "app.js").read_text()
-    shape = ui[ui.index("const SHAPE = {"):ui.index("// Theme swatches")]
+    shape = ui[ui.index("const SHAPE = {"):ui.index("async function api(")]
     pools = ui[ui.index("const POOLS = {"):]
     pools = pools[:pools.index("}")]
     named = {name for name in ("gauge", "series", "list", "any") if name in pools}
@@ -1690,9 +1690,9 @@ def test_a_theme_travels_as_its_colours(_h):
 
 @check
 def test_a_theme_can_be_derived_from_one_accent(h):
-    """`custom` is the theme that is not written down: it is derived from an accent, a mode and
-    a ramp style, so what is stored is the choices and not their result. Restricted on purpose -
-    every combination on offer is checked here, so a pickable one cannot make a page nobody can
+    """The tinted pair are the themes that are not written down: a whole palette from the one
+    accent chosen, so what is stored is the choice and not its result. Restricted on purpose -
+    every accent on offer is checked here, so a pickable one cannot make a page nobody can
     read."""
     import sys
 
@@ -1701,81 +1701,95 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     sys.path.insert(0, install.app_source_dir())
     import look
 
-    assert layout.CUSTOM in layout.THEMES
+    assert set(layout.TINTED) <= set(layout.THEMES)
+    assert sorted(layout.TINTED.values()) == sorted(derive.MODES)
     assert len(derive.accents("dark")) == len(derive.ACCENT_HUES) == 12
 
-    # Every accent, in both modes, with every ramp style it is offered.
+    # Every accent, in both modes. The ramp is not a choice: it travels to red where the accent
+    # has somewhere to travel, and stays in the accent's own hue where it has not.
     checked = 0
-    for mode in derive.MODES:
+    for theme, mode in layout.TINTED.items():
         for accent in derive.accents(mode):
-            for ramp in derive.ramps_for(accent):
-                palette = derive.palette(accent, mode, ramp)
-                assert derive.contrast(palette["ink"], palette["bg"]) >= derive.INK_RATIO
-                assert derive.contrast(palette["dim"], palette["bg"]) >= derive.DIM_RATIO
-                # The hot end has to be seen against the page, or a gauge says nothing when it
-                # matters most - which is the fault the shipped `cyan` ramp has.
-                assert derive.contrast(palette["ramp"][-1][1], palette["bg"]) >= 1.9
-                cold, hot = palette["ramp"][0][1], palette["ramp"][-1][1]
-                apart = sum((a - b) ** 2 for a, b in zip(cold, hot, strict=True))
-                assert apart > 1600, (mode, accent, ramp, apart)
-                # And the badge can build it, which is what the app actually does with it.
-                assert look.from_palette("custom", palette) is not None
-                checked += 1
-    assert checked == 42, checked
+            palette = layout.palette_for(theme, accent)
+            assert derive.contrast(palette["ink"], palette["bg"]) >= derive.INK_RATIO
+            assert derive.contrast(palette["dim"], palette["bg"]) >= derive.DIM_RATIO
+            # The hot end has to be seen against the page, or a gauge says nothing when it
+            # matters most - which is the fault the shipped `cyan` ramp has.
+            assert derive.contrast(palette["ramp"][-1][1], palette["bg"]) >= 1.9
+            cold, hot = palette["ramp"][0][1], palette["ramp"][-1][1]
+            apart = sum((a - b) ** 2 for a, b in zip(cold, hot, strict=True))
+            assert apart > 1600, (theme, accent, apart)
+            # And the badge can build it, which is what the app actually does with it.
+            assert look.from_palette("tinted", palette) is not None
+            checked += 1
+    assert checked == 24, checked
 
-    # `signal` travels to red, so an accent already there is only offered `mono`.
-    reds = [a for a in derive.accents("dark") if derive.ramps_for(a) == ["mono"]]
+    reds = [a for a in derive.accents("dark") if derive.ramp_for(a) == "mono"]
     assert reds, "every accent claims it can travel to red"
-    assert derive.ramps_for(derive.accents("dark")[6]) == ["signal", "mono"]
+    assert derive.ramp_for(derive.accents("dark")[6]) == "signal"
 
-    # A choice that was never offered falls back rather than raising: this arrives from a UI,
+    # An accent that was never offered falls back rather than raising: this arrives from a UI,
     # and a theme is not worth refusing a whole config over.
-    kept = layout.validate({"theme": "custom", "custom": {"accent": [7, 7, 7]},
+    kept = layout.validate({"theme": "tinted-dark", "tint": [7, 7, 7],
                             "pages": layout.DEFAULT_PAGES})
-    assert tuple(kept["custom"]["accent"]) in derive.offered()
-    forced = layout.validate({"theme": "custom",
-                              "custom": {"accent": list(reds[0]), "ramp": "signal"},
-                              "pages": layout.DEFAULT_PAGES})
-    assert forced["custom"]["ramp"] == "mono", forced["custom"]
+    assert tuple(kept["tint"]) in derive.offered()
 
     # What travels is a palette like any other, so the badge never knows it was derived.
     config = layout.Config(os.path.join(tempfile.mkdtemp(), "layout.json"))
-    config.replace({"theme": "custom", "pages": layout.DEFAULT_PAGES,
-                    "custom": {"accent": list(derive.accents("light")[8]), "mode": "light",
-                               "ramp": "signal"}})
+    config.replace({"theme": "tinted-light", "pages": layout.DEFAULT_PAGES,
+                    "tint": list(derive.accents("light")[8])})
     sent = config.for_badge()
-    assert sent["theme"] == "custom"
+    assert sent["theme"] == "tinted-light"
     assert set(sent["palette"]) >= {"bg", "panel", "ink", "dim", "accent", "grid", "ramp"}
-    assert look.from_palette("custom", sent["palette"]) is not None
+    assert look.from_palette("tinted", sent["palette"]) is not None
 
-    # And the host derives it for the UI as well, so the preview cannot drift from the badge.
+    # One preview path for every theme, tinted or not, so what is shown and what reaches the
+    # badge cannot drift apart.
     picked = ",".join(str(part) for part in derive.accents("light")[8])
-    status, shown = h.raw("GET", f"/api/theme?accent={picked}&mode=light&ramp=signal")
+    status, shown = h.raw("GET", f"/api/theme?theme=tinted-light&accent={picked}")
     assert status == 200, (status, shown)
-    assert shown["custom"]["mode"] == "light"
     assert shown["palette"]["bg"] == list(sent["palette"]["bg"]), "the preview would differ"
-    status, bad = h.raw("GET", "/api/theme?accent=nonsense")
+    status, plain = h.raw("GET", "/api/theme?theme=mono")
+    assert status == 200 and plain["palette"]["bg"] == list(themes_bg("mono")), plain
+    status, bad = h.raw("GET", "/api/theme?theme=nonesuch")
     assert status == 400, status
 
     # The UI offers exactly what the host will accept, and nothing it will not.
     status, caps = h.raw("GET", "/api/capabilities")
-    assert sorted(caps["accents"]) == sorted(derive.MODES)
+    assert caps["tinted"] == layout.TINTED
     assert caps["accents"]["dark"] == [list(a) for a in derive.accents("dark")]
     web = pathlib.Path("src/statsbadge/web")
     page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
-    assert 'id="configure"' in page and 'id="accents"' in page, "no picker in the UI"
-    assert 'id="preview"' in page, "no preview of the badge"
-    assert "caps.accents" in script and "/api/theme?" in script
-    assert "config.custom" in script, "the choices are not bound"
+    assert 'id="accents"' in page and 'id="preview"' in page, "no picker or preview in the UI"
+    assert "caps.tinted" in script and "config.tint" in script
+    # Clicking along the swatches starts several previews; the last click has to win rather
+    # than the last reply, or the panel shows a colour nobody chose.
+    assert "previewWanted" in script, "a stale preview reply can win"
+
+    # The plot settings sit under their own heading rather than in with the rest of the look.
+    graphs = page[page.index("<h2>Graphs</h2>"):]
+    graphs = graphs[:graphs.index("</section>")]
+    for control in ('id="points"', 'id="smooth"', 'id="plotanim"', 'id="rows"'):
+        assert control in graphs, control
+    look_section = page[page.index("<h2>Look</h2>"):page.index("<h2>Graphs</h2>")]
+    for control in ('id="theme"', 'id="brightness"', 'id="slide"', 'id="animate"'):
+        assert control in look_section, control
+
+
+def themes_bg(name):
+    from statsbadge import themes
+    return themes.PALETTES[name]["bg"]
 
 
 @check
-def test_the_ui_takes_its_swatches_from_the_host(_h):
+def test_the_ui_takes_its_colours_from_the_host(_h):
     """They used to be a table in app.js with a comment asking for it to be kept in step
-    with the badge, which is two places to edit and one to forget."""
+    with the badge, which is two places to edit and one to forget. Now the UI asks for the
+    palette of whatever theme is selected, so there is nowhere for a copy to live."""
     web = pathlib.Path("src/statsbadge/web/app.js").read_text()
     assert "THEME_COLOURS" not in web, "the UI still carries its own palettes"
-    assert "caps.palettes" in web, "the UI does not read the host's palettes"
+    assert "/api/theme?" in web, "the UI does not ask the host for a palette"
+    assert "--pv-ramp" in web, "the preview does not paint the ramp"
     assert '"palettes"' in pathlib.Path("src/statsbadge/server.py").read_text()
 
 

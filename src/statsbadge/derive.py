@@ -46,9 +46,8 @@ DIM_RATIO = 4.5
 
 # How severity is shown. `signal` travels to red the way a warning light does; `mono` stays in
 # the accent's own hue and says it with lightness and chroma instead, which is what the mono,
-# cyan and luminescence palettes do. Offered per accent, because an accent already at red has
-# nowhere to travel.
-RAMPS = ("signal", "mono")
+# cyan and luminescence palettes do. Chosen from the accent rather than asked about: red is what
+# a hot end means, so it is `signal` wherever the accent has somewhere to travel.
 # Where `signal` ends up, and how near an accent has to be to that for the travel to be
 # pointless. Measured across the shipped palettes: the ones whose ramp does not travel all sit
 # within 45 degrees of their own hot end.
@@ -156,11 +155,16 @@ def offered():
     return [tuple(accent) for mode in MODES for accent in accents(mode)]
 
 
-def ramps_for(accent):
-    """Which ramp styles suit this accent. `signal` travels to red, so red cannot use it."""
+def ramp_for(accent):
+    """Which ramp suits this accent: `signal` where it has somewhere to travel, else `mono`.
+
+    Not a choice anybody is asked to make. Travelling to red is what a warning light does and
+    reads as severity without being learned, so it is the answer wherever it can be - and where
+    the accent is already red, saying it again says nothing.
+    """
     hue = oklch(accent)[2]
     away = abs((hue - SIGNAL_HUE + 180.0) % 360.0 - 180.0)
-    return list(RAMPS) if away >= SIGNAL_NEAR else ["mono"]
+    return "signal" if away >= SIGNAL_NEAR else "mono"
 
 
 def _signal_ramp(lightness, chroma, hue, shape):
@@ -204,7 +208,7 @@ def _mono_ramp(lightness, chroma, hue, shape):
     return tuple(stops)
 
 
-def palette(accent, mode="dark", ramp="signal"):
+def palette(accent, mode="dark"):
     """A whole palette from one accent, as `themes.PALETTES` holds them.
 
     The greys carry a little of the accent's hue so the furniture belongs to it, and `ink` and
@@ -213,8 +217,7 @@ def palette(accent, mode="dark", ramp="signal"):
     """
     if mode not in MODES:
         mode = "dark"
-    if ramp not in ramps_for(accent):
-        ramp = ramps_for(accent)[0]
+    ramp = ramp_for(accent)
     shape = MODES[mode]
     _lightness, chroma, hue = oklch(accent)
     # Placed at the mode's own accent lightness, so the same hue is picked in either mode and

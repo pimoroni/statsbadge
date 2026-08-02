@@ -130,11 +130,6 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
    the document instead of hidden with this. */
 .hidden { display: none; }
 
-/* -- theme swatches ---------------------------------------------------- */
-
-.swatches { display: flex; gap: 4px; margin: 4px 0 12px; height: 18px; }
-.swatches i { flex: 1; }
-
 /* -- badges and pairing ------------------------------------------------ */
 
 .badge-row { display: flex; align-items: center; gap: 8px; padding: 6px 0;
