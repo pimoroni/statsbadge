@@ -1982,6 +1982,38 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
 
 
 @check
+def test_the_notice_screen_offers_a_way_out(_h):
+    """It is the screen a badge sits on when it cannot reach anything, so it has to say what
+    can be done rather than only what went wrong - and polls back off to fifteen seconds apart
+    while a host is quiet, which is no use to somebody who has just woken the PC."""
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+
+    notice = app[app.index("    def render(self):"):]
+    notice = notice[:notice.index("\n    def ", 1)]
+    for action in ("C retry", "B set up", "HOME hosts"):
+        assert action in notice, action
+    assert "self.detail" in notice, "the reason is not shown"
+
+    # C asks again there, rather than being taken as a host command.
+    pressed = app[app.index("    def buttons(self):"):]
+    pressed = pressed[:pressed.index("\n    def ", 1)]
+    assert "self.retry()" in pressed and "current_page() is None" in pressed
+
+    # Retrying drops the backoff rather than waiting it out, and clears what was in flight.
+    retry = app[app.index("    def retry(self):"):]
+    retry = retry[:retry.index("\n    def ", 1)]
+    for cleared in ("self.client.failures = 0", "self._next_poll", "self._queued = None",
+                    "self._pending = None"):
+        assert cleared in retry, cleared
+
+    # And one failed poll is enough to offer setup: waiting for three left that screen with
+    # nothing on it that did anything.
+    setup = app[app.index("    def needs_setup(self):"):]
+    setup = setup[:setup.index("\n    def ", 1)]
+    assert "self.client.failures >= 1" in setup, setup
+
+
+@check
 def test_sparkline_rows_can_be_told_apart(_h):
     """Six lines on one page read as one plot with six traces, so the rows are banded.
 

@@ -618,7 +618,12 @@ class App:
             touched = True
         for name, button in (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C)):
             if badge.pressed(button):
-                self.press(name)
+                if name == "c" and self.current_page() is None:
+                    # Nothing is on screen but the notice, so C is not a command: it is the
+                    # way to ask again without waiting out the backoff.
+                    self.retry()
+                else:
+                    self.press(name)
                 touched = True
         if touched:
             # Only a press counts as being touched: the page turns this class makes for
@@ -672,12 +677,29 @@ class App:
     def needs_setup(self):
         """Whether to offer the pairing screens.
 
-        Not just when unpaired: a badge holding credentials a host rejects, or one that
-        has never managed a poll, is otherwise stuck with no way to reach setup at all.
+        Not just when unpaired: a badge holding credentials a host rejects, or one that has
+        never managed a poll, is otherwise stuck with no way to reach setup at all. One failed
+        poll is enough - waiting for three left the only screen with nothing on it that does
+        anything, which is the state somebody is in when they need setup most.
         """
         if not self.config.paired or self.rejected:
             return True
-        return self.layout is None and self.client.failures >= 3
+        return self.layout is None and self.client.failures >= 1
+
+    def retry(self):
+        """Drop the connection and poll again now.
+
+        Polls back off to fifteen seconds apart while a host is not answering, which is right
+        for a sleeping PC and no use at all to somebody standing there having just woken it.
+        """
+        self.client.close()
+        self.client.failures = 0
+        self._pending = None
+        self._queued = None
+        self._next_poll = time.ticks_ms()
+        self.detail = None
+        self.status = "retrying"
+        self.note("retrying")
 
     def note(self, text):
         self.toast_text = text
@@ -774,10 +796,13 @@ class App:
             return
         page = self.current_page()
         if page is None:
-            hint = "B to set up" if self.needs_setup() else self.detail
-            draw.banner(theme, "Connecting",
+            # Whatever went wrong, this screen has to say what can be done about it: it is the
+            # one a badge sits on when it cannot reach anything, and the reason alone left
+            # somebody with a message and no way out.
+            title = "Connecting" if not self.detail else self.detail
+            draw.banner(theme, title,
                         f"{self.config.name or self.config.host}:{self.config.port}",
-                        hint)
+                        "C retry   B set up   HOME hosts")
             return
 
         subtitle = self.subtitle()
