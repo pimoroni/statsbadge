@@ -114,6 +114,18 @@ def extension_modules(args):
 
 # -- serve ------------------------------------------------------------------
 
+def _extension_line(record):
+    """One extension on the startup line: its name, and what went wrong if anything did.
+
+    A pip install that did not take is otherwise invisible until a page fails to appear.
+    """
+    if record.get("error"):
+        return f"{record['name']} (failed)"
+    if record.get("available") is False:
+        return f"{record['name']} (not usable here)"
+    return record["name"]
+
+
 def cmd_serve(args):
     service = build_service(args)
     service.start()
@@ -134,7 +146,8 @@ def cmd_serve(args):
         s["name"] for s in caps["sources"])) or "none")
     print("  groups with data:  {}".format(", ".join(sorted(caps["available"]))) or "none")
     if caps["extensions"]:
-        print("  extensions:        {}".format(", ".join(caps["extensions"])))
+        print("  extensions:        {}".format(", ".join(
+            _extension_line(record) for record in caps["extensions"])))
     paired = service.badges.list_badges()
     print("  paired badges:     %s" % (", ".join(paired) if paired else
                                        "none yet, run 'statsbadge pair'"))

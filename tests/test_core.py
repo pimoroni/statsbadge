@@ -924,7 +924,7 @@ def test_unreadable_badge_store_is_not_treated_as_empty(_h):
 
 
 @check
-def test_extensions_describe_finds_the_clock(_h):
+def test_extensions_describe_finds_the_clock(h):
     from statsbadge import extensions
 
     found = {record["name"]: record for record in extensions.describe()}
@@ -934,6 +934,17 @@ def test_extensions_describe_finds_the_clock(_h):
     assert clock["loaded"], clock
     assert clock["badge_module"] == "clockface.py", clock
     assert "clock" in clock["provides"], clock
+
+    # The UI gets all of them, not only the ones with settings: an extension that asks to be
+    # told nothing had nothing on the page, and one that failed to import had nothing anywhere.
+    _status, caps = h.raw("GET", "/api/capabilities")
+    described = {record["name"] for record in caps["extensions"]}
+    assert described == set(found), (described, set(found))
+    web = pathlib.Path("src/statsbadge/web")
+    assert 'id="settings" class="boxes"' in (web / "index.html").read_text()
+    script = (web / "app.js").read_text()
+    assert "caps.extensions" in script, "the UI still lists only what has settings"
+    assert "extensionBox" in script, "an extension is not a box of its own"
 
 
 @check

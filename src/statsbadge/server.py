@@ -112,6 +112,10 @@ class Service:
                                    "ramp": [rgb for _pos, rgb in palette["ramp"]]}
                             for name, palette in themes.PALETTES.items()}
         caps["kinds"] = list(layout.KINDS)
+        # Every discovered extension, not only the ones with something to be told: one that
+        # asks nothing had no box in the UI, and one that failed to import had nothing
+        # anywhere until a page it was meant to draw did not turn up.
+        caps["extensions"] = extensions.describe()
         caps["extension_pages"] = extensions.badge_pages(self.collector.extensions)
         caps["extension_settings"] = self.extension_settings()
         caps["extension_page_settings"] = self.extension_page_settings()

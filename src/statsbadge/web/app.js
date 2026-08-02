@@ -406,33 +406,63 @@ async function refreshPruned() {
 
 // -- extension settings ----------------------------------------------------
 
-/** Fields for whatever the installed extensions say they can be told. */
+/** A box per installed extension, titled with its name, holding whatever it can be told.
+ *
+ * Every discovered one, not only those with settings: an extension that asks to be told
+ * nothing had nothing in the UI at all, and one that failed to import was invisible until a
+ * page it was meant to draw did not appear. */
 function renderSettings() {
   const node = $("settings");
   node.innerHTML = "";
   const schema = caps.extension_settings || {};
-  const names = Object.keys(schema).sort();
-  if (!names.length) {
-    node.innerHTML = '<p class="hint">Nothing installed asks to be configured.</p>';
+  const installed = caps.extensions || [];
+  if (!installed.length) {
+    node.innerHTML = '<section class="col"><p class="hint">None installed. '
+      + '<code>pip install</code> one, then <code>statsbadge install</code>.</p></section>';
     return;
   }
   config.settings = config.settings || {};
-  for (const name of names) {
-    config.settings[name] = config.settings[name] || {};
-    const stored = config.settings[name];
-    const heading = document.createElement("h3");
-    heading.textContent = name;
-    node.appendChild(heading);
-    for (const setting of schema[name]) {
-      node.appendChild(settingRow(stored, setting));
-      if (setting.hint) {
-        const hint = document.createElement("p");
-        hint.className = "hint";
-        hint.textContent = setting.hint;
-        node.appendChild(hint);
-      }
+  for (const extension of installed) {
+    node.appendChild(extensionBox(extension, schema[extension.name] || []));
+  }
+}
+
+function extensionBox(extension, settings) {
+  const box = document.createElement("section");
+  box.className = "col";
+  const heading = document.createElement("h3");
+  heading.textContent = extension.name;
+  box.appendChild(heading);
+
+  const state = document.createElement("p");
+  state.className = "hint";
+  if (extension.error) {
+    state.className = "hint bad";
+    state.textContent = extension.error;
+  } else if (extension.available === false) {
+    state.textContent = "Installed, but not usable on this host.";
+  } else {
+    const parts = [];
+    if (extension.version) parts.push(extension.version);
+    if (extension.provides.length) parts.push(extension.provides.join(", "));
+    if (extension.badge_module) parts.push("draws its own page");
+    state.textContent = parts.join(" · ");
+  }
+  box.appendChild(state);
+
+  if (!settings.length) return box;
+  config.settings[extension.name] = config.settings[extension.name] || {};
+  const stored = config.settings[extension.name];
+  for (const setting of settings) {
+    box.appendChild(settingRow(stored, setting));
+    if (setting.hint) {
+      const hint = document.createElement("p");
+      hint.className = "hint";
+      hint.textContent = setting.hint;
+      box.appendChild(hint);
     }
   }
+  return box;
 }
 
 function settingRow(stored, setting) {

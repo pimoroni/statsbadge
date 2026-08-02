@@ -48,14 +48,19 @@ h3 { font-size: 12px; margin: 0 0 4px; color: var(--dim); }
 
 header .host { color: var(--dim); font-variant-numeric: tabular-nums; flex: 1; }
 
+/* Four columns: the pages, what they look like, what is installed, and this host. The first
+   is wider, being a list of cards with a picker in each. */
 main {
   display: grid;
-  grid-template-columns: minmax(320px, 1.3fr) minmax(260px, 1fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(300px, 1.25fr) repeat(3, minmax(230px, 1fr));
   gap: 20px;
   padding: 20px;
   align-items: start;
 }
 
+@media (max-width: 1500px) {
+  main { grid-template-columns: minmax(300px, 1.2fr) minmax(240px, 1fr); }
+}
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 
 .col { background: var(--panel); padding: 16px; }
@@ -156,6 +161,18 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
   color: var(--accent); text-align: right;
 }
 .ask .askbuttons { grid-column: 1 / -1; display: flex; gap: 6px; }
+
+/* -- extensions --------------------------------------------------------- */
+
+/* One box per extension, titled with its name, so an install that took is visible before
+   anything it draws is: a section of settings said nothing about an extension that asks to be
+   told nothing, and nothing at all about one that failed to import. */
+.boxes { display: grid; gap: 10px; }
+.boxes .col h3 { color: var(--accent); text-transform: uppercase;
+                 letter-spacing: 0.08em; font-size: 12px; margin-bottom: 2px; }
+.boxes .col .hint { margin: 0 0 6px; }
+.boxes .col .hint.bad { color: var(--bad); }
+.boxes .col label:first-of-type { margin-top: 10px; }
 
 /* -- sources, settings and live ---------------------------------------- */
 
