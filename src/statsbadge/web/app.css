@@ -47,6 +47,12 @@ h2 { font-size: 17px; font-weight: 600; color: var(--ink); margin: 26px 0 8px; }
 h3 { font-size: 12px; margin: 0 0 4px; color: var(--dim); }
 
 header .host { color: var(--dim); font-variant-numeric: tabular-nums; flex: 1; }
+/* Which badge the page below is configuring, and whether it has a layout of its own. */
+header .whose { margin: 0; gap: 6px; color: var(--dim); font-size: 12px;
+                text-transform: uppercase; letter-spacing: 0.06em; }
+header .whose select { color: var(--ink); font-size: 14px; text-transform: none;
+                       letter-spacing: 0; max-width: 220px; }
+header .note { color: var(--dim); font-size: 12px; }
 
 /* Four columns: the pages, what they look like, what is installed, and this host. The first
    is wider, being a list of cards with a picker in each. */
@@ -137,10 +143,14 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
 
 /* -- badges and pairing ------------------------------------------------ */
 
-.badge-row { display: flex; align-items: center; gap: 8px; padding: 6px 0;
-             border-bottom: 1px solid var(--line); font-size: 13px; }
+.badge-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+             border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
 .badge-row code { color: var(--dim); font-size: 11px; }
 .badge-row .name { flex: 1; }
+.badge-row .state { color: var(--dim); font-size: 11px; }
+.badge-row:hover { background: var(--panel2); }
+/* The one the page is configuring, marked the way the pages list marks a drop target. */
+.badge-row.on { box-shadow: inset 3px 0 0 var(--accent); }
 
 .pairing { margin-top: 10px; padding: 12px; background: var(--panel2);
            border-left: 3px solid var(--accent); }

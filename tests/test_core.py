@@ -1944,6 +1944,101 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     assert "previewWanted" in script, "a stale preview reply can win"
 
 
+@check
+def test_each_badge_has_its_own_layout(h):
+    """Everything on the page is configured per badge: two badges on one host draw different
+    pages, and a save for one is not a save for the other. A badge that has not been given a
+    layout draws the default, which is also what there is to edit before anything is paired."""
+    other = "badgetwo00000002"
+    other_secret = h.service.badges.provision(other, "second badge")
+    try:
+        _status, default = h.raw("GET", "/api/config")
+        assert "badges" not in default, "the UI is handed every badge's layout at once"
+
+        # The second badge, and only it, is given a layout of its own.
+        theirs = dict(default, theme="mono", interval_ms=2000)
+        status, saved = h.raw("PUT", f"/api/config?badge={other}",
+                              json.dumps(theirs).encode(),
+                              {"Content-Type": "application/json"})
+        assert status == 200, (status, saved)
+        assert saved["badge"] == other and saved["rev"] > default["rev"]
+
+        status, sent = h.raw("GET", "/v1/layout", None,
+                             _headers(other, 1, other_secret, path="/v1/layout"))
+        assert status == 200, (status, sent)
+        assert sent["theme"] == "mono" and sent["interval_ms"] == 2000
+        # Never the table: it names every other badge paired with this host, which is nothing
+        # to do with the one asking.
+        assert "badges" not in sent, "a badge is told about every other badge here"
+
+        # The first is still on the default, and its revision has not moved - or every badge
+        # would refetch a layout that had not changed.
+        _status, mine = h.signed("GET", "/v1/layout")
+        assert mine["theme"] == default["theme"], mine["theme"]
+        assert mine["rev"] == default["rev"], "a save for one badge moved another's revision"
+
+        # And what each watches for a change is its own layout's revision.
+        _status, frame = h.signed("GET", "/v1/stats")
+        assert frame["layout_rev"] == default["rev"]
+        _status, their_frame = h.raw("GET", "/v1/stats", None,
+                                     _headers(other, 2, other_secret))
+        assert their_frame["layout_rev"] == saved["rev"]
+
+        # The UI edits one badge at a time, and is told which of them have their own.
+        _status, listing = h.raw("GET", "/api/badges")
+        assert listing[other]["configured"] is True
+        assert listing[h.badge_id]["configured"] is False
+        _status, edited = h.raw("GET", f"/api/config?badge={other}")
+        assert edited["theme"] == "mono"
+
+        # A layout cannot be stored against a badge that is not paired here, or a typo in a
+        # query string would configure a phantom.
+        status, refused = h.raw("PUT", "/api/config?badge=nobody",
+                                json.dumps(theirs).encode(),
+                                {"Content-Type": "application/json"})
+        assert status == 404, (status, refused)
+
+        # An extension doing per-page work is told about every badge's pages: it fetches for
+        # all of them at once and keys what it fetched by page id.
+        everywhere = {page["id"] for page in h.service.config.all_pages()}
+        assert {page["id"] for page in default["pages"]} <= everywhere
+
+        # Forgetting a badge takes its layout with it, or the layout would sit in the file
+        # naming a badge nothing can reach and be handed to whatever next held that id.
+        assert h.service.config.configured() == [other]
+        h.raw("DELETE", f"/api/badges/{other}")
+        assert h.service.config.configured() == []
+    finally:
+        h.service.badges.forget(other)
+        h.service.config.forget(other)
+
+    # A file written before there was more than one badge reads as the default, so every badge
+    # carries on showing what it showed.
+    path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-layout-"), "layout.json")
+    with open(path, "w") as handle:
+        json.dump({"rev": 7, "theme": "mono", "pages": layout.DEFAULT_PAGES}, handle)
+    old = layout.Config(path)
+    assert old.configured() == []
+    assert old.layout_for()["theme"] == "mono"
+    assert old.layout_for("anybadge")["theme"] == "mono", "an old file lost its layout"
+    assert old.rev_for("anybadge") == 7
+    # And a revision is never reused, whichever layout it was last spent on.
+    assert old.replace({"pages": layout.DEFAULT_PAGES}, badge_id="anybadge") == 8
+    assert old.replace({"pages": layout.DEFAULT_PAGES}) == 9
+    assert old.rev_for("anybadge") == 8, "the default's save moved a badge's revision"
+    assert old.layout_for("anybadge")["pages"], "a badge's layout was lost"
+    shutil.rmtree(os.path.dirname(path), ignore_errors=True)
+
+    # The picker is in the header, where it says what everything below belongs to.
+    web = pathlib.Path("src/statsbadge/web")
+    page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
+    header = page[page.index("<header>"):page.index("</header>")]
+    for control in ('id="whose"', 'id="forget"', 'id="pair"', 'id="save"'):
+        assert control in header, control
+    assert "?badge=" in script, "the UI saves without saying whose layout it is"
+    assert "ownIds" in script, "a badge's pages can collide with another's"
+
+
 def sections_of(page):
     """The config UI's sections, keyed by heading. Only the ones that are a `section`: the
     page list is a column of its own and would otherwise swallow the heading after it."""

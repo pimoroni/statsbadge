@@ -132,6 +132,14 @@ Requests are rate limited on a doubling backoff and capped at `MAX_PENDING`, so 
 
 The app ships its own HTTP client because the firmware's `fetch.py` did not work on this build. [pimoroni/fetch](https://github.com/pimoroni/fetch) is the better choice for anything talking to arbitrary hosts - it spreads the TLS handshake across calls, handles chunked bodies and verifies keep-alive - but this app talks only to its own server, over plain HTTP, always with `Content-Length`.
 
+## One layout per badge
+
+`layout.json` holds the default at the top level and every badge's own under `badges`, keyed by badge id, so a file written before there was more than one badge reads as the default and each badge carries on showing what it showed. `Config.layout_for(badge_id)` is that badge's own or the default; `for_badge` is the same thing pruned, with the palette resolved and the table stripped, because the table names every other badge paired here and that is nothing to do with the one asking. A badge is identified by the signature on its request, so `/v1/layout` and `/v1/stats` need no query string to know whose layout to serve.
+
+Revisions come from one counter across the whole file - the highest anywhere plus one - and each layout carries the value it was last saved at. That is what makes a save for one badge leave the others alone: a badge refetches when the `layout_rev` in its own signed stats frame moves, and nobody else's does. A counter kept per layout would hand two badges the same number for different content, which the badge has no way to tell apart.
+
+Two things are deliberately not per badge. Extension settings are the host's answer - one place, one API key - so they stay at the top level however they arrive, and `layout_for` hands them back with whichever layout is being edited. And a source doing per-page work is told about `all_pages()`, every badge's, because it fetches for all of them at once and keys what it fetched by page id. That is also why the UI renames a badge's pages when it first gives it a layout of its own: two badges must not carry the same page id, or one clock page's city would be the other's.
+
 ## Which host, and where it went
 
 Credentials are keyed on a server id from [`identity.py`](src/statsbadge/identity.py), not an address, so a host that changes address is still the same host. The badge stores several, each with its own secret and counter, and after three failed polls it listens for beacons and follows one it knows - at most every 20s, because listening costs a frame. A beacon's *source address* is trusted over its payload. The older flat `{host, port, secret}` state file still loads, under a placeholder id until a beacon or a reinstall reveals the real one.

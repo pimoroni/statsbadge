@@ -1,11 +1,16 @@
 // The config UI. Edits a config object, PUTs it, and the badge picks up the new
 // revision on its next poll - so there is no "push to badge" step to get wrong.
+//
+// Everything on the page belongs to one badge, chosen in the header: `whose` is its id, or
+// null for the layout a badge draws before it has been given one of its own.
 
 const $ = (id) => document.getElementById(id);
 
 let config = null;
 let caps = null;
 let dirty = false;
+let whose = null;
+let badges = {};
 
 // Which field slots each page kind has, and how many.
 const SHAPE = {
@@ -390,7 +395,7 @@ function offerExtensionPages() {
 /** Tell the user when a page they configured will not appear on the badge. */
 async function refreshPruned() {
   try {
-    const preview = await api("/api/preview");
+    const preview = await api(configPath("/api/preview"));
     const kept = new Set(preview.pages.map((p) => p.id));
     const dropped = config.pages.filter((p) => !kept.has(p.id)).map((p) => p.title);
     const node = $("pruned");
@@ -718,35 +723,122 @@ function rampAt(stops, at) {
   return stops[stops.length - 1][1];
 }
 
-// -- badges ----------------------------------------------------------------
+// -- which badge -----------------------------------------------------------
+//
+// One layout per badge, and a default for a badge that has not been given its own. The picker
+// in the header says which of them the page is editing; `null` is the default.
 
-async function renderBadges() {
-  const listing = await api("/api/badges");
+const REMEMBERED = "statsbadge.whose";
+
+function configPath(path) {
+  const base = path || "/api/config";
+  return whose ? `${base}?badge=${encodeURIComponent(whose)}` : base;
+}
+
+function badgeName(id) {
+  return (badges[id] && badges[id].name) || id;
+}
+
+/** Which badge to open on: the one last edited if it is still paired, else the first. */
+function pickBadge() {
+  let last = null;
+  try { last = window.localStorage.getItem(REMEMBERED); } catch (error) { /* private */ }
+  if (last && badges[last]) return last;
+  return Object.keys(badges)[0] || null;
+}
+
+function remember(id) {
+  try {
+    if (id) window.localStorage.setItem(REMEMBERED, id);
+    else window.localStorage.removeItem(REMEMBERED);
+  } catch (error) { /* nothing to remember it in */ }
+}
+
+function renderWhose() {
+  const select = $("whose");
+  const ids = Object.keys(badges);
+  select.innerHTML = "";
+  for (const id of ids) {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = badgeName(id);
+    select.appendChild(option);
+  }
+  const fallback = document.createElement("option");
+  fallback.value = "";
+  fallback.textContent = ids.length ? "Default, for any other badge" : "No badge paired yet";
+  select.appendChild(fallback);
+  select.value = whose || "";
+  select.onchange = () => switchTo(select.value).catch((e) => toast(e.message, true));
+
+  const own = whose && badges[whose] && badges[whose].configured;
+  $("whosenote").textContent = whose && !own
+    ? "on the default layout, until you save"
+    : (!whose && ids.length ? "what a newly paired badge draws" : "");
+  $("forget").disabled = !whose;
+  $("forget").onclick = () => forgetBadge(whose).catch((e) => toast(e.message, true));
+}
+
+/** Load another badge's layout into the page. */
+async function switchTo(id) {
+  if (dirty && !window.confirm("Discard the unsaved changes to this badge?")) {
+    renderWhose();                      // put the picker back on the badge being edited
+    return;
+  }
+  whose = id || null;
+  remember(whose);
+  config = await api(configPath());
+  dirty = false;
+  $("save").disabled = true;
+  renderWhose();
+  renderPages();
+  renderSettings();
+  renderLook();
+  renderBadges();
+}
+
+async function forgetBadge(id) {
+  if (!window.confirm(`Forget ${badgeName(id)}? Its layout goes with it.`)) return;
+  await api(`/api/badges/${id}`, { method: "DELETE" });
+  badges = await api("/api/badges");
+  dirty = false;                        // the badge those edits belonged to is gone
+  await switchTo(Object.keys(badges)[0] || "");
+  toast("Forgotten");
+}
+
+/** Page ids made this badge's own.
+ *
+ * An extension keys what it does per page by page id - which city a clock page shows - so two
+ * badges must not carry the same one. Done where a badge stops drawing the default and gets a
+ * layout of its own, and derived from the badge id so switching back and forth is stable. */
+function ownIds(pages, badgeId) {
+  const tag = badgeId.slice(0, 4);
+  return pages.map((page) => (String(page.id).endsWith(`-${tag}`)
+    ? page : { ...page, id: `${page.id}-${tag}` }));
+}
+
+function renderBadges() {
   const node = $("badges");
   node.innerHTML = "";
-  const ids = Object.keys(listing);
+  const ids = Object.keys(badges);
   if (!ids.length) {
     node.innerHTML = `<div class="hint">None paired. Use the USB installer, or `
       + `pair over the network.</div>`;
     return;
   }
   for (const id of ids) {
-    const record = listing[id];
     const row = document.createElement("div");
-    row.className = "badge-row";
+    row.className = "badge-row" + (id === whose ? " on" : "");
     const name = document.createElement("span");
     name.className = "name";
-    name.innerHTML = `${record.name || id}<br><code>${id}</code>`;
+    name.innerHTML = `${badges[id].name || id}<br><code>${id}</code>`;
     row.appendChild(name);
-    const forget = document.createElement("button");
-    forget.className = "small danger";
-    forget.textContent = "Forget";
-    forget.onclick = async () => {
-      await api(`/api/badges/${id}`, { method: "DELETE" });
-      toast("Forgotten");
-      renderBadges();
-    };
-    row.appendChild(forget);
+    const state = document.createElement("span");
+    state.className = "state";
+    state.textContent = badges[id].configured ? "own layout" : "default";
+    row.appendChild(state);
+    // Clicking a row is the other way to get at a badge, the picker being in the header.
+    row.onclick = () => switchTo(id).catch((error) => toast(error.message, true));
     node.appendChild(row);
   }
 }
@@ -767,9 +859,18 @@ async function stopPairing() {
 }
 
 async function answer(requestId, approve) {
-  await api(`/api/enrol/${requestId}/${approve ? "approve" : "deny"}`, { method: "POST" });
+  const result = await api(`/api/enrol/${requestId}/${approve ? "approve" : "deny"}`,
+                          { method: "POST" });
   toast(approve ? "Badge paired" : "Denied");
-  renderBadges();
+  badges = await api("/api/badges");
+  // Straight to the badge just paired, since configuring it is what comes next - unless there
+  // are edits for another one, which are not worth interrupting for.
+  if (approve && result.approved && !dirty) {
+    await switchTo(result.approved);
+  } else {
+    renderWhose();
+    renderBadges();
+  }
   watchPairing();
 }
 
@@ -926,16 +1027,24 @@ function renderSources() {
 
 async function save() {
   try {
-    const result = await api("/api/config", {
+    // A badge saving for the first time stops drawing the default and gets pages of its own.
+    if (whose && badges[whose] && !badges[whose].configured) {
+      config.pages = ownIds(config.pages, whose);
+    }
+    const result = await api(configPath(), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(config),
     });
     config.rev = result.rev;
+    if (whose && badges[whose]) badges[whose].configured = true;
     dirty = false;
     $("save").disabled = true;
-    toast(`Saved. The badge will pick up revision ${result.rev}.`);
-    refreshPruned();
+    toast(`Saved. ${whose ? badgeName(whose) : "A badge on the default"} `
+      + `will pick up revision ${result.rev}.`);
+    renderWhose();
+    renderPages();
+    renderBadges();
   } catch (error) {
     toast(error.message, true);
   }
@@ -943,7 +1052,9 @@ async function save() {
 
 async function boot() {
   try {
-    [config, caps] = await Promise.all([api("/api/config"), api("/api/capabilities")]);
+    [caps, badges] = await Promise.all([api("/api/capabilities"), api("/api/badges")]);
+    whose = pickBadge();
+    config = await api(configPath());
   } catch (error) {
     document.body.innerHTML = `<p style="padding:20px">Cannot reach the server: `
       + `${error.message}</p>`;
@@ -954,6 +1065,7 @@ async function boot() {
     `${sys.host || "host"} · ${sys.os || ""} · ${sys.cpu_name || ""}`;
 
   offerExtensionPages();
+  renderWhose();
   renderPages();
   renderSettings();
   renderLook();

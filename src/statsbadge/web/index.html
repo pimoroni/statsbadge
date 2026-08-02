@@ -10,6 +10,10 @@
 <header>
   <h1>statsbadge</h1>
   <div class="host" id="hostline">loading&hellip;</div>
+  <!-- Everything on the page below belongs to whichever badge is chosen here. -->
+  <label class="whose">Badge <select id="whose"></select></label>
+  <span class="note" id="whosenote"></span>
+  <button id="forget" class="danger">Forget</button>
   <button id="pair">Pair a badge&hellip;</button>
   <button id="save" class="primary" disabled>Save to badge</button>
   <!-- Under the button that opened it: the code to match is what somebody is looking at

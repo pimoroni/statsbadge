@@ -70,6 +70,8 @@ statsbadge install --ssid "Other" --force-secrets    # change the WiFi it uses
 statsbadge --config-dir ./cfg serve    # global options come before the subcommand
 ```
 
+Each badge is configured separately: the picker in the header of the config UI says which one the page belongs to, and pages, theme, buttons and the rest are that badge's own. A badge that has just been paired draws the default until it is saved for the first time, which is what "Default, for any other badge" in the picker edits. Saving for one badge leaves the others where they are - a badge only refetches when its own layout's revision moves. Forgetting a badge takes its layout with it. What an extension is *told* - a place, an API key - stays one answer per host, since that is what it is.
+
 Configuration lives in `~/.config/statsbadge` on Linux, `~/Library/Application Support/statsbadge` on macOS and `%LOCALAPPDATA%\statsbadge` on Windows, or `$XDG_CONFIG_HOME/statsbadge` wherever that is set. `statsbadge status` prints the path it is using. Three files: `layout.json`, `server.json` and `badges.json`, the last holding pairing secrets and kept at mode 600.
 
 ## Changing IPs, and more than one computer

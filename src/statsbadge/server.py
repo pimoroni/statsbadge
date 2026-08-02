@@ -87,11 +87,11 @@ class Service:
     def announce_pages(self):
         """Tell the sources about the pages already stored, at startup.
 
-        replace_config covers a later save; without this a source doing per-page work
-        does nothing until someone presses Save.
+        Every badge's, since a source doing per-page work fetches for all of them at once.
+        replace_config covers a later save; without this one does nothing until someone
+        presses Save.
         """
-        extensions.configure_pages(self.collector.extensions,
-                                   self.config.snapshot().get("pages"))
+        extensions.configure_pages(self.collector.extensions, self.config.all_pages())
 
     def capabilities(self):
         caps = self.collector.capabilities()
@@ -121,20 +121,23 @@ class Service:
         caps["extension_page_settings"] = self.extension_page_settings()
         return caps
 
-    def replace_config(self, incoming):
-        """Store a config from the UI and hand the new settings to the sources.
+    def replace_config(self, incoming, badge_id=None):
+        """Store a layout from the UI and hand the new settings to the sources.
 
         Applied here rather than at the next restart, so a location typed in the browser
-        takes effect on the next sample.
+        takes effect on the next sample. `badge_id` says whose layout this is; without one it
+        is the default.
         """
         rev = self.config.replace(incoming, self.extension_kinds(),
                                  self.extension_settings(),
-                                 self.extension_page_settings())
-        stored = self.config.snapshot()
-        extensions.configure(self.collector.extensions, stored.get("settings"))
-        # Pages too, so a source doing per-page work sees the new ones without waiting
-        # for a restart.
-        extensions.configure_pages(self.collector.extensions, stored.get("pages"))
+                                 self.extension_page_settings(), badge_id)
+        # Settings are the host's and not a badge's - a location or an API key is one answer
+        # per machine - so they are read back from where the store keeps them.
+        extensions.configure(self.collector.extensions,
+                             self.config.snapshot().get("settings"))
+        # Pages too, so a source doing per-page work sees the new ones without waiting for a
+        # restart, and every badge's, since it fetches for all of them at once.
+        extensions.configure_pages(self.collector.extensions, self.config.all_pages())
         return rev
 
 
@@ -259,8 +262,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": service.identity["name"],
                 "host": service.collector.latest().get("sys", {}).get("host"),
                 "pairing": service.badges.pairing_active(),
+                # The default's, this being the one call a badge makes before it can prove who
+                # it is. What it watches for a layout change is the revision in a signed
+                # stats frame, which is its own.
                 "layout_rev": service.config.rev,
-                "interval_ms": service.config.snapshot().get("interval_ms", 1000),
+                "interval_ms": service.config.layout_for().get("interval_ms", 1000),
             })
 
         # Unauthenticated: the badge has no secret yet. Gated on a human approving it.
@@ -291,11 +297,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if path == "/v1/stats" and method == "GET":
             frame = dict(service.collector.latest())
-            frame["layout_rev"] = service.config.rev
+            # This badge's own layout revision: it refetches when the number moves, so a save
+            # for one badge must not send the others to fetch a layout that has not changed.
+            frame["layout_rev"] = service.config.rev_for(badge_id)
             return self._json(200, frame)
 
         if path == "/v1/layout" and method == "GET":
-            return self._json(200, service.config.for_badge(service.capabilities()))
+            return self._json(200, service.config.for_badge(service.capabilities(),
+                                                           badge_id))
 
         if path == "/v1/history" and method == "GET":
             query = self._query()
@@ -311,8 +320,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/v1/command" and method == "POST":
             payload = json.loads(body or b"{}")
             name = str(payload.get("cmd") or "")
+            # Bound on this badge's own layout: the buttons are configured per badge.
             allowed = {
-                v for v in service.config.snapshot().get("buttons", {}).values() if v
+                v for v in service.config.layout_for(badge_id).get("buttons", {}).values()
+                if v
             }
             if name not in allowed:
                 return self._fail(403, f"command {name!r} is not bound to a button")
@@ -349,22 +360,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {"theme": theme, "tint": tint,
                                     "palette": layout.palette_for(theme, tint)})
 
+        # One layout per badge, and a default for a badge that has not been given its own.
+        # `?badge=` says whose; without it, the default.
         if path == "/api/config":
+            whose = self._query().get("badge") or None
             if method == "GET":
-                return self._json(200, service.config.snapshot())
+                return self._json(200, service.config.layout_for(whose))
             if method == "PUT":
+                if whose and whose not in service.badges.list_badges():
+                    return self._fail(404, f"no badge {whose!r} is paired here")
                 try:
-                    rev = service.replace_config(json.loads(body or b"{}"))
+                    rev = service.replace_config(json.loads(body or b"{}"), whose)
                 except ValueError as exc:
                     return self._fail(400, str(exc))
-                return self._json(200, {"rev": rev})
+                return self._json(200, {"rev": rev, "badge": whose})
 
         if path == "/api/stats" and method == "GET":
             return self._json(200, service.collector.latest())
 
         if path == "/api/preview" and method == "GET":
             # What the badge would be sent, so the UI can show pruning.
-            return self._json(200, service.config.for_badge(service.capabilities()))
+            return self._json(200, service.config.for_badge(
+                service.capabilities(), self._query().get("badge") or None))
 
         if path == "/api/pair" and method == "GET":
             state = service.badges.pairing_state()
@@ -396,10 +413,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {"pairing": False})
 
         if path == "/api/badges" and method == "GET":
-            return self._json(200, service.badges.list_badges())
+            # With whether each has a layout of its own, which is what the UI's badge picker
+            # has to say: the rest are drawing the default.
+            configured = set(service.config.configured())
+            return self._json(200, {
+                badge_id: dict(record, configured=badge_id in configured)
+                for badge_id, record in service.badges.list_badges().items()
+            })
 
         if path.startswith("/api/badges/") and method == "DELETE":
             badge_id = path[len("/api/badges/"):]
+            # And its layout, which would otherwise sit in the file naming a badge nothing can
+            # reach, and be handed to whatever next held that id.
+            service.config.forget(badge_id)
             return self._json(200, {"forgotten": service.badges.forget(badge_id)})
 
         return self._fail(404, "no such endpoint")

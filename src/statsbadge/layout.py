@@ -112,12 +112,22 @@ DEFAULT_CONFIG = {
 
 
 class Config:
-    """The layout, persisted, with a revision the badge can watch."""
+    """The layouts, persisted, each with a revision the badge that draws it can watch.
+
+    One layout per badge, and one for a badge that has not been given its own. The file holds
+    the default at the top level and the rest under `badges`, keyed by badge id, so a file
+    written before there was more than one badge reads as the default and every badge carries
+    on showing what it showed.
+
+    A badge is never sent the table: it names every other badge paired with this host, which
+    is nothing to do with the one asking.
+    """
 
     def __init__(self, path):
         self.path = path
         self._lock = threading.Lock()
         self.data = copy.deepcopy(DEFAULT_CONFIG)
+        self.data["badges"] = {}
         self.load()
 
     def load(self):
@@ -129,6 +139,11 @@ class Config:
         with self._lock:
             merged = copy.deepcopy(DEFAULT_CONFIG)
             merged.update(stored)
+            merged["badges"] = {
+                str(badge_id): block
+                for badge_id, block in (stored.get("badges") or {}).items()
+                if isinstance(block, dict)
+            }
             self.data = merged
 
     def save(self):
@@ -143,33 +158,118 @@ class Config:
         os.replace(tmp, self.path)
 
     def snapshot(self):
+        """The whole file, table included."""
         with self._lock:
             return copy.deepcopy(self.data)
 
+    def layout_for(self, badge_id=None):
+        """The layout one badge is configured with: its own, or the default.
+
+        Extension settings come with it wherever they are stored, so a UI editing any badge
+        sees the same ones and hands them back as it found them.
+        """
+        with self._lock:
+            own = (self.data.get("badges") or {}).get(str(badge_id or ""))
+            data = copy.deepcopy(own if own is not None else self.data)
+            data["settings"] = copy.deepcopy(self.data.get("settings") or {})
+        data.pop("badges", None)
+        return data
+
+    def configured(self):
+        """Badge ids with a layout of their own, as against those on the default."""
+        with self._lock:
+            return sorted(self.data.get("badges") or {})
+
+    def all_pages(self):
+        """Every page configured anywhere, deduped by id.
+
+        What a source doing per-page work has to be told about: it is handed the pages of its
+        own kinds and keys what it fetches by page id, so it needs every badge's and not one
+        badge's.
+        """
+        with self._lock:
+            blocks = [self.data] + list((self.data.get("badges") or {}).values())
+            seen, pages = set(), []
+            for block in blocks:
+                for page in block.get("pages") or ():
+                    if page.get("id") in seen:
+                        continue
+                    seen.add(page.get("id"))
+                    pages.append(copy.deepcopy(page))
+        return pages
+
     @property
     def rev(self):
+        return self.rev_for(None)
+
+    def rev_for(self, badge_id=None):
+        """The revision of the layout this badge draws, which is what it watches for a change.
+
+        Its own layout's, so saving for one badge does not send every other badge to refetch a
+        layout that has not moved.
+        """
         with self._lock:
-            return self.data.get("rev", 1)
+            own = (self.data.get("badges") or {}).get(str(badge_id or ""))
+            return (own if own is not None else self.data).get("rev", 1)
+
+    def _next_rev(self):
+        """One counter across every layout in the file, so a revision is never reused.
+
+        Taken as the highest anywhere plus one, rather than kept as a key of its own: a badge
+        comparing what it holds with what a frame reports must never see a number it has
+        already drawn.
+        """
+        revs = [self.data.get("rev", 1)]
+        revs += [block.get("rev", 1)
+                 for block in (self.data.get("badges") or {}).values()]
+        return max(revs) + 1
 
     def replace(self, incoming, extra_kinds=(), settings_schema=None,
-                page_settings_schema=None):
-        """Validate and store a whole config from the UI. Returns the new revision."""
+                page_settings_schema=None, badge_id=None):
+        """Validate and store a whole layout from the UI. Returns its new revision.
+
+        With a badge id it becomes that badge's own, whatever it was showing before; without
+        one it is the default, which is what a badge with no layout of its own draws.
+        """
         cleaned = validate(incoming, extra_kinds, settings_schema, page_settings_schema)
         with self._lock:
-            cleaned["rev"] = self.data.get("rev", 1) + 1
+            cleaned["rev"] = self._next_rev()
             cleaned["updated_at"] = int(time.time())
-            self.data = cleaned
+            if badge_id:
+                # What an extension is told is the host's answer and not a badge's - one place,
+                # one API key - so it is kept at the top level however it arrives.
+                self.data["settings"] = cleaned.pop("settings", None) or {}
+                self.data.setdefault("badges", {})[str(badge_id)] = cleaned
+            else:
+                # The table belongs to the file, not to the default layout, so replacing the
+                # default must not take every badge's layout with it.
+                kept = self.data.get("badges") or {}
+                self.data = cleaned
+                self.data["badges"] = kept
         self.save()
         return cleaned["rev"]
 
-    def for_badge(self, capabilities=None):
+    def forget(self, badge_id):
+        """Drop a badge's layout. True if there was one.
+
+        Called when a pairing is forgotten: the layout would otherwise sit in the file naming a
+        badge nothing can reach, and be handed to whatever next held that id.
+        """
+        with self._lock:
+            if str(badge_id) not in (self.data.get("badges") or {}):
+                return False
+            del self.data["badges"][str(badge_id)]
+        self.save()
+        return True
+
+    def for_badge(self, capabilities=None, badge_id=None):
         """The layout as the badge should see it: pruned to fields that exist.
 
         The chosen theme travels as its colours and not only its name, so the badge draws
         what this host knows about rather than what its own copy of the app happened to
         ship with. 213 bytes, on a payload that is only refetched when `rev` moves.
         """
-        data = self.snapshot()
+        data = self.layout_for(badge_id)
         data.pop("settings", None)
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
