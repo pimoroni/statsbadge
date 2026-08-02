@@ -64,8 +64,19 @@ class FakeColour:
         return "color.rgb({}, {}, {}, {})".format(*self.parts())
 
 
-# Where the badge finds it, and before anything imports look.
+class FakeShape:
+    """The stroke flags draw.py names at import. Mirrors picovector's `stroke_flags_t`,
+    though nothing here depends on the values: only the badge draws with them."""
+
+    PATH_OPEN = 1 << 2
+    ALIGN_CENTER = 2
+    JOIN_MITER = 0
+    CAP_BUTT = 0
+
+
+# Where the badge finds them, and before anything imports look or draw.
 builtins.color = FakeColour
+builtins.shape = FakeShape
 
 
 class Harness:
@@ -1762,6 +1773,25 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
     body = source[source.index("def curve("):]
     body = body[:body.index("\ndef ", 1)]
     assert "_basis(steps)" in body, "the weights are not taken from the table"
+
+    # A fill and a line are the same layout with different ends on it, so both go through
+    # _lay_out and neither scales its samples twice.
+    for name in ("def area(", "def line("):
+        widget = source[source.index(name):]
+        widget = widget[:widget.index("\ndef ", 1)]
+        assert "_lay_out(" in widget, f"{name} lays its own points out"
+
+    # A sparkline is stroked, and how it is stroked is what it costs: a round join is an arc
+    # at every sample and 3.5ms a page, where the weight is free.
+    trace = source[source.index("LINE_FLAGS = "):]
+    trace = trace[:trace.index("\n")]
+    assert "JOIN_MITER" in trace and "PATH_OPEN" in trace, trace
+    # Centred, or the band grows to one side of the samples it is drawn from.
+    assert "ALIGN_CENTER" in trace, trace
+    sparks = source[source.index("def sparklines("):]
+    sparks = sparks[:sparks.index("\ndef ", 1)]
+    assert "line(plot_x" in sparks, "the sparkline page is not drawing lines"
+    assert "screen.alpha" not in sparks, "a line does not need to let the page through"
 
 
 @check

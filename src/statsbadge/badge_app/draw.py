@@ -785,8 +785,10 @@ def curve(values, steps=CURVE_STEPS):
 _points = array("f", b"")
 
 
-def area(left, top, width, height, values, peak, base=None, shift=0.0):
-    """One filled area from `values` against `peak`, closed along its base. A shape, or None.
+def _lay_out(left, top, width, height, values, peak, shift):
+    """`values` scaled against `peak` and laid across the box, in the shared float buffer.
+
+    Returns how many floats were written, or 0.
 
     `shift` is how far the plot has walked left since its newest sample landed, in samples:
     0 draws it where the readings are, and 1 would have moved a whole sample's width. The
@@ -794,16 +796,15 @@ def area(left, top, width, height, values, peak, base=None, shift=0.0):
     at the left while the gap at the right is where the next one is arriving.
 
     The plot is smoothed first if it is tall enough to show a curve, then scaled and laid out
-    in one pass into a float buffer: `shape.custom` takes one of those, so no point is boxed
-    as a vec2 - 2.3ms against 3.7 for 191 points, and the same pixels. Scaling here rather
-    than in a list the caller passes saves a pass over every sample, which was 14.7us a point
-    and 4.2ms of the sparkline page. Where the base sits is a caller's business, a sparkline's
-    axis being under its plot rather than at the foot of it.
+    in one pass: `shape.custom` takes a float buffer, so no point is boxed as a vec2 - 2.3ms
+    against 3.7 for 191 points, and the same pixels. Scaling here rather than in a list the
+    caller passes saves a pass over every sample, which was 14.7us a point and 4.2ms of the
+    sparkline page.
     """
     global _points
     count = len(values)
     if count < 2:
-        return None
+        return 0
     steps = curve_steps(width, height, count)
     if steps > 1:
         values = curve([value or 0.0 for value in values], steps)
@@ -823,13 +824,43 @@ def area(left, top, width, height, values, peak, base=None, shift=0.0):
         _points[i] = start + index * step
         _points[i + 1] = top if y < top else (bottom if y > bottom else y)
         i += 2
+    return i
+
+
+def area(left, top, width, height, values, peak, base=None, shift=0.0):
+    """One filled area from `values` against `peak`, closed along its base. A shape, or None.
+
+    Where the base sits is a caller's business, a sparkline's axis being under its plot
+    rather than at the foot of it.
+    """
+    i = _lay_out(left, top, width, height, values, peak, shift)
+    if not i:
+        return None
     if base is None:
-        base = bottom
-    _points[i] = start + width
+        base = top + height
+    _points[i] = _points[i - 2]
     _points[i + 1] = base
-    _points[i + 2] = start
+    _points[i + 2] = _points[0]
     _points[i + 3] = base
     return shape.custom(memoryview(_points)[:i + 4])
+
+
+# A plot drawn as a line rather than as a fill. Anti-aliased, so it costs its edges: the
+# weight is free - 2.0 and 2.5 time the same as 1.5 - but the join is not, a round one being
+# an arc at every one of 48 vertices and 3.5ms a page more than a miter. Centred on the
+# samples, or the band grows to one side of its own data.
+LINE_W = 2.0
+LINE_FLAGS = (shape.PATH_OPEN | shape.ALIGN_CENTER | shape.JOIN_MITER | shape.CAP_BUTT)
+
+
+def line(left, top, width, height, values, peak, weight=LINE_W, shift=0.0):
+    """`values` as a stroked polyline against `peak`. A shape, or None."""
+    i = _lay_out(left, top, width, height, values, peak, shift)
+    if not i:
+        return None
+    trace = shape.custom(memoryview(_points)[:i])
+    trace.stroke(weight, LINE_FLAGS)
+    return trace
 
 
 def graph(theme, series, labels, maximum=None, shift=0.0):
@@ -1090,10 +1121,14 @@ def rings(theme, entries):
 # -- sparklines -------------------------------------------------------------
 
 def sparklines(theme, entries, shift=0.0):
-    """A row per reading: name, current value, and its history as a small area.
+    """A row per reading: name, current value, and its history as a small line.
 
     Six of these fit the body band, which is the point - one page that says what every
     other page says, at the cost of the detail a full graph gives.
+
+    A line rather than a filled area, at 1.2ms a page more: a plot 22px tall filled to its
+    axis is a slab of colour on any reading that holds steady, which says the level over
+    again where the reading beside it already does, and says nothing about the shape.
     """
     rows = entries[:6]
     if not rows:
@@ -1114,15 +1149,12 @@ def sparklines(theme, entries, shift=0.0):
         screen.pen = theme.grid
         screen.hspan(plot_x, top + plot_h + 3, plot_w)
         if points and len(points) > 1 and peak:
-            filled = area(plot_x, top, plot_w, plot_h, points, peak,
-                          base=top + plot_h + 3, shift=shift)
+            trace = line(plot_x, top, plot_w, plot_h, points, peak, shift=shift)
             screen.pen = theme.accent
-            screen.alpha = 190
             was = screen.clip
             screen.clip = rect(plot_x, look.BODY_TOP, plot_w, look.BODY_H)
-            screen.shape(filled)
+            screen.shape(trace)
             screen.clip = was
-            screen.alpha = 255
         blit_label(value_text, look.SIZE_LABEL, theme.ink, look.W - look.PAD, mid - 7,
                    align=2)
 
