@@ -161,9 +161,13 @@ uv pip install --python .venv/bin/python --no-deps --reinstall-package statsbadg
   ./extensions/statsbadge-clock
 ```
 
-That one is a worked example: a Swiss railway clock whose second hand sweeps at the badge's frame rate, plus weather from Open-Meteo, which needs no API key.
+Two are vendored as worked examples. [statsbadge-clock](extensions/statsbadge-clock/) is a Swiss railway clock whose second hand sweeps at the badge's frame rate, plus weather from Open-Meteo, which needs no API key.
 
 ![Railway](shots/swiss_clock.png) ![Dots](shots/face_dots.png) ![Squircle](shots/face_squircle.png) ![Digital](shots/face_digital.png) ![Digital LCD](shots/face_lcd.png)
+
+[statsbadge-quakes](extensions/statsbadge-quakes/) puts the last few earthquakes on a world map, cycling through them on its own: a camera that travels and rings that grow, off a list the host fetches from USGS every five minutes. The map is the firmware's own `world.geo.json`, so no geometry goes over the wire, and the land takes its colour from the theme ramp by latitude.
+
+![Quakes](shots/quakes.png) ![Quakes pulled out](shots/quakes_wide.png)
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for how to write one.
 

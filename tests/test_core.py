@@ -2868,6 +2868,84 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
         "the ghost is drawn over the digits")
 
 
+@check
+def test_the_quake_map_stays_inside_its_own_band(_h):
+    """The map is 288 polygons placed by a transform, so nothing about a polygon says it
+    stops at the edge of the page's band: the header, the footer and the reading band are
+    all one clip away from being drawn over."""
+    source = (pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge")
+              / "quakemap.py").read_text()
+    sys.path.insert(0, install.app_source_dir())
+    import look
+
+    scope = {"look": look}
+    for line in source.splitlines():
+        if line.startswith(("BAND_H", "MAP_TOP", "MAP_H", "BAND_TOP")):
+            exec(line, scope)  # noqa: S102  our own module, four constants off the top
+    # The band the map draws in plus the band that names it are the page's own band and no
+    # more of the screen.
+    assert scope["MAP_H"] + scope["BAND_H"] == look.BODY_H, scope
+    assert scope["MAP_TOP"] == look.BODY_TOP
+    assert scope["BAND_TOP"] == look.BODY_TOP + scope["MAP_H"]
+
+    # Both the coastlines and the rings around an epicentre are drawn to the map band and
+    # put the clip back, or the next page would inherit it.
+    for name in ("def _coastlines(", "def _reticle("):
+        body = source[source.index(name):]
+        body = body[:body.index("\ndef ", 1)]
+        assert "screen.clip = rect(0, MAP_TOP, look.W, MAP_H)" in body, name
+        assert body.index("was = screen.clip") < body.index("screen.clip = rect"), name
+        assert "screen.clip = was" in body, name
+
+
+@check
+def test_the_quake_page_agrees_with_its_source(_h):
+    """The events are host side and the drawing is badge side, so a name that moved on one
+    is a page that draws nothing and says nothing about why."""
+    source = (pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge")
+              / "quakemap.py").read_text()
+    try:
+        from statsbadge_quakes import Quakes, _event
+    except ImportError:
+        return              # the extension is not pip installed in this environment
+
+    kind = Quakes.badge_page["kind"]
+    assert f'pages.EXTRA["{kind}"] = render' in source, kind
+    # The camera travels and the rings grow between readings, so the page has to ask for
+    # frames it has not been polled for.
+    assert f'pages.ANIMATED.add("{kind}")' in source, kind
+
+    # Every per-page setting the UI offers is one the renderer reads.
+    for setting in Quakes.page_settings:
+        assert f'get("{setting["key"]}")' in source, setting["key"]
+
+    # And every key an event carries is one of them, both ways round: the group name, the
+    # list inside it, and the fields of an event.
+    event = _event({"properties": {"mag": 4.5, "place": "somewhere", "time": 1700000000000},
+                    "geometry": {"coordinates": [1.0, 2.0, 10.0]}})
+    assert 'frame.get("quakes") or {}).get("events")' in source
+    for field in event:
+        if field == "at":
+            continue        # worked out into age_s before it is sent
+        assert f'"{field}"' in source, field
+
+
+@check
+def test_the_quake_map_only_uses_names_the_badge_has(_h):
+    """An extension's badge module is compiled on the badge at launch and cannot be imported
+    here, so a name that is neither defined, imported nor a badge builtin is a crash dialog
+    after the app has started. Same check the app's own modules get."""
+    import ast
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+    import check_app
+
+    path = (pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge")
+            / "quakemap.py")
+    tree = ast.parse(path.read_text(), filename=str(path))
+    assert check_app.check_names(path, tree) is None, check_app.check_names(path, tree)
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)
