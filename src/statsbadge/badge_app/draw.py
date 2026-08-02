@@ -784,16 +784,23 @@ def curve(values, steps=CURVE_STEPS):
 
 _points = array("f", b"")
 
+# How many samples a walking plot has to make room for on its right: one per update normally,
+# and however many arrive at once when the badge polls slower than the host samples. Set from
+# pages, which is what knows the two rates. Held still between updates on purpose - deriving it
+# from the current shift would resize the plot on every frame.
+WALK_LEAD = 1
+
 
 def _lay_out(left, top, width, height, values, peak, shift):
     """`values` scaled against `peak` and laid across the box, in the shared float buffer.
 
     Returns how many floats were written, or 0.
 
-    `shift` is how far the plot has walked left since its newest sample landed, in samples:
-    0 draws it where the readings are, and 1 would have moved a whole sample's width. The
-    plot is drawn one step wider than its box and clipped to it, so the oldest sample leaves
-    at the left while the gap at the right is where the next one is arriving.
+    `shift` is how far the plot has walked left since its last update, in samples: 0 is just
+    after one landed. `None` means the plot is not walking at all, which is a different layout
+    and not the same as a shift of zero - a walking plot is laid out `WALK_LEAD` samples wider
+    than its box and clipped to it, so the samples still to come slide in at the right as the
+    oldest leave at the left.
 
     The plot is smoothed first if it is tall enough to show a curve, then scaled and laid out
     in one pass: `shape.custom` takes a float buffer, so no point is boxed as a vec2 - 2.3ms
@@ -811,12 +818,31 @@ def _lay_out(left, top, width, height, values, peak, shift):
         count = len(values)
     if len(_points) < (count + 2) * 2:
         _points = array("f", bytes((count + 2) * 8))
-    step = width / float(count - 1)
-    scale = height / float(peak or 1.0)
-    bottom = top + height
     # A sample of the original data, however many points it was interpolated to, so a shift
     # of one moves the plot by one reading whether it is smoothed or not.
-    away = (shift * step * (steps if steps > 1 else 1)) if shift else 0.0
+    # Points per original sample, so a shift of one moves the plot by one reading whether the
+    # series was interpolated or not.
+    per_sample = steps if steps > 1 else 1
+    # Walking, the samples still to come in are laid *past* the right edge and slide in as the
+    # plot moves, so the box stays full. Laid across the width alone the whole plot simply
+    # shifts left, and the gap it leaves at the right grows to a sample's width before
+    # snapping back - which reads as the plot periodically shrinking.
+    lead = per_sample * (WALK_LEAD if WALK_LEAD > 1 else 1)
+    # A quarter of the plot at most. Headroom is space the samples are not drawn in, so a
+    # badge far enough behind to want more than that gets a shorter walk instead of a plot
+    # squeezed into the corner of its own box.
+    if lead > count // 4:
+        lead = count // 4
+    walking = shift is not None
+    span = count - 1 - lead if walking and count > lead + 1 else count - 1
+    step = width / float(span)
+    scale = height / float(peak or 1.0)
+    bottom = top + height
+    away = shift * step * per_sample if walking else 0.0
+    # Never further than the headroom laid out for it, or the newest sample is pulled back
+    # inside the box and the gap at the right returns. It waits at the edge instead.
+    if away > lead * step:
+        away = lead * step
     start = left - away
     i = 0
     for index in range(count):
@@ -827,7 +853,7 @@ def _lay_out(left, top, width, height, values, peak, shift):
     return i
 
 
-def area(left, top, width, height, values, peak, base=None, shift=0.0):
+def area(left, top, width, height, values, peak, base=None, shift=None):
     """One filled area from `values` against `peak`, closed along its base. A shape, or None.
 
     Where the base sits is a caller's business, a sparkline's axis being under its plot
@@ -853,7 +879,7 @@ LINE_W = 2.0
 LINE_FLAGS = (shape.PATH_OPEN | shape.ALIGN_CENTER | shape.JOIN_MITER | shape.CAP_BUTT)
 
 
-def line(left, top, width, height, values, peak, weight=LINE_W, shift=0.0):
+def line(left, top, width, height, values, peak, weight=LINE_W, shift=None):
     """`values` as a stroked polyline against `peak`. A shape, or None."""
     i = _lay_out(left, top, width, height, values, peak, shift)
     if not i:
@@ -863,19 +889,48 @@ def line(left, top, width, height, values, peak, weight=LINE_W, shift=0.0):
     return trace
 
 
-def graph(theme, series, labels, maximum=None, shift=0.0):
+# What an axis with no full scale of its own tops out at: one of these times a power of the
+# base the reading is formatted in. Stepped rather than fitted to the data, because a scale
+# fitted to the window creeps with every sample that arrives or leaves - the plot rescaling
+# slightly on each poll, which reads as the whole graph twitching. It also settles the
+# gutter, whose width is the label's: a stepped axis shows one of a few strings.
+AXIS_STEPS = (1, 2, 5, 10, 20, 50, 100, 200, 500)
+
+
+def axis_top(peak, field):
+    """The round number an axis tops out at, at or above `peak`.
+
+    In the base the reading is scaled by, so a byte rate steps 1024 at a time and says
+    5.0MB/s rather than 4.8: a label the reader can place a sample against is the point of
+    having one.
+    """
+    base = 1024.0 if field.endswith(("_bps", "_mb")) else 10.0
+    scale = 1.0
+    while scale * AXIS_STEPS[-1] < peak:
+        scale *= base
+    for step in AXIS_STEPS:
+        if scale * step >= peak:
+            return scale * step
+    return scale * base
+
+
+def graph(theme, series, labels, maximum=None, shift=None):
     """One or two series over time, as filled areas.
 
     Each series is one `shape.custom` contour: a polyline across the top and back
     along the bottom. One shape is one anti-aliased edge and one setup cost, where a
     line per sample would be dozens.
-    """
-    peak = maximum
-    if peak is None:
-        peak = max((max(s) for s in series if s), default=1.0)
-    peak = max(peak, 1.0) * 1.15
 
+    A field with a full scale is drawn against it with headroom above; one without - a
+    throughput has none of its own - is drawn against the next round number up from the
+    busiest sample on the plot.
+    """
     field = labels[0][1] if labels else "pct"
+    if maximum is None:
+        peak = axis_top(max((max(s) for s in series if s), default=1.0), field)
+    else:
+        peak = max(maximum, 1.0) * 1.15
+
     peak_text = reading(peak, field)
     # The gutter holds the scale, which is as wide as the scale is: 100% and 9.8MB/s do
     # not need the same room.
@@ -1133,7 +1188,7 @@ ROWS = "zebra"
 ROW_NONE = "none"
 
 
-def sparklines(theme, entries, shift=0.0):
+def sparklines(theme, entries, shift=None):
     """A row per reading: name, current value, and its history as a small line.
 
     Six of these fit the body band, which is the point - one page that says what every
@@ -1251,7 +1306,7 @@ def radar(theme, entries):
 # -- trend ------------------------------------------------------------------
 
 def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
-          hot=None, shift=0.0):
+          hot=None, shift=None):
     """One big reading, which way it is going, and where it has been.
 
     The arrow and the change are the point: a number on its own does not say whether

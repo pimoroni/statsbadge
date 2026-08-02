@@ -26,11 +26,41 @@ ANIMATED = set()
 # itself steps either way: the number is the measurement, and one redrawn at frame rate
 # would bake a sprite a frame.
 ANIMATE = False
-# How far through the interval between polls the frame being drawn is, 0 when a reading has
-# just landed and approaching 1 as the next one is due. Set by the app, which is what knows
-# when the last frame arrived and how often they come; used to walk a plot left, so a graph
-# scrolls between readings instead of jumping a sample every second.
+# How many samples a plot should have walked left by the frame being drawn: 0 just after an
+# update landed, rising towards however many arrive in one. Used to walk a plot left, so a
+# graph scrolls between updates instead of jumping.
 PHASE = 0.0
+# The last sample the badge saw, when the series last advanced, and how far apart both come.
+#
+# Three periods are in play and only one of them is the right one. The host samples every
+# `serve --interval` seconds, this badge polls every `interval_ms`, and it refetches the
+# series every five: keying the walk to a reply snapped every plot back on each poll while
+# the data stood still, and dividing by the poll interval walked a plot three times too fast
+# against a host sampling every three seconds. So the spacing is measured from `seq`, which
+# the host moves once per sample, and nothing has to be assumed.
+_sample_seq = None
+_sample_at = 0
+_seen_at = 0
+_sample_t = None
+SAMPLE_MS = 0
+# What to fall back on before two samples have been seen, and the gaps worth believing: a
+# badge coming back from sleep, or a host restarting, must not set the walk to something it
+# never recovers from.
+SAMPLE_DEFAULT_MS = 1000
+SAMPLE_MIN_MS = 200
+SAMPLE_MAX_MS = 60000
+# How many of the host's samples arrive in one update, which is not one whenever the badge
+# polls slower than the host samples - a 5s refresh against a host on 1s brings five. A plot
+# has to walk all of them, or it covers one sample's width and then waits: the pause reported
+# against a slow refresh. Averaged, so a poll interval that does not divide the sample period
+# settles on one number instead of alternating. Taken as the ratio of the two measured periods
+# rather than from the last count, so it comes back down after a hiccup instead of narrowing the
+# plot for good.
+SAMPLE_STEPS = 1
+UPDATE_MS = 0
+# A plot cannot give more of itself to headroom than this and still be a plot. Past it the walk
+# is short of an update and pauses at the end, which is the lesser fault.
+SAMPLE_STEPS_MAX = 12
 # The kinds that draw a series and so move with PHASE, rather than a reading that moves when
 # a new one lands.
 PLOTS = ("graph", "spark", "trend")
@@ -187,6 +217,9 @@ def render(page, frame, history, theme, index, total, subtitle=None):
     """Draw one page. Everything before this has already cleared the screen."""
     global moving
     moving = False
+    # However many samples an update brings is how much room a walking plot needs on its
+    # right, and pages is what knows both rates.
+    draw.WALK_LEAD = SAMPLE_STEPS
     draw.background(theme, page.get("title", page.get("id", "")), index, total,
                     subtitle)
     kind = page.get("kind")
@@ -230,16 +263,118 @@ def _bars(page, frame, _history, theme):
               _swept_lanes(ref, values, maximum))
 
 
+def note_sample(frame, now):
+    """Take note of a frame, and say whether it carries a sample not seen before.
+
+    `seq` moves once per sample on the host, so a badge polling faster than the host samples
+    can tell a repeat from a new reading - and the gap between two of them is the spacing a
+    plot should walk over, which nothing else tells the badge.
+
+    Taken from the host's own `t` where there is one, divided by how many samples went by:
+    that is exact, and it owes nothing to when a reply happened to arrive or to a poll the
+    badge skipped. The arrival gap is the fallback, and is divided the same way - a badge
+    that missed a sample must not conclude the host slowed down, or the plot walks at half
+    pace and lurches at every reading to catch up.
+    """
+    global _sample_seq, _sample_t, _seen_at, SAMPLE_MS
+    seq = frame.get("seq")
+    if seq is None or seq == _sample_seq:
+        return 0
+    stamp = frame.get("t")
+    steps = 1
+    if _sample_seq is not None:
+        steps = seq - _sample_seq
+        if steps < 1:
+            # The host restarted and its count began again; nothing here is comparable.
+            steps = 1
+        elif _sample_t is not None and stamp is not None:
+            _believe((stamp - _sample_t) // steps, True)
+        else:
+            _believe(time.ticks_diff(now, _seen_at) // steps, False)
+    _sample_seq = seq
+    _seen_at = now
+    _sample_t = stamp
+    return steps
+
+
+def note_update(now):
+    """The series has just advanced: this is what a plot walks away from.
+
+    Not the same moment as the frame arriving. A badge polling slower than the host samples
+    cannot fill the series in itself, so it comes from the sync a pass or two later - and
+    restarting the walk when the frame landed drew the old series at a new walk's shift, which
+    is a jump backwards until the series caught up.
+    """
+    global _sample_at, UPDATE_MS, SAMPLE_STEPS
+    if _sample_at:
+        gap = time.ticks_diff(now, _sample_at)
+        if SAMPLE_MIN_MS <= gap <= SAMPLE_MAX_MS:
+            UPDATE_MS = gap if not UPDATE_MS else (UPDATE_MS + gap) // 2
+    _sample_at = now
+    if UPDATE_MS:
+        pace = SAMPLE_MS or SAMPLE_DEFAULT_MS
+        SAMPLE_STEPS = max(1, min(SAMPLE_STEPS_MAX, int(UPDATE_MS / pace + 0.5)))
+
+
+def _believe(gap, exact):
+    """Take a measured spacing as the pace, if it is one worth believing.
+
+    A gap under SAMPLE_MIN_MS or over SAMPLE_MAX_MS is a badge coming back from sleep or a
+    host restarting, and setting the pace from one of those is something a plot never
+    recovers from. An exact gap is taken as it stands; an arrival gap is averaged, since it
+    carries whatever the network did.
+    """
+    global SAMPLE_MS
+    if not SAMPLE_MIN_MS <= gap <= SAMPLE_MAX_MS:
+        return
+    if exact or not SAMPLE_MS:
+        SAMPLE_MS = gap
+    else:
+        SAMPLE_MS = (SAMPLE_MS + gap) // 2
+
+
+def phase_at(now):
+    """How many samples a plot should have walked by `now`, at the host's own pace.
+
+    Capped at how many arrive in one update rather than at one: a badge polling every five
+    seconds against a host sampling every second is brought five at a time, and a plot that
+    walked only the first of them covered a sample's width and then stood still for four
+    seconds. Capped all the same, so a late update holds the plot at the edge rather than
+    marching it off the side.
+    """
+    if not _sample_at:
+        return 0.0
+    since = time.ticks_diff(now, _sample_at)
+    if since <= 0:
+        return 0.0
+    walked = since / float(SAMPLE_MS or SAMPLE_DEFAULT_MS)
+    return float(SAMPLE_STEPS) if walked > SAMPLE_STEPS else walked
+
+
+def sample_reset():
+    """Forget the pace, for a host swap: the next two samples set it again."""
+    global _sample_seq, _sample_at, _seen_at, _sample_t, SAMPLE_MS, SAMPLE_STEPS, UPDATE_MS
+    _sample_seq = None
+    _sample_at = 0
+    _seen_at = 0
+    _sample_t = None
+    SAMPLE_MS = 0
+    SAMPLE_STEPS = 1
+    UPDATE_MS = 0
+
+
 def _walk():
     """How far a plot should have walked left, in samples, or 0 to draw it where it stands.
 
-    The readings arrive a second apart and a plot is a fixed number of them, so between two
-    polls the whole series is one sample out of date at the right hand edge. Walking it left
-    by the fraction of the interval that has passed is what makes it scroll rather than step,
-    and the page asks for frames all the while - a plot in motion is not resting between
-    readings the way a gauge does.
+    A plot is a fixed number of samples, so between two of them the whole series is one
+    sample out of date at its right hand edge. Walking it left by the fraction of the gap
+    that has passed is what makes it scroll rather than step, and the page asks for frames
+    all the while - a plot in motion is not resting between readings the way a gauge does.
+
+    None rather than 0.0 when it is not walking: a plot that walks is laid out one sample
+    wider than its box, and a plot that never will should use the whole of it.
     """
-    return PHASE if ANIMATE else 0.0
+    return PHASE if ANIMATE else None
 
 
 def _swept_lanes(ref, values, maximum):

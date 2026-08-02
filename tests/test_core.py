@@ -115,6 +115,14 @@ class FakeShape:
 builtins.color = FakeColour
 builtins.shape = FakeShape
 
+# MicroPython's tick helpers, which the app uses for every interval it measures. ticks_ms
+# wraps on the badge and ticks_diff is what copes with that; here the clocks are handed in by
+# the tests, so subtraction is the whole of it.
+if not hasattr(time, "ticks_diff"):
+    time.ticks_ms = lambda: int(time.monotonic() * 1000)
+    time.ticks_diff = lambda a, b: a - b
+    time.ticks_add = lambda a, b: a + b
+
 
 class Harness:
     def __init__(self):
@@ -1811,6 +1819,21 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
     body = body[:body.index("\ndef ", 1)]
     assert "_basis(steps)" in body, "the weights are not taken from the table"
 
+    # An axis with no full scale of its own steps to round numbers rather than fitting the
+    # window, or it creeps on every poll as samples arrive and leave - the plot rescaling
+    # slightly each time, which reads as the whole graph twitching. A byte rate steps in
+    # 1024s so the label is a number a reader can place a sample against.
+    assert draw.axis_top(900, "down_bps") == 1024
+    assert draw.axis_top(6 * 1024 ** 2, "down_bps") == 10 * 1024 ** 2
+    assert draw.axis_top(41943040, "down_bps") == 50 * 1024 ** 2
+    assert draw.reading(draw.axis_top(41943040, "down_bps"), "down_bps") == "50.0MB/s"
+    # Anything else steps in tens, so a temperature plot tops out at 100 and not at 81.6.
+    assert draw.axis_top(71.0, "temp") == 100
+    assert draw.axis_top(30.0, "temp") == 50
+    # And it holds still while the busiest sample moves, which is the whole point.
+    for peak in (6.1, 6.5, 7.0, 9.9):
+        assert draw.axis_top(peak * 1024 ** 2, "down_bps") == 10 * 1024 ** 2, peak
+
     # A fill and a line are the same layout with different ends on it, so both go through
     # _lay_out and neither scales its samples twice.
     for name in ("def area(", "def line("):
@@ -1829,6 +1852,148 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
     sparks = sparks[:sparks.index("\ndef ", 1)]
     assert "line(plot_x" in sparks, "the sparkline page is not drawing lines"
     assert "screen.alpha" not in sparks, "a line does not need to let the page through"
+
+
+@check
+def test_a_plot_walks_at_the_pace_the_host_samples(_h):
+    """Three periods are in play and only one is the plot's: the host samples every
+    `serve --interval`, the badge polls every `interval_ms`, and it refetches the series on its
+    own timer. The walk has to run at the host's pace, over as many samples as an update
+    brings, from the moment the series actually moves."""
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+    import pages
+
+    def update(seq, stamp, now):
+        """A poll that saw a new sample, and the series moving because of it."""
+        steps = pages.note_sample({"seq": seq, "t": stamp}, now)
+        if steps:
+            pages.note_update(now)
+        return steps
+
+    # A host on three seconds, a badge polling every one: two polls in three are a repeat of a
+    # sample already seen, and 0 says so.
+    pages.sample_reset()
+    seen = [update(clock // 3000, clock, clock)
+            for clock in range(1000, 10000, 1000)]
+    assert seen == [1, 0, 1, 0, 0, 1, 0, 0, 1], seen
+
+    # The pace is the host's, taken from its own clock, and exact on the first pair.
+    pages.sample_reset()
+    update(10, 1_000_000, 5_000)
+    update(11, 1_003_000, 5_400)
+    assert pages.SAMPLE_MS == 3000, pages.SAMPLE_MS
+
+    # A sample the badge never saw must not read as the host slowing down, or every plot walks
+    # at half pace and lurches to catch up.
+    pages.sample_reset()
+    update(1, 0, 0)
+    assert update(3, 6000, 6000) == 2, "it answers how many arrived"
+    assert pages.SAMPLE_MS == 3000, pages.SAMPLE_MS
+
+    # A host that restarted counts from the beginning again: nothing before it compares.
+    pages.sample_reset()
+    update(900, 90_000, 0)
+    update(1, 100, 3000)
+    assert pages.SAMPLE_MS == 0, pages.SAMPLE_MS
+
+    # Neither a sleeping badge's gap nor a frame without a seq is taken as the pace.
+    pages.sample_reset()
+    update(1, 0, 0)
+    update(2, 500_000, 500_000)
+    assert pages.SAMPLE_MS == 0, pages.SAMPLE_MS
+    assert pages.note_sample({}, 1000) == 0
+
+    # The walk runs 0 to 1 over one sample and waits at the edge rather than marching off.
+    pages.sample_reset()
+    update(1, 10_000, 10_000)
+    update(2, 13_000, 13_000)
+    assert pages.SAMPLE_MS == 3000 and pages.SAMPLE_STEPS == 1
+    assert pages.phase_at(13_000) == 0.0
+    assert abs(pages.phase_at(15_000) - 2 / 3.0) < 0.01, pages.phase_at(15_000)
+    assert pages.phase_at(16_000) == 1.0
+    assert pages.phase_at(25_000) == 1.0, "a late update must not walk a plot off the side"
+
+    # Polling slower than the host samples brings several at once, and the walk covers all of
+    # them: covering one and waiting was a pause of about a second at a 2s refresh.
+    pages.sample_reset()
+    for tick in range(6):
+        update(tick * 2, tick * 2000, tick * 2000)
+    assert (pages.SAMPLE_MS, pages.SAMPLE_STEPS) == (1000, 2), (pages.SAMPLE_MS,
+                                                                pages.SAMPLE_STEPS)
+    landed = 10_000
+    assert abs(pages.phase_at(landed + 1000) - 1.0) < 0.01, "one sample in, one to go"
+    assert abs(pages.phase_at(landed + 2000) - 2.0) < 0.01, "and the second by the next poll"
+    assert pages.phase_at(landed + 5000) == 2.0, "then it waits"
+
+    # A badge coming back from sleep sees hundreds go by at once. Taken as the refresh rate
+    # that would hand a plot more headroom than it has samples, so it is not.
+    update(900, 1_000_000, landed + 600_000)
+    assert pages.SAMPLE_STEPS <= pages.SAMPLE_STEPS_MAX, pages.SAMPLE_STEPS
+
+    # The walk restarts when the series *moves*, not when the frame arrives. Where the badge
+    # is behind the host it cannot fill the series in itself, so it comes from the sync a pass
+    # later - and restarting the walk on the frame drew the old series at a new walk's shift,
+    # which is a jump backwards until the sync caught up.
+    pages.sample_reset()
+    update(1, 0, 0)
+    update(3, 2000, 2000)
+    was = pages.phase_at(3000)
+    assert pages.note_sample({"seq": 5, "t": 4000}, 4000) == 2, "a frame the badge is behind"
+    assert pages.phase_at(3000) == was, "the frame alone must not restart the walk"
+    pages.note_update(4000)
+    assert pages.phase_at(4000) == 0.0, "the series moving does"
+
+    # A walking plot is laid out with room for a whole update past its right edge, so those
+    # samples slide in. Laid across the width alone the whole plot shifts left instead and the
+    # gap it leaves grows to a sample's width before snapping back, which reads as shrinking.
+    flat = [50.0] * 48
+
+    def ends(shift, lead=1):
+        draw.WALK_LEAD = lead
+        try:
+            written = draw._lay_out(60, 40, 250, 150, flat, 100.0, shift)
+        finally:
+            draw.WALK_LEAD = 1
+        return draw._points[0], draw._points[written - 2]
+
+    first, last = ends(None)
+    assert abs(first - 60) < 0.01 and abs(last - 310) < 0.01, (first, last)
+    # Walking is a different layout, not a shift of zero: at zero the samples of this update
+    # are still to come in from the right, and one update later they have arrived.
+    first, last = ends(0.0)
+    assert abs(first - 60) < 0.01 and last > 314, (first, last)
+    first, last = ends(1.0)
+    assert abs(last - 310) < 0.01 and first < 55, (first, last)
+    # Two samples an update needs twice the room, and the box is full the whole way either way.
+    for lead, top in ((1, 1.0), (2, 2.0)):
+        for tenth in range(11):
+            _first, last = ends(top * tenth / 10.0, lead)
+            assert last >= 310 - 0.01, (lead, tenth, last)
+    # And never further than the headroom it was given, or that gap comes back.
+    _first, last = ends(9.0, 2)
+    assert abs(last - 310) < 0.01, last
+
+    # The badge only fills the series in itself when it saw every sample: appending one point
+    # where the host added five leaves it behind, and the next sync jumps it forward.
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    assert "note_sample(payload, now) == 1" in app, "the series is advanced when it cannot be"
+    assert "pages_module.note_update" in app, "nothing tells it the series moved"
+    appended = app[app.index("def append_sample"):]
+    appended = appended[:appended.index("\n    def ", 1)]
+    assert "pages_module.value_of(self.frame" in appended
+    assert "graph_points" in appended, "the ring is not trimmed to what the plot holds"
+
+    # The series is refetched as well as the stats and never instead of them: a skipped stats
+    # poll is a sample the badge never sees.
+    polling = app[app.index("    def poll(self):"):]
+    polling = polling[:polling.index("\n    def ", 1)]
+    assert 'self._queued = ("history"' in polling, "history still takes the stats' turn"
+    assert polling.count('self._start("stats"') == 1
+    assert "elif" not in polling, "the fetches are still exclusive"
+    pages.sample_reset()
 
 
 @check
