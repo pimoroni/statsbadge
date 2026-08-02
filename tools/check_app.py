@@ -21,6 +21,7 @@ WANTED = (
     "pages.py",
     "setup.py",
     "splash.py",
+    "worldmap.py",
 )
 
 # Names the badge injects into builtins from `badgeware`, plus the app's own modules.

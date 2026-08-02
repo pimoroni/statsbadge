@@ -158,10 +158,21 @@ class FakeBrush:
         return "erase"
 
 
+class FakeVec2:
+    """A point, far enough to be built and read back. What it rasterises to is the badge's."""
+
+    def __init__(self, x, y):
+        self.x, self.y = float(x), float(y)
+
+    def __repr__(self):
+        return f"vec2({self.x}, {self.y})"
+
+
 # Where the badge finds them, and before anything imports look or draw.
 builtins.color = FakeColour
 builtins.shape = FakeShape
 builtins.brush = FakeBrush
+builtins.vec2 = FakeVec2
 
 # MicroPython's tick helpers, which the app uses for every interval it measures. ticks_ms
 # wraps on the badge and ticks_diff is what copes with that; here the clocks are handed in by
@@ -2869,33 +2880,141 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
 
 
 @check
-def test_the_quake_map_stays_inside_its_own_band(_h):
-    """The map is 288 polygons placed by a transform, so nothing about a polygon says it
-    stops at the edge of the page's band: the header, the footer and the reading band are
-    all one clip away from being drawn over."""
-    source = (pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge")
-              / "quakemap.py").read_text()
+def test_the_world_map_is_parsed_once_for_every_page_that_wants_it(_h):
+    """Two extensions draw on the firmware's coastlines. 215KB of JSON is 1256ms and 184KB on
+    the badge, so a copy per page would be both twice, and a page that has not been turned to
+    should cost neither."""
+    sys.path.insert(0, install.app_source_dir())
+    import worldmap
+
+    assert worldmap._shapes is None, "the map is parsed at import, not on first use"
+    # First ask arms it and says no, so the frame that pays for the parse is not the frame that
+    # was meant to draw the notice.
+    assert worldmap.ready() is False
+    assert worldmap._shapes is None, "the parse happened in the frame that asked"
+
+    # The pens are what a theme change invalidates, and they are the expensive half of a
+    # second page: 288 ramp lookups and 288 composites.
+    source = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    body = source[source.index("def pens("):]
+    body = body[:body.index("\ndef ", 1)]
+    assert "theme.name" in body and "alpha" in body, "the pens are not keyed by theme"
+    assert "_pens.clear()" in body, "the table of pens grows without bound"
+
+    # And every page's own band comes out of one View, so nothing restates the projection.
+    for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
+        page = (pathlib.Path("extensions") / extension / "src"
+                / extension.replace("-", "_") / "badge" / f"{module}.py").read_text()
+        assert "worldmap.View(" in page, module
+        assert "world.geo.json" not in page, f"{module} reads the map itself"
+
+
+@check
+def test_the_night_side_is_the_one_the_sun_is_not_on(_h):
+    """The terminator is a curve and the wash is the polygon closed off at a pole, so the half
+    that gets filled depends on which pole is lit. Filling the same side all year - which the
+    firmware's own iss_tracker does - is right for one solstice and inside out for the other."""
+    sys.path.insert(0, install.app_source_dir())
+    import worldmap
+
+    # Northern summer: the sun is over the tropic of Cancer, so the north pole is lit all day
+    # and the terminator at the sun's own longitude is as far south as it goes.
+    below = worldmap.terminator_at(23.0, 23.0, 23.0)
+    opposite = worldmap.terminator_at(23.0 + 180.0, 23.0, 23.0)
+    assert below < 0 and opposite > 0, (below, opposite)
+    # Southern summer flips both.
+    assert worldmap.terminator_at(0.0, 0.0, -23.0) > 0
+    # An equinox has no terminator latitude to give: it saturates at a pole, which is the
+    # meridian the curve becomes, and must not divide by zero getting there.
+    assert abs(worldmap.terminator_at(0.0, 0.0, 0.0)) > 89.0
+
+    # The wash is that curve closed off at a pole, and the pole it closes at is the one in
+    # darkness: the other is the one the sun is over. The path is in map degrees, where y is
+    # -latitude, so a northern sun closes at y +90.
+    assert worldmap.night_path(0.0, 23.0)[0].y == 90.0
+    assert worldmap.night_path(0.0, 23.0)[-1].y == 90.0
+    assert worldmap.night_path(0.0, -23.0)[0].y == -90.0
+    # And the curve between them spans the world, so the fill has an edge everywhere.
+    path = worldmap.night_path(0.0, 23.0)
+    assert path[1].x == -180.0 and path[-2].x == 180.0, (path[1], path[-2])
+
+    # Three copies across, or a view wide enough to see a date line loses the wash at one edge.
+    source = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    body = source[source.index("    def night("):]
+    body = body[:body.index("\n    def ", 1) if "\n    def " in body[1:] else len(body)]
+    assert "nearest - 360.0, nearest, nearest + 360.0" in body, body[-400:]
+
+
+@check
+def test_a_map_page_stays_inside_its_own_band(_h):
+    """A map is 288 polygons placed by a transform, and a track and a terminator are drawn in
+    degrees too, so nothing about any of them stops at the edge of the page's band: the header,
+    the footer and the reading band are all one clip away from being drawn over."""
     sys.path.insert(0, install.app_source_dir())
     import look
 
-    scope = {"look": look}
-    for line in source.splitlines():
-        if line.startswith(("BAND_H", "MAP_TOP", "MAP_H", "BAND_TOP")):
-            exec(line, scope)  # noqa: S102  our own module, four constants off the top
-    # The band the map draws in plus the band that names it are the page's own band and no
-    # more of the screen.
-    assert scope["MAP_H"] + scope["BAND_H"] == look.BODY_H, scope
-    assert scope["MAP_TOP"] == look.BODY_TOP
-    assert scope["BAND_TOP"] == look.BODY_TOP + scope["MAP_H"]
+    pages_and_bands = (
+        ("statsbadge-quakes", "quakemap", ("_others", "_reticle")),
+        ("statsbadge-iss", "issmap", ("_marker", "_track")),
+    )
+    for extension, module, drawers in pages_and_bands:
+        source = (pathlib.Path("extensions") / extension / "src"
+                  / extension.replace("-", "_") / "badge" / f"{module}.py").read_text()
+        scope = {"look": look}
+        for line in source.splitlines():
+            if line.startswith(("BAND_H", "MAP_TOP", "MAP_H", "BAND_TOP")):
+                exec(line, scope)  # noqa: S102  our own module, four constants off the top
+        # The band the map draws in plus the band that names it are the page's own band and no
+        # more of the screen.
+        assert scope["MAP_H"] + scope["BAND_H"] == look.BODY_H, (module, scope)
+        assert scope["MAP_TOP"] == look.BODY_TOP, module
+        assert scope["BAND_TOP"] == look.BODY_TOP + scope["MAP_H"], module
+        # And everything the page draws on the map clips to it and puts back what it found, or
+        # the next page would inherit the clip.
+        for name in drawers:
+            body = source[source.index(f"def {name}("):]
+            body = body[:body.index("\ndef ", 1)]
+            assert "screen.clip = view.box" in body, (module, name)
+            assert body.index("was = screen.clip") < body.index("screen.clip = view.box"), name
+            assert "screen.clip = was" in body, (module, name)
 
-    # Both the coastlines and the rings around an epicentre are drawn to the map band and
-    # put the clip back, or the next page would inherit it.
-    for name in ("def _coastlines(", "def _reticle("):
-        body = source[source.index(name):]
-        body = body[:body.index("\ndef ", 1)]
-        assert "screen.clip = rect(0, MAP_TOP, look.W, MAP_H)" in body, name
-        assert body.index("was = screen.clip") < body.index("screen.clip = rect"), name
+    # The map itself and the night wash are the app's, and clip themselves for the same reason.
+    shared = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    for name in ("    def land(", "    def night("):
+        body = shared[shared.index(name):]
+        body = body[:body.index("\n    def ", 1) if "\n    def " in body[1:] else len(body)]
+        assert "screen.clip = self.box" in body, name
         assert "screen.clip = was" in body, name
+
+
+@check
+def test_the_iss_page_agrees_with_its_source(_h):
+    """The station is host side and the drawing is badge side. The terminator is the one that
+    would fail quietly: the sub-solar point arrives with the position, and a page reading a
+    name that moved would draw a map with no night on it and say nothing."""
+    source = (pathlib.Path("extensions/statsbadge-iss/src/statsbadge_iss/badge")
+              / "issmap.py").read_text()
+    try:
+        from statsbadge_iss import ISS
+    except ImportError:
+        return              # the extension is not pip installed in this environment
+
+    kind = ISS.badge_page["kind"]
+    assert f'pages.EXTRA["{kind}"] = render' in source, kind
+    # And deliberately not animated, unlike the quake map: with the whole world in view a frame
+    # is 78ms, and the station covers 0.06 pixels of it a second. Nothing here moves between
+    # readings, so asking for frames it has no use for is 30% of the CPU for a pulse.
+    assert f'pages.ANIMATED.add("{kind}")' not in source, kind
+    assert "jump_to" in source, "the camera eases on a page that is only drawn once a reading"
+    for setting in ISS.page_settings:
+        assert f'get("{setting["key"]}")' in source, setting["key"]
+    # Every option the UI offers for the camera is one the page tests for.
+    for option in next(s for s in ISS.page_settings if s["key"] == "follow")["options"]:
+        assert option in source or option == "whole world", option
+    # The keys a position carries, all of which the page reads.
+    for field in ("lat", "lon", "altitude", "speed", "sunlit", "solar_lat", "solar_lon"):
+        assert f'"{field}"' in source, field
+    assert '"flown"' in source or 'get("flown")' in source
 
 
 @check
@@ -2931,7 +3050,7 @@ def test_the_quake_page_agrees_with_its_source(_h):
 
 
 @check
-def test_the_quake_map_only_uses_names_the_badge_has(_h):
+def test_a_map_page_only_uses_names_the_badge_has(_h):
     """An extension's badge module is compiled on the badge at launch and cannot be imported
     here, so a name that is neither defined, imported nor a badge builtin is a crash dialog
     after the app has started. Same check the app's own modules get."""
@@ -2940,10 +3059,12 @@ def test_the_quake_map_only_uses_names_the_badge_has(_h):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
     import check_app
 
-    path = (pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge")
-            / "quakemap.py")
-    tree = ast.parse(path.read_text(), filename=str(path))
-    assert check_app.check_names(path, tree) is None, check_app.check_names(path, tree)
+    for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
+        path = (pathlib.Path("extensions") / extension / "src"
+                / extension.replace("-", "_") / "badge" / f"{module}.py")
+        tree = ast.parse(path.read_text(), filename=str(path))
+        fault = check_app.check_names(path, tree)
+        assert fault is None, fault
 
 
 def _source_of(fn):

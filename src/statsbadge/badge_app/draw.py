@@ -1177,6 +1177,21 @@ def banner(theme, title, message, detail=None):
         cursor += height + gap
 
 
+def readable(pen, over, toward):
+    """`pen` if it can be seen on `over`, else the same hue stepped toward `toward`.
+
+    For anything written in the colour of a reading. A ramp is built to be seen against the
+    page, and a pale palette's cold end lands within 5 counts of its own panel - measured
+    across the themes - so a low reading would be written in a colour that is not there. The
+    hue is kept where it can be: half way to the ink usually clears it.
+    """
+    for alpha in (255, 128):
+        candidate = pen if alpha == 255 else pen.with_alpha(alpha).over(toward)
+        if over.difference(candidate) >= SERIES_FLOOR:
+            return candidate
+    return toward
+
+
 def fit(text, size, room):
     """Shorten a string until it fits `room` pixels, with an ellipsis if cut.
 
