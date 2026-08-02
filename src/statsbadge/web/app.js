@@ -210,6 +210,14 @@ function shapeFor(kind) {
            max: slots.max || 0, label: slots.label || "Values" };
 }
 
+/** A slot label in the singular. The labels name the whole set of slots a kind has - Rows,
+ * Series, Axes - and the button under them adds one. */
+function singular(label) {
+  if (label === "Series") return label;
+  if (label === "Axes") return "Axis";
+  return label.endsWith("s") ? label.slice(0, -1) : label;
+}
+
 function pageCard(page, index) {
   const shape = shapeFor(page.kind);
   const item = document.createElement("li");
@@ -293,7 +301,8 @@ function pageCard(page, index) {
     if (current.length < shape.max) {
       const add = document.createElement("button");
       add.className = "small";
-      add.textContent = `+ ${shape.label.toLowerCase()}`;
+      // What the slot is called, in the singular: the button adds one of them.
+      add.textContent = `Add ${singular(shape.label).toLowerCase()}`;
       add.onclick = () => {
         const pool = (POOLS[shape.manyPool] || POOLS.any)();
         page[shape.many] = current.concat([pool[0] || availableRefs()[0]]);
