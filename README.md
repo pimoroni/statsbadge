@@ -1,10 +1,12 @@
 # statsbadge
 
-Your PC's vitals on a Badgeware badge, paged with UP and DOWN. An Afterburner-style panel that is not welded to a keyboard.
+Your PC's vitals on a Badgeware badge. A compact, wireless and extensible hardware monitor for Windows, macOS and Linux.
 
 ![CPU](shots/cpu.png) ![Load](shots/gauges.png)
 
-A server on the host measures things and serves them; the badge fetches and draws them. The host also serves a web page for choosing which screens appear, so rearranging the display needs no reinstall.
+Runs on [Badgeware's Tufty](https://shop.pimoroni.com/products/tufty-2350), firmware v3.0.0 and above, with a 2.8" 320x240 colour IPS display.
+
+Build your stats overview from a selection of pages - bar graphs and waterfalls to big, bold gauges - configured in a web UI on your computer and pushed to your badge at the press of a button. A server on the host measures things and serves them; the badge fetches and draws them, so rearranging the display needs no reinstall.
 
 ## Install
 
@@ -19,7 +21,7 @@ Working on a checkout instead:
 
 ```bash
 uv sync
-uv pip install --no-deps ./extensions/statsbadge-clock   # optional, the example
+uv pip install --no-deps ./extensions/statsbadge-clock   # optional
 uv run statsbadge serve
 ```
 
@@ -56,7 +58,8 @@ Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings. 
 ```bash
 statsbadge serve                       # the usual thing
 statsbadge status                      # what is on the badge, what this host knows
-statsbadge extensions                  # installed extensions, and whether they loaded
+statsbadge ext                         # installed extensions, and whether they loaded
+statsbadge ext add clock               # install one and remember it
 statsbadge probe                       # what this host can measure at all
 statsbadge badges                      # which badges are paired here
 statsbadge badges --forget <badge-id>
@@ -135,9 +138,9 @@ Twelve kinds and any field can go in any of them. Six show readings as they are:
 
 ![Badge](shots/badge.png)
 
-`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Written-down themes, grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura`, the three Eva units, and four that come as a pair for a lit room and a dark one - Mono, Watermelon, Shell and Luminescence. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images - and the palette travels to the badge with the layout, so it is config: [`themes.py`](src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
+`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Sixteen themes, and forty-eight accents. Written down and grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura`, the three Eva units, and four that come as a pair for a lit room and a dark one - Mono, Watermelon, Shell and Luminescence. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images - and the palette travels to the badge with the layout, so it is config: [`themes.py`](src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
 
-Then four that are derived rather than written. Pick one of forty-eight accents - twelve hues in four families, Pastel, Normal, Saturated and Dark - and the rest of the palette is worked out from it: Tinted Dark and Tinted Light hold every hue at one chroma and send the ramp to red unless the accent is already there, and Tinted Bold Dark and Tinted Bold Light take each hue as far as sRGB allows and keep the ramp in it, sweeping lightness instead. The single-hue themes that used to be written down - red, green, cyan, amber, blueprint - are that second pair with an accent, so those names still resolve to what they always looked like. A palette can also carry a second accent, used sparingly: a graph's second series takes it, which is the one place the badge otherwise has to hunt through the ramp for a colour that will show. A derived theme picks it by rule - Same, Complementary, Triadic or Contrasting, the last being whichever offered hue lands furthest away once lightness and chroma are counted - and Watermelon Light names its own, that page having nowhere else to put its green. The config page previews whichever theme is selected, derived or not.
+Then four you can tune yourself, derived rather than written. Pick one of forty-eight accents - twelve hues in four families, Pastel, Normal, Saturated and Dark - and the rest of the palette is worked out from it: Tinted Dark and Tinted Light hold every hue at one chroma and send the ramp to red unless the accent is already there, and Tinted Bold Dark and Tinted Bold Light take each hue as far as sRGB allows and keep the ramp in it, sweeping lightness instead. The single-hue themes that used to be written down - red, green, cyan, amber, blueprint - are that second pair with an accent, so those names still resolve to what they always looked like. A palette can also carry a second accent, used sparingly: a graph's second series takes it, which is the one place the badge otherwise has to hunt through the ramp for a colour that will show. A derived theme picks it by rule - Same, Complementary, Triadic or Contrasting, the last being whichever offered hue lands furthest away once lightness and chroma are counted - and Watermelon Light names its own, that page having nowhere else to put its green. The config page previews whichever theme is selected, derived or not.
 
 ![Cores](shots/cores.png) ![Network](shots/net.png) ![Disk](shots/disk.png) ![Processor](shots/gauges2.png) ![Host](shots/host.png) ![Vapor](shots/theme_vapor.png) ![Sakura](shots/theme_sakura.png) ![Watermelon](shots/theme_watermelon.png) ![Shell](shots/theme_shell.png) ![Unit-01](shots/theme_eva01.png) ![Luminescence](shots/theme_luminescence.png)
 
@@ -145,14 +148,27 @@ Then four that are derived rather than written. Pick one of forty-eight accents 
 
 ## Extensions
 
-An extension is a pip install. It adds data to the frame, and optionally badge-side code for a page the built-in kinds cannot draw:
+An extension is a pip install away. It adds data to the frame, and optionally badge-side code for a page the built-in kinds cannot draw:
 
-```
-pip install ./extensions/statsbadge-clock
+```bash
+statsbadge ext add clock
 statsbadge install
 ```
 
-Badge-side modules go on by default, so installing an extension and then running `install` is all of it. `--no-extensions` leaves them off, and `--without NAME` drops one from both the frame and the badge.
+Badge-side modules go on by default, so adding an extension and then running `install` is all of it. `--no-extensions` leaves them off, and `--without NAME` drops one from both the frame and the badge.
+
+`uv tool install` is declarative: every run replaces the last, so naming one extension would drop the others. `ext add` keeps the list in `extensions.txt` beside your config and rebuilds from all of it, taking whatever the tool was already installed with as its starting point - extras like `statsbadge[nvidia]` included, read from uv's own record of how it was installed.
+
+```bash
+statsbadge ext                     # what is installed, and what the list asks for
+statsbadge ext add iss quakes      # add, then rebuild
+statsbadge ext remove clock        # take one out, and out of the environment
+statsbadge ext sync                # make the environment match the list
+```
+
+Installed some other way - a venv, pipx, a checkout - and `ext add` says so and prints the `uv pip install` line to run instead. The list is still the record either way.
+
+Three extensions are vendored here: [statsbadge-clock](extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's own world map, so running both costs one copy of the coastlines and no geometry crosses the network.
 
 An extension can declare settings that belong to *one page* rather than to the extension, so two pages of the same kind can show different things. The clock uses it for a place and a face: point one page at Tokyo and another at home, and each shows that city's weather and its own local time - Open-Meteo returns a location's UTC offset with its forecast, so a place settles the time too and there is no timezone to set. `latitude` and `longitude` are there per page as well, for a spot no name lands on. Settings that describe how the extension works, like units or an API key, stay under Extensions where there is one answer per machine, and the place set there is the default for any page that names none.
 
@@ -167,22 +183,15 @@ python3 tools/make_icon_font.py extensions/statsbadge-clock
 
 That fetches Material Symbols, fits each glyph to the text font's metrics so icons sit on the same baseline as the words beside them, and writes `src/statsbadge_clock/badge/icons.af`. Any vendored extension with an `icons.txt` builds the same way.
 
-Editing a vendored extension means reinstalling it before `statsbadge install` will push the change, because the installer reads the *installed* distribution and not the checkout:
-
-```bash
-uv pip install --python .venv/bin/python --no-deps --reinstall-package statsbadge-clock \
-  ./extensions/statsbadge-clock
-```
-
-Two are vendored as worked examples. [statsbadge-clock](extensions/statsbadge-clock/) is a Swiss railway clock whose second hand sweeps at the badge's frame rate, plus weather from Open-Meteo, which needs no API key.
+[statsbadge-clock](extensions/statsbadge-clock/) is a clock and the weather: five faces, including a Swiss railway station clock whose second hand sweeps at the badge's frame rate. Weather from Open-Meteo, no key needed.
 
 ![Railway](shots/swiss_clock.png) ![Dots](shots/face_dots.png) ![Squircle](shots/face_squircle.png) ![Digital](shots/face_digital.png) ![Digital LCD](shots/face_lcd.png)
 
-[statsbadge-quakes](extensions/statsbadge-quakes/) puts the last few earthquakes on a world map, cycling through them on its own: a camera that travels and rings that grow, off a list the host fetches from USGS every five minutes. The map is the firmware's own `world.geo.json`, so no geometry goes over the wire, and the land takes its colour from the theme ramp by latitude.
+[statsbadge-quakes](extensions/statsbadge-quakes/) puts recent earthquakes on a world map, cycling through them on its own: the camera closes in on each and pulls back out to cross an ocean, and the rings leaving an epicentre are coloured by magnitude. From USGS, no key needed.
 
 ![Quakes](shots/quakes.png) ![Quakes pulled out](shots/quakes_wide.png)
 
-[statsbadge-iss](extensions/statsbadge-iss/) tracks the space station across the same map, with an orbit of ground track either side of it and the day and night terminator washed over the half the sun is not on. The sub-solar point arrives with the position, so the terminator costs two numbers and no almanac.
+[statsbadge-iss](extensions/statsbadge-iss/) tracks the space station across the same map, with an orbit of ground track either side of it and the day and night terminator washed over the half the sun is not on. The sub-solar point arrives with the position, so the terminator costs two numbers and no almanac. Both feeds are open, so there is no key and no account to set up.
 
 ![ISS](shots/iss.png) ![ISS following](shots/iss_follow.png)
 

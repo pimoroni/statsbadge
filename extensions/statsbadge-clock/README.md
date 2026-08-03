@@ -1,19 +1,25 @@
 # statsbadge-clock
 
-A worked example of a [statsbadge](https://github.com/pimoroni/stats-badge) extension, showing all three parts of the mechanism:
+A clock and the weather, for [statsbadge](https://github.com/pimoroni/stats-badge).
 
-1. **Data in the frame.** A `clock` group and a `weather` group, which the badge's built-in page kinds can draw with no badge-side code at all - `clock.time` in a `text` page just works.
-2. **Badge-side code**, for a page the built-in kinds cannot draw. `src/statsbadge_clock/badge/clockface.py` registers a `clockface` kind, and `statsbadge install` pushes it to the badge.
-3. **Keeping what it worked out.** `self.store` is a namespaced dict the host persists, and the coordinates a place name resolved to go in it: a town does not move, so the geocoder is asked once per name rather than once per launch.
+Five faces: a Swiss railway station clock whose second hand sweeps at the badge's frame rate, Koppel's dotted minute track, the badge's own squircle in whatever theme it is wearing, and two digital faces - one set in the app's own typeface, one in seven-segment digits over their unlit segments.
 
-The second is the point: the clock's second hand is carried forward from the badge's frame clock between polls, so it sweeps at 45fps off one reading a second. An image over the wire would tick once a second and cost a fetch each time.
+![Railway](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/swiss_clock.png) ![Dots](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_dots.png) ![Squircle](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_squircle.png) ![Digital](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_digital.png) ![Digital LCD](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_lcd.png)
+
+Weather comes from [Open-Meteo](https://open-meteo.com): the condition with a symbol for the sky, temperature, what it feels like, humidity and the wind. No key and no account.
+
+## Install
 
 ```bash
-uv pip install --no-deps ./extensions/statsbadge-clock
+statsbadge ext add clock
 statsbadge install
 ```
 
-Weather comes from [Open-Meteo](https://open-meteo.com), which needs no API key. Set a **Place** under Extensions in the config UI - a town or city, and a country after a comma if the name is a common one:
+Then add a **Clock** page in the config UI.
+
+## Settings
+
+Set a **Place** under Extensions - a town or city, and a country after a comma if the name is a common one:
 
 ```
 Sheffield          the one most people mean, by how well known it is
@@ -21,24 +27,9 @@ Sheffield, US      Alabama
 Paris, US          Texas
 ```
 
-Names are resolved through Open-Meteo's own geocoder, which also needs no key, once per name rather than once per forecast. What it resolved to comes back as `weather.place`, so the Live panel shows which Sheffield you got.
+Which one you got comes back as `weather.place`, so the Live panel shows it. Latitude and longitude are there for a spot no name lands on, and win wherever both are set. Temperature reads in celsius or fahrenheit, wind in km/h, mph, m/s or knots.
 
-Latitude and longitude are still there for a spot no name lands on, and win where they are set. The same settings work on the command line, for a host with no browser near it:
-
-```bash
-statsbadge serve --extension clock.place=Sheffield
-statsbadge serve --extension clock.latitude=53.38 --extension clock.longitude=-1.47
-```
-
-A setting stored by the UI wins over the flag, since the UI is the live editor and the flag is for a first run.
-
-Without a location the clock still works and the weather readouts read "no location set".
-
-The settings themselves are declared on the source as `settings`, which is what the UI builds its fields from. An extension that declares none gets no section.
-
-## Faces
-
-Each clock page picks one, under its own settings in the config UI:
+Every clock page then has settings of its own, so two pages can show two cities. A place settles the time as well as the weather, because Open-Meteo returns a location's UTC offset with its forecast: point a page at Tokyo and it shows Tokyo's time, with no timezone to set anywhere. Each page picks its own face:
 
 | Face | What it is |
 | ---- | ---------- |
@@ -48,20 +39,17 @@ Each clock page picks one, under its own settings in the config UI:
 | `digital` | No dial: date, place, the time the height of the band, weather under it |
 | `lcd` | The same layout in seven-segment digits, over their own unlit segments |
 
-The seven segments are [DSEG](https://github.com/keshikan/DSEG) by keshikan - DSEG7 Classic Bold, under the SIL Open Font License, packed into `badge/lcd.af` and pushed to the badge as an asset beside the module:
+Without a location the clock still keeps time, and the weather readouts read "no location set".
+
+The same settings work from the command line, for a host with no browser near it. Anything stored by the UI wins over the flag.
 
 ```bash
-python3 tools/make_text_font.py build/fonts/DSEG7Classic-Bold.ttf \
-        --chars "0123456789: " --cap 122 --cap-from 8 \
-        --out extensions/statsbadge-clock/src/statsbadge_clock/badge/lcd.af
+statsbadge serve --extension clock.place=Sheffield
+statsbadge serve --extension clock.latitude=53.38 --extension clock.longitude=-1.47
 ```
 
-`--cap-from 8` because a face that only draws numbers has no `H` to measure a cap height from, and `--cap 122` packs it at the finest grid a signed byte holds. Its licence is in [licences/OFL-DSEG.txt](https://github.com/pimoroni/stats-badge/blob/main/licences/OFL-DSEG.txt).
+## Notes
 
-## Working on it
+The hands run off the badge's own clock, set once from the host, so they keep time when the host goes away and the second hand sweeps whether or not a reading has landed. A place name is looked up once ever rather than once a launch.
 
-Install it editable, or an edit here does nothing: a plain `uv pip install` copies the package, and installing again over an unchanged version is a no-op, so the code that runs stays the snapshot from the first install.
-
-```bash
-uv pip install --no-deps -e ./extensions/statsbadge-clock
-```
+The seven segments are [DSEG](https://github.com/keshikan/DSEG) by keshikan, under the SIL Open Font License, whose text travels with the package.

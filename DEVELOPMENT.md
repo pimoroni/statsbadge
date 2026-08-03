@@ -239,6 +239,33 @@ A package advertising a `statsbadge.sources` entry point gets two things: a grou
 
 [`extensions/statsbadge-clock`](extensions/statsbadge-clock) is a worked example of both halves, and of why the second exists: its second hand is carried forward from the badge's frame clock between polls, so it sweeps at 45fps off one reading a second.
 
+**A plugin's readme addresses whoever installed it.** What it does, how to install it, what its settings mean. How the mechanism works is this file's business, and [`extensions/statsbadge-clock`](extensions/statsbadge-clock) is the worked example of all three parts of it: a group in the frame that the built-in kinds can draw with no badge-side code (`clock.time` in a `text` page just works), badge-side Python for a page they cannot, and `store` for what it worked out.
+
+**Declared settings are what the UI offers.** `settings` on the source builds the fields under Extensions, one answer per host; `page_settings` builds the fields on each page of that extension's kinds, so two pages can point at two places. A source that declares neither gets no controls, which is right: offering seven field pickers to a renderer that reads none of them offered seven controls that did nothing. The same values are settable as `--extension name.key=value` for a host with no browser near it, and anything stored by the UI wins over the flag.
+
+**Installing a plugin for development means installing it editable.** A plain `uv pip install` copies the package, and installing again over an unchanged version is a no-op, so the code that runs stays the snapshot from the first install:
+
+```bash
+uv pip install --python .venv/bin/python --no-deps -e ./extensions/statsbadge-clock
+```
+
+Pushing a change to a *vendored* extension means reinstalling it first, because `statsbadge install` reads the installed distribution and not the checkout:
+
+```bash
+uv pip install --python .venv/bin/python --no-deps --reinstall-package statsbadge-clock \
+  ./extensions/statsbadge-clock
+```
+
+An `.af` font a plugin ships is built the same way the app's are. The clock's seven-segment face:
+
+```bash
+python3 tools/make_text_font.py build/fonts/DSEG7Classic-Bold.ttf \
+        --chars "0123456789: " --cap 122 --cap-from 8 \
+        --out extensions/statsbadge-clock/src/statsbadge_clock/badge/lcd.af
+```
+
+`--cap-from 8` because a face that only draws numbers has no `H` to measure a cap height from, and `--cap 122` packs it at the finest grid a signed byte holds.
+
 **Settings are what a source is told; `store` is what it found out.** `self.store` is a dict the host persists, namespaced by entry point name and written to `<config dir>/extensions/<name>.json`, so an extension keeps state without choosing a filename or owning a directory. Written whole on every `set`, and refused before the store changes if a value will not serialise, so what is in memory always matches what is on disk. `state.Store()` with no path is the same object keeping everything in memory, which is what `install` gets when it loads extensions only to ask which badge modules they ship, and what a source built by hand gets from `Source.__init__` - so the persistent one is only guaranteed by the time `start` runs, which is where to read it. Capped at 64 keys, oldest dropped, since a cache keyed by something a user types grows by one on every typo.
 
 **Nothing in `sample` may wait on a network.** Every source shares the collector's thread and the first sample is taken during `start`, so a lookup that hangs holds up the whole launch: the clock's geocoder did, and `urlopen(timeout=...)` is no guard, since it does not cover name resolution. Fetch on a thread of your own, started in `start`, and let `sample` serve what it last brought back. Measured with a geocoder that hangs for 20s: `Collector.start()` took 20.05s, and 0.03s once the fetching moved off the thread. A failed lookup is worth retrying in a minute rather than at the sample rate or never.
