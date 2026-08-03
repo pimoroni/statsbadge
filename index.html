@@ -10,6 +10,10 @@
 <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
 <link rel="canonical" href="https://pimoroni.github.io/stats-badge/">
 
+<!-- The app's splash mark, at the proportions and angles src/statsbadge/badge_app/splash.py
+     draws it with and the colours of the badge's default dark theme. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%2312141c'/%3E%3Cpath fill='%232c3346' d='M3.868 20.132A11.5 11.5 0 1 1 20.132 20.132L17.902 17.902A8.347 8.347 0 1 0 6.098 17.902Z'/%3E%3Cpath fill='%2338e8d1' d='M3.868 20.132A11.5 11.5 0 1 1 21.304 5.240L18.753 7.094A8.347 8.347 0 1 0 6.098 17.902Z'/%3E%3Cg fill='%23f2f5ff'%3E%3Crect x='7.64' y='11.44' width='2.04' height='3.15'/%3E%3Crect x='10.98' y='9.03' width='2.04' height='5.56'/%3E%3Crect x='14.32' y='10.33' width='2.04' height='4.27'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="statsbadge">
 <meta property="og:title" content="statsbadge">
@@ -66,6 +70,8 @@ body > * {
 }
 
 h1, h2, h3 { font-weight: 500; line-height: 1.2; text-wrap: balance; }
+b { font-weight: 500; }
+small { color: var(--dim); font-size: 0.9rem; }
 p, li { text-wrap: pretty; }
 p { max-width: var(--measure); }
 
@@ -82,9 +88,14 @@ code {
 }
 
 header {
+  display: grid;
+  gap: 0 1.5rem;
   padding-block: 2rem 1rem;
 
   h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.25em;
     margin: 0;
     font-size: clamp(2.75rem, 2rem + 4vw, 4.5rem);
     font-weight: 600;
@@ -93,6 +104,15 @@ header {
     background-clip: text;
     color: transparent;
     width: fit-content;
+
+    /* The app's splash mark, drawn at the size of the word beside it and nudged down to
+       sit on the same optical centre. */
+    svg {
+      width: 0.9em;
+      height: 0.9em;
+      flex: none;
+      transform: translateY(0.15em);
+    }
   }
 
   > p:first-of-type {
@@ -102,30 +122,54 @@ header {
   }
 
   > p + p {
-    margin-block: 0 1.5rem;
+    margin-block: 0 0.35rem;
     color: var(--dim);
+  }
+
+  > p:last-of-type { margin-bottom: 1.5rem; }
+
+  small { font-size: 0.8rem; }
+}
+
+/* Wide enough for the links to sit beside the wordmark; below it before that. */
+@media (width >= 40rem) {
+  header {
+    grid-template-columns: 1fr auto;
+
+    > h1 { grid-area: 1 / 1; }
+    > p { grid-column: 1; }
+    > nav { grid-area: 1 / 2; align-self: center; }
   }
 }
 
 nav ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
+  gap: 0.5rem 1.25rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 nav a {
-  display: inline-block;
-  padding: 0.4rem 0.9rem;
-  border: 1px solid var(--grid);
-  border-radius: 100px;
-  background: var(--panel);
+  color: var(--dim);
   text-decoration: none;
   font-weight: 400;
 }
-nav a:hover { border-color: var(--accent); color: var(--accent); }
+nav a:hover { color: var(--accent); }
+
+/* The one link that is a thing to do, not a thing to read. */
+nav a[href^="https://badgewa.re"] {
+  padding: 0.3em 1.1em;
+  border-radius: 100px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 500;
+}
+nav a[href^="https://badgewa.re"]:hover {
+  background: var(--ink);
+  color: var(--bg);
+}
 
 section {
   padding-block: 2.5rem;
@@ -143,11 +187,46 @@ pre {
   overflow-x: auto;
   margin: 0;
   padding: 1rem 1.25rem;
-  border: 1px solid var(--grid);
-  border-radius: 0.75rem;
+  border-top: 2px solid var(--accent);
   background: var(--panel);
   line-height: 1.8;
 }
+/* The install recipes: one radio a platform, the matching pre shown by :checked. */
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.25rem;
+  margin-top: 1.25rem;
+
+  input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  label {
+    padding: 0.35rem 1rem;
+    background: var(--panel);
+    color: var(--dim);
+    cursor: pointer;
+  }
+
+  input:checked + label { background: var(--accent); color: var(--bg); }
+  input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  pre {
+    order: 1;
+    flex-basis: 100%;
+    display: none;
+  }
+
+  #linux:checked ~ pre:nth-of-type(1),
+  #macos:checked ~ pre:nth-of-type(2),
+  #windows:checked ~ pre:nth-of-type(3) { display: block; }
+}
+
+ul + pre { margin-top: 1.5rem; }
+pre + p { margin-top: 0.75rem; }
 pre code { color: var(--ink); }
 pre b { font-weight: 400; color: var(--accent); }
 pre i { font-style: normal; color: var(--dim); }
@@ -162,7 +241,6 @@ figure {
     height: auto;
     aspect-ratio: 4 / 3;
     border: 1px solid var(--grid);
-    border-radius: 0.5rem;
     background: var(--panel);
     image-rendering: pixelated;
   }
@@ -174,6 +252,16 @@ figure {
 
     b { font-weight: 500; color: var(--ink); }
   }
+}
+
+section > ul:not(:has(figure)) {
+  max-width: var(--measure);
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--dim);
+
+  li { margin-bottom: 0.5rem; }
+  ::marker { color: var(--grid); }
 }
 
 /* Every gallery: one column on a phone, filling out as the page widens. */
@@ -235,15 +323,26 @@ footer {
 <body>
 
 <header>
-  <h1>statsbadge</h1>
+  <h1>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="24" height="24" rx="5" fill="#12141c"/>
+      <path fill="#2c3346" d="M3.868 20.132A11.5 11.5 0 1 1 20.132 20.132L17.902 17.902A8.347 8.347 0 1 0 6.098 17.902Z"/>
+      <path fill="#38e8d1" d="M3.868 20.132A11.5 11.5 0 1 1 21.304 5.240L18.753 7.094A8.347 8.347 0 1 0 6.098 17.902Z"/>
+      <g fill="#f2f5ff">
+        <rect x="7.64" y="11.44" width="2.04" height="3.15"/>
+        <rect x="10.98" y="9.03" width="2.04" height="5.56"/>
+        <rect x="14.32" y="10.33" width="2.04" height="4.27"/>
+      </g>
+    </svg>
+    statsbadge
+  </h1>
   <p>Your PC's vitals on a Badgeware badge. A compact, wireless and extensible hardware monitor for Windows, macOS and Linux.</p>
-  <p>Runs on <a href="https://badgewa.re/buy">Badgeware's Tufty</a>, featuring a 2.8" 320x240 colour IPS display.</p>
+  <p>Runs on <a href="https://badgewa.re/buy">Badgeware's Tufty</a><sup>*</sup>, featuring a 2.8" 320x240 colour IPS display.</p>
+  <p><small>* firmware v3.0.0 and above.</small></p>
   <nav>
     <ul>
       <li><a href="https://github.com/pimoroni/stats-badge">Source</a></li>
-      <li><a href="https://pypi.org/project/statsbadge/">PyPI</a></li>
-      <li><a href="https://github.com/pimoroni/stats-badge/blob/main/README.md">Docs</a></li>
-      <li><a href="https://github.com/pimoroni/stats-badge/blob/main/DEVELOPMENT.md">How it works</a></li>
+      <li><a href="https://badgewa.re/buy">Buy</a></li>
     </ul>
   </nav>
 </header>
@@ -251,37 +350,13 @@ footer {
 <main>
 
 <section>
-  <h2>Install</h2>
-  <p>A server on the host measures things and serves them; the badge fetches and draws them.</p>
-  <pre><code><b>uv tool install</b> statsbadge
-<b>statsbadge serve</b>
-<b>statsbadge install</b>            <i># with the badge on USB</i></code></pre>
-  <p>Then open <code>http://127.0.0.1:8420/</code> to pick screens, themes and button bindings. No cable? <code>statsbadge pair</code> and the badge finds the host by itself.</p>
-</section>
-
-<section>
-  <h2>What it reports</h2>
-  <p>A field the host cannot measure is null, and pages that need it are dropped.</p>
-  <dl>
-    <dt>cpu</dt><dd>load, per-core, temperature, clock, load average, processes</dd>
-    <dt>mem</dt><dd>used, total, percentage, swap</dd>
-    <dt>gpu</dt><dd>load, temperature, VRAM, power, clock, fan</dd>
-    <dt>net</dt><dd>up/down rate and totals, interface</dd>
-    <dt>disk</dt><dd>used, total, read/write rate</dd>
-    <dt>power</dt><dd>battery, charging, package watts</dd>
-    <dt>fans</dt><dd>RPM</dd>
-    <dt>sys</dt><dd>host, OS, CPU name, uptime</dd>
-  </dl>
-</section>
-
-<section>
-  <h2>Eleven page kinds</h2>
-  <p>Point any field at any of them. Six draw a reading plainly, as a dial, a bar, a graph or a number. The other five draw its history, its motion or its shape.</p>
+  <h2>System stats à la carte</h2>
+  <p>Build your stats overview with a selection of pages from bar graphs and waterfalls to big, bold gauges. Everything configured via a web UI on your computer and pushed to your badge(s) at the press of a button.</p>
   <ul>
     <li>
       <figure>
         <img src="shots/cpu.png" alt="Processor page: load percentage, temperature, clock and a history graph." width="320" height="240" loading="lazy">
-        <figcaption>Dials and a graph, on one page.</figcaption>
+        <figcaption><b>dial</b> - one reading as a gauge, with the rest read out beside it.</figcaption>
       </figure>
     </li>
     <li>
@@ -326,10 +401,23 @@ footer {
         <figcaption><b>graph</b> - two series over time.</figcaption>
       </figure>
     </li>
+  </ul>
+</section>
+
+<section>
+  <h2>Both ends of it</h2>
+  <p>Two pages report a machine instead of a reading.</p>
+  <ul>
     <li>
       <figure>
         <img src="shots/host.png" alt="Host name, operating system, processor and uptime as text." width="320" height="240" loading="lazy">
-        <figcaption><b>text</b> - what the machine is.</figcaption>
+        <figcaption><b>text</b> - the host: its name, OS, processor and how long it has been up.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/badge.png" alt="The badge's own battery, memory, flash use, ambient light, clock speed and screen size." width="320" height="240" loading="lazy">
+        <figcaption><b>badge</b> - the badge itself: battery, memory, flash, ambient light and what it is running. The one page whose numbers do not come from the host.</figcaption>
       </figure>
     </li>
   </ul>
@@ -380,7 +468,7 @@ footer {
 
 <section>
   <h2>Extensions</h2>
-  <p>An extension is a pip install. It adds data to the frame, and optionally badge-side code for a page the built-in kinds cannot draw. We've built a beautiful clock as an example: a Swiss railway face whose second hand sweeps at the badge's frame rate, plus dots, squircle, digital and seven-segment LCD faces, and weather from Open-Meteo.</p>
+  <p>An extension is a pip install away. We've built a beautiful clock as an example: a Swiss railway face whose second hand sweeps at the badge's frame rate. It's joined by dots, squircle, digital and seven-segment LCD faces, all with weather from Open-Meteo.</p>
   <ul>
     <li>
       <figure>
@@ -413,6 +501,44 @@ footer {
       </figure>
     </li>
   </ul>
+  <pre><code><b>statsbadge ext add</b> clock
+<b>statsbadge install</b>            <i># pushes the badge-side code too</i></code></pre>
+  <p>Then add a <b>Clock</b> page in the config UI.</p>
+  <p><small><code>ext add</code> keeps the list of extensions beside your config and installs from all of it, so adding another later leaves this one where it is. <code>ext</code> on its own says what you have.</small></p>
+</section>
+
+<section>
+  <h2>Something to look at</h2>
+  <p>Two more extensions draw the ISS transit and recent earthquakes over crisp, colour-themed world maps. Both take open feeds, so there is no key and no account to set up.</p>
+  <ul>
+    <li>
+      <figure>
+        <img src="shots/iss.png" alt="A world map with the space station, its ground track and the day and night terminator." width="320" height="240" loading="lazy">
+        <figcaption><b>ISS</b> - where the station is, an orbit of ground track either side of it, and the day and night terminator drawn from the sub-solar point.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/iss_follow.png" alt="The same map closed in on the space station." width="320" height="240" loading="lazy">
+        <figcaption>Or closed in, travelling with it. Altitude, speed and the crew aboard come with the position.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/quakes.png" alt="A world map closed in on an earthquake, with rings around the epicentre." width="320" height="240" loading="lazy">
+        <figcaption><b>Quakes</b> - recent events from USGS, the reticle coloured by magnitude.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/quakes_wide.png" alt="The same map pulled out to show a whole hemisphere." width="320" height="240" loading="lazy">
+        <figcaption>The page cycles through the set on its own, pulling out to cross an ocean. There is nothing to press.</figcaption>
+      </figure>
+    </li>
+  </ul>
+  <pre><code><b>statsbadge ext add</b> iss quakes
+<b>statsbadge install</b>            <i># pushes the badge-side code too</i></code></pre>
+  <p>Then add an <b>ISS</b> or a <b>Quakes</b> page in the config UI.</p>
 </section>
 
 <section>
@@ -429,6 +555,55 @@ footer {
     </tbody>
   </table>
   <p>Pair with more than one machine and the badge uses whichever it can reach, switching by itself when the current one goes quiet. Credentials are keyed on a server id, so a host that changes address is followed and not re-paired.</p>
+</section>
+
+<section>
+  <h2>What it reports</h2>
+  <p>A field the host cannot measure is null, and pages that need it are dropped.</p>
+  <dl>
+    <dt>cpu</dt><dd>load, per-core, temperature, clock, load average, processes</dd>
+    <dt>mem</dt><dd>used, total, percentage, swap</dd>
+    <dt>gpu</dt><dd>load, temperature, VRAM, power, clock, fan</dd>
+    <dt>net</dt><dd>up/down rate and totals, interface</dd>
+    <dt>disk</dt><dd>used, total, read/write rate</dd>
+    <dt>power</dt><dd>battery, charging, package watts</dd>
+    <dt>fans</dt><dd>RPM</dd>
+    <dt>sys</dt><dd>host, OS, CPU name, uptime</dd>
+  </dl>
+  <p>Most of it comes from <a href="https://github.com/giampaolo/psutil">psutil</a>, which answers the same questions on every platform. Each one then hides something different:</p>
+  <ul>
+    <li><b>NVIDIA cards</b> are read through NVML, the library behind <code>nvidia-smi</code>. Add it with <code>statsbadge[nvidia]</code>.</li>
+    <li><b>Linux</b> takes CPU temperatures and fan speeds from the kernel's hwmon sensors, and an AMD card straight from the driver's files under <code>/sys</code>.</li>
+    <li><b>macOS</b> asks <code>ioreg</code> about the GPU. Temperatures, fans and package power need root, so they stay off unless you run with <code>--powermetrics</code>.</li>
+    <li><b>Windows</b> tells an ordinary program nothing about temperatures without a driver, so those come from <a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor">LibreHardwareMonitor</a>'s web server.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Install</h2>
+  <p>A server on the host measures things and serves them; the badge fetches and draws them.</p>
+  <form>
+    <input type="radio" name="platform" id="linux" checked>
+    <label for="linux">Linux</label>
+    <input type="radio" name="platform" id="macos">
+    <label for="macos">macOS</label>
+    <input type="radio" name="platform" id="windows">
+    <label for="windows">Windows</label>
+
+    <pre><code><b>uv tool install</b> statsbadge          <i># or "statsbadge[nvidia]" for an NVIDIA card</i>
+<b>statsbadge serve</b>
+<b>statsbadge install</b>                   <i># with the badge on USB</i></code></pre>
+
+    <pre><code><b>uv tool install</b> statsbadge
+<b>statsbadge serve --powermetrics</b>      <i># temperatures, fans and package watts</i>
+<b>statsbadge install</b>                   <i># with the badge on USB</i></code></pre>
+
+    <pre><code><b>uv tool install</b> "statsbadge[nvidia]"
+<b>statsbadge serve</b>                     <i># --lhm-url if LibreHardwareMonitor is not on port 8085</i>
+<b>statsbadge install</b>                   <i># with the badge on USB</i></code></pre>
+  </form>
+  <p>Then open <code>http://127.0.0.1:8420/</code> to pick screens, themes and button bindings. No cable? <code>statsbadge pair</code> and the badge finds the host by itself.</p>
+  <p><small>The server itself never runs as root: on macOS it spawns <code>sudo -n powermetrics</code>, so that flag wants a passwordless sudo rule for that one command line and nothing wider. Windows reads its temperatures and fans from <a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases">LibreHardwareMonitor</a>, so leave it running with Options &gt; Remote Web Server &gt; Run. Take it from the project's own releases: the similarly named .com is not theirs.</small></p>
 </section>
 
 <section>
