@@ -10,13 +10,17 @@ maintainers = [
     { name = "Philip Howard", email = "phil@pimoroni.com" },
 ]
 license = "MIT"
-# The vendored .af fonts are built from OFL originals, so their licences travel with the
-# wheel that carries them. Not with the badge copy: a licence is for whoever redistributes
-# the font, and the badge is where it is used.
+# The vendored .af fonts are built from OFL originals, and the raw REPL in repl.py follows
+# MicroPython's own implementation, so those licences travel with the wheel that carries
+# them. Not with the badge copy of a font: a licence is for whoever redistributes it, and
+# the badge is where it is used.
 license-files = ["LICENSE", "licences/*.txt"]
 requires-python = ">=3.11"
 dependencies = [
     "psutil>=5.9",
+    # Finding the badge's port and talking to its REPL. Not an extra: `statsbadge install`
+    # is how a badge is set up, so it has to work from a plain install.
+    "pyserial>=3.5",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -32,9 +36,6 @@ classifiers = [
 [project.optional-dependencies]
 # NVIDIA cards, via the same library nvidia-smi uses.
 nvidia = ["nvidia-ml-py>=12"]
-# Pushing the app and credentials to a badge over USB.
-install = ["mpremote>=1.22", "pyserial>=3.5"]
-all = ["nvidia-ml-py>=12", "mpremote>=1.22", "pyserial>=3.5"]
 
 [project.urls]
 Homepage = "https://github.com/pimoroni/statsbadge"
@@ -64,7 +65,9 @@ requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["ruff>=0.6"]
+# mpremote for the on-badge tools, which run a script over a mounted checkout - `mpremote
+# mount` is a whole filesystem protocol and not something statsbadge itself needs.
+dev = ["ruff>=0.6", "mpremote>=1.22"]
 # Building an extension's .af icon font. Not needed to run or install anything, so it
 # is a group rather than an extra: uv sync --group fonts.
 fonts = ["freetype-py>=2.4", "shapely>=2.1"]

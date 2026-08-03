@@ -21,6 +21,8 @@ import shutil
 import subprocess
 import time
 
+from . import repl
+
 APP_NAME = "stats"
 STATE_FILE = "/state/stats.json"
 
@@ -73,32 +75,21 @@ def _find_ports_by_glob():
     return []
 
 
-def _mpremote():
-    exe = shutil.which("mpremote")
-    if not exe:
+def _exec(port, script, timeout=30):
+    """Run a script on the badge and return what it printed."""
+    try:
+        return repl.run(port, script, timeout=timeout)
+    except repl.Busy:
         raise InstallError(
-            "mpremote not found. pip install mpremote, or pass --port and use the "
-            "USB volume by hand."
-        )
-    return exe
-
-
-def _run(port, *args, timeout=30):
-    argv = [_mpremote(), "connect", port] + list(args)
-    done = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-    if done.returncode != 0:
-        detail = (done.stderr or done.stdout or "").strip()
-        if "in use" in detail:
-            raise InstallError(
-                f"{port} is busy. Close Thonny, a serial monitor or another mpremote."
-            )
-        raise InstallError(detail or "mpremote failed")
-    return done.stdout
+            f"{port} is busy. Close Thonny, a serial monitor or whatever else has it open."
+        ) from None
+    except (repl.ReplError, OSError) as exc:
+        raise InstallError(str(exc) or f"the badge on {port} did not answer") from None
 
 
 def badge_id(port):
     """The badge's uid, which is what it identifies itself as when signing."""
-    out = _run(port, "exec", "import badgeware; print(badge.uid)")
+    out = _exec(port, "import badgeware; print(badge.uid)")
     uid = out.strip().splitlines()[-1].strip() if out.strip() else ""
     if not uid:
         raise InstallError(f"could not read the badge uid from {port}")
@@ -106,7 +97,7 @@ def badge_id(port):
 
 
 def badge_info(port):
-    out = _run(port, "exec", (
+    out = _exec(port, (
         "import badgeware, os, sys\n"
         "print(badge.model)\n"
         "print(badge.uid)\n"
@@ -217,7 +208,7 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
         "open(path, 'w').write(json.dumps(data))\n"
         "print('wrote', path, len(hosts), 'host(s)')\n"
     )
-    out = _run(port, "exec", script)
+    out = _exec(port, script)
     if "wrote" not in out:
         raise InstallError(f"could not write {STATE_FILE}: {out.strip()}")
     return STATE_FILE
@@ -258,7 +249,7 @@ def installed_hashes(port):
 
     Empty if the app is not installed.
     """
-    out = _run(port, "exec", _HASH_SCRIPT % APP_DIR)
+    out = _exec(port, _HASH_SCRIPT % APP_DIR)
     if "HEND" not in out:
         raise InstallError(f"could not read the installed app: {out.strip()}")
     hashes = {}
@@ -304,7 +295,7 @@ def secrets_file(volume):
 def wifi_network(port):
     """The SSID the badge is set to use, over the REPL. Never the password."""
     try:
-        out = _run(port, "exec",
+        out = _exec(port,
                    "import secrets\n"
                    "print('SSID', getattr(secrets, 'WIFI_SSID', '') or '')\n")
     except InstallError:
@@ -369,7 +360,7 @@ def write_secrets(volume, ssid, password, region=None, timezone=None):
 
 
 def read_state(port):
-    out = _run(port, "exec",
+    out = _exec(port,
                f"try:\n print(open({STATE_FILE!r}).read())\nexcept OSError:\n print('')\n")
     text = out.strip()
     if not text:
@@ -466,8 +457,8 @@ def enter_mass_storage(port):
     serial port goes away and comes back.
     """
     try:
-        _run(port, "exec", "import _msc", timeout=10)
-    except (InstallError, subprocess.TimeoutExpired):
+        _exec(port, "import _msc", timeout=10)
+    except InstallError:
         # Expected: the board resets mid-command and the REPL never replies.
         pass
 
@@ -649,7 +640,7 @@ def wait_for_port(timeout=40, previous=None):
                 # Same path: make sure it actually answers before trusting it.
                 try:
                     badge_id(port)
-                except (InstallError, subprocess.SubprocessError):
+                except InstallError:
                     continue
             return port
         time.sleep(1.0)
@@ -664,9 +655,9 @@ def hard_reset(port, settle=True):
     `main.py` again, so the badge starts whatever it is set up to start.
     """
     try:
-        _run(port, "reset", timeout=10)
-    except (InstallError, subprocess.TimeoutExpired):
-        # Expected: the port goes away mid-command and mpremote never gets a reply.
+        repl.reset(port, timeout=10)
+    except (repl.ReplError, OSError):
+        # Expected: the port goes away mid-command, so there is nothing to hear back.
         pass
     if not settle:
         return None

@@ -252,24 +252,17 @@ name = "statsbadge"
 source = { editable = "." }
 dependencies = [
     { name = "psutil" },
+    { name = "pyserial" },
 ]
 
 [package.optional-dependencies]
-all = [
-    { name = "mpremote" },
-    { name = "nvidia-ml-py" },
-    { name = "pyserial" },
-]
-install = [
-    { name = "mpremote" },
-    { name = "pyserial" },
-]
 nvidia = [
     { name = "nvidia-ml-py" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "mpremote" },
     { name = "ruff" },
 ]
 fonts = [
@@ -279,18 +272,17 @@ fonts = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mpremote", marker = "extra == 'all'", specifier = ">=1.22" },
-    { name = "mpremote", marker = "extra == 'install'", specifier = ">=1.22" },
-    { name = "nvidia-ml-py", marker = "extra == 'all'", specifier = ">=12" },
     { name = "nvidia-ml-py", marker = "extra == 'nvidia'", specifier = ">=12" },
     { name = "psutil", specifier = ">=5.9" },
-    { name = "pyserial", marker = "extra == 'all'", specifier = ">=3.5" },
-    { name = "pyserial", marker = "extra == 'install'", specifier = ">=3.5" },
+    { name = "pyserial", specifier = ">=3.5" },
 ]
-provides-extras = ["all", "install", "nvidia"]
+provides-extras = ["nvidia"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.6" }]
+dev = [
+    { name = "mpremote", specifier = ">=1.22" },
+    { name = "ruff", specifier = ">=0.6" },
+]
 fonts = [
     { name = "freetype-py", specifier = ">=2.4" },
     { name = "shapely", specifier = ">=2.1" },

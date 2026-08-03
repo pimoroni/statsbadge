@@ -2974,6 +2974,142 @@ def test_every_package_here_can_be_published(_h):
         assert short in found, f"{workflow.name} publishes an extension that is not here"
 
 
+class FakeBoard:
+    """The board's half of the raw REPL, enough to answer what repl.py asks of it.
+
+    Stands in for a serial port, so the framing is checked without a badge on the end of a
+    cable: the protocol is four control characters and two end markers, and getting one of
+    them wrong is a hang rather than an error.
+    """
+
+    def __init__(self, printed="ok\r\n", failed=""):
+        self.printed, self.failed = printed.encode(), failed.encode()
+        self.written = b""
+        self.scripts = []
+        self.out = b""
+        self.closed = False
+        self.phase = "friendly"
+        self._script = b""
+
+    # -- what pyserial offers -----------------------------------------------
+    @property
+    def in_waiting(self):
+        return len(self.out)
+
+    def read(self, count=1):
+        data, self.out = self.out[:count], self.out[count:]
+        return data
+
+    def write(self, data):
+        self.written += data
+        for byte in data:
+            self._take(bytes((byte,)))
+        return len(data)
+
+    def close(self):
+        self.closed = True
+
+    # -- and what a MicroPython board answers -------------------------------
+    def _take(self, byte):
+        if self.phase == "raw" and byte != b"\x04":
+            self._script += byte
+            return
+        if byte == b"\x01":
+            self.out += b"\r\n" + FakeBoard.PROMPT + b">"
+            self.phase = "armed"
+        elif byte == b"\x04" and self.phase == "armed":
+            self.out += b"\r\n" + b"soft reboot\r\n" + FakeBoard.PROMPT + b">"
+            self.phase = "raw"
+        elif byte == b"\x04" and self.phase == "raw":
+            self.scripts.append(self._script.decode())
+            self._script = b""
+            self.out += b"OK" + self.printed + b"\x04" + self.failed + b"\x04>"
+        elif byte == b"\x02":
+            self.phase = "friendly"
+
+    PROMPT = b"raw REPL; CTRL-B to exit\r\n"
+
+
+@check
+def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
+    """No mpremote on the PATH and no interpreter spawned per command: `statsbadge install`
+    is how a badge is set up, and a dependency's console script is not on PATH when this is
+    installed as a uv tool, so the two things ever asked of a badge - run a script, hard
+    reset - are spoken here.
+
+    The board's side is faked, because the failure this guards against is a protocol that
+    hangs rather than one that raises."""
+    from statsbadge import repl
+
+    board = FakeBoard(printed="2e8a01\r\n")
+    fault = type("SerialException", (Exception,), {})
+    stub = type(sys)("serial")
+    stub.SerialException = fault
+    stub.Serial = lambda *_args, **_kwargs: board
+    was = sys.modules.get("serial")
+    sys.modules["serial"] = stub
+    try:
+        assert repl.run("/dev/fake", "print(badge.uid)") == "2e8a01\r\n"
+        # Interrupt what was running, raw mode, then a soft reset for a clean interpreter:
+        # without that the app is still in memory, holding the screen.
+        assert board.written.startswith(b"\r\x03\x03\r\x01\x04"), board.written
+        assert board.scripts == ["print(badge.uid)"], board.scripts
+        # And the badge is not left in raw mode, which shows as a blank screen.
+        assert board.written.endswith(b"\r\x02") and board.closed, board.written
+
+        # A script that raised is an exception here, not output the caller has to inspect.
+        board = FakeBoard(printed="", failed="Traceback:\r\nImportError: no module named x")
+        try:
+            repl.run("/dev/fake", "import x")
+        except repl.ReplError as exc:
+            assert "ImportError" in str(exc), exc
+        else:
+            raise AssertionError("a traceback came back as ordinary output")
+
+        # A script longer than one chunk still arrives whole.
+        board = FakeBoard()
+        long_one = "\n".join(f"print({number})" for number in range(200))
+        repl.run("/dev/fake", long_one)
+        assert board.scripts == [long_one], len(board.scripts)
+
+        # The reset is a hard one, so the badge runs main.py again rather than sitting at
+        # a prompt. It sleeps first, or the acknowledgement never gets out.
+        board = FakeBoard()
+        repl.reset("/dev/fake")
+        assert "machine.reset()" in board.scripts[0], board.scripts
+        assert "sleep_ms" in board.scripts[0], board.scripts
+
+        # Somebody else holding the port is its own answer, since the fix is theirs.
+        def held(*_args, **_kwargs):
+            raise fault("Could not exclusively lock port /dev/fake")
+
+        stub.Serial = held
+        try:
+            repl.run("/dev/fake", "print(1)")
+        except repl.Busy:
+            pass
+        else:
+            raise AssertionError("a held port is not reported as busy")
+        # install.py says whose problem that is, in the words of the thing to close.
+        try:
+            install._exec("/dev/fake", "print(1)")
+        except install.InstallError as exc:
+            assert "busy" in str(exc) and "Thonny" in str(exc), exc
+    finally:
+        if was is None:
+            del sys.modules["serial"]
+        else:
+            sys.modules["serial"] = was
+
+    # Nothing looks for mpremote any more, and pyserial is a dependency rather than an extra.
+    assert "mpremote" not in pathlib.Path("src/statsbadge/install.py").read_text()
+    with open("pyproject.toml", "rb") as handle:
+        project = tomllib.load(handle)["project"]
+    assert any(name.startswith("pyserial") for name in project["dependencies"]), project
+    assert "install" not in project.get("optional-dependencies", {}), (
+        "an extra that no longer adds anything")
+
+
 @check
 def test_a_published_readme_links_to_somewhere_that_exists(_h):
     """A README is the project page on PyPI as well as on GitHub, and PyPI resolves a relative

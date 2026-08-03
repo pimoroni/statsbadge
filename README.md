@@ -32,7 +32,7 @@ uv pip install statsbadge      # or from a checkout: uv pip install .
 pip install statsbadge         # plain pip works too
 ```
 
-Extras, if you want them: `statsbadge[nvidia]` for NVIDIA cards via NVML, `statsbadge[install]` for pushing the app to a badge over USB, `statsbadge[all]` for both.
+One extra, if you want it: `statsbadge[nvidia]` for NVIDIA cards via NVML. Pushing the app to a badge over USB needs nothing added.
 
 With the badge on USB, in another terminal:
 
