@@ -1,6 +1,6 @@
 [project]
 name = "statsbadge-clock"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A Swiss railway clock and weather page for statsbadge"
 readme = "README.md"
 authors = [
@@ -20,6 +20,17 @@ Issues = "https://github.com/pimoroni/statsbadge/issues"
 [project.entry-points."statsbadge.sources"]
 clock = "statsbadge_clock:Clock"
 
+# The tag is the version, and this package's tags carry its own prefix so a release of one
+# extension is not a release of the others: clock-v0.2.0 is this one at 0.2.0.
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+pattern-prefix = "clock-"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/statsbadge_clock"]
+
 [build-system]
-requires = ["uv_build>=0.11.23,<0.12.0"]
-build-backend = "uv_build"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"

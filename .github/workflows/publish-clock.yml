@@ -38,35 +38,31 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The tag is the version, so the build has to be able to see it. A checkout of a tag
+          # has it at HEAD either way; this keeps a run from a branch honest too.
+          fetch-depth: 0
 
       # setup-uv publishes no v9 tag, only exact versions
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           version: "0.9.2"
 
-      - name: Check the version matches the tag
-        # A release tagged clock-v0.2.0 publishing 0.1.0 is the kind of thing you only notice
-        # after it is on PyPI and immutable.
-        working-directory: ${{ env.DIRECTORY }}
-        run: |
-          TAG="${GITHUB_REF_NAME#$TAG_PREFIX}"
-          VERSION="$(uv run --no-project python -c \
-            'import tomllib,pathlib;print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
-          echo "tag=$TAG project=$VERSION"
-          if [ "$GITHUB_REF_NAME" = "$TAG" ]; then
-            echo "::error::$GITHUB_REF_NAME is not a $TAG_PREFIX tag"
-            exit 1
-          fi
-          if [ -n "$TAG" ] && [ "$TAG" != "$VERSION" ]; then
-            echo "::error::tag $TAG does not match $PACKAGE version $VERSION"
-            exit 1
-          fi
-
-      # No bytecode step: an extension's badge-side module ships as source and the badge
-      # compiles it, so there is nothing to cross-compile here.
       - name: Build
         working-directory: ${{ env.DIRECTORY }}
         run: uv build
+
+      - name: Check the built version is the tag
+        working-directory: ${{ env.DIRECTORY }}
+        run: |
+          TAG="${GITHUB_REF_NAME#$TAG_PREFIX}"
+          BUILT="$(ls dist/*.whl | head -1 | cut -d- -f2)"
+          echo "tag=$TAG built=$BUILT"
+          if [ "$GITHUB_REF_NAME" != "$TAG" ] && [ "$TAG" != "$BUILT" ]; then
+            echo "::error::built $BUILT from tag $TAG - check pattern-prefix, or whether the"
+            echo "::error::checkout could see the tag at all"
+            exit 1
+          fi
 
       - name: Publish
         working-directory: ${{ env.DIRECTORY }}

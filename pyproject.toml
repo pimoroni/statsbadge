@@ -1,6 +1,6 @@
 [project]
 name = "statsbadge"
-version = "0.1.0"
+dynamic = ["version"]
 description = "System stats from a host PC, drawn on a Badgeware badge"
 readme = "README.md"
 authors = [
@@ -44,9 +44,24 @@ Issues = "https://github.com/pimoroni/statsbadge/issues"
 [project.scripts]
 statsbadge = "statsbadge.__main__:main"
 
+# The tag is the version. uv's own build backend takes only static metadata - astral-sh/uv#11718,
+# open and undecided - so the backend is hatchling, which `uv build` and `uv publish` drive just
+# the same: those are the frontend, and it is only the backend that changes.
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/statsbadge"]
+
+# The precompiled app is a build artefact, so it is gitignored - and hatchling leaves out what
+# the VCS ignores unless told. Without this the wheel carries the sources alone and the badge
+# goes back to compiling them at every launch, 763ms against 126.
+[tool.hatch.build]
+artifacts = ["src/statsbadge/badge_app/mpy/**"]
+
 [build-system]
-requires = ["uv_build>=0.11.23,<0.12.0"]
-build-backend = "uv_build"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = ["ruff>=0.6"]

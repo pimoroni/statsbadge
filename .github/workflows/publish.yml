@@ -33,24 +33,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The tag is the version, so the build has to be able to see it. A checkout of a tag
+          # has it at HEAD either way; this keeps a run from a branch honest too.
+          fetch-depth: 0
 
       # setup-uv publishes no v9 tag, only exact versions
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           version: "0.9.2"
-
-      - name: Check the version matches the tag
-        # A release tagged v0.2.0 publishing 0.1.0 is the kind of thing you only notice
-        # after it is on PyPI and immutable.
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          VERSION="$(uv run --no-project python -c \
-            'import tomllib,pathlib;print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
-          echo "tag=$TAG project=$VERSION"
-          if [ -n "$TAG" ] && [ "$TAG" != "$VERSION" ]; then
-            echo "::error::tag $TAG does not match pyproject version $VERSION"
-            exit 1
-          fi
 
       - name: Read the pinned MicroPython
         shell: bash
@@ -81,6 +72,16 @@ jobs:
              ci/build-mpy.sh src/statsbadge/badge_app src/statsbadge/badge_app/mpy
 
       - run: uv build
+
+      - name: Check the built version is the tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          BUILT="$(ls dist/*.whl | head -1 | cut -d- -f2)"
+          echo "tag=$TAG built=$BUILT"
+          if [ "$GITHUB_REF_NAME" != "$TAG" ] && [ "$TAG" != "$BUILT" ]; then
+            echo "::error::built $BUILT from tag $TAG - check whether the checkout could see it"
+            exit 1
+          fi
 
       - name: Publish
         run: uv publish --trusted-publishing always

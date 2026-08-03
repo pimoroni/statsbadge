@@ -250,8 +250,8 @@ uv run python tools/shots.py shots                  # framebuffer dumps to PNGs
 
 `statsbadge install` uses precompiled bytecode by default: CI compiles it into the package before the wheel is built, so a pip install carries both that and the `.py` sources. It loads in 66ms where the sources take 763ms, because the badge compiles at every launch. Bytecode only loads on the firmware it was built for, so if a badge runs different firmware the install falls back to the sources and says so. `--mpy DIR` installs a build of your own, `--source` forces the sources.
 
-Releases: tag `vX.Y.Z` matching the version in `pyproject.toml` and publish a GitHub release. CI builds the wheel, checks it carries the badge app, attaches both the source and precompiled app zips, and publishes to PyPI over trusted publishing - no API token to store.
+Releases: tag `vX.Y.Z` and publish a GitHub release. The tag *is* the version - nothing in the repository states one - so a release cannot disagree with what it publishes. CI builds the wheel, checks it carries the badge app, attaches both the source and precompiled app zips, and publishes to PyPI over trusted publishing, with no API token to store.
 
-Four packages come out of this repository, so the tag says which one a release is for: `v0.2.0` is statsbadge itself, and `clock-v0.1.0`, `iss-v0.1.0` and `quakes-v0.1.0` are the extensions. Each has a workflow of its own, because PyPI matches a publisher on the workflow's filename.
+Four packages come out of this repository, so the tag says which one a release is for and what version it is: `v0.2.0` is statsbadge itself at 0.2.0, and `clock-v0.1.0`, `iss-v0.1.0` and `quakes-v0.1.0` are the extensions at 0.1.0. Each has a workflow of its own, because PyPI matches a publisher on the workflow's filename. Between tags a build reports what git says - `0.2.1.dev4+g1234abc` - which is a version PyPI will not accept, so only a tag can publish.
 
 [DEVELOPMENT.md](DEVELOPMENT.md) covers how it is put together and what each frame costs. It also explains why the server writes every response in a single `write()`, which is worth 30x on this hardware.

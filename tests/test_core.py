@@ -2891,30 +2891,45 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
 
 @check
 def test_the_version_is_written_down_once(_h):
-    """A number in pyproject.toml and a `__version__` beside it are two things to bump, and the
-    one that gets missed is whichever nothing reads. The distribution's own metadata is the copy
-    that is true of the thing installed, so that is the one anything asks for."""
+    """Nowhere, in fact: the tag is the version. A number in pyproject.toml and a `__version__`
+    beside it were two things to bump and one of them silently stale; now neither exists and the
+    build reads the tag, so the only way to release the wrong number is to tag the wrong number.
+
+    Two things have to agree for that to work, though, and they are in different files: the tag
+    prefix a workflow fires on, and the prefix the build strips to get a version."""
     import statsbadge
 
     source = pathlib.Path("src/statsbadge/__init__.py").read_text()
     # An assignment, not the word: the docstring says why there is not one.
     assert not re.search(r"^__version__\s*=", source, re.M), "a second copy of the version"
+    assert statsbadge.version(), "nothing can say what is installed"
+
     with open("pyproject.toml", "rb") as handle:
-        declared = tomllib.load(handle)["project"]["version"]
-    # Installed editable here, so the metadata is the checkout's own.
-    assert statsbadge.version() == declared, (statsbadge.version(), declared)
+        main = tomllib.load(handle)
+    assert main["project"].get("version") is None, "a static version is back"
+    assert "version" in main["project"]["dynamic"], main["project"]
+    # Hatchling leaves out what the VCS ignores, and the precompiled app is a build artefact:
+    # without this the wheel ships sources alone and the badge compiles them at every launch.
+    artifacts = main["tool"]["hatch"]["build"]["artifacts"]
+    assert any("badge_app/mpy" in entry for entry in artifacts), artifacts
 
-    # And the CLI reports it, so `--version` is not a third place to keep in step.
-    cli = pathlib.Path("src/statsbadge/__main__.py").read_text()
-    assert 'version=f"statsbadge {package_version()}"' in cli, "--version does not read metadata"
-
-    # Every extension states its own, and none of them repeats it in code either.
+    workflows = pathlib.Path(".github/workflows")
     for directory in sorted(pathlib.Path("extensions").iterdir()):
         pyproject = directory / "pyproject.toml"
         if not pyproject.is_file():
             continue
         with open(pyproject, "rb") as handle:
-            assert tomllib.load(handle)["project"]["version"], pyproject
+            plugin = tomllib.load(handle)
+        name = plugin["project"]["name"]
+        short = name.removeprefix("statsbadge-")
+        assert plugin["project"].get("version") is None, name
+        assert "version" in plugin["project"]["dynamic"], name
+        # Its own tags and nobody else's, or a release of one extension versions them all.
+        prefix = plugin["tool"]["uv-dynamic-versioning"]["pattern-prefix"]
+        assert prefix == f"{short}-", (name, prefix)
+        # And the prefix the workflow fires on is the prefix the build strips.
+        workflow = (workflows / f"publish-{short}.yml").read_text()
+        assert f"TAG_PREFIX: {prefix}v" in workflow, (short, prefix)
         for module in (directory / "src").rglob("__init__.py"):
             assert not re.search(r"^__version__\s*=", module.read_text(), re.M), module
 
