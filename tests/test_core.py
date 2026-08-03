@@ -2975,6 +2975,37 @@ def test_every_package_here_can_be_published(_h):
 
 
 @check
+def test_a_published_readme_links_to_somewhere_that_exists(_h):
+    """A README is the project page on PyPI as well as on GitHub, and PyPI resolves a relative
+    link against pypi.org: `shots/cpu.png` is a broken image and `DEVELOPMENT.md` a 404. So every
+    target is absolute, which makes the repository name part of the text - and this repository has
+    been renamed once, so the names are checked against the URLs the packages declare."""
+    for pyproject in [pathlib.Path("pyproject.toml"),
+                      *sorted(pathlib.Path("extensions").glob("*/pyproject.toml"))]:
+        with open(pyproject, "rb") as handle:
+            project = tomllib.load(handle)["project"]
+        readme = pyproject.parent / project["readme"]
+        text = readme.read_text()
+        repository = project["urls"]["Repository"].removesuffix("/")
+        slug = repository.removeprefix("https://github.com/")
+        raw = f"https://raw.githubusercontent.com/{slug}/main/"
+
+        for label, target in re.findall(r"\[([^\]]*)\]\(([^)\s]+)\)", text):
+            where = f"{readme}: [{label}]({target})"
+            assert target.startswith(("http", "#")), f"{where} does not resolve on PyPI"
+            # Every picture is one of ours, so the repository name is in the URL: renaming the
+            # repository and leaving a README behind serves nothing but a broken image.
+            if target.startswith("https://raw.githubusercontent.com/"):
+                assert target.startswith(raw), where
+            # A link naming a path in our own tree can be looked at, so it is: a 404 for a reader
+            # passes silently otherwise. Anything else - the repository itself, another project -
+            # is not ours to check.
+            for prefix in (f"{repository}/blob/main/", f"{repository}/tree/main/", raw):
+                if target.startswith(prefix):
+                    assert pathlib.Path(target.removeprefix(prefix)).exists(), where
+
+
+@check
 def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
     """`uv tool install` replaces the environment rather than adding to it, so adding a second
     extension by naming only that one drops the first. The list in the config directory is what

@@ -2,7 +2,7 @@
 
 Your PC's vitals on a Badgeware badge. A compact, wireless and extensible hardware monitor for Windows, macOS and Linux.
 
-![CPU](shots/cpu.png) ![Load](shots/gauges.png)
+![CPU](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/cpu.png) ![Load](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/gauges.png)
 
 Runs on [Badgeware's Tufty](https://shop.pimoroni.com/products/tufty-2350), firmware v3.0.0 and above, with a 2.8" 320x240 colour IPS display.
 
@@ -136,19 +136,19 @@ Twelve kinds and any field can go in any of them. Six show readings as they are:
 
 `dial` has a page to itself, so it is the one gauge big enough to read a ramp off: set **Dial gauge** to *The Whole Ramp* and it fills with a conical gradient carrying the theme's whole ramp, with the part past the reading drawn from the same stops at alpha 32 so the scale still shows behind it. Costs 0.6ms a frame.
 
-![The whole ramp](shots/dial_ramp.png)
+![The whole ramp](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/dial_ramp.png)
 
 `badge` is the odd one out: battery, memory, both filesystems and the ambient light as levels, the clock, voltage, power source, uptime and screen as figures, and the board, firmware and uid underneath. Nothing on it comes from the host, so it is the page to turn to when you are wondering whether the badge or the network is the problem.
 
-![Badge](shots/badge.png)
+![Badge](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/badge.png)
 
-`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Sixteen themes, and forty-eight accents. Written down and grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura`, the three Eva units, and four that come as a pair for a lit room and a dark one - Mono, Watermelon, Shell and Luminescence. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images - and the palette travels to the badge with the layout, so it is config: [`themes.py`](src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
+`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Sixteen themes, and forty-eight accents. Written down and grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura`, the three Eva units, and four that come as a pair for a lit room and a dark one - Mono, Watermelon, Shell and Luminescence. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images - and the palette travels to the badge with the layout, so it is config: [`themes.py`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
 
 Then four you can tune yourself, derived rather than written. Pick one of forty-eight accents - twelve hues in four families, Pastel, Normal, Saturated and Dark - and the rest of the palette is worked out from it: Tinted Dark and Tinted Light hold every hue at one chroma and send the ramp to red unless the accent is already there, and Tinted Bold Dark and Tinted Bold Light take each hue as far as sRGB allows and keep the ramp in it, sweeping lightness instead. The single-hue themes that used to be written down - red, green, cyan, amber, blueprint - are that second pair with an accent, so those names still resolve to what they always looked like. A palette can also carry a second accent, used sparingly: a graph's second series takes it, which is the one place the badge otherwise has to hunt through the ramp for a colour that will show. A derived theme picks it by rule - Same, Complementary, Triadic or Contrasting, the last being whichever offered hue lands furthest away once lightness and chroma are counted - and Watermelon Light names its own, that page having nowhere else to put its green. The config page previews whichever theme is selected, derived or not.
 
-![Cores](shots/cores.png) ![Network](shots/net.png) ![Disk](shots/disk.png) ![Processor](shots/gauges2.png) ![Host](shots/host.png) ![Vapor](shots/theme_vapor.png) ![Sakura](shots/theme_sakura.png) ![Watermelon](shots/theme_watermelon.png) ![Shell](shots/theme_shell.png) ![Unit-01](shots/theme_eva01.png) ![Luminescence](shots/theme_luminescence.png)
+![Cores](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/cores.png) ![Network](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/net.png) ![Disk](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/disk.png) ![Processor](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/gauges2.png) ![Host](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/host.png) ![Vapor](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_vapor.png) ![Sakura](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_sakura.png) ![Watermelon](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_watermelon.png) ![Shell](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_shell.png) ![Unit-01](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_eva01.png) ![Luminescence](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_luminescence.png)
 
-![Waterfall](shots/waterfall.png) ![Rings](shots/rings.png) ![Sparklines](shots/spark.png) ![Radar](shots/radar.png) ![Trend](shots/trend.png)
+![Waterfall](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/waterfall.png) ![Rings](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/rings.png) ![Sparklines](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/spark.png) ![Radar](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/radar.png) ![Trend](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/trend.png)
 
 ## Extensions
 
@@ -172,7 +172,7 @@ statsbadge ext sync                # make the environment match the list
 
 Installed some other way - a venv, pipx, a checkout - and `ext add` says so and prints the `uv pip install` line to run instead. The list is still the record either way.
 
-Three extensions are vendored here: [statsbadge-clock](extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's own world map, so running both costs one copy of the coastlines and no geometry crosses the network.
+Three extensions are vendored here: [statsbadge-clock](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's own world map, so running both costs one copy of the coastlines and no geometry crosses the network.
 
 An extension can declare settings that belong to *one page* rather than to the extension, so two pages of the same kind can show different things. The clock uses it for a place and a face: point one page at Tokyo and another at home, and each shows that city's weather and its own local time - Open-Meteo returns a location's UTC offset with its forecast, so a place settles the time too and there is no timezone to set. `latitude` and `longitude` are there per page as well, for a spot no name lands on. Settings that describe how the extension works, like units or an API key, stay under Extensions where there is one answer per machine, and the place set there is the default for any page that names none.
 
@@ -187,30 +187,30 @@ python3 tools/make_icon_font.py extensions/statsbadge-clock
 
 That fetches Material Symbols, fits each glyph to the text font's metrics so icons sit on the same baseline as the words beside them, and writes `src/statsbadge_clock/badge/icons.af`. Any vendored extension with an `icons.txt` builds the same way.
 
-[statsbadge-clock](extensions/statsbadge-clock/) is a clock and the weather: five faces, including a Swiss railway station clock whose second hand sweeps at the badge's frame rate. Weather from Open-Meteo, no key needed.
+[statsbadge-clock](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock) is a clock and the weather: five faces, including a Swiss railway station clock whose second hand sweeps at the badge's frame rate. Weather from Open-Meteo, no key needed.
 
-![Railway](shots/swiss_clock.png) ![Dots](shots/face_dots.png) ![Squircle](shots/face_squircle.png) ![Digital](shots/face_digital.png) ![Digital LCD](shots/face_lcd.png)
+![Railway](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/swiss_clock.png) ![Dots](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_dots.png) ![Squircle](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_squircle.png) ![Digital](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_digital.png) ![Digital LCD](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_lcd.png)
 
-[statsbadge-quakes](extensions/statsbadge-quakes/) puts recent earthquakes on a world map, cycling through them on its own: the camera closes in on each and pulls back out to cross an ocean, and the rings leaving an epicentre are coloured by magnitude. From USGS, no key needed.
+[statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) puts recent earthquakes on a world map, cycling through them on its own: the camera closes in on each and pulls back out to cross an ocean, and the rings leaving an epicentre are coloured by magnitude. From USGS, no key needed.
 
-![Quakes](shots/quakes.png) ![Quakes pulled out](shots/quakes_wide.png)
+![Quakes](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/quakes.png) ![Quakes pulled out](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/quakes_wide.png)
 
-[statsbadge-iss](extensions/statsbadge-iss/) tracks the space station across the same map, with an orbit of ground track either side of it and the day and night terminator washed over the half the sun is not on. The sub-solar point arrives with the position, so the terminator costs two numbers and no almanac. Both feeds are open, so there is no key and no account to set up.
+[statsbadge-iss](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-iss) tracks the space station across the same map, with an orbit of ground track either side of it and the day and night terminator washed over the half the sun is not on. The sub-solar point arrives with the position, so the terminator costs two numbers and no almanac. Both feeds are open, so there is no key and no account to set up.
 
-![ISS](shots/iss.png) ![ISS following](shots/iss_follow.png)
+![ISS](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/iss.png) ![ISS following](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/iss_follow.png)
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for how to write one.
+See [DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMENT.md) for how to write one.
 
 ## Security
 
-Plain HTTP on the LAN, with every request signed HMAC-SHA256 against a shared secret from pairing, and a counter the host refuses to accept twice. So a command cannot be forged or replayed, and an unpaired device on the network learns nothing. TLS is affordable on this hardware but buys little without certificate validation - [DEVELOPMENT.md](DEVELOPMENT.md) has the measurements. The config API is bound to loopback because it can mint secrets. Host commands only run if you have bound them to a button.
+Plain HTTP on the LAN, with every request signed HMAC-SHA256 against a shared secret from pairing, and a counter the host refuses to accept twice. So a command cannot be forged or replayed, and an unpaired device on the network learns nothing. TLS is affordable on this hardware but buys little without certificate validation - [DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMENT.md) has the measurements. The config API is bound to loopback because it can mint secrets. Host commands only run if you have bound them to a button.
 
 ## Fonts
 
 The badge draws with two typefaces, both under the SIL Open Font License, packed into `.af` by `tools/make_text_font.py`:
 
-- [Lexend](https://github.com/googlefonts/lexend) for everything, and again as thirteen digits packed wide for the clock face that draws numbers the height of the band. [Licence](licences/OFL-Lexend.txt).
-- [DSEG](https://github.com/keshikan/DSEG) by keshikan, DSEG7 Classic Bold, for the LCD clock face's seven segments. [Licence](licences/OFL-DSEG.txt).
+- [Lexend](https://github.com/googlefonts/lexend) for everything, and again as thirteen digits packed wide for the clock face that draws numbers the height of the band. [Licence](https://github.com/pimoroni/statsbadge/blob/main/licences/OFL-Lexend.txt).
+- [DSEG](https://github.com/keshikan/DSEG) by keshikan, DSEG7 Classic Bold, for the LCD clock face's seven segments. [Licence](https://github.com/pimoroni/statsbadge/blob/main/licences/OFL-DSEG.txt).
 
 ## Names
 
@@ -254,4 +254,4 @@ Releases: tag `vX.Y.Z` and publish a GitHub release. The tag *is* the version - 
 
 Four packages come out of this repository, so the tag says which one a release is for and what version it is: `v0.2.0` is statsbadge itself at 0.2.0, and `clock-v0.1.0`, `iss-v0.1.0` and `quakes-v0.1.0` are the extensions at 0.1.0. Each has a workflow of its own, because PyPI matches a publisher on the workflow's filename. Between tags a build reports what git says - `0.2.1.dev4+g1234abc` - which is a version PyPI will not accept, so only a tag can publish.
 
-[DEVELOPMENT.md](DEVELOPMENT.md) covers how it is put together and what each frame costs. It also explains why the server writes every response in a single `write()`, which is worth 30x on this hardware.
+[DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMENT.md) covers how it is put together and what each frame costs. It also explains why the server writes every response in a single `write()`, which is worth 30x on this hardware.
