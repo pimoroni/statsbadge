@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="statsbadge">
+  <!-- The app's own splash mark, which is what the badge draws before it has a font: a 270
+       degree gauge filled seven tenths of the way, and three bars. Every number here is one of
+       src/statsbadge/badge_app/splash.py's at 24/334 of its size, so the two cannot drift
+       without a test noticing:
+
+         radius 11.5 and 8.347   splash OUTER 62 and INNER 45
+         bars 2.04 wide, 1.3 apart, 3.15 / 5.56 / 4.27 tall
+                                 splash BAR_W 11, BAR_GAP 7, BAR_HEIGHTS (17, 30, 23)
+         baseline y 14.59        splash BASE_BELOW_CENTRE 14
+         the arc ends at 54 degrees past north
+                                 splash DIAL_FROM 225 plus SWEEP 0.7 of 270
+
+       Colours are the badge's default dark theme, so the mark on a browser tab is the mark on
+       the badge: bg, grid, accent and ink out of look.THEMES["dark"]. -->
+  <rect width="24" height="24" rx="5" fill="#12141c"/>
+  <path fill="#2c3346" d="M3.868 20.132A11.5 11.5 0 1 1 20.132 20.132L17.902 17.902A8.347 8.347 0 1 0 6.098 17.902Z"/>
+  <path fill="#38e8d1" d="M3.868 20.132A11.5 11.5 0 1 1 21.304 5.240L18.753 7.094A8.347 8.347 0 1 0 6.098 17.902Z"/>
+  <g fill="#f2f5ff">
+    <rect x="7.64" y="11.44" width="2.04" height="3.15"/>
+    <rect x="10.98" y="9.03" width="2.04" height="5.56"/>
+    <rect x="14.32" y="10.33" width="2.04" height="4.27"/>
+  </g>
+</svg>

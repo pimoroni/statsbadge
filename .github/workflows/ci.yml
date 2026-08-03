@@ -110,7 +110,8 @@ jobs:
           missing = {"__init__.py", "icon.png", "draw.py", "look.py", "net.py",
                      "pages.py", "setup.py"} - files
           assert not missing, f"missing from the wheel: {missing}"
-          assert os.path.isfile(os.path.join(server.STATIC_DIR, "index.html"))
+          for asset in ("index.html", "app.css", "app.js", "icon.svg"):
+              assert os.path.isfile(os.path.join(server.STATIC_DIR, asset)), asset
           built = install.packaged_mpy_dir()
           assert built, "the wheel carries no precompiled app"
           print(f"wheel carries the app, the UI, and bytecode in {built}")

@@ -2885,6 +2885,53 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
 
 
 @check
+def test_the_mark_is_the_same_one_everywhere(h):
+    """The badge draws it from splash.py's numbers, the config UI links a file and the site
+    inlines a copy so it needs no request. Three expressions of one mark, so each is checked
+    against the geometry rather than trusted."""
+    icon = pathlib.Path("src/statsbadge/web/icon.svg").read_text()
+    page = pathlib.Path("src/statsbadge/web/index.html").read_text()
+    site = pathlib.Path("index.html").read_text()
+
+    # The UI asks for the file, and the server hands it over with the right type: a favicon
+    # served as octet-stream is a favicon the browser ignores.
+    assert '<link rel="icon" href="/icon.svg"' in page
+    with urllib.request.urlopen(h.url("/icon.svg"), timeout=5) as response:
+        assert response.status == 200
+        assert response.headers.get("content-type") == "image/svg+xml", response.headers
+        assert response.read().decode() == icon
+
+    # The site inlines the same geometry, so a change to one shows up here rather than as two
+    # different marks. Its data URI quotes attributes with apostrophes, so the numbers are what
+    # is compared and not the markup around them.
+    assert 'rel="icon"' in site, "the site has no mark to be the same as"
+    for outline in re.findall(r'd="([^"]+)"', icon):
+        assert outline in site, outline
+    for numbers in re.findall(r'<rect x="([\d.]+)" y="([\d.]+)" '
+                              r'width="([\d.]+)" height="([\d.]+)"', icon):
+        for number in numbers:
+            assert f"'{number}'" in site, (numbers, number)
+
+    # And the proportions are splash.py's own, which is what the badge draws before it has a
+    # font. The bars carry it: three widths, two gaps and the tallest of them.
+    splash = (pathlib.Path(install.app_source_dir()) / "splash.py").read_text()
+    numbers = {}
+    for line in splash.splitlines():
+        if line.startswith(("BAR_W", "BAR_GAP", "BAR_HEIGHTS", "OUTER", "INNER")):
+            exec(line, numbers)  # noqa: S102  our own module, five constants off the top
+    boxes = [(float(w), float(t)) for w, t in
+             re.findall(r'<rect x="[\d.]+" y="[\d.]+" width="([\d.]+)" height="([\d.]+)"', icon)]
+    assert len(boxes) == len(numbers["BAR_HEIGHTS"]), boxes
+    scale = boxes[0][0] / numbers["BAR_W"]
+    for (_wide, tall), height in zip(boxes, numbers["BAR_HEIGHTS"], strict=True):
+        assert abs(tall / scale - height) < 0.5, (tall, height, scale)
+    # The arc's radii are the dial's, at the same scale.
+    radii = sorted({float(r) for r in re.findall(r"A([\d.]+) [\d.]+ 0 1 [01]", icon)})
+    assert abs(radii[0] / scale - numbers["INNER"]) < 0.5, radii
+    assert abs(radii[-1] / scale - numbers["OUTER"]) < 0.5, radii
+
+
+@check
 def test_the_badge_can_report_on_itself_with_no_host(_h):
     """The one page kind whose readings do not come from the frame. It needs no field, so
     nothing can be picked for it and nothing can fail to answer: a prune that keeps only pages
