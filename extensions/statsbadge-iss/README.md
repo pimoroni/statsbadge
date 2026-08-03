@@ -1,8 +1,8 @@
 # statsbadge-iss
 
-Where the space station is, for [statsbadge](https://github.com/pimoroni/stats-badge).
+Where the space station is, for [statsbadge](https://github.com/pimoroni/statsbadge).
 
-![ISS](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/iss.png) ![ISS following](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/iss_follow.png)
+![ISS](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/iss.png) ![ISS following](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/iss_follow.png)
 
 An orbit of ground track either side of it: forty-five minutes behind and fifty ahead, dimmed where the station is in the earth's shadow. The day and night terminator is washed over the half of the world the sun is not on. The marker takes the accent when the station is in sunlight and goes quiet when it is not.
 
@@ -33,6 +33,6 @@ The track is asked for rather than guessed: the position feed answers a list of 
 
 The terminator costs nothing extra. The position reply carries the sub-solar point, so the curve is drawn from two numbers with no almanac and no clock to trust.
 
-The map is the badge firmware's own, shared with [statsbadge-quakes](https://github.com/pimoroni/stats-badge/tree/main/extensions/statsbadge-quakes), so running both costs one copy of the coastlines.
+The map is the badge firmware's own, shared with [statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes), so running both costs one copy of the coastlines.
 
 `iss.lat`, `iss.lon`, `iss.altitude` and `iss.speed` are in the frame too, for a `text` or `dial` page that wants a number rather than a map.

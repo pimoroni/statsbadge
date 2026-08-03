@@ -1,10 +1,10 @@
 # statsbadge-clock
 
-A clock and the weather, for [statsbadge](https://github.com/pimoroni/stats-badge).
+A clock and the weather, for [statsbadge](https://github.com/pimoroni/statsbadge).
 
 Five faces: a Swiss railway station clock whose second hand sweeps at the badge's frame rate, Koppel's dotted minute track, the badge's own squircle in whatever theme it is wearing, and two digital faces - one set in the app's own typeface, one in seven-segment digits over their unlit segments.
 
-![Railway](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/swiss_clock.png) ![Dots](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_dots.png) ![Squircle](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_squircle.png) ![Digital](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_digital.png) ![Digital LCD](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/face_lcd.png)
+![Railway](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/swiss_clock.png) ![Dots](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_dots.png) ![Squircle](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_squircle.png) ![Digital](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_digital.png) ![Digital LCD](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_lcd.png)
 
 Weather comes from [Open-Meteo](https://open-meteo.com): the condition with a symbol for the sky, temperature, what it feels like, humidity and the wind. No key and no account.
 

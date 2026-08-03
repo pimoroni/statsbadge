@@ -1,8 +1,8 @@
 # statsbadge-quakes
 
-Recent earthquakes on a world map, for [statsbadge](https://github.com/pimoroni/stats-badge).
+Recent earthquakes on a world map, for [statsbadge](https://github.com/pimoroni/statsbadge).
 
-![Quakes](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/quakes.png) ![Quakes pulled out](https://raw.githubusercontent.com/pimoroni/stats-badge/main/shots/quakes_wide.png)
+![Quakes](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/quakes.png) ![Quakes pulled out](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/quakes_wide.png)
 
 The page cycles through the set on its own, closing in on each event and pulling back out to cross an ocean. Rings leave the epicentre in the magnitude's own colour off the theme ramp, so how big it was is something you can read at a glance from across the room. Under the map: the magnitude, where it was, how deep and how long ago.
 

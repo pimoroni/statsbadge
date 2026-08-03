@@ -37,9 +37,9 @@ install = ["mpremote>=1.22", "pyserial>=3.5"]
 all = ["nvidia-ml-py>=12", "mpremote>=1.22", "pyserial>=3.5"]
 
 [project.urls]
-Homepage = "https://github.com/pimoroni/stats-badge"
-Repository = "https://github.com/pimoroni/stats-badge"
-Issues = "https://github.com/pimoroni/stats-badge/issues"
+Homepage = "https://github.com/pimoroni/statsbadge"
+Repository = "https://github.com/pimoroni/statsbadge"
+Issues = "https://github.com/pimoroni/statsbadge/issues"
 
 [project.scripts]
 statsbadge = "statsbadge.__main__:main"
