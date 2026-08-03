@@ -13,6 +13,7 @@ frame.
 """
 
 import builtins
+import gc
 import os
 import sys
 import time
@@ -90,6 +91,16 @@ def load_extensions():
 # to stay: a press alone must not strand anyone.
 BUTTON_HOME.irq(None)
 HOLD_TO_EXIT_MS = 700
+
+# How much may be allocated between collects, and how often the heap is swept when nothing on
+# screen is moving. Left to itself the collector runs only when an allocation fails, which on 8MB
+# of PSRAM lets megabytes of garbage pile up first and leaves the free list in pieces: measured
+# with tools/mem_probe.py, a largest contiguous free run of 71KB with 7MB of it free. A collect is
+# 3.9ms on this board. The threshold covers an animated page, where a frame allocates up to 15KB
+# and a collect every seventeen frames is 0.23ms a frame amortised; the sweep is for a page that
+# is resting, where the pause goes somewhere nothing is waiting on it.
+GC_THRESHOLD = 256 * 1024
+COLLECT_EVERY_MS = 1000
 
 # State writes /state/<app>.json, the same file net.Config keeps the pairing in. Both read
 # and write it, so page saves go through State.modify, which merges.
@@ -189,6 +200,7 @@ class App:
         self.dimmed = None
         self.dim_step = 0
         self._light_at = 0
+        self._swept = 0
         # When a button was last touched, and when the badge last turned a page by itself.
         self._pressed_at = time.ticks_ms()
         self._advanced_at = 0
@@ -887,6 +899,24 @@ class App:
         self._home_at = None
         return "menu"
 
+    def sweep(self):
+        """Collect between frames, at a moment when nothing is waiting on the result.
+
+        Only while the page is resting: 3.9ms is a frame an animated page would drop, and the
+        threshold set at launch is what keeps that case in hand. A page redrawn on the poll
+        produces a poll's worth of garbage a second, which is what this is for.
+        """
+        now = time.ticks_ms()
+        if time.ticks_diff(now, self._swept) < COLLECT_EVERY_MS:
+            return
+        page = self.current_page()
+        if page is not None and page.get("kind") in pages_module.ANIMATED:
+            return
+        if pages_module.moving or self.sliding is not None:
+            return
+        self._swept = now
+        gc.collect()
+
     def save_page(self):
         """Persist the page index, if it moved. Called on the way out.
 
@@ -902,6 +932,8 @@ class App:
 
 def main():
     global _app
+    # Before anything is drawn: a collect on allocation volume rather than only on failure.
+    gc.threshold(GC_THRESHOLD)
     draw.prepare()
     load_extensions()
     app = App()
@@ -959,6 +991,8 @@ def main():
             app.render()
             app.dirty = False
         badge.update()
+        # After the frame is composited, so a sweep lands between frames and never inside one.
+        app.sweep()
 
 
 _app = None

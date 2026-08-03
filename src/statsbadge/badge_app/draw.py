@@ -132,10 +132,26 @@ def use_font(name):
 # page that redraws at frame rate takes eight hits a frame off it.
 CACHE_UNDER = 40
 
+# A string is only worth a picture the second time it is asked for. Every reading that moves is
+# a new key, and baking each one fills the heap with several hundred images of assorted sizes:
+# measured with tools/mem_probe.py, that holds 221 sprites at a time, drops the lot every eighty
+# frames, and leaves a largest contiguous free run of 70KB out of 7.9MB free - which the map's own
+# 827KB parse would not fit in.
+#
+# Furniture - a name, a title, a unit - is redrawn every frame and so bakes on the frame after its
+# first, which is where the saving is. A value that comes and goes is drawn where it stands, which
+# is cheaper than baking it anyway: 297B and 1.23ms live against 4695B and 2.54ms to bake.
+_once = set()
+# Enough that a string which comes round again inside a few seconds is still remembered, and so
+# bakes: a sprite is 100B and 0.26ms to blit, so what repeats is worth one. Keys, not pictures:
+# this is about 50KB full.
+ONCE_MAX = 512
+
 
 def label(text_value, size, pen, name=TEXT):
-    """A string baked into a sprite, or None if it is too large to be worth keeping.
+    """A string baked into a sprite, or None if it should be drawn where it stands.
 
+    None for a string too large to be worth keeping, and for one not seen before: see `_once`.
     A caller that needs the sprite - to place something against its width - should ask
     `text_width` and draw with `blit_label`, which handles both sides of that line.
     """
@@ -145,6 +161,12 @@ def label(text_value, size, pen, name=TEXT):
     cached = _labels.get(key)
     if cached is not None:
         return cached
+    if key not in _once:
+        if len(_once) > ONCE_MAX:
+            # Only ever holds keys, so this is a few kilobytes of tuples going, not pictures.
+            _once.clear()
+        _once.add(key)
+        return None
     face = _fonts.get(name)
     if face is None:
         return None
@@ -164,8 +186,9 @@ def label(text_value, size, pen, name=TEXT):
     finally:
         screen.font = was
     if len(_labels) > 220:
-        # Values churn; the cache is for furniture, so drop it wholesale rather than
-        # tracking ages.
+        # A ceiling for the furniture of a badge that has been through every page and every
+        # theme. Dropped wholesale rather than aged: only what has been asked for twice is in
+        # here, so there is little to lose.
         _labels.clear()
     _labels[key] = sprite
     return sprite
@@ -218,6 +241,7 @@ def clear_cache():
     screen's width after a switch.
     """
     _labels.clear()
+    _once.clear()
     _pip_rows.clear()
     _readings.clear()
     _gradients.clear()

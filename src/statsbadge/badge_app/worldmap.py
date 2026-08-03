@@ -27,6 +27,11 @@ LAND_ALPHA = 104
 # Where the ramp is anchored, in degrees from the equator. The tropics take the hot end and
 # the ice caps the cold one, so a theme's ramp reads as a climate.
 LAND_SPAN = 90.0
+# How many steps of the ramp the land is drawn in. `screen.pen = <colour>` allocates 64 bytes a
+# time, so a pen per polygon would be 288 assignments and 18KB a frame; the polygons are held
+# sorted by band, and a frame sets the pen once a band. Twenty four bands is under four degrees of
+# latitude each, finer than the ramp's own 65 steps resolve at the size of a polygon.
+LAND_BANDS = 24
 
 # How dark the night side goes. Two figures, because the wash goes toward the page on a dark
 # theme and toward the ink on a pale one, and those are nothing like each other: a near-black
@@ -40,6 +45,8 @@ NIGHT_STEP = 3
 # One entry per polygon: the shape in degrees, the middle of it, and the box it covers. Most
 # of the world is off screen at any zoom, and the box is what makes skipping it cheap.
 _shapes = None
+# Where each band of the ramp starts and stops in `_shapes`, which is held sorted by band.
+_bands = ()
 # Whether a frame has already said the map is coming, so the parse lands in the frame after
 # the notice rather than in place of it.
 _asked = False
@@ -96,28 +103,53 @@ def shapes():
                 lat_max = max(lat_max, lat)
             built.append((shape.custom(path), (lon_min + lon_max) * 0.5,
                           (lat_min + lat_max) * 0.5, lon_min, lon_max, lat_min, lat_max))
+    # Sorted by which step of the ramp the polygon is drawn in, so a frame can set the pen once
+    # a band instead of once a polygon. Order within a band does not matter: these are filled
+    # land masses at the same latitude, and they do not overlap.
+    built.sort(key=_band_of)
     _shapes = tuple(built)
+    _find_bands()
     del data, built
     gc.collect()
     return _shapes
 
 
-def pens(theme, alpha=LAND_ALPHA):
-    """One pen per polygon: the ramp colour for its latitude, over the page.
+def _band_of(entry):
+    """Which step of the ramp a polygon is drawn in, from the latitude of its middle."""
+    fraction = 1.0 - min(1.0, abs(entry[2]) / LAND_SPAN)
+    return min(LAND_BANDS - 1, int(fraction * LAND_BANDS))
 
-    Per theme rather than per frame, a pen apiece being 288 ramp lookups and 288 composites,
-    and keyed by the alpha as well so two pages can want two weights of the same map.
+
+def _find_bands():
+    """Where each band starts and stops in the sorted shapes."""
+    global _bands
+    edges = []
+    start = 0
+    for band in range(LAND_BANDS):
+        stop = start
+        while stop < len(_shapes) and _band_of(_shapes[stop]) == band:
+            stop += 1
+        edges.append((start, stop))
+        start = stop
+    _bands = tuple(edges)
+
+
+def pens(theme, alpha=LAND_ALPHA):
+    """One pen per band of the ramp, the colour for that latitude over the page.
+
+    Per theme rather than per frame, and per band rather than per polygon: twenty four colours
+    instead of 288, which is also twenty four pen assignments in a frame instead of 288.
     """
     key = (theme.name, alpha)
     found = _pens.get(key)
     if found is None:
-        # A set is 288 colours, so the table is dropped rather than grown past the couple of
-        # pages that can be on screen: a badge cycling every theme would otherwise keep them all.
+        # Dropped rather than grown past the couple of pages that can be on screen: a badge
+        # cycling every theme would otherwise keep a set for each.
         if len(_pens) > 2:
             _pens.clear()
         found = _pens[key] = tuple(
-            theme.at(1.0 - min(1.0, abs(entry[2]) / LAND_SPAN)).with_alpha(alpha).over(theme.bg)
-            for entry in shapes())
+            theme.at((band + 0.5) / LAND_BANDS).with_alpha(alpha).over(theme.bg)
+            for band in range(LAND_BANDS))
     return found
 
 
@@ -179,6 +211,8 @@ class View:
         self.scale = scale
         self._night = None
         self._night_for = None
+        # A transform per whole turn of longitude, refilled each frame by `land`.
+        self._placed = {}
 
     def at(self, lon, lat):
         """Where a point in degrees lands on the screen."""
@@ -225,21 +259,37 @@ class View:
         screen.clip = self.box
         # Looked up once: this runs 288 times a frame and the attribute lookup is not free.
         local_floor = math.floor
-        for index, entry in enumerate(entries):
-            outline, lon_mid, _lat_mid, lon_min, lon_max, lat_min, lat_max = entry
-            # Each polygon is drawn at whichever whole turn of longitude puts it nearest the
-            # camera, which is what makes the map wrap rather than end at the date line.
-            turn = 360.0 * local_floor((self.lon - lon_mid) / 360.0 + 0.5)
-            if (lon_min + turn - self.lon > half_lon
-                    or self.lon - lon_max - turn > half_lon):
-                continue
-            if lat_min - self.lat > half_lat or self.lat - lat_max > half_lat:
-                continue
-            screen.pen = colours[index]
-            outline.transform = mat3().translate((turn - self.lon) * scale + self.mid[0],
-                                                 base_y).scale(scale, scale * ASPECT)
-            screen.shape(outline)
-            drawn += 1
+        # Every polygon at the same whole turn of longitude shares one transform, and a frame
+        # only ever sees two or three turns, so a frame builds two or three. One apiece would be
+        # 288 allocations of 32 bytes; assigning a transform already built costs nothing.
+        placed = self._placed
+        placed.clear()
+        for band, (first, last) in enumerate(_bands):
+            # The pen is set on the first polygon of the band that is actually in view, so a band
+            # entirely off screen costs nothing: an assignment is 64 bytes.
+            inked = False
+            for index in range(first, last):
+                entry = entries[index]
+                outline, lon_mid, _lat_mid, lon_min, lon_max, lat_min, lat_max = entry
+                # Each polygon is drawn at whichever whole turn of longitude puts it nearest the
+                # camera, which is what makes the map wrap rather than end at the date line.
+                turn = 360.0 * local_floor((self.lon - lon_mid) / 360.0 + 0.5)
+                if (lon_min + turn - self.lon > half_lon
+                        or self.lon - lon_max - turn > half_lon):
+                    continue
+                if lat_min - self.lat > half_lat or self.lat - lat_max > half_lat:
+                    continue
+                if not inked:
+                    screen.pen = colours[band]
+                    inked = True
+                transform = placed.get(turn)
+                if transform is None:
+                    transform = placed[turn] = mat3().translate(
+                        (turn - self.lon) * scale + self.mid[0],
+                        base_y).scale(scale, scale * ASPECT)
+                outline.transform = transform
+                screen.shape(outline)
+                drawn += 1
         screen.clip = was
         return drawn
 

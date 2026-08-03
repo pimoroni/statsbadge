@@ -12,6 +12,8 @@ and the terminator a quarter of a degree a minute, so both are carried forward f
 that arrives every five seconds. A picture would cost a fetch a frame to do the same.
 """
 
+from array import array
+
 import draw
 import look
 import pages
@@ -54,6 +56,10 @@ HALO = 6.0
 
 # Where each page is looking, keyed by page id.
 _state = {}
+# The track projected to the screen, x and y a point, grown once and reused every frame.
+_path = array("f", b"")
+# The marker's four shapes, built on the first frame that draws them.
+_parts = None
 
 
 def _page_state(page):
@@ -74,15 +80,27 @@ def _marker(theme, view, where):
     was = screen.clip
     screen.clip = view.box
 
-    screen.pen = pen.with_alpha(60)
-    screen.shape(shape.circle(vec2(x, y), HALO))
+    # Built once and re-aimed: the marker is the same size every frame, and a circle is a path
+    # of thirty-odd points to allocate for the sake of moving it a pixel.
+    global _parts
+    if _parts is None:
+        _parts = (shape.circle(vec2(0, 0), HALO),
+                  shape.rectangle(rect(-PANEL_LONG, -PANEL_SHORT * 0.5,
+                                       PANEL_LONG * 2.0, PANEL_SHORT)),
+                  shape.circle(vec2(0, 0), BODY),
+                  shape.circle(vec2(0, 0), BODY * 0.45))
+    halo, panels, body, pupil = _parts
+    at = mat3().translate(x, y)
+    for part in _parts:
+        part.transform = at
 
+    screen.pen = pen.with_alpha(60)
+    screen.shape(halo)
     screen.pen = pen
-    screen.shape(shape.rectangle(rect(x - PANEL_LONG, y - PANEL_SHORT * 0.5,
-                                      PANEL_LONG * 2.0, PANEL_SHORT)))
-    screen.shape(shape.circle(vec2(x, y), BODY))
+    screen.shape(panels)
+    screen.shape(body)
     screen.pen = theme.bg if sunlit else theme.panel
-    screen.shape(shape.circle(vec2(x, y), BODY * 0.45))
+    screen.shape(pupil)
     screen.clip = was
 
 
@@ -135,47 +153,74 @@ def _track(theme, view, state, points, flown):
     dense = state["curve"]
     cut = max(0, min(len(dense) - 1, int(flown * TRACK_STEPS)))
 
+    # Nothing about the drawn track changes between most frames: the run arrives every two
+    # minutes, the split moves every thirty seconds, and on the whole-world camera the projection
+    # never moves at all. So the stroked shapes are kept and only rebuilt when one of those
+    # actually moves - the camera to the nearest pixel, since below that it is the same picture.
+    # Stroking is the dear half: an open contour of 77 points becomes an outline of four times
+    # that, six times a frame.
+    drawn_for = (state["curve_for"], cut, int(view.lon * view.scale),
+                 int(view.lat * view.scale), int(view.scale * 100.0))
+    if state.get("runs_for") != drawn_for:
+        state["runs_for"] = drawn_for
+        state["runs"] = _project(view, dense, cut)
+
     was = screen.clip
     screen.clip = view.box
-    path = []
-    stretch = None
-    previous = None
-    for index, (lon, lat, sunlit) in enumerate(dense):
-        # What this point is drawn as, rather than the pen itself: a stretch ends where the
-        # answer changes, and comparing two colours is not something a pen can be asked.
-        want = (index >= cut, bool(sunlit))
-        here = view.at(lon, lat)
-        # A jump wider than half the screen is the seam, not a move.
-        seam = previous is not None and abs(here[0] - previous[0]) > look.W * 0.5
-        if path and (seam or want != stretch):
-            _stroke(theme, path, stretch)
-            # The last point is carried over, so a change of colour is a join and not a gap.
-            path = [] if seam else [path[-1]]
-        stretch = want
-        path.append(vec2(here[0], here[1]))
-        previous = here
-    _stroke(theme, path, stretch)
+    for trace, ahead, sunlit in state["runs"]:
+        if ahead:
+            screen.pen = theme.accent.with_alpha(255 if sunlit else DARK_ALPHA)
+        else:
+            screen.pen = theme.accent_b.with_alpha(
+                FLOWN_ALPHA if sunlit else FLOWN_ALPHA // 2)
+        screen.shape(trace)
     screen.clip = was
 
 
-def _stroke(theme, path, stretch):
-    """One run of the track, in the colour its half and its light call for.
+def _project(view, dense, cut):
+    """The track as stroked shapes, one per run of it that is drawn the same way.
 
-    Behind is the second accent and ahead the first; a run in the earth's shadow keeps less of
-    whichever it is, so the track says where the station is in daylight and the wash under it
-    says why.
+    Projected into one buffer that outlives the frame and stroked out of slices of it: a vec2 a
+    point and a list a run would be 77 objects, which is the sort of allocation that leaves a heap
+    in pieces. Same idiom as draw.line, which strokes a plot out of `draw._points`.
     """
-    if len(path) < 2 or stretch is None:
-        return
-    ahead, sunlit = stretch
-    if ahead:
-        pen = theme.accent.with_alpha(255 if sunlit else DARK_ALPHA)
-    else:
-        pen = theme.accent_b.with_alpha(FLOWN_ALPHA if sunlit else FLOWN_ALPHA // 2)
-    trace = shape.custom(path)
-    trace.stroke(TRACK_W, draw.LINE_FLAGS)
-    screen.pen = pen
-    screen.shape(trace)
+    global _path
+    wanted = len(dense) * 2
+    if len(_path) < wanted:
+        _path = array("f", bytes(wanted * 4 + 64))
+    bounds = []
+    stretch = None
+    start = 0
+    at = 0
+    previous_x = None
+    for index, (lon, lat, sunlit) in enumerate(dense):
+        # What this point is drawn as, rather than the pen itself: a run ends where the answer
+        # changes, and comparing two colours is not something a pen can be asked.
+        want = (index >= cut, bool(sunlit))
+        x, y = view.at(lon, lat)
+        # A jump wider than half the screen is the seam, not a move.
+        seam = previous_x is not None and abs(x - previous_x) > look.W * 0.5
+        if at and (seam or want != stretch):
+            bounds.append((start, at, stretch))
+            # A change of colour carries the last point over, so the join is drawn; a seam does
+            # not, because the two ends are not next to each other.
+            start = at if seam else at - 2
+        stretch = want
+        _path[at] = x
+        _path[at + 1] = y
+        at += 2
+        previous_x = x
+    bounds.append((start, at, stretch))
+
+    held = memoryview(_path)
+    runs = []
+    for start, stop, run in bounds:
+        if stop - start < 4 or run is None:
+            continue
+        trace = shape.custom(held[start:stop])
+        trace.stroke(TRACK_W, draw.LINE_FLAGS)
+        runs.append((trace, run[0], run[1]))
+    return runs
 
 
 def _band(theme, where, aboard, note="waiting for the feed"):
