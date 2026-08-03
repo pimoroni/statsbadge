@@ -155,10 +155,11 @@ def install_argv(base, config_dir, fresh=False):
     --force because the tool is already there and this is a replacement, which is the only
     thing uv tool install does: there is no adding to an existing one.
 
-    --fresh, and so --reinstall, for taking something out. Measured against a tool holding two
-    extensions: --force alone writes the shorter receipt but leaves the dropped package in
-    site-packages, where its entry point still registers a page. --reinstall rebuilds and the
-    package goes. Adding needs neither, and skipping it keeps an add quick.
+    --fresh, and so --reinstall, for taking something out. Whether --force alone prunes depends
+    on the uv doing the work: measured against a tool holding two extensions, uv 0.9.2 drops the
+    package from site-packages and uv 0.4.28 writes the shorter receipt and leaves it there, with
+    its entry point still registering a page. Nothing here chooses which uv a user has, and a
+    removal that does not remove is worse than a slow one. Adding needs neither.
     """
     argv = [shutil.which("uv") or "uv", "tool", "install", "--force"]
     if fresh:
