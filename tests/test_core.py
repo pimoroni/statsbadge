@@ -2885,6 +2885,84 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
 
 
 @check
+def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
+    """`uv tool install` replaces the environment rather than adding to it, so adding a second
+    extension by naming only that one drops the first. The list in the config directory is what
+    every install is made from, and uv's own receipt is where it comes from to begin with."""
+    from statsbadge import tooling
+
+    work = tempfile.mkdtemp(prefix="statsbadge-tool-")
+    try:
+        # No receipt beside the interpreter means this is a venv or a checkout, not a tool.
+        assert tooling.as_uv_tool(work) is None
+        pathlib.Path(work, tooling.RECEIPT).write_text(
+            '[tool]\n'
+            'requirements = [\n'
+            '    { name = "statsbadge", extras = ["nvidia"], directory = "/src/sb" },\n'
+            '    { name = "statsbadge-clock", directory = "/src/sb/extensions/clock" },\n'
+            '    { name = "statsbadge-iss" },\n'
+            ']\n')
+        receipt = tooling.as_uv_tool(work)
+        # The extra has to survive: reinstalling as plain statsbadge would drop NVML support.
+        assert tooling.base_requirement(receipt) == "/src/sb[nvidia]", receipt
+        # And everything else it was built with is what an `ext add` starts from.
+        assert tooling.installed_beside(receipt) == ["/src/sb/extensions/clock",
+                                                     "statsbadge-iss"]
+
+        registry = {"tool": {"requirements": [{"name": "statsbadge"}]}}
+        assert tooling.base_requirement(registry) == "statsbadge"
+        pinned = {"tool": {"requirements": [{"name": "statsbadge", "specifier": "==0.2.0"}]}}
+        assert tooling.base_requirement(pinned) == "statsbadge==0.2.0"
+        # Something this cannot read is not guessed at: the caller offers the command instead.
+        assert tooling.base_requirement({"tool": {"requirements": []}}) is None
+
+        # A short name becomes the package; anything already specific is left alone.
+        assert tooling.as_requirement("clock") == "statsbadge-clock"
+        for given in ("statsbadge-clock", "./extensions/statsbadge-iss", "statsbadge-iss>=0.2",
+                      "git+https://example.invalid/x.git"):
+            assert tooling.as_requirement(given) == given, given
+        for requirement, short in (("statsbadge-clock", "clock"),
+                                   ("/src/sb/extensions/statsbadge-iss", "iss"),
+                                   ("statsbadge-quakes>=0.2", "quakes")):
+            assert tooling.short_name(requirement) == short, requirement
+
+        # One extension, three spellings: a list holding two of them asks uv for it twice.
+        assert tooling.names(["/src/sb/extensions/statsbadge-clock"]) == {"clock"}
+        assert tooling.short_name("clock") == tooling.short_name("statsbadge-clock")
+
+        # uv's resolver explains itself at length; the useful part is the name.
+        assert tooling.explain(
+            "error: Because statsbadge-nope was not found in the package registry and you "
+            "require statsbadge-nope, we can conclude that your requirements are unsatisfiable."
+        ) == "no such package: statsbadge-nope"
+        assert tooling.explain("error: no internet") == "no internet"
+        assert tooling.explain("") == "uv did not say why"
+
+        tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-iss"])
+        assert tooling.read_wanted(work) == ["statsbadge-clock", "statsbadge-iss"]
+        tooling.forget_wanted(work)
+        assert tooling.read_wanted(work) == []
+        tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-iss"])
+        # The file explains itself, and the comments are not requirements.
+        assert pathlib.Path(work, tooling.WANTED).read_text().startswith("#")
+
+        # Taking something out has to rebuild: measured against uv, a shorter list alone writes
+        # the shorter receipt but leaves the package in site-packages, entry point and all.
+        adding = tooling.install_argv("statsbadge", work)
+        removing = tooling.install_argv("statsbadge", work, fresh=True)
+        assert "--reinstall" not in adding, adding
+        assert "--reinstall" in removing, removing
+        for argv in (adding, removing):
+            assert argv[1:4] == ["tool", "install", "--force"], argv
+            assert argv[-2:] == ["--with-requirements", tooling.wanted_path(work)], argv
+        # Nothing wanted, nothing to point at: uv would refuse an empty requirements file.
+        tooling.write_wanted(work, [])
+        assert "--with-requirements" not in tooling.install_argv("statsbadge", work)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@check
 def test_asking_for_powermetrics_without_the_rule_says_so(_h):
     """--powermetrics needs one sudoers rule. A flag that quietly reports nothing leaves the
     reader with no way to find out why, and a rule that does not match the argv sudo is asked

@@ -1,0 +1,214 @@
+"""Managing extensions when statsbadge is installed as a uv tool.
+
+`uv tool install` is declarative: each run replaces the last, so adding a second extension
+means naming the first one again or losing it. That is a list worth keeping somewhere, so it
+lives in the config directory as `extensions.txt` and every install is made from it.
+
+The base requirement - `statsbadge`, or `statsbadge[nvidia]`, or a path for a checkout - comes
+from uv's own receipt, which sits beside the tool's environment and records what it was built
+from. Reading that rather than guessing is what keeps an extra from being dropped on the next
+add.
+
+uv has no `pipx inject`, so `uv tool install --with-requirements` is the way in. Its own
+progress and its resolver's prose are not this command's output: uv runs quiet, one line is
+printed here, and `--verbose` hands the terminal back to uv for when the reason matters.
+
+`uv pip install --python <the tool environment>` would put a package in without a rebuild, and
+is not used: nothing would record it, so the next `uv tool upgrade` would drop it again.
+"""
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tomllib
+
+# uv writes this beside the environment of every tool it installs, so finding one next to the
+# running interpreter is what tells us this is a tool and not a venv or a checkout.
+RECEIPT = "uv-receipt.toml"
+# The extensions wanted on this host, one requirement a line, in the config directory: hand
+# editable, and the thing every reinstall is made from.
+WANTED = "extensions.txt"
+# What a plugin is called if it is named by its short name.
+PREFIX = "statsbadge-"
+# Anything with one of these in it is already a requirement, a path or a URL, so it is passed
+# through as it stands.
+SPEC_MARKS = "/\\=<>@[]!~;: "
+
+
+def receipt_path(prefix=None):
+    return os.path.join(prefix or sys.prefix, RECEIPT)
+
+
+def as_uv_tool(prefix=None):
+    """uv's receipt for this interpreter, or None if statsbadge is not installed as a tool."""
+    path = receipt_path(prefix)
+    try:
+        with open(path, "rb") as handle:
+            return tomllib.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+def base_requirement(receipt, name="statsbadge"):
+    """What to reinstall the tool itself from, extras and all, or None if it cannot be told.
+
+    A receipt records a requirement per package: the tool and everything installed beside it.
+    Only the tool's own entry is wanted, and it may be a registry name, a directory or a URL -
+    so anything not recognised returns None and the caller offers the command instead of
+    running a guess.
+    """
+    for requirement in (receipt or {}).get("tool", {}).get("requirements", ()):
+        if requirement.get("name") != name:
+            continue
+        extras = requirement.get("extras") or ()
+        marked = f"{name}[{','.join(extras)}]" if extras else name
+        if requirement.get("directory"):
+            # A path install keeps the path, or the reinstall would take the published package
+            # in place of the checkout it came from.
+            where = requirement["directory"]
+            return f"{where}[{','.join(extras)}]" if extras else where
+        if requirement.get("url"):
+            return requirement["url"]
+        if requirement.get("specifier"):
+            return marked + requirement["specifier"]
+        return marked
+    return None
+
+
+def installed_beside(receipt, name="statsbadge"):
+    """Every requirement in the receipt other than the tool itself, as uv recorded them."""
+    out = []
+    for requirement in (receipt or {}).get("tool", {}).get("requirements", ()):
+        if requirement.get("name") == name:
+            continue
+        out.append(requirement.get("directory") or requirement.get("url")
+                   or requirement.get("name", ""))
+    return [entry for entry in out if entry]
+
+
+def wanted_path(config_dir):
+    return os.path.join(config_dir, WANTED)
+
+
+def read_wanted(config_dir):
+    """The extensions this host asks for, in the order they were added."""
+    try:
+        with open(wanted_path(config_dir)) as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return []
+    return [line.strip() for line in lines
+            if line.strip() and not line.strip().startswith("#")]
+
+
+def write_wanted(config_dir, requirements):
+    os.makedirs(config_dir, exist_ok=True)
+    with open(wanted_path(config_dir), "w") as handle:
+        handle.write("# Extensions statsbadge is installed with, one requirement a line.\n")
+        handle.write("# Edit by hand or with `statsbadge ext add`, then run `statsbadge ext"
+                     " sync`.\n")
+        for requirement in requirements:
+            handle.write(f"{requirement}\n")
+
+
+def forget_wanted(config_dir):
+    """Take the list away again, for a first add that could not be installed."""
+    try:
+        os.remove(wanted_path(config_dir))
+    except OSError:
+        pass
+
+
+def as_requirement(name):
+    """`clock` as `statsbadge-clock`, and anything already specific left alone."""
+    name = name.strip()
+    if name.startswith(PREFIX) or any(mark in name for mark in SPEC_MARKS):
+        return name
+    if name.startswith(".") or name.endswith((".whl", ".tar.gz")):
+        return name
+    return PREFIX + name
+
+
+def names(requirements):
+    """The short name of each, for asking whether one is already there.
+
+    By short name and not by the string: the same extension can be named as `clock`, as
+    `statsbadge-clock` or as a path to it, and a list holding two spellings of one plugin asks
+    uv to install it twice.
+    """
+    return {short_name(requirement) for requirement in requirements}
+
+
+def short_name(requirement):
+    """What `ext add` would have been given for this requirement, for reporting."""
+    tail = requirement.rstrip("/").replace("\\", "/").split("/")[-1]
+    for mark in "[=<>@!~;":
+        tail = tail.split(mark)[0]
+    return tail[len(PREFIX):] if tail.startswith(PREFIX) else tail
+
+
+def install_argv(base, config_dir, fresh=False):
+    """The command that makes the tool environment match `extensions.txt`.
+
+    --force because the tool is already there and this is a replacement, which is the only
+    thing uv tool install does: there is no adding to an existing one.
+
+    --fresh, and so --reinstall, for taking something out. Measured against a tool holding two
+    extensions: --force alone writes the shorter receipt but leaves the dropped package in
+    site-packages, where its entry point still registers a page. --reinstall rebuilds and the
+    package goes. Adding needs neither, and skipping it keeps an add quick.
+    """
+    argv = [shutil.which("uv") or "uv", "tool", "install", "--force"]
+    if fresh:
+        argv.append("--reinstall")
+    argv.append(base)
+    if read_wanted(config_dir):
+        argv += ["--with-requirements", wanted_path(config_dir)]
+    return argv
+
+
+def quoted(argv):
+    """The command as a line someone can paste."""
+    return " ".join(f'"{part}"' if " " in part else part for part in argv)
+
+
+# uv's answer when a name is not a package. Its resolver explains itself at length, and the
+# useful part is the name.
+MISSING = re.compile(r"Because (\S+) was not found in the package registry")
+
+
+def run_install(base, config_dir, fresh=False, verbose=False):
+    """Replace the tool environment. Returns (ok, what went wrong).
+
+    Whatever this process was going to do afterwards, it should not: the environment it is
+    running out of has just been rebuilt underneath it.
+    """
+    argv = install_argv(base, config_dir, fresh)
+    if verbose:
+        print(f"  {quoted(argv)}")
+    # uv writes to the same terminal, and what is already printed should be on it first.
+    sys.stdout.flush()
+    if verbose:
+        try:
+            return subprocess.run(argv, check=False).returncode == 0, ""
+        except OSError as exc:
+            return False, f"could not run uv: {exc}"
+    try:
+        done = subprocess.run([*argv, "--quiet"], capture_output=True, text=True, check=False)
+    except OSError as exc:
+        return False, f"could not run uv: {exc}"
+    return done.returncode == 0, explain(done.stderr)
+
+
+def explain(said):
+    """uv's complaint as one line, or the name of whatever does not exist."""
+    said = (said or "").strip()
+    missing = MISSING.search(said)
+    if missing:
+        return f"no such package: {missing.group(1)}"
+    for line in said.splitlines():
+        if line.startswith("error: "):
+            return line[len("error: "):]
+    return said.splitlines()[-1] if said else "uv did not say why"

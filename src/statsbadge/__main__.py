@@ -8,7 +8,7 @@ import sys
 import threading
 import time
 
-from . import auth, beacon, extensions, install, layout, server
+from . import auth, beacon, extensions, install, layout, server, tooling
 
 
 LEGACY_CONFIG_DIR = os.path.join(os.path.expanduser("~/.config"), "statsbadge")
@@ -480,11 +480,17 @@ def _badge_status(args, port):
 
 # -- extensions -------------------------------------------------------------
 
-def cmd_extensions(_args):
+def cmd_extensions(args):
+    """List the extensions on this host, or change which ones are installed."""
+    verb = getattr(args, "verb", None) or "list"
+    if verb != "list":
+        return _change_extensions(args, verb)
+
+    directory = config_dir(args.config_dir)
     found = extensions.describe()
     if not found:
         print("no extensions installed")
-        print("try: pip install ./extensions/statsbadge-clock")
+        print(_how_to_add("clock"))
         return 0
     for record in found:
         state = "ok" if record["available"] else (
@@ -497,7 +503,97 @@ def cmd_extensions(_args):
             print(f"  badge module: {record['badge_module']}")
         if record["error"]:
             print(f"  error:        {record['error']}")
+
+    wanted = tooling.read_wanted(directory)
+    if wanted:
+        print()
+        print(f"asked for in {tooling.wanted_path(directory)}:")
+        for requirement in wanted:
+            print(f"  {requirement}")
+        loaded = {record["name"] for record in found}
+        adrift = [r for r in wanted if tooling.short_name(r) not in loaded]
+        if adrift:
+            print("  not installed yet: {}".format(", ".join(adrift)))
+            print("  run: statsbadge ext sync")
+    elif tooling.as_uv_tool():
+        # Installed with --with rather than from the list, so say where the list would be: the
+        # next `uv tool install` replaces the environment and would drop them.
+        print()
+        print(f"no {tooling.WANTED} yet. The first `statsbadge ext add` writes one, taking")
+        print("what this tool was installed with as its starting point.")
     return 0
+
+
+def _how_to_add(name):
+    """The line to run to install an extension, for however statsbadge itself was installed."""
+    receipt = tooling.as_uv_tool()
+    if receipt and tooling.base_requirement(receipt):
+        return f"try: statsbadge ext add {name}"
+    return f"try: uv pip install {tooling.PREFIX}{name}"
+
+
+def _change_extensions(args, verb):
+    """add, remove or sync: keep `extensions.txt` and the tool environment in step."""
+    directory = config_dir(args.config_dir)
+    receipt = tooling.as_uv_tool()
+    before = tooling.read_wanted(directory)
+    had_list = os.path.isfile(tooling.wanted_path(directory))
+    wanted = list(before)
+    if not wanted and receipt:
+        # Nothing written down yet, but uv remembers what the tool was built with. Adopting that
+        # is the whole point: `ext add` on a tool installed with --with would otherwise reinstall
+        # naming only the new one, and drop everything already there.
+        wanted = tooling.installed_beside(receipt)
+
+    changed = []
+    if verb == "add":
+        for name in args.names:
+            requirement = tooling.as_requirement(name)
+            if tooling.short_name(requirement) in tooling.names(wanted):
+                print(f"already installed: {tooling.short_name(requirement)}")
+                continue
+            wanted.append(requirement)
+            changed.append(requirement)
+    elif verb == "remove":
+        for name in args.names:
+            requirement = tooling.as_requirement(name)
+            matches = [r for r in wanted
+                       if r == requirement
+                       or tooling.short_name(r) == tooling.short_name(requirement)]
+            if not matches:
+                print(f"not installed: {tooling.short_name(requirement)}")
+                continue
+            for match in matches:
+                wanted.remove(match)
+                changed.append(match)
+    if verb != "sync" and not changed:
+        return 0
+
+    base = tooling.base_requirement(receipt) if receipt else None
+    if base is None:
+        # Not a uv tool, or a receipt this cannot read: say what to run instead, and leave the
+        # list as it was rather than recording something that has not happened.
+        print("statsbadge is not installed as a uv tool, so there is nothing here to rebuild.")
+        for requirement in (changed or wanted):
+            print(f"  uv pip install {requirement}")
+        return 0
+
+    tooling.write_wanted(directory, wanted)
+    doing = "installing" if verb != "remove" else "removing"
+    print(f"{doing} {', '.join(tooling.short_name(r) for r in changed or wanted)}...")
+    ok, why = tooling.run_install(base, directory, fresh=verb != "add",
+                                  verbose=args.verbose)
+    if ok:
+        print("done. Run `statsbadge install` to push any badge-side code they ship.")
+        return 0
+
+    # Put the list back: it records what is installed, and nothing was.
+    if had_list:
+        tooling.write_wanted(directory, before)
+    else:
+        tooling.forget_wanted(directory)
+    print(why, file=sys.stderr)
+    return 1
 
 
 # -- probe ------------------------------------------------------------------
@@ -681,9 +777,18 @@ def main(argv=None):
                         help="compare against the .py sources, not the bytecode")
     status.set_defaults(func=cmd_status)
 
-    exts = subs.add_parser("extensions", parents=[common],
-                           help="list installed extensions and whether they loaded")
-    exts.set_defaults(func=cmd_extensions)
+    exts = subs.add_parser("extensions", parents=[common], aliases=["ext"],
+                           help="list extensions, or add and remove them")
+    exts.set_defaults(func=cmd_extensions, verb="list", names=[])
+    verbs = exts.add_subparsers(dest="verb", metavar="add|remove|sync")
+    for verb, what in (("add", "install an extension and remember it"),
+                       ("remove", "uninstall an extension and forget it"),
+                       ("sync", "install whatever the list names")):
+        step = verbs.add_parser(verb, parents=[common], help=what)
+        step.set_defaults(func=cmd_extensions, verb=verb, names=[])
+        if verb != "sync":
+            step.add_argument("names", nargs="+", metavar="NAME",
+                              help="a short name like clock, or any pip requirement")
 
     badges = subs.add_parser("badges", help="list or forget paired badges")
     badges.add_argument("--forget", metavar="BADGE_ID")

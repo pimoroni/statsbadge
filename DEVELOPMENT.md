@@ -243,6 +243,8 @@ A package advertising a `statsbadge.sources` entry point gets two things: a grou
 
 **Declared settings are what the UI offers.** `settings` on the source builds the fields under Extensions, one answer per host; `page_settings` builds the fields on each page of that extension's kinds, so two pages can point at two places. A source that declares neither gets no controls, which is right: offering seven field pickers to a renderer that reads none of them offered seven controls that did nothing. The same values are settable as `--extension name.key=value` for a host with no browser near it, and anything stored by the UI wins over the flag.
 
+**`ext add` rebuilds a uv tool rather than adding to it.** uv has no `pipx inject`, so the only way in is `uv tool install --with-requirements`, which replaces the environment: naming one extension drops the rest. Hence the list in `extensions.txt`, and hence reading the base requirement out of uv's `uv-receipt.toml` so an extra like `statsbadge[nvidia]` survives. Taking one out needs `--reinstall`, because `--force` alone writes the shorter receipt and leaves the package in `site-packages` with its entry point still registering a page. `uv pip install --python <the tool environment>` would put one in without a rebuild and is not used: nothing records it, so the next `uv tool upgrade` drops it again. uv runs quiet and its resolver's prose is translated to a line - `--verbose` hands the terminal back to it.
+
 **Installing a plugin for development means installing it editable.** A plain `uv pip install` copies the package, and installing again over an unchanged version is a no-op, so the code that runs stays the snapshot from the first install:
 
 ```bash
