@@ -2,12 +2,12 @@
 """Turn the badge's raw framebuffer dumps into PNGs.
 
     python3 tools/shots.py build/shots              # convert what the badge dumped
-    python3 tools/shots.py build/shots --publish    # and copy the README's own into shots/
+    python3 tools/shots.py build/shots --publish    # and copy the ones the docs show
 
 The badge writes frames into build/shots, which is ignored: a render of every page and
 every theme is a review artefact, and committing all of it means a drawing change shows up
-as forty modified images. Only what the README links is checked in, and --publish reads the
-README to decide which those are, so the set maintains itself.
+as forty modified images. Only what the README and the project page link is checked in, and --publish reads both to
+decide which those are, so the set maintains itself.
 
 The dumps are 320x240 straight from `screen.raw`: R G B A per pixel and
 premultiplied, so alpha is divided back out here. Measured, not assumed - a pure red
@@ -88,31 +88,38 @@ def shrink(path):
                     "--output", str(path), "--", str(path)], check=False)
 
 
-def linked_by_readme():
-    """The shot names the README shows, which is what earns a place in the repository."""
-    readme = pathlib.Path(__file__).resolve().parent.parent / "README.md"
-    return sorted(set(re.findall(r"shots/([A-Za-z0-9_]+)\.png", readme.read_text())))
+def linked_shots():
+    """The shot names the README or the project page shows, which is what earns a place here.
+
+    Both, because the page publishes out of the same `shots` directory: a figure added to
+    index.html and to nowhere else would never be copied in, and the site would ask for a file
+    that is not there.
+    """
+    root = pathlib.Path(__file__).resolve().parent.parent
+    text = "".join((root / name).read_text() for name in ("README.md", "index.html")
+                   if (root / name).is_file())
+    return sorted(set(re.findall(r"shots/([A-Za-z0-9_]+)\.png", text)))
 
 
 def publish(source, target="shots"):
-    """Copy the README's shots out of a build directory, and say what is missing."""
+    """Copy the shots the docs show out of a build directory, and say what is missing."""
     target = pathlib.Path(target)
     target.mkdir(parents=True, exist_ok=True)
     missing = []
-    for name in linked_by_readme():
+    for name in linked_shots():
         found = pathlib.Path(source) / f"{name}.png"
         if not found.exists():
             missing.append(name)
             continue
         shutil.copyfile(found, target / f"{name}.png")
         shrink(target / f"{name}.png")
-    print(f"published {len(linked_by_readme()) - len(missing)} of "
-          f"{len(linked_by_readme())} into {target}")
+    print(f"published {len(linked_shots()) - len(missing)} of "
+          f"{len(linked_shots())} into {target}")
     if missing:
         print("not in " + str(source) + ": " + ", ".join(missing))
-    # Anything checked in that the README no longer shows is only taking up room.
+    # Anything checked in that neither of them shows any more is only taking up room.
     extra = sorted(p.stem for p in target.glob("*.png")
-                   if p.stem not in linked_by_readme())
+                   if p.stem not in linked_shots())
     if extra:
         print("checked in but unreferenced: " + ", ".join(extra))
 

@@ -177,6 +177,19 @@ for index, page in enumerate(PAGES):
     shot(page["id"])
     print(f"{page['id']:<8} {page['kind']:<6} {per_frame:6.2f} ms/frame")
 
+# The single dial again with the whole ramp swept round it. A second pass over the same page
+# rather than another entry above, because the fill is a layout setting and not a page one - and
+# the setting is worth a shot of its own, being the one thing no other page can show.
+draw.GAUGE_FILL = "ramp"
+draw.clear_cache()
+ramped = time_page(PAGES[0], theme)
+pages_module.render(PAGES[0], FRAME, HISTORY, theme, 0, len(PAGES), FRAME["sys"]["host"])
+badge.update()
+shot("dial_ramp")
+draw.GAUGE_FILL = "solid"
+draw.clear_cache()
+print(f"{'dial_ramp':<8} {'dial':<6} {ramped:6.2f} ms/frame  (gauge_fill = ramp)")
+
 # A page that has to redraw its furniture is the worst case; measure a page turn.
 draw.clear_cache()
 t = time.ticks_us()

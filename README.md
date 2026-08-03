@@ -134,6 +134,10 @@ Twelve kinds and any field can go in any of them. Six show readings as they are:
 | `waterfall` | a list field as lanes over time, interpolated between polls |
 | `badge` | the badge's own vitals, which need no field and no host |
 
+`dial` has a page to itself, so it is the one gauge big enough to read a ramp off: set **Dial gauge** to *The Whole Ramp* and it fills with a conical gradient carrying the theme's whole ramp, with the part past the reading drawn from the same stops at alpha 32 so the scale still shows behind it. Costs 0.6ms a frame.
+
+![The whole ramp](shots/dial_ramp.png)
+
 `badge` is the odd one out: battery, memory, both filesystems and the ambient light as levels, the clock, voltage, power source, uptime and screen as figures, and the board, firmware and uid underneath. Nothing on it comes from the host, so it is the page to turn to when you are wondering whether the badge or the network is the problem.
 
 ![Badge](shots/badge.png)
