@@ -345,7 +345,11 @@ def test_layout_and_history(h):
     assert status == 200, status
     assert aged["every_ms"] == 200, aged["every_ms"]
     assert 0 <= aged["age_ms"] <= 2000, aged["age_ms"]
-    assert len(aged["series"]["cpu.pct"]) == len(body["cpu.pct"]), "the same ring, said twice"
+    # The two are read a moment apart while the ring is still filling and the collector is
+    # sampling every 200ms, so the second can hold one more point than the first. Any more than
+    # that and they are not the same ring.
+    grew = len(aged["series"]["cpu.pct"]) - len(body["cpu.pct"])
+    assert 0 <= grew <= 1, ("the same ring, said twice", grew)
 
     # Every ring gains a point per sample, whenever it started - a rate has nothing to report
     # on the first one - so positions counted back from the newest mean the same time in all of
