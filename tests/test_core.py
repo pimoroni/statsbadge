@@ -2890,6 +2890,36 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
 
 
 @check
+def test_the_version_is_written_down_once(_h):
+    """A number in pyproject.toml and a `__version__` beside it are two things to bump, and the
+    one that gets missed is whichever nothing reads. The distribution's own metadata is the copy
+    that is true of the thing installed, so that is the one anything asks for."""
+    import statsbadge
+
+    source = pathlib.Path("src/statsbadge/__init__.py").read_text()
+    # An assignment, not the word: the docstring says why there is not one.
+    assert not re.search(r"^__version__\s*=", source, re.M), "a second copy of the version"
+    with open("pyproject.toml", "rb") as handle:
+        declared = tomllib.load(handle)["project"]["version"]
+    # Installed editable here, so the metadata is the checkout's own.
+    assert statsbadge.version() == declared, (statsbadge.version(), declared)
+
+    # And the CLI reports it, so `--version` is not a third place to keep in step.
+    cli = pathlib.Path("src/statsbadge/__main__.py").read_text()
+    assert 'version=f"statsbadge {package_version()}"' in cli, "--version does not read metadata"
+
+    # Every extension states its own, and none of them repeats it in code either.
+    for directory in sorted(pathlib.Path("extensions").iterdir()):
+        pyproject = directory / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        with open(pyproject, "rb") as handle:
+            assert tomllib.load(handle)["project"]["version"], pyproject
+        for module in (directory / "src").rglob("__init__.py"):
+            assert not re.search(r"^__version__\s*=", module.read_text(), re.M), module
+
+
+@check
 def test_every_package_here_can_be_published(_h):
     """Four packages share this repository. PyPI's trusted publishing matches on a workflow
     filename, so an extension with no workflow of its own cannot be published at all - and every

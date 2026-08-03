@@ -9,6 +9,8 @@ import threading
 import time
 
 from . import auth, beacon, extensions, install, layout, server, tooling
+# Named apart from the `version` locals in this module, which are extensions' own.
+from . import version as package_version
 
 
 LEGACY_CONFIG_DIR = os.path.join(os.path.expanduser("~/.config"), "statsbadge")
@@ -692,6 +694,8 @@ def main(argv=None):
     parser.add_argument("--interval", type=float, default=1.0,
                         help="seconds between samples (default 1.0)")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--version", action="version",
+                        version=f"statsbadge {package_version()}")
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--host", default="0.0.0.0")
