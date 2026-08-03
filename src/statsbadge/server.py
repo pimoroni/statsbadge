@@ -24,7 +24,9 @@ import traceback
 from . import auth, commands, derive, extensions, identity, layout, themes
 from .collect import Collector
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "web")
+# Normalised, and absolute: `_static` compares a normalised target against this to refuse a path
+# out of the directory, so a `..` or a relative segment left in here refuses everything instead.
+STATIC_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"))
 
 REASONS = {
     200: "OK", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
