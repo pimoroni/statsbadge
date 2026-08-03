@@ -108,7 +108,15 @@ The hosts menu is how you switch between machines - laptop, desktop, that Linux 
 | `fans`  | RPM                                                        |
 | `sys`   | host, OS, CPU name, uptime                                 |
 
-A field the host cannot measure is `null`, and pages that need it are dropped rather than shown empty. On macOS that means temperatures: they need root, so pass `--powermetrics` if you want them and have passwordless sudo. Windows needs [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running with its web server on for temperatures and fans. NVIDIA GPUs need `pip install statsbadge[nvidia]`.
+A field the host cannot measure is `null`, and pages that need it are dropped rather than shown empty. On macOS that means temperatures, fan speed and package power: those need root, so they are opt-in with `--powermetrics`, which allows one command and nothing else:
+
+```bash
+sudo visudo -f /etc/sudoers.d/statsbadge
+# then, with your own username:
+you ALL=(root) NOPASSWD: /usr/bin/powermetrics --samplers cpu_power,gpu_power,thermal -i 1000 -f plist
+```
+
+Run with `--powermetrics` and no rule in place and it says so, prints that line with your username already in it, and carries on without those fields. Windows needs [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running with its web server on for temperatures and fans. NVIDIA GPUs need `pip install statsbadge[nvidia]`.
 
 ## Page kinds and themes
 

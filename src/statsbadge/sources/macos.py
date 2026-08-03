@@ -8,17 +8,52 @@ Apple exposes very little without privileges. What is readable as a normal user:
 Die temperatures, fan RPM and package power all live behind the SMC or
 powermetrics, which needs root. `MacPowermetrics` covers that and is opt-in, so the
 default install asks for no password and simply reports no temperature.
+
+Asked for with `--powermetrics` and not permitted, it prints the sudoers rule to add and
+carries on without those fields: a flag that quietly does nothing is worse than no flag.
 """
 
+import getpass
 import plistlib
 import re
 import shutil
 import subprocess
+import sys
 import threading
 
 from .base import Source
 
 MB = 1024 * 1024
+
+# The one command this source runs as root, as one list, so the sudoers rule a user is told to
+# paste is the argv that will actually be run. sudoers matches the whole command line, so a rule
+# written for anything else is a rule that does not work.
+POWERMETRICS = "/usr/bin/powermetrics"
+POWERMETRICS_ARGS = ("--samplers", "cpu_power,gpu_power,thermal", "-i", "1000", "-f", "plist")
+
+
+def powermetrics_argv():
+    """The command, with this machine's own path to it."""
+    return [shutil.which("powermetrics") or POWERMETRICS, *POWERMETRICS_ARGS]
+
+
+def sudoers_line():
+    """The rule that allows that command and nothing else, for this user and this machine."""
+    return "{} ALL=(root) NOPASSWD: {}".format(getpass.getuser(),
+                                               " ".join(powermetrics_argv()))
+
+
+def sudoers_advice():
+    """What to do about it, ready to paste. One command allowed, not a blanket rule."""
+    return (
+        "statsbadge: --powermetrics was asked for, but sudo will not run powermetrics\n"
+        "  without a password, so there will be no temperatures, fan speeds or package\n"
+        "  power. Everything else works as it is. To allow that one command and nothing\n"
+        "  else:\n\n"
+        "    sudo visudo -f /etc/sudoers.d/statsbadge\n\n"
+        "  and put this line in it:\n\n"
+        f"    {sudoers_line()}\n"
+    )
 
 
 class MacIOKit(Source):
@@ -90,9 +125,9 @@ class MacIOKit(Source):
 class MacPowermetrics(Source):
     """Package power, GPU power and die temperatures, via a root powermetrics.
 
-    Opt-in: it needs to run as root, so it is only started when the config asks and
-    a working `sudo -n` is available. One long-lived process sampling on an interval,
-    read on a thread, because spawning powermetrics per frame costs about a second.
+    Opt-in: it needs to run as root, so it is only started when the config asks and sudoers
+    permits that one command without a password. One long-lived process sampling on an
+    interval, read on a thread, because spawning powermetrics per frame costs about a second.
     """
 
     name = "macos-powermetrics"
@@ -114,14 +149,18 @@ class MacPowermetrics(Source):
     def start(self):
         if not self._enabled:
             return
-        if not self._can_sudo():
-            self.note_fault(RuntimeError("powermetrics needs passwordless sudo"))
+        if not self._permitted():
+            # The advice goes to the terminal the flag was typed at; the fault is one line,
+            # being what the config UI and `probe` show.
+            print(sudoers_advice(), file=sys.stderr)
+            self.note_fault(RuntimeError(
+                "sudo will not run powermetrics without a password: add a rule to "
+                "/etc/sudoers.d/statsbadge"))
             self._enabled = False
             return
         self._proc = subprocess.Popen(
-            ["sudo", "-n", "powermetrics", "--samplers", "cpu_power,gpu_power,thermal",
-             "-i", "1000", "-f", "plist"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            ["sudo", "-n", *powermetrics_argv()],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self._thread = threading.Thread(target=self._pump, daemon=True)
         self._thread.start()
@@ -136,10 +175,16 @@ class MacPowermetrics(Source):
                 self._proc.kill()
 
     @staticmethod
-    def _can_sudo():
+    def _permitted():
+        """Whether sudo will run *this* command without a password.
+
+        Asked of the command itself rather than of sudo in general. A rule that allows
+        powermetrics and nothing else - which is the rule to write - does not allow `sudo -n
+        true`, so testing with that would refuse the very setup worth having.
+        """
         try:
-            return subprocess.run(["sudo", "-n", "true"], capture_output=True,
-                                  timeout=3).returncode == 0
+            return subprocess.run(["sudo", "-n", "-l", *powermetrics_argv()],
+                                  capture_output=True, timeout=3).returncode == 0
         except Exception:
             return False
 
@@ -151,6 +196,10 @@ class MacPowermetrics(Source):
         while not self._stop.is_set() and self._proc and self._proc.stdout:
             chunk = self._proc.stdout.read(8192)
             if not chunk:
+                # Nothing more coming. A rule that is permitted but does not match the argv, or
+                # a powermetrics that refuses for its own reasons, ends up here rather than in
+                # the check above, so what it said on the way out becomes the fault.
+                self._note_exit()
                 break
             buf += chunk.replace(b"\x00", b"")
             while True:
@@ -167,6 +216,23 @@ class MacPowermetrics(Source):
                     continue
                 with self._lock:
                     self._latest = sample
+
+    def _note_exit(self):
+        """Record why the reader stopped, if it stopped badly.
+
+        Not while shutting down: terminate() is how this is meant to end.
+        """
+        if self._stop.is_set() or self._proc is None:
+            return
+        try:
+            code = self._proc.poll()
+            said = (self._proc.stderr.read() or b"").decode(errors="replace").strip()
+        except Exception:
+            return
+        if code:
+            self.note_fault(RuntimeError(said.splitlines()[0] if said
+                                         else f"powermetrics exited {code}"))
+            self._enabled = False
 
     def sample(self, frame, dt):
         if not self._enabled:

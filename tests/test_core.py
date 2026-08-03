@@ -2885,6 +2885,46 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
 
 
 @check
+def test_asking_for_powermetrics_without_the_rule_says_so(_h):
+    """--powermetrics needs one sudoers rule. A flag that quietly reports nothing leaves the
+    reader with no way to find out why, and a rule that does not match the argv sudo is asked
+    for is a rule that does nothing - so the line printed has to be the command run."""
+    from statsbadge.sources import macos
+
+    argv = macos.powermetrics_argv()
+    assert argv[0].endswith("powermetrics"), argv
+    # The rule and the command cannot drift: the whole command line is what sudoers matches.
+    assert " ".join(argv) in macos.sudoers_line(), macos.sudoers_line()
+    assert "NOPASSWD" in macos.sudoers_line()
+    assert macos.sudoers_line() in macos.sudoers_advice()
+    assert "/etc/sudoers.d/statsbadge" in macos.sudoers_advice()
+
+    source = macos.MacPowermetrics({"powermetrics": True})
+    # The check asks whether sudo will run *this*, not whether sudo works at all: a rule for
+    # powermetrics and nothing else does not permit `sudo -n true`.
+    probe = _source_of(macos.MacPowermetrics._permitted)  # noqa: SLF001
+    assert "powermetrics_argv()" in probe and '"true"' not in probe, probe
+
+    # With no rule in place, the flag reports itself and the source stands down rather than
+    # sampling nothing in silence.
+    said = io.StringIO()
+    was, sys.stderr = sys.stderr, said
+    try:
+        source._permitted = lambda: False  # noqa: SLF001
+        source.start()
+    finally:
+        sys.stderr = was
+    assert "visudo" in said.getvalue(), said.getvalue()
+    assert macos.sudoers_line() in said.getvalue()
+    assert source.faults == 1, source.faults
+    assert "sudoers" in source.last_fault, source.last_fault
+    # And it draws nothing, so a page of temperatures is pruned rather than shown empty.
+    frame = model.empty_frame()
+    source.sample(frame, 1.0)
+    assert frame["power"] == {} and frame["cpu"] == {}, frame
+
+
+@check
 def test_the_mark_is_the_same_one_everywhere(h):
     """The badge draws it from splash.py's numbers, the config UI links a file and the site
     inlines a copy so it needs no request. Three expressions of one mark, so each is checked
