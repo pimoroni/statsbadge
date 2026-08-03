@@ -1124,6 +1124,64 @@ def grid(theme, entries):
         blit_label(value_text, size, theme.ink, x + 7, y + cell_h // 2 - size // 2 + 2)
 
 
+# The badge's own page: two columns and a plate under them. The columns are the same width so
+# the two halves read as one table, and the plate is where anything too long for a column goes.
+VITALS_METERS = 5
+VITALS_FACTS = 5
+VITALS_NOTE_H = 12
+# The bar under a level. Four rather than the readout column's three: this page is a wall of
+# them and they are what it is read by, where a readout's bar sits beside a gauge saying the
+# same thing.
+VITALS_BAR_H = 4
+
+
+def vitals(theme, meters, facts, notes=()):
+    """Levels down the left, figures down the right, and a plate of strings underneath.
+
+    Its own widget because none of the others fit what a badge knows about itself: half of it
+    is levels that want a bar and half is strings that want reading, and a name like "littlefs"
+    is not a field on any host.
+    """
+    column = (look.W - look.PAD * 3) // 2
+    right = look.PAD * 2 + column
+    top = look.BODY_TOP + 4
+    plate_h = len(notes) * VITALS_NOTE_H
+    room = look.BODY_H - 8 - plate_h
+
+    pitch = room // max(1, min(len(meters), VITALS_METERS))
+    for index, (name, value_text, fraction, hot) in enumerate(meters[:VITALS_METERS]):
+        y = top + index * pitch
+        blit_label(name, look.SIZE_SMALL, theme.dim, look.PAD, y)
+        # A level is read off its bar; the figure under the name is for looking closer, and it
+        # is a compound one - used of total - where the right hand column's are single numbers.
+        blit_label(value_text, look.SIZE_LABEL, theme.ink, look.PAD, y + 10)
+        if fraction is None:
+            continue
+        fraction = max(0.0, min(1.0, fraction))
+        filled = int(column * fraction)
+        bar_y = y + pitch - VITALS_BAR_H - 4
+        screen.pen = theme.grid
+        screen.rectangle(rect(look.PAD + filled, bar_y, column - filled, VITALS_BAR_H))
+        if filled:
+            screen.pen = theme.at(fraction if hot is None else hot)
+            screen.rectangle(rect(look.PAD, bar_y, filled, VITALS_BAR_H))
+
+    pitch = room // max(1, min(len(facts), VITALS_FACTS))
+    for index, (name, value_text) in enumerate(facts[:VITALS_FACTS]):
+        y = top + index * pitch
+        blit_label(name, look.SIZE_SMALL, theme.dim, right, y + 4)
+        blit_label(value_text, look.SIZE_VALUE, theme.ink, right + column, y, align=2)
+        screen.pen = theme.grid
+        screen.hspan(right, y + pitch - 6, column)
+
+    # Fitted rather than wrapped: these are one string each and the useful end is the front.
+    y = look.BODY_TOP + look.BODY_H - plate_h - 2
+    for note in notes:
+        blit_label(fit(note, look.SIZE_SMALL, look.W - look.PAD * 2), look.SIZE_SMALL,
+                   theme.dim, look.PAD, y)
+        y += VITALS_NOTE_H
+
+
 def lines(theme, entries):
     """Labelled lines, for names and versions."""
     y = look.BODY_TOP + 10

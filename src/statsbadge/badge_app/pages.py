@@ -375,6 +375,146 @@ def _text(page, frame, _history, theme):
     draw.lines(theme, entries)
 
 
+def _asked(call, fallback=None):
+    """What the badge answers, or a fallback. A firmware that has not got one of these should
+    cost the page a row and not the frame."""
+    try:
+        return call()
+    except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+        return fallback
+
+
+def _size(value):
+    """Bytes as the badge's own scale: MB past a megabyte, KB under it."""
+    if value is None:
+        return "--"
+    if value >= 1024 * 1024:
+        return f"{value / 1048576:.1f}MB"
+    return f"{value / 1024:.0f}KB"
+
+
+def _uptime(ms):
+    if ms is None:
+        return "--"
+    seconds = int(ms / 1000)
+    if seconds < 3600:
+        return f"{seconds // 60}m {seconds % 60:02d}s"
+    return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"
+
+
+def _used_of(volume):
+    """(text, fraction) for a filesystem, from badge.disk_free's total, used and free."""
+    if not volume or len(volume) < 2:
+        return "--", None
+    total, used = volume[0], volume[1]
+    if not total:
+        return "--", None
+    return f"{_size(used)} of {_size(total)}", used / total
+
+
+# What the badge is, as against how it is doing: the board, the firmware, the clock and the
+# uid, none of which can move. Read once, because `import os` and `import machine` are ~40ms a
+# call on this firmware and are not cached the way `math` and `gc` are - every one walks
+# sys.path again - so they belong nowhere near a frame.
+_fixed = None
+
+
+def _fixed_readings():
+    global _fixed
+    if _fixed is None:
+        import machine
+        import os
+
+        uname = _asked(os.uname)
+        _fixed = {
+            "clock": f"{_asked(machine.freq, 0) // 1000000}MHz",
+            "board": getattr(uname, "machine", None) or "unknown board",
+            "release": getattr(uname, "release", "?"),
+            "uid": _asked(lambda: badge.uid, "?"),
+        }
+    return _fixed
+
+
+# Two of the badge's own readings are dear. Measured on the board: gc.mem_free walks the
+# allocation table of 8MB of PSRAM and takes 44ms, and littlefs walks its own metadata to say
+# how full it is, 3.7ms; the rest are under half a millisecond each. So the dear ones are taken
+# on a timer and the cheap ones every frame. Three seconds, because none of them is something
+# you watch move - a page of them redrawn on the poll is already 1Hz.
+SLOW_EVERY_MS = 3000
+_slow = None
+_slow_at = 0
+# The heap's size, which is settled at boot: worth one reading ever, and it saves the second
+# 44ms call on every refresh after.
+_heap = None
+
+
+def _slow_readings():
+    """Memory and the two filesystems, at most every SLOW_EVERY_MS."""
+    global _slow, _slow_at, _heap
+    now = time.ticks_ms()
+    if _slow is not None and time.ticks_diff(now, _slow_at) < SLOW_EVERY_MS:
+        return _slow
+    import gc
+
+    free = _asked(gc.mem_free, 0)
+    if _heap is None:
+        _heap = free + _asked(gc.mem_alloc, 0)
+    _slow_at = now
+    _slow = {
+        "free": free,
+        "held": _heap - free,
+        "heap": _heap,
+        "root": _asked(lambda: badge.disk_free("/")),
+        "system": _asked(lambda: badge.disk_free("/system")),
+    }
+    return _slow
+
+
+def _badge_page(_page, _frame, _history, theme):
+    """What the badge knows about itself, which is nothing the host has an opinion on.
+
+    The only page whose readings do not come from the frame. It is still redrawn on a poll
+    like every other page, because these are numbers rather than motion: a bar creeping as
+    memory is used reads the same at one frame a second as at forty-five, and this page would
+    otherwise be the app's most expensive one for the sake of a digit.
+    """
+    battery = _asked(badge.battery_level)
+    volts = _asked(badge.battery_voltage)
+    light = _asked(badge.light_level)
+    slow = _slow_readings()
+    held, heap = slow["held"], slow["heap"]
+    root_text, root_fraction = _used_of(slow["root"])
+    system_text, system_fraction = _used_of(slow["system"])
+
+    meters = [
+        # The ramp runs calm to alarming, so a nearly flat battery has to be read backwards -
+        # the same inversion pages.GOOD_HIGH makes for the host's own battery field.
+        ("BATTERY", f"{battery}%" if battery is not None else "--",
+         None if battery is None else battery / 100.0,
+         None if battery is None else 1.0 - battery / 100.0),
+        ("MEMORY", f"{_size(held)} of {_size(heap)}", (held / heap) if heap else None, None),
+        ("FLASH, LITTLEFS", root_text, root_fraction, None),
+        ("FLASH, FAT", system_text, system_fraction, None),
+        # The fraction the backlight is actually following, not the raw count: the sensor's
+        # useful range is the bottom two percent of its scale and look.ambient_fraction is the
+        # curve the app reads it through.
+        ("AMBIENT LIGHT", "--" if light is None else str(light),
+         None if light is None else look.ambient_fraction(light), None),
+    ]
+    fixed = _fixed_readings()
+    facts = [
+        ("CLOCK", fixed["clock"]),
+        ("BATTERY", f"{volts:.2f}V" if isinstance(volts, float) else "--"),
+        ("POWER", "charging" if _asked(badge.is_charging) else
+         "usb" if _asked(badge.usb_connected) else "battery"),
+        ("UPTIME", _uptime(_asked(lambda: badge.ticks))),
+        ("SCREEN", "{} x {}".format(*badge.resolution) if _asked(lambda: badge.resolution)
+         else "--"),
+    ]
+    notes = [fixed["board"], "{}  uid {}".format(fixed["release"], fixed["uid"])]
+    draw.vitals(theme, meters, facts, notes)
+
+
 def names_for(refs):
     """Display names that tell these readings apart.
 
@@ -532,6 +672,7 @@ _KINDS = {
     "radar": _radar,
     "trend": _trend,
     "waterfall": _waterfall,
+    "badge": _badge_page,
 }
 
 # It interpolates between polls, so it needs a frame whether or not one landed.

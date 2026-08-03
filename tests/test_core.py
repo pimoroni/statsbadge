@@ -1542,6 +1542,11 @@ def test_every_kind_picks_from_a_pool_that_suits_it(_h):
         start = shape.find(f"  {kind}: {{")
         assert start != -1, f"{kind} has no shape"
         entry = shape[start:shape.index("},", start)]
+        if 'one: "' not in entry and 'many: "' not in entry:
+            # A kind with no slots has nothing to pool from: the badge's own page reads the
+            # badge, so there is no field to offer and no pool to offer it from.
+            assert "max: 0" in entry, f"{kind} has no slots but a field maximum"
+            continue
         for slot, key in (("one", "pool"), ("many", "manyPool")):
             if f'{slot}: "' in entry:
                 assert f"{key}:" in entry, f"{kind} has a {slot} slot with no {key}"
@@ -2877,6 +2882,40 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
     body = body[:body.index("\ndef ", 1)]
     assert body.index('spec["ghost"]') < body.index("draw.blit_label(hours,"), (
         "the ghost is drawn over the digits")
+
+
+@check
+def test_the_badge_can_report_on_itself_with_no_host(_h):
+    """The one page kind whose readings do not come from the frame. It needs no field, so
+    nothing can be picked for it and nothing can fail to answer: a prune that keeps only pages
+    this host can fill would otherwise drop the page that never asked it for anything."""
+    config = layout.validate({"pages": [{"id": "b1", "kind": "badge", "title": "Badge"},
+                                        {"id": "cpu", "kind": "dial", "field": "cpu.pct"}]})
+    page = config["pages"][0]
+    assert page == {"id": "b1", "kind": "badge", "title": "Badge"}, page
+    # A host measuring nothing at all still keeps it, and drops the dial.
+    kept = layout.prune(config["pages"], {"available": {}})
+    assert [p["kind"] for p in kept] == ["badge"], kept
+
+    # The kind picker is written out in the page rather than built from the API, so it is the
+    # one place a new kind can be added to the badge and forgotten in the browser.
+    markup = pathlib.Path("src/statsbadge/web/index.html").read_text()
+    app = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    offered = set(re.findall(r'<option value="([a-z]+)">', markup))
+    for kind in layout.KINDS:
+        assert kind in offered, f"{kind} is not in the kind picker"
+        assert f"  {kind}: {{" in app, f"{kind} has no field slots declared in app.js"
+
+    # And the badge draws it: the kind is in the app's own table, reads no fields, and is not
+    # animated, being numbers rather than motion.
+    source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text()
+    table = source[source.index("_KINDS = {"):]
+    table = table[:table.index("}")]
+    assert '"badge": _badge_page' in table, table
+    body = source[source.index("def _badge_page("):]
+    body = body[:body.index("\ndef ", 1)]
+    assert "_frame" in body.split(")")[0], "the badge page takes the frame seriously"
+    assert 'ANIMATED.add("badge")' not in source
 
 
 @check

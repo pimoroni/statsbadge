@@ -112,7 +112,7 @@ A field the host cannot measure is `null`, and pages that need it are dropped ra
 
 ## Page kinds and themes
 
-Eleven kinds and any field can go in any of them. Six show readings as they are: `dial`, `dials`, `bars`, `graph`, `grid`, `text`. Five say something a single number cannot:
+Twelve kinds and any field can go in any of them. Six show readings as they are: `dial`, `dials`, `bars`, `graph`, `grid`, `text`. Five say something a single number cannot:
 
 | Kind | What it is for |
 | ---- | -------------- |
@@ -121,6 +121,11 @@ Eleven kinds and any field can go in any of them. Six show readings as they are:
 | `radar` | three to six readings as a polygon: the shape of the load rather than its size |
 | `trend` | one big reading, which way it is going, and where it has been |
 | `waterfall` | a list field as lanes over time, interpolated between polls |
+| `badge` | the badge's own vitals, which need no field and no host |
+
+`badge` is the odd one out: battery, memory, both filesystems and the ambient light as levels, the clock, voltage, power source, uptime and screen as figures, and the board, firmware and uid underneath. Nothing on it comes from the host, so it is the page to turn to when you are wondering whether the badge or the network is the problem.
+
+![Badge](shots/badge.png)
 
 `waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Written-down themes, grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura`, the three Eva units, and four that come as a pair for a lit room and a dark one - Mono, Watermelon, Shell and Luminescence. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images - and the palette travels to the badge with the layout, so it is config: [`themes.py`](src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
 

@@ -26,6 +26,8 @@ const SHAPE = {
   radar: { one: null, many: "fields", max: 6, label: "Axes", manyPool: "gauge" },
   trend: { one: "field", many: null, max: 0, label: "", pool: "series" },
   waterfall: { one: "field", many: null, max: 0, label: "", pool: "list" },
+  // The badge's own vitals: no fields at all, since none of it comes from the host.
+  badge: { one: null, many: null, max: 0, label: "" },
 };
 
 // The palettes live on the host, and so does the arithmetic that derives a tinted one.

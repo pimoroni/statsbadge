@@ -24,8 +24,9 @@ from . import derive, themes
 #   graph   one or two fields over time, from the server's history ring
 #   grid    up to six fields as big numbers
 #   text    labelled lines, for names and versions
+#   badge   the badge's own vitals, which need no field and come from no host
 KINDS = ("dial", "dials", "bars", "graph", "grid", "text",
-         "rings", "spark", "radar", "trend", "waterfall")
+         "rings", "spark", "radar", "trend", "waterfall", "badge")
 
 # How many fields a kind can draw. What is left out is the badge's own layout table.
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
@@ -560,6 +561,10 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
         if not _is_ref(field):
             raise ValueError(f"page {page_id} needs a field")
         clean["field"] = field
+    elif kind == "badge":
+        # Nothing to configure: the page reads the badge, so there is no field to pick and no
+        # host that could fail to answer for it.
+        pass
     elif kind in ("dials", "graph", "grid", "text", "rings", "spark", "radar"):
         fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
         if not fields:
@@ -603,6 +608,10 @@ def prune(pages, capabilities):
 
     kept = []
     for page in pages:
+        if page.get("kind") == "badge":
+            # The badge can always answer for itself, whatever this host can measure.
+            kept.append(page)
+            continue
         if page.get("kind") not in KINDS:
             # An extension page: it declares its own group, so the model's field list
             # is not the authority on whether the host produces it.
