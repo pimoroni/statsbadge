@@ -554,6 +554,14 @@ def _change_extensions(args, verb):
             if tooling.short_name(requirement) in tooling.names(wanted):
                 print(f"already installed: {tooling.short_name(requirement)}")
                 continue
+            # Asked of the index before anything is written or rebuilt: the rebuild installs the
+            # whole list, so a name that is not a package would come back as a failure naming
+            # whichever entry uv tripped over first, which need not be this one.
+            if tooling.on_index(requirement) is False:
+                print(f"no such extension: {requirement}", file=sys.stderr)
+                print(f"  nothing on PyPI is called that. {tooling.WANTED} is unchanged.",
+                      file=sys.stderr)
+                return 1
             wanted.append(requirement)
             changed.append(requirement)
     elif verb == "remove":
@@ -595,6 +603,15 @@ def _change_extensions(args, verb):
     else:
         tooling.forget_wanted(directory)
     print(why, file=sys.stderr)
+    # uv names one package, and it need not be one of the ones just asked for: the rebuild
+    # installs the whole list, so an entry that was already there and cannot be installed fails
+    # every add until it is taken out. Saying which is which is the difference between a message
+    # that reads as a bug and one that can be acted on.
+    culprit = tooling.blamed(why)
+    if culprit and tooling.short_name(culprit) not in tooling.names(changed):
+        print(f"  {culprit} was already in {tooling.WANTED}, and nothing was changed. Take it "
+              f"out with:", file=sys.stderr)
+        print(f"    statsbadge ext remove {tooling.short_name(culprit)}", file=sys.stderr)
     return 1
 
 

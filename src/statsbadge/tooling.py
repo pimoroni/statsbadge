@@ -23,6 +23,8 @@ import shutil
 import subprocess
 import sys
 import tomllib
+import urllib.error
+import urllib.request
 
 # uv writes this beside the environment of every tool it installs, so finding one next to the
 # running interpreter is what tells us this is a tool and not a venv or a checkout.
@@ -173,6 +175,45 @@ def install_argv(base, config_dir, fresh=False):
 def quoted(argv):
     """The command as a line someone can paste."""
     return " ".join(f'"{part}"' if " " in part else part for part in argv)
+
+
+# Where a plain name can be checked before anything is installed, so a name that is not a
+# package is answered as one rather than as a failed rebuild.
+SIMPLE_INDEX = "https://pypi.org/simple/{}/"
+
+
+def on_index(requirement, timeout=4.0):
+    """Whether a plain name is a project on PyPI, or None when it cannot be told.
+
+    Only asked of a bare name: a path, a URL or a version specifier is something uv resolves
+    its own way. An index that cannot be reached is not an answer either, so both come back
+    None and the caller carries on and lets uv decide.
+    """
+    if requirement.startswith(".") or any(mark in requirement for mark in SPEC_MARKS):
+        return None
+    try:
+        request = urllib.request.Request(SIMPLE_INDEX.format(requirement), method="HEAD")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status == 200
+    except urllib.error.HTTPError as exc:
+        return False if exc.code == 404 else None
+    except (OSError, ValueError):
+        # No network, a proxy in the way, a mangled name: none of those is an answer either.
+        return None
+
+
+def blamed(said):
+    """The package that could not be found, out of uv's own words or out of `explain`'s.
+
+    Both, because the caller has the explained line and not the original: `explain` is what
+    turns a resolver's paragraph into something worth printing, and the name survives it.
+    """
+    said = said or ""
+    summarised = re.search(r"no such package: (\S+)", said)
+    if summarised:
+        return summarised.group(1)
+    found = MISSING.search(said)
+    return found.group(1) if found else None
 
 
 # uv's answer when a name is not a package. Its resolver explains itself at length, and the

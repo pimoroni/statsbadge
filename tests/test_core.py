@@ -3021,12 +3021,25 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
         assert tooling.short_name("clock") == tooling.short_name("statsbadge-clock")
 
         # uv's resolver explains itself at length; the useful part is the name.
-        assert tooling.explain(
-            "error: Because statsbadge-nope was not found in the package registry and you "
-            "require statsbadge-nope, we can conclude that your requirements are unsatisfiable."
-        ) == "no such package: statsbadge-nope"
+        resolver = ("error: Because statsbadge-nope was not found in the package registry and "
+                    "you require statsbadge-nope, we can conclude that your requirements are "
+                    "unsatisfiable.")
+        assert tooling.explain(resolver) == "no such package: statsbadge-nope"
         assert tooling.explain("error: no internet") == "no internet"
         assert tooling.explain("") == "uv did not say why"
+
+        # Which package it was, out of either form: the caller holds the explained line, and a
+        # rebuild installs the whole list - so the name uv trips over need not be the one just
+        # asked for, and saying which is the difference between a bug report and an instruction.
+        assert tooling.blamed(resolver) == "statsbadge-nope"
+        assert tooling.blamed(tooling.explain(resolver)) == "statsbadge-nope"
+        assert tooling.blamed("no internet") is None
+
+        # An index is only asked about a bare name, and never about a path or a specifier - and
+        # not being able to reach one is not an answer, so both are None and uv decides.
+        assert tooling.on_index("./extensions/statsbadge-iss") is None
+        assert tooling.on_index("statsbadge-clock>=2") is None
+        assert tooling.on_index("git+https://example.invalid/x.git") is None
 
         tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-iss"])
         assert tooling.read_wanted(work) == ["statsbadge-clock", "statsbadge-iss"]
