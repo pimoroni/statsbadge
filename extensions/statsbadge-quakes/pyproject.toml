@@ -10,6 +10,13 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["statsbadge"]
 
+[project.urls]
+Homepage = "https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes"
+Repository = "https://github.com/pimoroni/statsbadge"
+Issues = "https://github.com/pimoroni/statsbadge/issues"
+
+# The whole extension mechanism is this one entry point: the server finds the class,
+# runs it as a source, and can push its badge-side module to the badge.
 [project.entry-points."statsbadge.sources"]
 quakes = "statsbadge_quakes:Quakes"
 

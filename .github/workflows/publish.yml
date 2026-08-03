@@ -4,6 +4,9 @@ name: Publish
 # workflow via OIDC, so there is no long-lived API token to store or leak. Configure it
 # once at pypi.org/manage/project/statsbadge/settings/publishing/ with this repository,
 # this workflow filename, and the `pypi` environment.
+#
+# Four packages share this repository and each has a workflow of its own, told apart by the
+# release tag: vN.N.N is statsbadge, and clock-, iss- and quakes-vN.N.N are the extensions.
 on:
   release:
     types: [published]
@@ -15,6 +18,10 @@ permissions:
 jobs:
   publish:
     name: Build and publish to PyPI
+    # A release for an extension in this repository is not this workflow's business.
+    if: >
+      github.event_name == 'workflow_dispatch'
+      || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

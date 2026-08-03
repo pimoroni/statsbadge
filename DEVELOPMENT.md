@@ -282,7 +282,7 @@ A badge module draws with the same `draw` and `look` the app uses, and should ta
 
 `src` layout, `uv_build`, one project at the repo root. The badge app lives *inside* the package at `src/statsbadge/badge_app/`, because an installed wheel has to carry it or `statsbadge install` has nothing to push; uv_build ships every file under the module directory, icon included, so one path serves a checkout and an installed wheel. The distribution, the module and the command are all `statsbadge`: name them differently and uv_build needs `module-name`, which older uv treats as a fatal parse error rather than a warning.
 
-CI installs the built wheel into a throwaway environment and asserts the app and the web UI are in it, because "the wheel builds" and "the wheel works" are different claims. Publishing is trusted publishing over OIDC, and refuses if the tag and the version disagree.
+CI installs the built wheel into a throwaway environment and asserts the app and the web UI are in it, because "the wheel builds" and "the wheel works" are different claims. Publishing is trusted publishing over OIDC, and refuses if the tag and the version disagree. Every release fires every publish workflow, so each one is guarded by the tag prefix that is its own - `clock-v` and the rest, with the plain `v` tags reserved for statsbadge. One workflow per package rather than one reusable one called three times: PyPI matches on the filename of the workflow that runs, and a publisher that will not authenticate is something you find out at the moment of publishing.
 
 ## Working on it
 

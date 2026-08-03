@@ -17,6 +17,7 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 import urllib.error
 import urllib.request
 
@@ -2882,6 +2883,46 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
     body = body[:body.index("\ndef ", 1)]
     assert body.index('spec["ghost"]') < body.index("draw.blit_label(hours,"), (
         "the ghost is drawn over the digits")
+
+
+@check
+def test_every_package_here_can_be_published(_h):
+    """Four packages share this repository. PyPI's trusted publishing matches on a workflow
+    filename, so an extension with no workflow of its own cannot be published at all - and every
+    release fires every workflow, so each has to know which tags are its own or they all try."""
+    workflows = pathlib.Path(".github/workflows")
+    main = (workflows / "publish.yml").read_text()
+    # The top-level package takes the plain tags, and lets an extension's release alone.
+    assert "startsWith(github.event.release.tag_name, 'v')" in main
+
+    found = []
+    for directory in sorted(pathlib.Path("extensions").iterdir()):
+        pyproject = directory / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        with open(pyproject, "rb") as handle:
+            name = tomllib.load(handle)["project"]["name"]
+        short = name.removeprefix("statsbadge-")
+        found.append(short)
+
+        workflow = workflows / f"publish-{short}.yml"
+        assert workflow.is_file(), f"{name} has no publish workflow"
+        text = workflow.read_text()
+        assert f"PACKAGE: {name}" in text, workflow
+        assert f"DIRECTORY: extensions/{name}" in text, workflow
+        # The prefix is in two places in each workflow - the guard that decides whether to run,
+        # and the strip that checks the version - and they have to be the same prefix.
+        assert f"TAG_PREFIX: {short}-v" in text, workflow
+        assert f"startsWith(github.event.release.tag_name, '{short}-v')" in text, workflow
+        # And it publishes from its own directory, not the repository root.
+        assert text.count("working-directory: ${{ env.DIRECTORY }}") >= 3, workflow
+        assert "uv publish --trusted-publishing always" in text, workflow
+
+    assert len(found) >= 3, found
+    # No workflow for a package that is not here: a stale one publishes whatever is at that path.
+    for workflow in workflows.glob("publish-*.yml"):
+        short = workflow.stem.removeprefix("publish-")
+        assert short in found, f"{workflow.name} publishes an extension that is not here"
 
 
 @check
