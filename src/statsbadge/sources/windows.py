@@ -39,8 +39,10 @@ class LibreHardwareMonitor(Source):
         try:
             tree = _fetch(self.url, timeout=2.0)
         except Exception as exc:
+            # LibreHardwareMonitor being restarted is a gap, not a lasting fault.
             self.note_fault(exc)
             return
+        self.note_ok()
         readings = list(_walk(tree, []))
 
         cpu_temp = _pick(readings, ("cpu",), ("package", "tctl", "tdie", "core average"), "°C")

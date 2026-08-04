@@ -71,17 +71,23 @@ class MacIOKit(Source):
         self._names = {}
 
     def sample(self, frame, dt):
+        # Both readings are subprocesses, so either can time out on a machine busy enough
+        # to be worth looking at. Neither failure is lasting: the next poll tries again.
+        worked = True
         try:
             gpus = self._read_accelerators()
         except Exception as exc:
             self.note_fault(exc)
-            gpus = []
+            worked, gpus = False, []
         if gpus:
             frame["gpu"] = _merge_gpus(frame["gpu"], gpus)
         try:
             self._read_thermal(frame)
         except Exception as exc:
             self.note_fault(exc)
+            worked = False
+        if worked:
+            self.note_ok()
 
     def _read_accelerators(self):
         out = subprocess.run(

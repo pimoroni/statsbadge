@@ -323,6 +323,7 @@ class Clock(Source):
             try:
                 self._weather = self._fetch(where)
                 self._next_weather = time.monotonic() + self._interval
+                self.note_ok()
             except Exception as exc:
                 self._next_weather = time.monotonic() + RETRY_AFTER
                 self.note_fault(exc)
@@ -344,6 +345,7 @@ class Clock(Source):
                     (spec["lat"], spec["lon"], spec["label"] or spec["place"]),
                     local_time=True)
                 spec["next"] = time.monotonic() + self._interval
+                self.note_ok()
             except Exception as exc:
                 spec["next"] = time.monotonic() + RETRY_AFTER
                 self.note_fault(exc)

@@ -197,6 +197,7 @@ class ISS(Source):
             self._where = where
         self.store.set(LAST, where)
         self._next_where = time.monotonic() + POSITION_EVERY
+        self.note_ok()
 
     def _refresh_track(self):
         if time.monotonic() < self._next_track:
@@ -221,6 +222,7 @@ class ISS(Source):
             self._track = points
             self._track_from = wanted[0]
         self._next_track = time.monotonic() + TRACK_EVERY
+        self.note_ok()
 
     def _refresh_crew(self):
         if not self.crew_wanted or time.monotonic() < self._next_crew:
@@ -235,6 +237,7 @@ class ISS(Source):
         with self._lock:
             self._crew = [name for name in aboard if name]
         self._next_crew = time.monotonic() + CREW_EVERY
+        self.note_ok()
 
 
 def _get(url):

@@ -1,6 +1,34 @@
 """What a source has to implement."""
 
+import subprocess
+import urllib.error
+import urllib.parse
+
 from .. import state
+
+
+def readable(exc):
+    """A fault as one line somebody can act on.
+
+    `type(exc).__name__: exc` is what an exception says about itself, and for the ones a
+    source actually hits it says it twice: `HTTPError: HTTP Error 503: Service Unavailable`.
+    The name is kept for anything not recognised here, since an unexpected fault is worth
+    knowing the type of.
+    """
+    if isinstance(exc, urllib.error.HTTPError):
+        where = urllib.parse.urlsplit(exc.url or "").netloc
+        return f"HTTP {exc.code} {exc.reason}" + (f" from {where}" if where else "")
+    if isinstance(exc, urllib.error.URLError):
+        reason = str(exc.reason)
+        if "timed out" in reason or "timeout" in reason.lower():
+            return "the connection timed out"
+        return f"cannot reach it: {reason}"
+    if isinstance(exc, subprocess.TimeoutExpired):
+        command = exc.cmd[0] if isinstance(exc.cmd, (list, tuple)) else str(exc.cmd)
+        return f"{command} did not finish inside {exc.timeout:g}s"
+    if isinstance(exc, TimeoutError):
+        return "it timed out"
+    return f"{type(exc).__name__}: {exc}"
 
 
 class Source:
@@ -82,8 +110,23 @@ class Source:
         raise NotImplementedError
 
     def note_fault(self, exc):
+        """Record that this source's work failed, for the config UI and `statsbadge probe`."""
         self.faults += 1
-        self.last_fault = f"{type(exc).__name__}: {exc}"
+        self.last_fault = readable(exc)
+
+    def note_ok(self):
+        """Record that the work succeeded, which is what clears a fault.
+
+        A source says so itself because nothing outside it can tell: one that fetches on a
+        thread of its own fails and recovers on its own schedule, and `sample` handing over
+        the last good reading is no evidence that the next fetch landed. So this goes at the
+        point the work a fault was noted for worked, and a fault that is not transient - a
+        missing sudoers rule - is never cleared because nothing there ever succeeds.
+
+        The count is kept: a source failing every third poll is worth knowing about while it
+        is working.
+        """
+        self.last_fault = None
 
     def __repr__(self):
         return f"<{self.name}>"

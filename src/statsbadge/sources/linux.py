@@ -29,18 +29,23 @@ class LinuxHwmon(Source):
         return os.path.isdir("/sys/class/hwmon")
 
     def sample(self, frame, dt):
+        worked = True
         try:
             temp = self._cpu_temp()
             if temp is not None:
                 frame["cpu"].setdefault("temp", temp)
         except Exception as exc:
             self.note_fault(exc)
+            worked = False
         try:
             fans = self._fans()
             if fans:
                 frame["fans"] = frame["fans"] or fans
         except Exception as exc:
             self.note_fault(exc)
+            worked = False
+        if worked:
+            self.note_ok()
 
     def _cpu_temp(self):
         try:

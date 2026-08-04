@@ -13,6 +13,7 @@ import pathlib
 import re
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -2974,6 +2975,53 @@ def test_every_package_here_can_be_published(_h):
         assert short in found, f"{workflow.name} publishes an extension that is not here"
 
 
+@check
+def test_a_source_that_recovered_stops_being_reported_as_broken(h):
+    """An upstream 503 or a subprocess that took too long is a blip on a source that goes on
+    working, so the count is kept and the reason is dropped. Left permanently set, a fault
+    replaced what the source provides with the name of a Python exception."""
+    from statsbadge.sources import base
+
+    source = base.Source({})
+    source.note_fault(urllib.error.HTTPError("https://api.open-meteo.com/v1/forecast", 503,
+                                             "Service Unavailable", {}, None))
+    # The message says what happened and where, without repeating the exception's own name.
+    assert source.last_fault == "HTTP 503 Service Unavailable from api.open-meteo.com", \
+        source.last_fault
+    source.note_ok()
+    assert source.last_fault is None and source.faults == 1, vars(source)
+
+    # The ones sources actually hit, in the words of the thing that failed.
+    said = {}
+    for exc in (urllib.error.URLError("_ssl.c:1063: The handshake operation timed out"),
+                subprocess.TimeoutExpired(["ioreg", "-r", "-c", "IOAccelerator"], 4),
+                ValueError("something we did not expect")):
+        said[type(exc).__name__] = base.readable(exc)
+    assert said["URLError"] == "the connection timed out", said
+    assert said["TimeoutExpired"] == "ioreg did not finish inside 4s", said
+    # Anything unrecognised keeps its type, that being the clue to what went wrong.
+    assert said["ValueError"] == "ValueError: something we did not expect", said
+
+    # The API reports both, so the UI can say "failing" and "recovered" and not confuse them.
+    _status, caps = h.raw("GET", "/api/capabilities")
+    assert caps["sources"], caps
+    for entry in caps["sources"]:
+        assert set(entry) >= {"name", "provides", "faults", "last_fault"}, entry
+
+    # And every source that expects to fail clears it, or the reason sticks for the session.
+    for path in ["src/statsbadge/sources/macos.py", "src/statsbadge/sources/linux.py",
+                 "src/statsbadge/sources/windows.py",
+                 *sorted(str(p) for p in pathlib.Path("extensions").glob("*/src/*/__init__.py"))]:
+        text = pathlib.Path(path).read_text()
+        if "note_fault" not in text or "sudoers" in text and "note_ok" not in text:
+            continue
+        assert "note_ok" in text, f"{path} records faults and never clears one"
+    # The UI puts the reason under the name rather than instead of it.
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    assert 'source.last_fault ? "faulty" : ""' in script, "a recovered source reads as broken"
+    assert 'provides.join(", ")' in script.split("function renderSources")[1][:600]
+
+
 class FakeBoard:
     """The board's half of the raw REPL, enough to answer what repl.py asks of it.
 
@@ -3533,11 +3581,14 @@ def test_a_map_page_only_uses_names_the_badge_has(_h):
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
     import check_app
 
+    injected = check_app.badge_globals()
+    assert not isinstance(injected, str), injected
+
     for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
         path = (pathlib.Path("extensions") / extension / "src"
                 / extension.replace("-", "_") / "badge" / f"{module}.py")
         tree = ast.parse(path.read_text(), filename=str(path))
-        fault = check_app.check_names(path, tree)
+        fault = check_app.check_names(path, tree, injected)
         assert fault is None, fault
 
 

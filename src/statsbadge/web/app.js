@@ -1138,10 +1138,20 @@ function renderSources() {
   node.innerHTML = "";
   for (const source of caps.sources) {
     const row = document.createElement("div");
-    row.className = source.faults ? "faulty" : "";
-    row.textContent = source.faults
-      ? `${source.name}: ${source.last_fault}`
-      : `${source.name} → ${source.provides.join(", ")}`;
+    // What a source provides is what its row is for. A fault goes underneath it rather
+    // than in place of it, and one it has recovered from is a footnote: an upstream 503
+    // an hour ago should not still be a source's whole description.
+    row.className = source.last_fault ? "faulty" : "";
+    row.textContent = `${source.name} → ${source.provides.join(", ") || "nothing"}`;
+    const note = document.createElement("i");
+    if (source.last_fault) {
+      note.className = "why";
+      note.textContent = source.last_fault;
+      row.appendChild(note);
+    } else if (source.faults) {
+      note.textContent = ` recovered, ${source.faults} fault${source.faults === 1 ? "" : "s"} so far`;
+      row.appendChild(note);
+    }
     node.appendChild(row);
   }
   const groups = Object.keys(caps.available || {}).join(", ");

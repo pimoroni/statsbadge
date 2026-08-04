@@ -181,6 +181,7 @@ class Quakes(Source):
         # something to draw before the first fetch lands.
         self.store.set(EVENTS, records)
         self._next = time.monotonic() + INTERVAL
+        self.note_ok()
 
     def _fetch(self):
         query = urllib.parse.urlencode({

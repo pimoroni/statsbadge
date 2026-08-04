@@ -83,6 +83,9 @@ class Collector:
             try:
                 source.sample(frame, dt)
             except Exception as exc:
+                # A source that lets an exception out of `sample` is not handling something
+                # it knows about, so this one stays until the source clears it itself. What
+                # a source expects to fail - a subprocess, a fetch - it notes and clears.
                 source.note_fault(exc)
 
         frame["t"] = int(now * 1000)

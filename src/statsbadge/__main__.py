@@ -633,8 +633,11 @@ def cmd_probe(args):
     print("sources:")
     for source in caps["sources"]:
         note = ""
-        if source["faults"]:
-            note = f"  ({source['faults']} faults, last: {source['last_fault']})"
+        if source["last_fault"]:
+            note = f"  (failing: {source['last_fault']})"
+        elif source["faults"]:
+            count = source["faults"]
+            note = f"  (recovered, {count} fault{'' if count == 1 else 's'} so far)"
         provides = ",".join(source["provides"])
         print(f"  {source['name']:<24} provides {provides}{note}")
     print()

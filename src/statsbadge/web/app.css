@@ -220,6 +220,8 @@ header .pairing { position: absolute; top: 100%; right: 20px; width: 340px;
 .sources { font-size: 12px; color: var(--dim); }
 .sources div { padding: 3px 0; }
 .sources .faulty { color: var(--bad); }
+/* Why it is failing, under the name of the thing that is. */
+.sources .why { display: block; }
 
 /* A group is its own panel: one box per reading, not a box of boxes. */
 .live { display: grid; gap: 10px; }
