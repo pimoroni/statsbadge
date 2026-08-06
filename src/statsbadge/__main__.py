@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 
-from . import auth, beacon, extensions, install, layout, server, tooling
+from . import auth, beacon, collect, extensions, install, layout, server, tooling
 # Named apart from the `version` locals in this module, which are extensions' own.
 from . import version as package_version
 
@@ -663,7 +663,7 @@ def cmd_probe(args):
         print(f"  {source['name']:<24} provides {provides}{note}")
     print()
     for group in sorted(frame):
-        if group in ("v", "t", "seq"):
+        if group in collect.FRAME_SCALARS:
             continue
         value = frame[group]
         if isinstance(value, list):

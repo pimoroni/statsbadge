@@ -3617,6 +3617,29 @@ def test_every_package_here_can_be_published(_h):
 
 
 @check
+def test_a_frame_is_walked_past_its_own_scalars(h):
+    """A frame carries a few numbers of its own beside the groups of readings, so anything
+    walking one has to step over them.
+
+    `probe` kept its own list, which never gained `slow_rev`, and printed it as a group -
+    `_fmt` then iterating an int. app.js keeps a copy too, JavaScript being unable to import
+    this one, so both are held to it here.
+    """
+    from statsbadge import collect
+
+    _status, frame = h.raw("GET", "/api/stats")
+    loose = {key for key, value in frame.items() if not isinstance(value, (dict, list))}
+    assert loose == set(collect.FRAME_SCALARS), loose
+
+    source = pathlib.Path(install.__file__).parent / "__main__.py"
+    assert "collect.FRAME_SCALARS" in source.read_text(), "probe has a list of its own again"
+
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    named = re.search(r"const FRAME_SCALARS = \[(.*?)\]", script).group(1)
+    assert [word.strip().strip('"') for word in named.split(",")] == list(collect.FRAME_SCALARS)
+
+
+@check
 def test_a_source_that_recovered_stops_being_reported_as_broken(h):
     """An upstream 503 or a subprocess that took too long is a blip on a source that goes on
     working, so the count is kept and the reason is dropped. Left permanently set, a fault

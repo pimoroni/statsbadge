@@ -663,8 +663,9 @@ function settingRow(stored, setting, options) {
     }
   }
   // What it is counted in, where saying so in the hint would be saying it twice.
-  return setting.unit ? [label, input, el("small", { textContent: setting.unit })]
-                      : [label, input]
+  return setting.unit
+    ? [label, input, el("small", { textContent: setting.unit })]
+    : [label, input]
 }
 
 // -- look and buttons ------------------------------------------------------
@@ -1215,10 +1216,11 @@ async function watchPairing(announce) {
 
 const PERCENT = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"]
 
-// Everything on a frame that is not a group of readings. `peaks` is shown, being useful to
-// see, but it is scale rather than a reading and comes and goes with what has been measured,
-// so it is left out of the signature below.
-const FRAME_SCALARS = ["v", "t", "seq", "layout_rev"]
+// Everything on a frame that is not a group of readings, which is collect.FRAME_SCALARS and
+// held to it by a test. `peaks` is shown, being useful to see, but it is scale rather than a
+// reading and comes and goes with what has been measured, so it is left out of the signature
+// below.
+const FRAME_SCALARS = ["v", "t", "seq", "slow_rev"]
 const FRAME_META = FRAME_SCALARS.concat(["peaks"])
 
 // Which groups the last frame carried. A source that finds out what it can report only once it

@@ -12,6 +12,11 @@ import time
 from . import extensions, model
 from .sources import discover
 
+# Everything on a frame that is not a group of readings. Written down once because anything
+# walking a frame has to step over them: `probe` printed one as a group and fell over on it,
+# and app.js keeps its own copy of this list, which a test holds to this one.
+FRAME_SCALARS = ("v", "t", "seq", "slow_rev")
+
 
 class Collector:
     def __init__(self, interval=1.0, config=None, history=90, state_dir=None):
