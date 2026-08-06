@@ -2041,9 +2041,38 @@ def test_a_theme_travels_as_its_colours(_h):
     config.replace({"theme": "eva01", "pages": layout.DEFAULT_PAGES})
     sent = config.for_badge()
     assert sent["theme"] == "eva01"
-    assert sent["palette"] == themes.PALETTES["eva01"], sent["palette"]
+    stored = themes.PALETTES["eva01"]
+    assert {key: sent["palette"][key] for key in stored} == stored, sent["palette"]
     assert look.from_palette(sent["theme"], sent["palette"]).accent == \
         builtins.color.rgb(143, 212, 0)
+
+    # Plus the greys a picture is drawn in, which are derived from the accent's hue rather
+    # than written down - the same reason `stripe` is. Their lightnesses are fixed and the
+    # same on every theme, which is the whole guarantee: the host dithers a photograph to a
+    # position on this ramp knowing nothing about which theme will draw it, so index 2 of
+    # four has to mean the same brightness everywhere or the same picture reads differently
+    # on each palette.
+    from statsbadge import derive
+
+    wanted = None
+    for name in layout.THEMES:
+        greys = layout.palette_for(name, layout.DEFAULT_CONFIG["tint"])["image"]
+        assert sorted(greys) == ["4", "8"], sorted(greys)
+        for count, ramp in greys.items():
+            assert len(ramp) == int(count), (name, count)
+        lightnesses = [round(derive.oklch(tuple(rgb))[0], 2) for rgb in greys["4"]]
+        assert lightnesses == sorted(lightnesses), (name, lightnesses)
+        if wanted is None:
+            wanted = lightnesses
+        assert lightnesses == wanted, f"{name} draws a picture at other levels: {lightnesses}"
+    # And the badge builds them keyed by how many, which is what an indexed image's own
+    # table length says.
+    built = look.from_palette("eva01", sent["palette"])
+    assert sorted(built.image) == [4, 8], sorted(built.image)
+    assert all(isinstance(pen, builtins.color) for pen in built.image[4])
+    # A host too old to send them leaves a theme that draws no pictures, not one that fails
+    assert look.from_palette("old", {k: v for k, v in sent["palette"].items()
+                                     if k != "image"}).image == {}
 
     # Nonsense off the network is refused rather than drawn: a bad palette would otherwise
     # be a crash on every frame instead of a page in the theme it booted with.

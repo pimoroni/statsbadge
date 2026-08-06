@@ -162,7 +162,7 @@ class Theme:
     """
 
     def __init__(self, name, bg, panel, ink, dim, accent, ramp, grid=None,
-                 case=0.1, accent_b=None):
+                 case=0.1, accent_b=None, image=None):
         self.name = name
         self.bg = color.rgb(*bg)
         self.panel = color.rgb(*panel)
@@ -186,6 +186,12 @@ class Theme:
         # `lighten` having nowhere to go on a background that is already near white.
         self.stripe = self.bg.darken(STRIPE) if self.pale else self.bg.lighten(STRIPE)
         self.steps = tuple(color.ramp(self.ramp, RAMP_STEPS))
+        # The greys a picture is drawn in, keyed by how many shades it has. Assigned straight
+        # into an indexed image's own table, which recolours every pixel indexing it in one
+        # write - so a photograph arrives as positions on a ramp and comes out in the theme.
+        # Not `ramp`, which travels calm to alarming: a picture drawn in that is a heat map.
+        self.image = {count: tuple(color.rgb(*rgb) for rgb in greys)
+                      for count, greys in (image or {}).items()}
 
     def at(self, fraction):
         """The ramp colour for a 0-1 value, off a table built with the theme.
@@ -247,9 +253,14 @@ def from_palette(name, palette):
                      for pos, rgb in palette["ramp"])
         if not ramp:
             return None
+        # Keyed by the number of shades, which is what an indexed image's own table length
+        # says: a host too old to send these leaves a theme that draws no pictures rather
+        # than one that will not build.
+        image = {len(greys): [tuple(int(v) for v in rgb[:3]) for rgb in greys]
+                 for greys in (palette.get("image") or {}).values()}
         return Theme(name, ramp=ramp, case=float(palette.get("case", 0.1)),
                      grid=tuple(int(v) for v in grid[:3]) if grid else None,
                      accent_b=tuple(int(v) for v in second[:3]) if second else None,
-                     **colours)
+                     image=image, **colours)
     except (TypeError, ValueError, KeyError, IndexError):
         return None

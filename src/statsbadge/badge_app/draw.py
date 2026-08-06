@@ -17,12 +17,19 @@ its own: the pages are paged between, and anything choosing its own margin moves
 reader when they press a button.
 """
 
+import binascii
 import os
 from array import array
 
 import look
 
 FONT = None
+# How many decoded pictures to hold. A message travels only when it changes, so the same
+# bytes arrive on every frame in between and decoding them each time would be the whole page
+# budget: a decode is never free, and the set on screen is at most three.
+_pictures = {}
+PICTURE_CACHE = 4
+
 _labels = {}
 _pip_rows = {}
 
@@ -245,6 +252,8 @@ def clear_cache():
     _pip_rows.clear()
     _readings.clear()
     _gradients.clear()
+    # A decoded picture holds a table painted in the theme's greys, so it is one of these.
+    _pictures.clear()
     waterfall_reset()
 
 
@@ -1285,10 +1294,55 @@ def notification(theme, items, counters):
             screen.hspan(look.PAD, top + index * height, look.W - look.PAD * 2)
 
 
+# The gap between a picture and the words beside it.
+PICTURE_GAP = 8
+
+
+def picture(theme, data):
+    """An indexed image off the wire, in this theme's greys. None if it will not decode.
+
+    The bytes carry indices and a grey ramp; the theme's own ramp is assigned over the top,
+    which recolours every pixel indexing it in one write. So one picture suits every badge
+    and arrives in the colours of the page around it.
+
+    Cached on the bytes themselves: the same message is redrawn on every frame until the
+    host sends a different one, and a decode per frame is not something a page can afford.
+    """
+    if not data:
+        return None
+    held = _pictures.get(data)
+    if held is not None:
+        return held
+    try:
+        # base64, because the frame is JSON and a PNG is not text. Keyed on the encoded
+        # string, which is what arrives and what changes when the message does.
+        img = image.load(binascii.a2b_base64(data))
+    except (OSError, ValueError, TypeError):
+        return None
+    table = img.palette
+    if table:
+        greys = theme.image.get(len(table))
+        if greys:
+            img.palette[0:len(greys)] = greys
+    if len(_pictures) >= PICTURE_CACHE:
+        _pictures.clear()
+    _pictures[data] = img
+    return img
+
+
 def _item_block(theme, item, top, height, rows):
     """One message: who it is from and how long ago, then what it says."""
     room = look.W - look.PAD * 2
     y = top + 6
+    shown = picture(theme, (item or {}).get("image"))
+    if shown is not None:
+        # Down the left, with the words taking what is left: a picture beside a message reads
+        # as belonging to it where one above reads as a page of its own.
+        screen.blit(shown, look.PAD, top + 4)
+        left = look.PAD + shown.width + PICTURE_GAP
+        room -= shown.width + PICTURE_GAP
+    else:
+        left = look.PAD
     title = str((item or {}).get("title") or "")
     aged = ago((item or {}).get("age_s"))
     if aged:
@@ -1296,19 +1350,18 @@ def _item_block(theme, item, top, height, rows):
         room -= width + 8
     note = str((item or {}).get("note") or "")
     if title:
-        used = blit_label(fit(title, ITEM_TITLE, room), ITEM_TITLE, theme.accent,
-                          look.PAD, y)
+        used = blit_label(fit(title, ITEM_TITLE, room), ITEM_TITLE, theme.accent, left, y)
         if note:
             # Why this message is here - boosted, a reply, a section - beside the name and
             # in the dim, since it qualifies the line rather than being part of it.
             blit_label(fit(note, ITEM_TITLE, room - used - 6), ITEM_TITLE, theme.dim,
-                       look.PAD + used + 6, y)
+                       left + used + 6, y)
         y += int(ITEM_TITLE * 1.45)
     step = int(ITEM_TEXT * 1.35)
     fits = max(1, min(rows, (top + height - y - 4) // step))
     for line in wrap(str((item or {}).get("text") or ""), ITEM_TEXT,
-                     look.W - look.PAD * 2, fits):
-        blit_label(line, ITEM_TEXT, theme.ink, look.PAD, y)
+                     look.W - look.PAD - left, fits):
+        blit_label(line, ITEM_TEXT, theme.ink, left, y)
         y += step
 
 

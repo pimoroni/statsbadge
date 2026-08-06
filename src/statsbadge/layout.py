@@ -400,7 +400,11 @@ def palette_for(theme, tint, second="same"):
     theme, tint = resolve_theme(theme, tint)
     if theme in TINTED:
         return derive.palette(tuple(tint), TINTED[theme], theme in BOLD, second)
-    return themes.PALETTES.get(theme, themes.PALETTES[themes.DEFAULT])
+    stored = themes.PALETTES.get(theme, themes.PALETTES[themes.DEFAULT])
+    # The greys a picture is drawn in are derived rather than written down, for the same
+    # reason `stripe` is: they follow from the accent's hue, and a palette that had to state
+    # them could state them wrong. Copied, since PALETTES is shared.
+    return {**stored, "image": derive.image_ramps(stored["accent"])}
 
 
 def validate(incoming, extra_kinds=(), settings_schema=None,

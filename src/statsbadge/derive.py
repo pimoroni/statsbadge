@@ -331,6 +331,47 @@ def _bold_ramp(lightness, chroma, hue, shape):
     return tuple(stops)
 
 
+# Where a picture's levels sit, in OKLCH lightness. **Fixed, and the same for every theme**,
+# which is the whole of the guarantee: the host dithers to a position on this ramp and knows
+# nothing about which theme will draw it, so index 2 of four has to mean the same brightness
+# on every palette or the same photograph reads differently on each. Ends short of black and
+# white because a page is neither, and a picture that runs past its own background is a hole
+# in the screen rather than a dark patch.
+IMAGE_DARK = 0.16
+IMAGE_LIGHT = 0.94
+# A little of the theme's hue through the greys, so a picture belongs to the page it is on
+# rather than sitting on it. Small: this is a tint, and the level is the information. `rgb`
+# brings it into gamut on its own, which is what happens at both ends where there is no room
+# for any chroma at all.
+IMAGE_CHROMA = 0.03
+
+# The level counts `imaging` produces. Both travel, because index 2 of four and index 2 of
+# eight are different brightnesses: a badge cannot work one out from the other, and having it
+# rebuild either from the fixed lightnesses would put this table on both sides of the wire.
+IMAGE_LEVELS = (4, 8)
+
+
+def image_ramp(hue, levels):
+    """The greys a picture of `levels` shades is drawn in, darkest first.
+
+    Evenly spaced across a fixed lightness range, in the theme's own hue. Not the theme's
+    `ramp`, which travels calm to alarming and is a scale rather than a set of greys: a
+    photograph drawn in it would be a heat map.
+    """
+    if levels < 2:
+        levels = 2
+    span = (IMAGE_LIGHT - IMAGE_DARK) / (levels - 1)
+    return tuple(rgb(IMAGE_DARK + span * step, IMAGE_CHROMA, hue)
+                 for step in range(levels))
+
+
+def image_ramps(accent):
+    """Both level counts, keyed by how many, for a palette to carry."""
+    _lightness, _chroma, hue = oklch(accent)
+    return {str(levels): [list(colour) for colour in image_ramp(hue, levels)]
+            for levels in IMAGE_LEVELS}
+
+
 def palette(accent, mode="dark", bold=False, second="same"):
     """A whole palette from one accent, as `themes.PALETTES` holds them.
 
@@ -364,4 +405,7 @@ def palette(accent, mode="dark", bold=False, second="same"):
         "grid": rgb(shape["grid"], tint * 1.5, hue),
         "case": shape["case"],
         "ramp": build(lightness, chroma, hue, shape),
+        # Fixed lightnesses in this theme's hue, so a picture reads the same whatever
+        # palette is drawing it.
+        "image": image_ramps(rgb(lightness, chroma, hue)),
     }
