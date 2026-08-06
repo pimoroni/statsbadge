@@ -160,10 +160,21 @@ def severity_of(ref, fraction):
     return 1.0 - fraction if ref.split(".")[-1] in GOOD_HIGH else fraction
 
 
+# A unit on the end of a field name is not part of what the field is called. Every built-in
+# carrying one is named in NAMES, so this is for a group that arrived with an extension:
+# the reading is drawn with its unit after it, and "BYTES BPS 22KB/s" says it twice.
+UNIT_SUFFIXES = ("_bps", "_mb", "_pct")
+
+
 def name_for(ref):
     if ref in NAMES:
         return NAMES[ref]
-    return ref.split(".")[-1].replace("_", " ").upper()
+    field = ref.split(".")[-1]
+    for suffix in UNIT_SUFFIXES:
+        if field.endswith(suffix) and len(field) > len(suffix):
+            field = field[:-len(suffix)]
+            break
+    return field.replace("_", " ").upper()
 
 
 def value_of(frame, ref):
