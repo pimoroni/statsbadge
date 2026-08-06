@@ -2060,11 +2060,27 @@ def test_a_theme_travels_as_its_colours(_h):
         assert sorted(greys) == ["4", "8"], sorted(greys)
         for count, ramp in greys.items():
             assert len(ramp) == int(count), (name, count)
-        lightnesses = [round(derive.oklch(tuple(rgb))[0], 2) for rgb in greys["4"]]
+        lightnesses = [derive.oklch(tuple(rgb))[0] for rgb in greys["4"]]
         assert lightnesses == sorted(lightnesses), (name, lightnesses)
         if wanted is None:
             wanted = lightnesses
-        assert lightnesses == wanted, f"{name} draws a picture at other levels: {lightnesses}"
+        # Within a rounding of each other rather than equal. The levels are placed exactly;
+        # what moves is where a colour lands on whole bytes, and at the chroma a saturated
+        # theme asks for a channel step is worth more lightness - measured across every
+        # theme and both level counts, at most 0.013. Backing the chroma off the gamut edge
+        # only takes it to 0.008 and costs the saturation, so the tolerance is the honest
+        # place for it: a theme drawing at genuinely different levels is out by ten times
+        # this.
+        adrift = max(abs(one - other) for one, other in zip(lightnesses, wanted, strict=True))
+        assert adrift <= 0.015, f"{name} draws a picture {adrift:.3f} off the levels"
+
+    # And how colourful it is is the theme's own business: the same share of what the hue can
+    # hold that the accent takes of its. A grey accent has to give a grey picture, that being
+    # the convention `mono` exists for, and a fixed tint gave it a coloured one.
+    for name, coloured in (("mono", False), ("luminescence", True), ("eva01", True)):
+        shades = layout.palette_for(name, layout.DEFAULT_CONFIG["tint"])["image"]["8"]
+        chroma = max(derive.oklch(tuple(rgb))[1] for rgb in shades)
+        assert (chroma > 0.05) is coloured, f"{name} midtone chroma {chroma:.3f}"
     # And the badge builds them keyed by how many, which is what an indexed image's own
     # table length says.
     built = look.from_palette("eva01", sent["palette"])

@@ -339,11 +339,17 @@ def _bold_ramp(lightness, chroma, hue, shape):
 # in the screen rather than a dark patch.
 IMAGE_DARK = 0.16
 IMAGE_LIGHT = 0.94
-# A little of the theme's hue through the greys, so a picture belongs to the page it is on
-# rather than sitting on it. Small: this is a tint, and the level is the information. `rgb`
-# brings it into gamut on its own, which is what happens at both ends where there is no room
-# for any chroma at all.
-IMAGE_CHROMA = 0.03
+# How colourful a picture is: the same share of what its hue can hold that the theme's own
+# accent takes of its. Not a fixed chroma, which was the first attempt and came out grey -
+# 0.03 is 17% of the limit in the midtones, where the eye reads a tint, so every theme
+# rendered the same near-neutral picture whatever its accent was. A share instead means a
+# picture is as colourful as the theme is: `luminescence` takes 0.91 of its green and gets a
+# phosphor screen, `mono` has a grey accent at 0.00 and gets a grey picture, which is the
+# convention it exists for. The level is still the information; the hue is whose screen it is.
+#
+# Taken against the hue's own limit at each lightness rather than as one number, because how
+# much chroma a hue can hold varies enormously along the scale - so the ends come out near
+# neutral on their own, which is what a monochrome display does with its blacks and whites.
 
 # The level counts `imaging` produces. Both travel, because index 2 of four and index 2 of
 # eight are different brightnesses: a badge cannot work one out from the other, and having it
@@ -351,24 +357,29 @@ IMAGE_CHROMA = 0.03
 IMAGE_LEVELS = (4, 8)
 
 
-def image_ramp(hue, levels):
-    """The greys a picture of `levels` shades is drawn in, darkest first.
+def image_ramp(accent, levels):
+    """The shades a picture of `levels` is drawn in, darkest first.
 
-    Evenly spaced across a fixed lightness range, in the theme's own hue. Not the theme's
-    `ramp`, which travels calm to alarming and is a scale rather than a set of greys: a
-    photograph drawn in it would be a heat map.
+    Evenly spaced across a fixed lightness range, in the accent's hue and at its own share of
+    what that hue can hold. Not the theme's `ramp`, which travels calm to alarming and is a
+    scale rather than a set of shades: a photograph drawn in it would be a heat map.
     """
     if levels < 2:
         levels = 2
+    lightness, chroma, hue = oklch(accent)
+    limit = max_chroma(lightness, hue)
+    share = (chroma / limit) if limit else 0.0
     span = (IMAGE_LIGHT - IMAGE_DARK) / (levels - 1)
-    return tuple(rgb(IMAGE_DARK + span * step, IMAGE_CHROMA, hue)
-                 for step in range(levels))
+    shades = []
+    for step in range(levels):
+        level = IMAGE_DARK + span * step
+        shades.append(rgb(level, max_chroma(level, hue) * share, hue))
+    return tuple(shades)
 
 
 def image_ramps(accent):
     """Both level counts, keyed by how many, for a palette to carry."""
-    _lightness, _chroma, hue = oklch(accent)
-    return {str(levels): [list(colour) for colour in image_ramp(hue, levels)]
+    return {str(levels): [list(colour) for colour in image_ramp(accent, levels)]
             for levels in IMAGE_LEVELS}
 
 
