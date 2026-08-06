@@ -1044,16 +1044,33 @@ function badgeBox(id) {
   const nameId = `badge${++controlSerial}`
   const name = el("input", { type: "text", id: nameId, value: named,
                              placeholder: "Give it a name" })
-  // Saved on its own and not with the layout: what a badge is called is not something the
-  // badge draws, so there is nothing to wait for a revision on.
-  name.onchange = () => rename(id, name.value).catch((error) => toast(error.message, true))
+  const heading = el("h3", { textContent: named || "Unnamed badge" })
+
+  // A moment after the typing stops as well as on the way out of the field, so a name that
+  // is typed and then left alone is still saved. Only leaving it says so out loud.
+  let pending = null
+  const store = (announce) => {
+    window.clearTimeout(pending)
+    pending = null
+    rename(id, name.value)
+      .then((shown) => {
+        heading.textContent = shown
+        if (announce) toast("Renamed")
+      })
+      .catch((error) => toast(error.message, true))
+  }
+  name.oninput = () => {
+    window.clearTimeout(pending)
+    pending = window.setTimeout(() => store(false), 400)
+  }
+  name.onchange = () => store(true)
 
   const forget = el("button", { type: "button", className: "small danger",
                                 textContent: "Forget" })
   forget.onclick = () => forgetBadge(id).catch((error) => toast(error.message, true))
 
   const box = el("section", { "aria-current": id === whose ? "true" : null },
-                 el("h3", { textContent: named || "Unnamed badge" }),
+                 heading,
                  el("label", { htmlFor: nameId, textContent: "Name" }),
                  name,
                  el("p", null,
@@ -1071,16 +1088,18 @@ function badgeBox(id) {
   return box
 }
 
-async function rename(id, name) {
+/** Saved on its own and not with the layout: what a badge is called is not something the
+ * badge draws, so there is no revision to wait for. The list of badges is deliberately not
+ * redrawn - the field being typed in is inside it. */
+async function rename(id, wanted) {
   const result = await api(`/api/badges/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name: wanted }),
   })
   badges[id].name = result.name
   renderWhose()
-  renderBadges()
-  toast("Renamed")
+  return result.name === id ? "Unnamed badge" : result.name
 }
 
 // -- pairing ---------------------------------------------------------------

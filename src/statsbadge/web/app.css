@@ -376,9 +376,21 @@ figure {
 /* -- toast --------------------------------------------------------------- */
 
 .toast {
-  position: fixed; bottom: var(--gap); left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: var(--gap); left: 50%;
   background: var(--accent); color: var(--on-accent); padding: 9px 18px;
   font-weight: 600; box-shadow: 0 6px 20px #0009;
+  animation: toast 2.6s ease both;
 
   &.bad { background: var(--bad); color: #fff; }
+}
+
+@keyframes toast {
+  0% { opacity: 0; transform: translate(-50%, 1rem) scale(0.96); }
+  8% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  88% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -0.5rem) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; transform: translateX(-50%); }
 }
