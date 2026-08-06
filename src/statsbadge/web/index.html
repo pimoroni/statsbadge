@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -11,159 +11,210 @@
 <body>
 <header>
   <h1>statsbadge</h1>
-  <div class="host" id="hostline">loading&hellip;</div>
+  <p id="hostline" class="host">loading&hellip;</p>
   <!-- Everything on the page below belongs to whichever badge is chosen here. -->
   <label class="whose">Badge <select id="whose"></select></label>
-  <span class="note" id="whosenote"></span>
-  <button id="forget" class="danger">Forget</button>
-  <button id="pair">Pair a badge&hellip;</button>
-  <button id="save" class="primary" disabled>Save to badge</button>
+  <p id="whosenote" class="note"></p>
+  <button type="button" id="forget" class="danger">Forget</button>
+  <button type="button" id="pair">Pair a badge&hellip;</button>
+  <button type="button" id="save" class="primary" disabled>Save to badge</button>
   <!-- Under the button that opened it: the code to match is what somebody is looking at
        while they hold the badge, and it was at the bottom of a column. -->
-  <div id="pairing" class="pairing hidden"></div>
+  <div id="pairing" class="pairing" hidden></div>
 </header>
 
 <main>
   <div class="column">
-    <h2>Pages</h2>
-    <div class="row">
-      <select id="addkind">
-        <option value="dial">Dial</option>
-        <option value="dials">Gauges</option>
-        <option value="bars">Bars</option>
-        <option value="graph">Graph</option>
-        <option value="grid">Grid</option>
-        <option value="text">Text</option>
-        <option value="rings">Rings</option>
-        <option value="spark">Sparklines</option>
-        <option value="radar">Radar</option>
-        <option value="trend">Trend</option>
-        <option value="waterfall">Waterfall</option>
-        <option value="notify">Notifications</option>
-        <option value="badge">Badge</option>
-      </select>
-      <button id="add">Add page</button>
-    </div>
-    <div id="pruned" class="warn hidden"></div>
-    <ol id="pages" class="pages"></ol>
-  </div>
-
-  <div class="column">
-    <h2>Look</h2>
-    <section class="col">
-      <label><span class="name">Theme</span><select id="theme"></select></label>
-      <div class="preview" id="preview">
-        <div class="pv-head"><span class="pv-title">CPU</span><span class="pv-host">host</span></div>
-        <div class="pv-body">
-          <div class="pv-dial"><span class="pv-reading">63.5</span></div>
-          <div class="pv-rows">
-            <div class="pv-row"><i>TEMP</i><b>71.0&deg;C</b><u><s></s></u></div>
-            <div class="pv-row"><i>MEM</i><b>58.0%</b><u><s></s></u></div>
-            <div class="pv-row"><i>DISK</i><b>74.2%</b><u><s></s></u></div>
-          </div>
-        </div>
-        <div class="pv-foot"><i></i><i></i><i></i><i></i><i></i></div>
+    <section>
+      <h2>Pages</h2>
+      <div class="toolbar">
+        <select id="addkind" aria-label="Page kind">
+          <option value="dial">Dial</option>
+          <option value="dials">Gauges</option>
+          <option value="bars">Bars</option>
+          <option value="graph">Graph</option>
+          <option value="grid">Grid</option>
+          <option value="text">Text</option>
+          <option value="rings">Rings</option>
+          <option value="spark">Sparklines</option>
+          <option value="radar">Radar</option>
+          <option value="trend">Trend</option>
+          <option value="waterfall">Waterfall</option>
+          <option value="notify">Notifications</option>
+          <option value="badge">Badge</option>
+        </select>
+        <button type="button" id="add">Add page</button>
       </div>
-      <div class="accents hidden" id="accents"></div>
-      <p class="hint hidden" id="tinthint"></p>
-      <label class="hidden" id="secondrow"><span class="name">Second accent</span><span class="pair"><select id="accentb">
-        <option value="same">Same</option>
-        <option value="complementary">Complementary</option>
-        <option value="triadic">Triadic</option>
-        <option value="contrasting">Contrasting</option>
-      </select><i class="chip" id="accentbchip"></i></span></label>
-      <label><span class="name">Page turn</span><select id="slide">
-        <option value="off">Immediate</option>
-        <option value="over">Slide Over</option>
-        <option value="deck">Slide as a Deck</option>
-      </select></label>
-      <label><span class="name">Refresh</span>
+      <p id="pruned" class="warn" hidden></p>
+      <ol id="pages" class="pages"></ol>
+    </section>
+  </div>
+
+  <div class="column">
+    <section>
+      <h2>Look</h2>
+      <div class="panel form">
+        <label for="theme">Theme</label>
+        <select id="theme"></select>
+
+        <!-- An impression of the badge in the palette it would use, not a rendering of the
+             app: nothing here is worth passing on to a screen reader. -->
+        <div id="preview" class="preview" aria-hidden="true">
+          <div class="head"><span class="title">CPU</span><span class="host">host</span></div>
+          <div class="body">
+            <div class="dial"><span class="reading">63.5</span></div>
+            <div class="rows">
+              <div class="row">
+                <span class="name">TEMP</span><span class="value">71.0&deg;C</span>
+                <span class="bar"><span class="fill"></span></span>
+              </div>
+              <div class="row">
+                <span class="name">MEM</span><span class="value">58.0%</span>
+                <span class="bar"><span class="fill"></span></span>
+              </div>
+              <div class="row">
+                <span class="name">DISK</span><span class="value">74.2%</span>
+                <span class="bar"><span class="fill"></span></span>
+              </div>
+            </div>
+          </div>
+          <div class="pips"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+
+        <div id="accents" class="accents" hidden></div>
+        <p id="tinthint" class="hint" hidden></p>
+        <label id="accentblabel" for="accentb" hidden>Second accent</label>
+        <span id="accentbrow" class="with-chip" hidden>
+          <select id="accentb">
+            <option value="same">Same</option>
+            <option value="complementary">Complementary</option>
+            <option value="triadic">Triadic</option>
+            <option value="contrasting">Contrasting</option>
+          </select>
+          <span id="accentbchip" class="chip"></span>
+        </span>
+
+        <label for="slide">Page turn</label>
+        <select id="slide">
+          <option value="off">Immediate</option>
+          <option value="over">Slide Over</option>
+          <option value="deck">Slide as a Deck</option>
+        </select>
+
+        <label for="interval">Refresh</label>
         <input type="range" id="interval" min="250" max="5000" step="250">
-        <output id="intervalout"></output>
-      </label>
+        <output id="intervalout" for="interval"></output>
+      </div>
     </section>
 
-    <h2>Graphs &amp; Gauges</h2>
-    <section class="col">
-      <p class="hint">The pages that plot a history - the graph, the trend and the sparklines -
-        and the gauges everything else is drawn with. A curve needs room to bend, so a
-        sparkline is drawn straight whatever is chosen here.</p>
-      <label><span class="name">Readings kept</span>
+    <section>
+      <h2>Graphs &amp; Gauges</h2>
+      <div class="panel form">
+        <p class="hint">The pages that plot a history - the graph, the trend and the sparklines -
+          and the gauges everything else is drawn with. A curve needs room to bend, so a
+          sparkline is drawn straight whatever is chosen here.</p>
+
+        <label for="points">Readings kept</label>
         <input type="range" id="points" min="8" max="160" step="8">
-        <output id="pointsout"></output>
-      </label>
-      <label><span class="name">Sparkline rows</span><select id="rows">
-        <option value="zebra">Banded</option>
-        <option value="rules">Ruled</option>
-        <option value="none">Nothing</option>
-      </select></label>
-      <label><span class="name">Dial gauge</span><select id="gaugefill">
-        <option value="solid">One Colour</option>
-        <option value="ramp">The Whole Ramp</option>
-      </select></label>
-      <label><span class="name">Plot line</span><select id="smooth">
-        <option value="curved">Curved</option>
-        <option value="straight">Straight</option>
-      </select></label>
-      <label class="check"><span class="name">Scroll between readings</span>
-        <input type="checkbox" id="plotanim"></label>
-      <label class="check"><span class="name">Sweep gauges to each reading</span>
-        <input type="checkbox" id="animate"></label>
+        <output id="pointsout" for="points"></output>
+
+        <label for="rows">Sparkline rows</label>
+        <select id="rows">
+          <option value="zebra">Banded</option>
+          <option value="rules">Ruled</option>
+          <option value="none">Nothing</option>
+        </select>
+
+        <label for="gaugefill">Dial gauge</label>
+        <select id="gaugefill">
+          <option value="solid">One Colour</option>
+          <option value="ramp">The Whole Ramp</option>
+        </select>
+
+        <label for="smooth">Plot line</label>
+        <select id="smooth">
+          <option value="curved">Curved</option>
+          <option value="straight">Straight</option>
+        </select>
+
+        <label for="plotanim">Scroll between readings</label>
+        <input type="checkbox" id="plotanim">
+
+        <label for="animate">Sweep gauges to each reading</label>
+        <input type="checkbox" id="animate">
+      </div>
     </section>
 
-    <h2>Auto Advance</h2>
-    <section class="col">
-      <p class="hint">Paging on its own once nobody has pressed anything for a while.</p>
-      <label><span class="name">After</span>
+    <section>
+      <h2>Auto Advance</h2>
+      <div class="panel form">
+        <p class="hint">Paging on its own once nobody has pressed anything for a while.</p>
+
+        <label for="idle">After</label>
         <input type="range" id="idle" min="0" max="300" step="15">
-        <output id="idleout"></output>
-      </label>
-      <label><span class="name">Every</span>
+        <output id="idleout" for="idle"></output>
+
+        <label for="advance">Every</label>
         <input type="range" id="advance" min="2" max="60" step="2">
-        <output id="advanceout"></output>
-      </label>
+        <output id="advanceout" for="advance"></output>
+      </div>
     </section>
 
-    <h2>Backlight &amp; Case Lights</h2>
-    <section class="col">
-      <label><span class="name">Brightness</span>
+    <section>
+      <h2>Backlight &amp; Case Lights</h2>
+      <div class="panel form">
+        <label for="brightness">Brightness</label>
         <input type="range" id="brightness" min="5" max="100" step="5">
-        <output id="brightnessout"></output>
-      </label>
-      <label><span class="name">Case lights</span><select id="caselights"></select></label>
-      <label class="check"><span class="name">Dim to suit the room</span>
-        <input type="checkbox" id="autobright"></label>
-    </section>
+        <output id="brightnessout" for="brightness"></output>
 
-  </div>
+        <label for="caselights">Case lights</label>
+        <select id="caselights"></select>
 
-  <div class="column">
-    <h2>Extensions</h2>
-    <div id="settings" class="boxes"></div>
-
-    <h2>Buttons</h2>
-    <section class="col">
-      <p class="hint">A command runs on the host, and only bound commands are accepted. The
-        badge answers the rest itself, without asking.</p>
-      <label><span class="name">A</span><select id="btn-a" class="cmd"></select></label>
-      <label><span class="name">B</span><select id="btn-b" class="cmd"></select></label>
-      <label><span class="name">C</span><select id="btn-c" class="cmd"></select></label>
+        <label for="autobright">Dim to suit the room</label>
+        <input type="checkbox" id="autobright">
+      </div>
     </section>
   </div>
 
   <div class="column">
-    <h2>Badges</h2>
-    <section class="col">
-      <div id="badges"></div>
+    <section>
+      <h2>Extensions</h2>
+      <div id="settings" class="boxes"></div>
     </section>
 
-    <h2>This Host</h2>
-    <section class="col">
-      <div id="sources" class="sources"></div>
+    <section>
+      <h2>Buttons</h2>
+      <div class="panel form">
+        <p class="hint">A command runs on the host, and only bound commands are accepted. The
+          badge answers the rest itself, without asking.</p>
+
+        <label for="btn-a">A</label>
+        <select id="btn-a"></select>
+
+        <label for="btn-b">B</label>
+        <select id="btn-b"></select>
+
+        <label for="btn-c">C</label>
+        <select id="btn-c"></select>
+      </div>
+    </section>
+  </div>
+
+  <div class="column">
+    <section>
+      <h2>Badges</h2>
+      <div id="badges" class="panel"></div>
     </section>
 
-    <h2>Live</h2>
-    <div id="live" class="live"></div>
+    <section>
+      <h2>This Host</h2>
+      <div id="sources" class="panel sources"></div>
+    </section>
+
+    <section>
+      <h2>Live</h2>
+      <div id="live" class="live"></div>
+    </section>
   </div>
 </main>
 

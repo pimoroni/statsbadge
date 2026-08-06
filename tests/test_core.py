@@ -5,6 +5,7 @@ plain run with no pytest installed.
 """
 
 import builtins
+import html.parser
 import io
 import json
 import os
@@ -2270,7 +2271,7 @@ def test_the_themes_are_offered_light_and_dark(h):
     assert {record["name"] for record in caps["themes"]} == set(layout.THEMES)
     script = pathlib.Path("src/statsbadge/web/app.js").read_text()
     assert "optgroup" in script, "the picker is still one flat list"
-    assert "record.label || title(record.name)" in script
+    assert "record.label || titleCase(record.name)" in script
 
 
 @check
@@ -3214,7 +3215,7 @@ def test_an_api_key_is_masked_until_it_is_asked_for(_h):
           / "app.js").read_text()
     assert "function masked(" in ui and "Edit secrets" in ui
     # A secret does not go in the ordinary run of rows, or it would be on screen anyway
-    assert "if (setting.secret) continue;" in ui, "a secret is still drawn with the rest"
+    assert "if (setting.secret) continue" in ui, "a secret is still drawn with the rest"
     # Reopened by name, so a redraw does not close the box under someone's typing
     assert "editingSecrets" in ui
 
@@ -3281,28 +3282,46 @@ def test_a_notifications_page_sorts_messages_from_counters(_h):
 
 @check
 def test_a_hidden_row_is_actually_hidden(_h):
-    """`.hidden` is one class, so anything naming an element outranks it.
+    """The browser's own rule for `hidden` is one attribute selector, so a class naming a
+    display outranks it.
 
-    `.col > label` sets `display: contents`, which takes the box away and leaves what was
-    inside it in the grid - so a row hidden by class kept its label and its control. Second
-    accent showed for every theme, where only a derived palette works one out.
+    `.with-chip` sets `display: flex`, and the second accent's select stayed on screen for
+    every theme, where only a derived palette works one out. Hence the rule inside `.form`,
+    which every hidden row is a child of.
     """
     web = pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
     css, markup = (web / "app.css").read_text(), (web / "index.html").read_text()
 
-    assert ".col > label.hidden" in css, "a label row cannot be hidden by class"
-    # Every element the UI hides by class, against the rules that could outrank it. A
-    # single class loses to any selector naming an element, so each needs checking.
-    for line in markup.splitlines():
-        if 'class="hidden"' not in line and 'hidden"' not in line:
+    assert "> [hidden] { display: none; }" in css, "a form row cannot be hidden"
+
+    class Hidden(html.parser.HTMLParser):
+        """Every element the page starts out hiding, and the classes it sits inside."""
+
+        def __init__(self):
+            super().__init__()
+            self.open, self.found = [], []
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if "hidden" in attrs:
+                self.found.append((tag, attrs.get("class", ""), list(self.open)))
+            if tag not in ("input", "link", "meta", "br"):
+                self.open.append(attrs.get("class", ""))
+
+        def handle_endtag(self, _tag):
+            if self.open:
+                self.open.pop()
+
+    parser = Hidden()
+    parser.feed(markup)
+    assert parser.found, "nothing on the page starts out hidden"
+    for tag, classes, ancestors in parser.found:
+        if any("form" in each.split() for each in ancestors):
             continue
-        tag = line.strip().split()[0].lstrip("<")
-        if tag == "label":
-            assert ".col > label.hidden" in css, tag
-        else:
-            # div and p take `grid-column` from `.col`, which does not fight display.
-            assert f".col > {tag} {{ display" not in css, (
-                f"{tag} has a display rule that would outrank .hidden")
+        # Outside the form there is no such rule, so nothing may give it a display.
+        for name in classes.split():
+            assert f".{name} {{ display" not in css, (
+                f"{tag}.{name} sets a display that outranks [hidden]")
 
 
 @check
@@ -3542,7 +3561,8 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
         assert "note_ok" in text, f"{path} records faults and never clears one"
     # The UI puts the reason under the name rather than instead of it.
     script = pathlib.Path("src/statsbadge/web/app.js").read_text()
-    assert 'source.last_fault ? "faulty" : ""' in script, "a recovered source reads as broken"
+    assert 'if (source.last_fault) row.className = "faulty"' in script, \
+        "a recovered source reads as broken"
     assert 'provides.join(", ")' in script.split("function renderSources")[1][:600]
 
 

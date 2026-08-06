@@ -1,9 +1,11 @@
 /* The config UI. Dark, because it sits next to a badge that is.
 
-Flat: surfaces are told apart by their fill and the space around them, not by an
-outline each. A panel inside a panel with a border on both reads as two things when it
-is one, so the only rules left are the header's accent edge and the left bars that mark
-something wanting attention. */
+Flat: surfaces are told apart by their fill and the space around them, not by an outline
+each. A panel inside a panel with a border on both reads as two things when it is one, so
+the only rules left are the header's accent edge and the left bars that mark something
+wanting attention. */
+
+/* -- palette ------------------------------------------------------------ */
 
 :root {
   --bg: #0e0e11;
@@ -15,7 +17,10 @@ something wanting attention. */
   --accent: #38e8d1;
   --good: #78e65a;
   --bad: #ff4530;
+  --on-accent: #0a1614;
 }
+
+/* -- page furniture ----------------------------------------------------- */
 
 * { box-sizing: border-box; }
 
@@ -25,6 +30,19 @@ body {
   color: var(--ink);
   font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+h1 { font-size: 17px; margin: 0; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* Section titles sit on the page, not on the panel they introduce. */
+h2 { font-size: 17px; font-weight: 600; margin: 26px 0 8px; }
+
+h3 { font-size: 12px; margin: 0 0 4px; color: var(--dim); }
+
+code { font-family: ui-monospace, monospace; }
+
+.hint { color: var(--dim); font-size: 12px; margin: -4px 0 10px; }
+
+/* -- header ------------------------------------------------------------- */
 
 header {
   display: flex;
@@ -37,26 +55,28 @@ header {
   position: sticky;
   top: 0;
   z-index: 5;
+
+  .host { margin: 0; flex: 1; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .note { margin: 0; color: var(--dim); font-size: 12px; }
+
+  /* Which badge the page below is configuring. */
+  .whose {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+
+    select { color: var(--ink); font-size: 14px; text-transform: none; letter-spacing: 0;
+             max-width: 220px; }
+  }
+
+  /* Hung off the button that opens it, this being sticky. */
+  .pairing { position: absolute; top: 100%; right: 20px; width: 340px; margin: 0;
+             box-shadow: 0 8px 24px #0009; }
 }
 
-h1 { font-size: 17px; margin: 0; letter-spacing: 0.06em; text-transform: uppercase; }
+/* -- layout ------------------------------------------------------------- */
 
-/* Section titles sit on the page, not on the panel they introduce. */
-h2 { font-size: 17px; font-weight: 600; color: var(--ink); margin: 26px 0 8px; }
-.column > h2:first-child { margin-top: 0; }
-
-h3 { font-size: 12px; margin: 0 0 4px; color: var(--dim); }
-
-header .host { color: var(--dim); font-variant-numeric: tabular-nums; flex: 1; }
-/* Which badge the page below is configuring, and whether it has a layout of its own. */
-header .whose { margin: 0; gap: 6px; color: var(--dim); font-size: 12px;
-                text-transform: uppercase; letter-spacing: 0.06em; }
-header .whose select { color: var(--ink); font-size: 14px; text-transform: none;
-                       letter-spacing: 0; max-width: 220px; }
-header .note { color: var(--dim); font-size: 12px; }
-
-/* Four columns: the pages, what they look like, what is installed, and this host. The first
-   is wider, being a list of cards with a picker in each. */
+/* Four columns: the pages, what they look like, what is installed, and this host. The
+   first is wider, being a list of cards with a picker in each. */
 main {
   display: grid;
   grid-template-columns: minmax(300px, 1.25fr) repeat(3, minmax(230px, 1fr));
@@ -65,251 +85,293 @@ main {
   align-items: start;
 }
 
-@media (max-width: 1240px) {
+@media (width <= 1240px) {
   main { grid-template-columns: minmax(300px, 1.2fr) minmax(240px, 1fr); }
 }
-@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 
-/* A section is one grid, and every row is a `label` set to `display: contents` - so the name,
-   the control and the readout of each row land in the same three tracks and line up down the
-   section, rather than each row settling its own widths. Names size the first track between
-   them; a statement with a checkbox spans the first two, so a long one does not push every
-   control on the page to the right. */
-.col {
-  background: var(--panel); padding: 16px;
-  display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
-  gap: 9px 10px; align-items: center;
+@media (width <= 900px) {
+  main { grid-template-columns: 1fr; }
 }
-.col > label { display: contents; }
-/* And `.hidden` has to beat that, or a row hidden by it keeps its children: `display:
-   contents` takes the box away and leaves what is inside it in the grid, so the label reads
-   as still there. Here rather than in `.hidden` itself, which cannot outrank a selector
-   naming an element. */
-.col > label.hidden { display: none; }
-/* Every name starts a row of its own: with `display: contents` the items all flow into one
-   grid, so a row of two items would otherwise leave its last track for the next row's name. */
-.col > label > .name { color: var(--ink); grid-column-start: 1; }
-.col > label.check > .name { grid-column: 1 / 3; }
-.col > label > select { grid-column: 2 / -1; justify-self: start; max-width: 100%; }
-/* A control with something beside it - a swatch showing what the choice resolved to - takes the
-   two tracks together and lays the pair out itself, so the select still sizes to its options. */
-.col > label > .pair { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px;
-                       min-width: 0; }
-.col > label > .pair > select { max-width: 100%; }
-.col > label > input[type=text] { grid-column: 2 / -1; }
-.col > label > input[type=checkbox] { justify-self: end; margin: 0; }
-.col > label > input[type=range] { width: 100%; }
-.col > label > output { justify-self: end; }
-/* Anything that is not a row of the form takes the whole width. */
-.col > h3, .col > p, .col > div, .col > button { grid-column: 1 / -1; }
 
-.hint { color: var(--dim); font-size: 12px; margin: -4px 0 10px; }
-.col > .hint { margin: 0 0 2px; }
+.column > section:first-child h2 { margin-top: 0; }
+
+/* -- controls ----------------------------------------------------------- */
 
 button {
   background: var(--panel2); color: var(--ink); border: 0;
   padding: 7px 12px; font: inherit; cursor: pointer; white-space: nowrap;
-}
-button:hover:not(:disabled) { background: var(--line); }
-button:disabled { opacity: 0.45; cursor: default; }
-button.primary { background: var(--accent); color: #0a1614; font-weight: 600; }
-button.small { padding: 3px 7px; font-size: 12px; }
-button.danger:hover { background: var(--bad); color: #fff; }
-button.right { display: block; margin-left: auto; }
 
-select, input[type=text] {
+  &:hover:not(:disabled) { background: var(--line); }
+  &:disabled { opacity: 0.45; cursor: default; }
+  &.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  &.small { padding: 3px 7px; font-size: 12px; }
+  &.danger:hover { background: var(--bad); color: #fff; }
+}
+
+select, input[type="text"] {
   background: var(--panel2); color: var(--ink); border: 0;
   padding: 6px 8px; font: inherit; min-width: 0;
 }
 
-label { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
-label > select, label > input[type=text] { flex: 1; }
-input[type=range] { flex: 1; accent-color: var(--accent); }
-input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
-output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
-         text-align: right; font-size: 12px; }
+input[type="range"] { accent-color: var(--accent); }
+input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
 
-/* -- pages ------------------------------------------------------------- */
+output {
+  color: var(--dim); font-variant-numeric: tabular-nums;
+  min-width: 62px; text-align: right; font-size: 12px;
+}
+
+/* -- panels and form rows ------------------------------------------------ */
+
+.panel { background: var(--panel); padding: 16px; }
+
+/* A form is one grid, and every row lands in the same three tracks - name, control,
+   readout - so the controls line up down the panel instead of each row settling its own
+   widths. A statement with a checkbox spans the first two, so a long one does not push
+   every control on the page to the right. */
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  gap: 9px 10px;
+  align-items: center;
+
+  > label { grid-column: 1; }
+  > label:has(+ input[type="checkbox"]) { grid-column: 1 / 3; }
+  > select { grid-column: 2 / -1; justify-self: start; max-width: 100%; }
+  > input[type="text"] { grid-column: 2 / -1; }
+  > input[type="range"] { grid-column: 2; width: 100%; }
+  > input[type="checkbox"] { grid-column: 3; justify-self: end; margin: 0; }
+  > output { grid-column: 3; justify-self: end; }
+
+  /* Anything that is not a row of the form takes the whole width. */
+  > h3, > p, > div, > span, > button { grid-column: 1 / -1; }
+  > .hint { margin: 0 0 2px; }
+
+  /* Beats the display each of those carries, which the browser's own rule for the
+     attribute cannot. */
+  > [hidden] { display: none; }
+}
+
+/* A control with a swatch beside it showing what the choice resolved to. Lays the pair
+   out itself, so the select still sizes to its options. */
+.with-chip {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+
+  > select { max-width: 100%; }
+  > .chip { width: 18px; height: 18px; flex: none; }
+}
+
+/* -- pages -------------------------------------------------------------- */
 
 /* Above the list, where it stays reachable however many pages there are. */
-.row { display: flex; gap: 8px; margin-bottom: 10px; }
-/* Sized to its options, like every other picker here. */
-.row select { flex: 0 1 auto; background: var(--panel); }
-.row button { background: var(--panel); }
-.row button:hover { background: var(--panel2); }
+.toolbar {
+  display: flex; gap: 8px; margin-bottom: 10px;
+
+  /* Sized to its options, like every other picker here. */
+  select { flex: 0 1 auto; background: var(--panel); }
+  button { background: var(--panel); }
+  button:hover { background: var(--panel2); }
+}
+
+/* A box under the picker, not a note under the list, where a long list of pages pushes it
+   off the screen. */
+.warn {
+  color: var(--accent); font-size: 12px; margin: 0 0 10px;
+  background: var(--panel); border-left: 2px solid var(--accent);
+  border-radius: 0 6px 6px 0; padding: 8px 10px;
+}
 
 .pages { list-style: none; margin: 0; padding: 0; }
 
 /* Each page is its own panel on the page background, like a live group. */
-.page { background: var(--panel); padding: 12px 16px; margin-bottom: 10px; }
-.page.dragging { opacity: 0.4; }
-.page.over { box-shadow: inset 3px 0 0 var(--accent); }
+.page {
+  background: var(--panel); padding: 12px 16px; margin-bottom: 10px;
 
-.page .top { display: flex; align-items: center; gap: 8px; }
-.page .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
-.page .kind {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--accent);
+  &.dragging { opacity: 0.4; }
+  &.over { box-shadow: inset 3px 0 0 var(--accent); }
+
+  .top { display: flex; align-items: center; gap: 8px; }
+  .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
+
+  .kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+          color: var(--accent); }
+  .title { flex: 1; }
+  .twist { padding: 2px 6px; min-width: 24px; }
+  .fields { margin-top: 8px; display: grid; gap: 6px; }
+  .fieldrow { display: flex; gap: 6px; align-items: center; }
+  .fieldrow select { flex: 1; }
+
+  /* Which source the reading comes from. Narrower than the metric beside it and capped, so
+     the selects below each other line up instead of stepping in and out with the longest
+     domain name an account holds. */
+  .fieldrow select.group { flex: 0 1 40%; max-width: 150px; color: var(--dim);
+                           font-size: 12px; }
+
+  /* What a collapsed card is showing, so the overview is still readable. */
+  .summary { color: var(--dim); font-size: 12px; padding: 0 4px 2px 26px;
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
-.page .title { flex: 1; }
-.page .fields { margin-top: 8px; display: grid; gap: 6px; }
-.page .twist { padding: 2px 6px; min-width: 24px; }
-/* What a collapsed card is showing, so the overview is still readable. */
-.page .summary { color: var(--dim); font-size: 12px; padding: 0 4px 2px 26px;
-                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.page .fieldrow { display: flex; gap: 6px; align-items: center; }
-.page .fieldrow select { flex: 1; }
-/* Which source the reading comes from. Narrower than the metric beside it and capped, so
-   the selects below each other line up rather than stepping in and out with the longest
-   domain name an account holds. */
-.page .fieldrow select.group { flex: 0 1 40%; max-width: 150px; color: var(--dim);
-                               font-size: 12px; }
 
-/* A box under the picker rather than a note under the list, where a long list of pages
-   pushes it off the screen. Keeps the left accent bar this sheet uses to mark something
-   wanting attention. */
-.warn { color: var(--accent); font-size: 12px; margin: 0 0 10px;
-        background: var(--panel); border-left: 2px solid var(--accent);
-        border-radius: 0 6px 6px 0; padding: 8px 10px; }
-/* One class, so it loses to any two-class rule that sets display - `.page .fields` did,
-   and the fields would not hide. Something with its own display rule has to be left out of
-   the document instead of hidden with this. */
-.hidden { display: none; }
+/* -- badges and pairing -------------------------------------------------- */
 
-/* -- badges and pairing ------------------------------------------------ */
+.badge-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer;
 
-.badge-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
-             border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
-.badge-row code { color: var(--dim); font-size: 11px; }
-.badge-row .name { flex: 1; }
-.badge-row .state { color: var(--dim); font-size: 11px; }
-.badge-row:hover { background: var(--panel2); }
-/* The one the page is configuring, marked the way the pages list marks a drop target. */
-.badge-row.on { box-shadow: inset 3px 0 0 var(--accent); }
+  &:hover { background: var(--panel2); }
 
-.pairing { margin-top: 10px; padding: 12px; background: var(--panel2);
-           border-left: 3px solid var(--accent); }
-/* Hung off the button that opens it, the header being sticky. */
-header .pairing { position: absolute; top: 100%; right: 20px; width: 340px;
-                  margin: 0; box-shadow: 0 8px 24px #0009; }
-.pairing .code { font: 700 28px/1.2 ui-monospace, monospace; letter-spacing: 0.14em;
-                 color: var(--accent); text-align: center; margin: 6px 0; }
-.pairing .where { text-align: center; color: var(--dim); font-size: 12px; }
-.pairing .countdown { margin-top: 6px; font-variant-numeric: tabular-nums; }
+  /* The one the page is configuring, marked the way the pages list marks a drop target. */
+  &.on { box-shadow: inset 3px 0 0 var(--accent); }
+
+  code { color: var(--dim); font-size: 11px; }
+  .name { flex: 1; }
+  .state { color: var(--dim); font-size: 11px; }
+}
+
+.pairing {
+  margin-top: 10px; padding: 12px; background: var(--panel2);
+  border-left: 3px solid var(--accent);
+
+  .code { font: 700 28px/1.2 ui-monospace, monospace; letter-spacing: 0.14em;
+          color: var(--accent); text-align: center; margin: 6px 0; }
+  .where { text-align: center; color: var(--dim); font-size: 12px; }
+  .countdown { margin-top: 6px; font-variant-numeric: tabular-nums; }
+}
 
 .pending { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
 .ask {
   display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center;
   background: var(--panel2); padding: 8px 10px;
-}
-.ask .askname { font-size: 13px; color: var(--ink); }
-.ask code { font-size: 11px; color: var(--dim); }
-.ask .askcode {
-  font: 700 22px/1 ui-monospace, monospace; letter-spacing: 0.14em;
-  color: var(--accent); text-align: right;
-}
-.ask .askbuttons { grid-column: 1 / -1; display: flex; gap: 6px; }
 
-/* -- extensions --------------------------------------------------------- */
+  code { font-size: 11px; color: var(--dim); }
+  .askname { font-size: 13px; color: var(--ink); }
+
+  .askcode { font: 700 22px/1 ui-monospace, monospace; letter-spacing: 0.14em;
+             color: var(--accent); text-align: right; }
+  .askbuttons { grid-column: 1 / -1; display: flex; gap: 6px; }
+}
+
+/* -- extensions ---------------------------------------------------------- */
 
 /* One box per extension, titled with its name, so an install that took is visible before
-   anything it draws is: a section of settings said nothing about an extension that asks to be
-   told nothing, and nothing at all about one that failed to import. */
-.boxes { display: grid; gap: 10px; }
-.boxes .col h3 { color: var(--accent); text-transform: uppercase;
-                 letter-spacing: 0.08em; font-size: 12px; margin-bottom: 2px; }
-.boxes .col .hint { margin: 0 0 6px; }
-.boxes .col .hint.bad { color: var(--bad); }
+   anything it draws is: a section of settings said nothing about an extension that asks to
+   be told nothing, and nothing at all about one that failed to import. */
+.boxes {
+  display: grid; gap: 10px;
+
+  h3 { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em;
+       font-size: 12px; margin-bottom: 2px; }
+  .hint { margin: 0 0 6px; }
+  .hint.bad { color: var(--bad); }
+}
 
 /* An extension's API keys, kept off the screen until asked for. A masked line rather than
    nothing, so "not set" and "set to the wrong one" can be told apart. */
-.secrets { grid-column: 1 / -1; border-left: 2px solid var(--line);
-           padding: 8px 0 4px 10px; margin: 2px 0 8px; }
-.secrets .kv { display: flex; justify-content: space-between; gap: 10px;
-               font-size: 12px; padding: 2px 0; }
-.secrets .mask { font-family: ui-monospace, monospace; color: var(--dim); }
-.secrets .mask.none { font-style: italic; }
-.secrets button { margin-top: 6px; }
+.secrets {
+  border-left: 2px solid var(--line);
+  padding: 8px 0 4px 10px; margin: 2px 0 8px;
+  display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 6px 10px; align-items: center;
 
-/* -- sources, settings and live ---------------------------------------- */
+  .kv { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 10px;
+        font-size: 12px; }
+  .mask { font-family: ui-monospace, monospace; color: var(--dim); }
+  .mask.none { font-style: italic; }
+  input[type="text"] { grid-column: 2; }
+  button { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
+}
 
-.sources { font-size: 12px; color: var(--dim); }
-.sources div { padding: 3px 0; }
-.sources .faulty { color: var(--bad); }
-/* Why it is failing, under the name of the thing that is. */
-.sources .why { display: block; }
+/* -- this host and live readings ----------------------------------------- */
+
+.sources {
+  font-size: 12px; color: var(--dim);
+
+  div { padding: 3px 0; }
+  .faulty { color: var(--bad); }
+
+  /* Why it is failing, under the name of the thing that is. */
+  .why { display: block; }
+  .reporting { margin-top: 6px; }
+}
 
 /* A group is its own panel: one box per reading, not a box of boxes. */
-.live { display: grid; gap: 10px; }
-.live .group { background: var(--panel); padding: 12px 16px; }
-.live .group h3 { color: var(--accent); text-transform: uppercase;
-                  letter-spacing: 0.08em; }
-.live .kv { display: flex; justify-content: space-between; gap: 8px;
-            font-size: 12px; padding: 1px 0; }
-.live .kv span:last-child { font-variant-numeric: tabular-nums; }
-.live .kv .none { color: var(--dim); }
-.live .bar { height: 3px; background: var(--line); margin-top: 3px; }
-.live .bar i { display: block; height: 100%; background: var(--accent); }
+.live {
+  display: grid; gap: 10px;
 
-.toast {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: var(--accent); color: #0a1614; padding: 9px 18px;
-  font-weight: 600; box-shadow: 0 6px 20px #0009;
-}
-.toast.bad { background: var(--bad); color: #fff; }
+  .group { background: var(--panel); padding: 12px 16px; }
+  .group h3 { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
 
-/* The custom theme's picker, and a loose impression of the badge drawn in the palette it
-   would use. Not a rendering of the app - it is here so a choice can be judged before it is
-   sent, so what matters is that the colours sit next to each other the way they will. */
-.accents { margin: 8px 0 4px; }
-/* The second accent, beside the rule that picked it. */
-.col .chip { width: 18px; height: 18px; flex: none; }
-/* Which family of accents is showing: four rows of twelve, one at a time. */
-.accents .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
-.accents .tabs button {
-  flex: 1; padding: 4px 2px; font-size: 11px; color: var(--dim);
-  background: var(--panel2); border-bottom: 2px solid transparent;
+  .kv { display: flex; justify-content: space-between; gap: 8px; font-size: 12px;
+        padding: 1px 0; }
+  .kv span:last-child { font-variant-numeric: tabular-nums; }
+  .kv .none { color: var(--dim); }
+  .bar { height: 3px; background: var(--line); margin-top: 3px; }
+  .bar .fill { display: block; height: 100%; background: var(--accent); }
 }
-.accents .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
-.accents .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
-.accents .swatches button {
-  width: 30px; height: 30px; padding: 0; border: 2px solid transparent; cursor: pointer;
-}
-.accents .swatches button.on { border-color: var(--ink); }
 
-/* The badge's own 4:3, down to whatever the column allows: at 320px it is life size. */
+/* -- the accent picker --------------------------------------------------- */
+
+.accents {
+  margin: 8px 0 4px;
+
+  /* Which family of accents is showing: four rows of twelve, one at a time. */
+  .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
+
+  .tabs button { flex: 1; padding: 4px 2px; font-size: 11px; color: var(--dim);
+                 background: var(--panel2); border-bottom: 2px solid transparent; }
+  .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+  .swatches button { width: 30px; height: 30px; padding: 0; border: 2px solid transparent; }
+  .swatches button.on { border-color: var(--ink); }
+}
+
+/* -- the theme preview --------------------------------------------------- */
+
+/* A loose impression of the badge drawn in the palette it would use. Not a rendering of
+   the app - it is here so a choice can be judged before it is sent, so what matters is
+   that the colours sit next to each other the way they will. The badge's own 4:3, down to
+   whatever the column allows: at 320px it is life size. */
 .preview {
   width: 100%; max-width: 320px; aspect-ratio: 4 / 3;
   display: flex; flex-direction: column;
   background: var(--pv-bg); font-size: 11px; overflow: hidden; margin: 4px 0;
+
+  .head { height: 30px; background: var(--pv-panel);
+          border-bottom: 2px solid var(--pv-accent);
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 10px; }
+  .head .title { color: var(--pv-ink); font-size: 15px; letter-spacing: 0.06em; }
+  .head .host { color: var(--pv-dim); }
+
+  .body { flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 12px; }
+
+  /* The gauge. Its background is built in app.js, where the ramp's stops are: a stop list
+     cannot be handed to a gradient through a custom property and then given positions of
+     its own - the declaration parses as invalid and the whole gauge disappears. */
+  .dial { width: 96px; height: 96px; border-radius: 50%; flex: none;
+          display: grid; place-items: center; }
+  .reading { color: var(--pv-ink); font-size: 21px; }
+
+  .rows { flex: 1; display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; }
+  .row .name { color: var(--pv-dim); }
+  .row .value { color: var(--pv-ink); }
+  .row .bar { grid-column: 1 / -1; height: 3px; background: var(--pv-grid); }
+  .row .fill { display: block; height: 100%; }
+
+  .pips { height: 20px; background: var(--pv-panel); display: flex; align-items: center;
+          justify-content: center; gap: 6px; }
+  .pips span { width: 14px; height: 4px; background: var(--pv-grid); }
+  .pips span:first-child { background: var(--pv-accent); width: 18px; }
 }
-.pv-head {
-  height: 30px; background: var(--pv-panel); border-bottom: 2px solid var(--pv-accent);
-  display: flex; align-items: center; justify-content: space-between; padding: 0 10px;
+
+/* -- toast ---------------------------------------------------------------- */
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: var(--on-accent); padding: 9px 18px;
+  font-weight: 600; box-shadow: 0 6px 20px #0009;
+
+  &.bad { background: var(--bad); color: #fff; }
 }
-.pv-title { color: var(--pv-ink); font-size: 15px; letter-spacing: 0.06em; }
-.pv-host { color: var(--pv-dim); }
-.pv-body { flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 12px; }
-/* The gauge. Its background is built in app.js, where the ramp's stops are: a stop list cannot
-   be handed to a gradient through a custom property and then given positions of its own - the
-   declaration parses as invalid and the whole gauge disappears, which is what it did. */
-.pv-dial {
-  width: 96px; height: 96px; border-radius: 50%; flex: none;
-  display: grid; place-items: center;
-}
-.pv-reading { color: var(--pv-ink); font-size: 21px; }
-.pv-rows { flex: 1; display: grid; gap: 10px; }
-.pv-row { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; }
-.pv-row i { color: var(--pv-dim); font-style: normal; }
-.pv-row b { color: var(--pv-ink); font-weight: 500; }
-.pv-row u { grid-column: 1 / -1; height: 3px; background: var(--pv-grid); text-decoration: none; }
-.pv-row s { display: block; height: 100%; text-decoration: none; }
-.pv-row:nth-child(1) s { width: 62%; background: var(--pv-r62); }
-.pv-row:nth-child(2) s { width: 46%; background: var(--pv-r46); }
-.pv-row:nth-child(3) s { width: 78%; background: var(--pv-r78); }
-.pv-foot {
-  height: 20px; background: var(--pv-panel); display: flex; align-items: center;
-  justify-content: center; gap: 6px;
-}
-.pv-foot i { width: 14px; height: 4px; background: var(--pv-grid); }
-.pv-foot i:first-child { background: var(--pv-accent); width: 18px; }
