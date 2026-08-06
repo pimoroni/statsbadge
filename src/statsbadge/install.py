@@ -31,6 +31,15 @@ class InstallError(Exception):
     pass
 
 
+class PortBusy(InstallError):
+    """Something else has the port, so nothing here ever reached the badge.
+
+    Told apart from the rest because the difference decides what happens on the way out:
+    every command hard resets the badge in a `finally`, since talking to the REPL leaves
+    it on a blank screen, and a port that was never opened has nothing to hand back.
+    """
+
+
 # -- finding the badge ------------------------------------------------------
 
 # 0x2E8A is Raspberry Pi's vendor id, and a debug probe shares it with the board it
@@ -80,15 +89,44 @@ def _exec(port, script, timeout=30):
     try:
         return repl.run(port, script, timeout=timeout)
     except repl.Busy:
-        raise InstallError(
+        raise PortBusy(
             f"{port} is busy. Close Thonny, a serial monitor or whatever else has it open."
         ) from None
     except (repl.ReplError, OSError) as exc:
         raise InstallError(str(exc) or f"the badge on {port} did not answer") from None
 
 
+# What `os.uname()[4]` says on the board this app is for: "Pimoroni Tufty 2350 with RP2350".
+# Checked before `import badgeware`, which is the first thing every script here does and
+# which fails on anything else as a MicroPython traceback naming a module the reader has
+# never heard of. A serial port that answers MicroPython is not necessarily a badge.
+BOARD = "Tufty 2350"
+
+_BOARD_SCRIPT = (
+    "import os\n"
+    "print('BOARD', os.uname()[4])\n"
+)
+
+
+def check_board(port):
+    """Refuse a board that is not a Tufty, by name, before anything imports badgeware."""
+    out = _exec(port, _BOARD_SCRIPT, timeout=10)
+    machine = ""
+    for line in out.splitlines():
+        if line.strip().startswith("BOARD "):
+            machine = line.strip()[6:].strip()
+    if not machine:
+        raise InstallError(f"the board on {port} did not say what it is")
+    if BOARD not in machine:
+        raise InstallError(
+            f"{machine} is not a {BOARD}, so it has no badgeware to install into. "
+            f"Connect the badge, or pass --port-dev.")
+    return machine
+
+
 def badge_id(port):
     """The badge's uid, which is what it identifies itself as when signing."""
+    check_board(port)
     out = _exec(port, "import badgeware; print(badge.uid)")
     uid = out.strip().splitlines()[-1].strip() if out.strip() else ""
     if not uid:
@@ -97,6 +135,7 @@ def badge_id(port):
 
 
 def badge_info(port):
+    check_board(port)
     out = _exec(port, (
         "import badgeware, os, sys\n"
         "print(badge.model)\n"
@@ -648,20 +687,27 @@ def wait_for_port(timeout=40, previous=None):
 
 
 def hard_reset(port, settle=True):
-    """Reset the badge so it boots as it normally would.
+    """Reset the badge so it boots as it normally would. True if it was reset.
 
     Anything that talks over the REPL interrupts whatever the badge was running to get
     there, which leaves it sitting at a bare prompt on a blank screen. A reset runs
     `main.py` again, so the badge starts whatever it is set up to start.
+
+    A port something else holds is the one case where there is nothing to do: nothing
+    here interrupted the badge, so there is nothing to hand back, and waiting for a port
+    that never went away to come back is fifteen seconds of waiting out the timeout
+    before announcing a reset that did not happen.
     """
     try:
         repl.reset(port, timeout=10)
+    except repl.Busy:
+        return False
     except (repl.ReplError, OSError):
         # Expected: the port goes away mid-command, so there is nothing to hear back.
         pass
-    if not settle:
-        return None
-    return wait_for_enumeration(previous=port)
+    if settle:
+        wait_for_enumeration(previous=port)
+    return True
 
 
 def wait_for_enumeration(previous=None, timeout=15):

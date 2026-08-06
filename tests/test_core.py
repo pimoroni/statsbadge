@@ -3169,6 +3169,19 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
         assert "machine.reset()" in board.scripts[0], board.scripts
         assert "sleep_ms" in board.scripts[0], board.scripts
 
+        # A board that is not a Tufty is said so by name. Every script here starts by
+        # importing badgeware, which on anything else is a traceback naming a module the
+        # reader has never heard of.
+        board = FakeBoard(printed="BOARD Raspberry Pi Pico2 with RP2350\r\n")
+        try:
+            install.check_board("/dev/fake")
+        except install.InstallError as exc:
+            assert "Pico2" in str(exc) and install.BOARD in str(exc), exc
+        else:
+            raise AssertionError("a board with no badgeware on it was accepted")
+        board = FakeBoard(printed=f"BOARD Pimoroni {install.BOARD} with RP2350\r\n")
+        assert install.BOARD in install.check_board("/dev/fake")
+
         # Somebody else holding the port is its own answer, since the fix is theirs.
         def held(*_args, **_kwargs):
             raise fault("Could not exclusively lock port /dev/fake")
@@ -3183,8 +3196,17 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
         # install.py says whose problem that is, in the words of the thing to close.
         try:
             install._exec("/dev/fake", "print(1)")
-        except install.InstallError as exc:
+        except install.PortBusy as exc:
             assert "busy" in str(exc) and "Thonny" in str(exc), exc
+        else:
+            raise AssertionError("a held port is not reported as busy")
+
+        # And a port that was never opened is not then waited on: every command hard
+        # resets on the way out, and a reset that could not happen used to spend the
+        # enumeration timeout before announcing that the badge had been reset.
+        started = time.monotonic()
+        assert install.hard_reset("/dev/fake") is False
+        assert time.monotonic() - started < 2.0, "waited for a reset that never happened"
     finally:
         if was is None:
             del sys.modules["serial"]

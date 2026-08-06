@@ -260,8 +260,8 @@ def cmd_install(args):
     try:
         return _install(args, session)
     finally:
-        install.hard_reset(session["port"])
-        print("The badge has been reset.")
+        if install.hard_reset(session["port"]):
+            print("The badge has been reset.")
 
 
 def _install(args, session):
