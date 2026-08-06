@@ -412,7 +412,11 @@ GROUP_ICONS = {"cpu": "c", "gpu": "g", "mem": "m", "disk": "d", "net": "n",
                "power": "p", "fans": "f", "sys": "y"}
 FIELD_ICONS = {
     "pct": "l", "temp": "t", "freq": "s", "clock": "s", "procs": "r",
-    "up_bps": "u", "down_bps": "o", "write_bps": "u", "read_bps": "o",
+    # The same two arrows point opposite ways for a link and for a disk, because what they
+    # are drawn going into is not the same thing: the machine, for a network, so up leaves
+    # it - and the disk itself, for storage, so a write goes down into it and a read comes
+    # back up out.
+    "up_bps": "u", "down_bps": "o", "write_bps": "o", "read_bps": "u",
     "battery_pct": "b", "package_w": "p", "power": "p", "rpm": "f",
     "mem_pct": "m", "swap_pct": "e", "fan_pct": "f",
     "used_mb": "a", "total_mb": "a", "mem_used_mb": "a", "swap_used_mb": "a",
