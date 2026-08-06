@@ -2378,6 +2378,27 @@ def test_a_theme_can_be_derived_from_one_accent(h):
 
 
 @check
+def test_a_badge_can_be_given_a_name(h):
+    """A badge announces itself by whatever its own setup screen was told, which is its id
+    until somebody names it - so two badges on one host read the same in the picker."""
+    assert h.service.badges.list_badges()[h.badge_id]["name"] == "test"
+
+    status, body = h.raw("PUT", f"/api/badges/{h.badge_id}",
+                         json.dumps({"name": "  Desk badge  "}).encode())
+    assert status == 200 and body["name"] == "Desk badge", (status, body)
+    assert h.service.badges.list_badges()[h.badge_id]["name"] == "Desk badge"
+
+    # Cleared, it goes back to the id, which is at least unique.
+    _status, body = h.raw("PUT", f"/api/badges/{h.badge_id}",
+                          json.dumps({"name": ""}).encode())
+    assert body["name"] == h.badge_id, body
+
+    status, _body = h.raw("PUT", "/api/badges/nobodyhome",
+                          json.dumps({"name": "x"}).encode())
+    assert status == 404, status
+
+
+@check
 def test_each_badge_has_its_own_layout(h):
     """Everything on the page is configured per badge: two badges on one host draw different
     pages, and a save for one is not a save for the other. A badge that has not been given a
@@ -2468,8 +2489,8 @@ def test_each_badge_has_its_own_layout(h):
     header = page[page.index("<header>"):page.index("</header>")]
     for control in ("<label>Badge", 'id="pair"', 'id="save"'):
         assert control in header, control
-    # Forgetting one belongs with the list of them, not beside the picker.
-    assert 'id="forget"' in page[page.index("</header>"):], "no way to forget a badge"
+    # Naming one and forgetting one belong with the badge itself, not beside the picker.
+    assert '"Forget"' in script and "function rename(" in script, "no way to forget or name one"
     assert "?badge=" in script, "the UI saves without saying whose layout it is"
     assert "ownIds" in script, "a badge's pages can collide with another's"
 

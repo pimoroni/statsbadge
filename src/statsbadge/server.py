@@ -457,6 +457,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for badge_id, record in service.badges.list_badges().items()
             })
 
+        if path.startswith("/api/badges/") and method == "PUT":
+            badge_id = path[len("/api/badges/"):]
+            name = str(json.loads(body or b"{}").get("name") or "").strip()
+            if not service.badges.rename(badge_id, name):
+                return self._fail(404, f"no badge {badge_id!r} is paired here")
+            return self._json(200, {"name": name or badge_id})
+
         if path.startswith("/api/badges/") and method == "DELETE":
             badge_id = path[len("/api/badges/"):]
             # And its layout, which would otherwise sit in the file naming a badge nothing can

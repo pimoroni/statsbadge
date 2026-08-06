@@ -316,23 +316,7 @@ main section:has(> section) {
 
 /* -- badges -------------------------------------------------------------- */
 
-main menu + button { margin-top: 10px; justify-self: start; }
-
-main menu {
-  list-style: none; margin: 0; padding: 0;
-
-  button {
-    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 8px;
-    width: 100%; text-align: left; background: none;
-    padding: 8px 10px; border-bottom: 1px solid var(--line);
-  }
-
-  button:hover { background: var(--panel2); }
-  button[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
-  span { grid-column: 1; }
-  small { grid-column: 2; grid-row: 1; }
-  code { grid-column: 1; color: var(--dim); }
-}
+main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* -- the accent picker --------------------------------------------------- */
 

@@ -984,8 +984,6 @@ function renderWhose() {
   pick("header > small").textContent = whose && !own
     ? "on the default layout, until you save"
     : (!whose && ids.length ? "what a newly paired badge draws" : "")
-  $("forget").disabled = !whose
-  $("forget").onclick = () => forgetBadge(whose).catch((error) => toast(error.message, true))
 }
 
 /** Load another badge's layout into the page. */
@@ -1027,22 +1025,62 @@ function ownIds(pages, badgeId) {
 }
 
 function renderBadges() {
-  const list = $("badges").querySelector("menu")
   const ids = Object.keys(badges)
+  const node = $("badges")
   if (!ids.length) {
-    list.replaceChildren(el("li", null, el("p", {
+    node.replaceChildren(node.querySelector("h2"), el("section", null, el("p", {
       textContent: "None paired. Use the USB installer, or pair over the network." })))
     return
   }
-  list.replaceChildren(...ids.map((id) => {
-    // A button, since picking a badge is what a row is for and a keyboard has to reach it.
-    const row = el("button", { type: "button", "aria-current": id === whose ? "true" : null },
-                   el("span", { textContent: badges[id].name || id }),
-                   el("small", { textContent: badges[id].configured ? "own layout" : "default" }),
-                   el("code", { textContent: id }))
-    row.onclick = () => switchTo(id).catch((error) => toast(error.message, true))
-    return el("li", null, row)
-  }))
+  node.replaceChildren(node.querySelector("h2"), ...ids.map(badgeBox))
+}
+
+/** One box per paired badge: what to call it, what it is, and the two things that can be
+ * done to it. The one the rest of the page is configuring is marked. */
+function badgeBox(id) {
+  // A badge nobody has named announces itself by its id, so there is no name to show and
+  // the field is left empty rather than filled with the id under the id.
+  const named = badges[id].name && badges[id].name !== id ? badges[id].name : ""
+  const nameId = `badge${++controlSerial}`
+  const name = el("input", { type: "text", id: nameId, value: named,
+                             placeholder: "Give it a name" })
+  // Saved on its own and not with the layout: what a badge is called is not something the
+  // badge draws, so there is nothing to wait for a revision on.
+  name.onchange = () => rename(id, name.value).catch((error) => toast(error.message, true))
+
+  const forget = el("button", { type: "button", className: "small danger",
+                                textContent: "Forget" })
+  forget.onclick = () => forgetBadge(id).catch((error) => toast(error.message, true))
+
+  const box = el("section", { "aria-current": id === whose ? "true" : null },
+                 el("h3", { textContent: named || "Unnamed badge" }),
+                 el("label", { htmlFor: nameId, textContent: "Name" }),
+                 name,
+                 el("p", null,
+                    el("code", { textContent: id }),
+                    ` · ${badges[id].configured ? "own layout" : "on the default"}`))
+
+  const footer = el("footer", null, forget)
+  if (id !== whose) {
+    const configure = el("button", { type: "button", className: "small add",
+                                     textContent: "Configure" })
+    configure.onclick = () => switchTo(id).catch((error) => toast(error.message, true))
+    footer.append(configure)
+  }
+  box.append(footer)
+  return box
+}
+
+async function rename(id, name) {
+  const result = await api(`/api/badges/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  })
+  badges[id].name = result.name
+  renderWhose()
+  renderBadges()
+  toast("Renamed")
 }
 
 // -- pairing ---------------------------------------------------------------

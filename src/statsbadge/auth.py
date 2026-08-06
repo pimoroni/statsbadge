@@ -332,6 +332,20 @@ class Store:
             self.save()
             return secret
 
+    def rename(self, badge_id, name):
+        """A name somebody chose for a badge, or its id back when they clear it.
+
+        A badge announces itself by whatever its own setup screen was told, which is its id
+        until somebody names it - and two badges on one host then read the same.
+        """
+        with self._lock:
+            record = self.badges.get(badge_id)
+            if record is None:
+                return False
+            record["name"] = name or badge_id
+            self.save()
+            return True
+
     def forget(self, badge_id):
         with self._lock:
             if self.badges.pop(badge_id, None) is None:
