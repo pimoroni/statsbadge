@@ -405,7 +405,7 @@ def short_unit(field):
     """
     if field.endswith("_bps"):
         return "B/s"
-    if field in ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores"):
+    if field == "cores" or field == "pct" or field.endswith("_pct"):
         return "%"
     if field == "temp":
         return "°C"

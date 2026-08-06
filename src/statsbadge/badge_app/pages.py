@@ -134,6 +134,16 @@ SCALE = {
 # per-core page drew bare numbers and scaled its graph from the data.
 PERCENT = ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores")
 
+
+def is_percent(field):
+    """Whether a reading is already 0-100, so nothing has to say where full is.
+
+    By suffix as well as by name: the model's own percentages carry `_pct` and it is the
+    convention a source adding a group of its own is asked to follow, there being nothing
+    else the badge could read it off.
+    """
+    return field in PERCENT or field.endswith("_pct")
+
 # Fields where a high reading is the good one, so the ramp is read backwards to colour them.
 # The ramp runs calm to alarming and almost everything here is a load or a temperature, but a
 # battery at 100% is not a machine in trouble.
@@ -181,7 +191,7 @@ def fraction_of(ref, value, page=None, frame=None):
     field = ref.split(".")[-1]
     if page and page.get("max"):
         top = float(page["max"])
-    elif field in PERCENT or field.endswith("_pct"):
+    elif is_percent(field):
         top = 100.0
     else:
         # A peak wherever the host sent one: it tracks a throughput, and whatever else a
@@ -308,7 +318,7 @@ def _graph(page, frame, history, theme):
     labels = [(name_for(ref), ref.split(".")[-1]) for ref in refs]
     field = refs[0].split(".")[-1] if refs else "pct"
     maximum = float(page["max"]) if page.get("max") else (
-        100.0 if field in PERCENT else None)
+        100.0 if is_percent(field) else None)
     draw.graph(theme, series, labels, maximum, shift=_walk())
 
 
@@ -542,7 +552,7 @@ def _series_for(ref, frame, history, page=None):
     peak = None
     if page and page.get("max"):
         peak = float(page["max"])
-    elif ref.split(".")[-1] in PERCENT:
+    elif is_percent(ref.split(".")[-1]):
         peak = 100.0
     if peak is None:
         peak = max((p for p in points if p is not None), default=1.0)

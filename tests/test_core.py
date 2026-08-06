@@ -1046,7 +1046,7 @@ def test_a_declared_group_is_offered_kept_and_recorded(h):
             "cached_pct": {"label": "Cached %", "unit": "%", "percent": True},
         }}}
 
-        def sample(self, frame, dt):
+        def sample(self, frame, _dt):
             frame["site"] = {"hits": 40.0, "cached_pct": 62.0}
 
     collector = h.service.collector
