@@ -331,12 +331,11 @@ function pageCard(page, index) {
     return renderPages()
   }
 
+  // The title is the handle: a card holds a text field and two pickers, and dragging it
+  // from anywhere meant dragging it out from under whichever one was being used.
+  const kind = el("h3", { textContent: page.kind, title: "Drag to reorder" })
   const item = el("li", null,
-                  el("header", null,
-                     el("span", { className: "grip", textContent: "⠇" }),
-                     el("h3", { textContent: page.kind }),
-                     toggle,
-                     remove),
+                  el("header", null, kind, toggle, remove),
                   el("label", { htmlFor: titleId, textContent: "Title" }),
                   title)
 
@@ -350,38 +349,59 @@ function pageCard(page, index) {
     item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
   }
 
-  reorderable(item, config.pages, index, "page")
+  reorderable(item, config.pages, index, { tag: "page", along: "x", handle: kind })
   return item
 }
 
 /** Drag one of `items` to another place in it.
  *
- * The tag names the list a drag came from. A page card is draggable and so are the slots
- * inside it, so without one a slot dropped on its own card would reorder the pages; the
- * events are stopped on the way up for the same reason.
+ * The tag names the list a drag came from. A page card is draggable and so are the rows
+ * inside it, so without one a row dropped on its own card would reorder the pages; the
+ * events are stopped on the way up for the same reason. `along` is the axis the list runs,
+ * which decides both which half of an item counts as before it and which edge is marked,
+ * and a `handle` is what has to be held for the drag to start at all.
  */
-function reorderable(node, items, index, tag) {
-  node.draggable = true
+function reorderable(node, items, index, { tag, along, handle }) {
+  node.draggable = !handle
+  if (handle) {
+    handle.onpointerdown = () => { node.draggable = true }
+    handle.onpointerup = () => { node.draggable = false }
+  }
   node.ondragstart = (event) => {
     event.stopPropagation()
     node.dataset.dragging = ""
     event.dataTransfer.setData("text/plain", `${tag}:${index}`)
   }
-  node.ondragend = () => delete node.dataset.dragging
+  node.ondragend = () => {
+    node.draggable = !handle
+    delete node.dataset.dragging
+    delete node.dataset.over
+  }
   node.ondragover = (event) => {
     event.preventDefault()
     event.stopPropagation()
-    node.dataset.over = ""
+    const box = node.getBoundingClientRect()
+    node.dataset.over = (along === "x"
+      ? event.clientX < box.left + box.width / 2
+      : event.clientY < box.top + box.height / 2) ? "before" : "after"
   }
-  node.ondragleave = () => delete node.dataset.over
+  // Only on the way out of the whole item: moving over a select inside it is a leave too.
+  node.ondragleave = (event) => {
+    if (!node.contains(event.relatedTarget)) delete node.dataset.over
+  }
   node.ondrop = (event) => {
     event.preventDefault()
     event.stopPropagation()
+    const after = node.dataset.over === "after"
     delete node.dataset.over
     const [from, at] = event.dataTransfer.getData("text/plain").split(":")
     const moved = parseInt(at, 10)
-    if (from !== tag || Number.isNaN(moved) || moved === index) return
-    items.splice(index, 0, items.splice(moved, 1)[0])
+    if (from !== tag || Number.isNaN(moved)) return
+    // Where it lands once it has been lifted out, which shifts everything after it down.
+    let target = after ? index + 1 : index
+    if (moved < target) target -= 1
+    if (target === moved) return
+    items.splice(target, 0, items.splice(moved, 1)[0])
     markDirty()
     renderPages()
   }
@@ -411,7 +431,7 @@ function slotList(page, shape) {
                    el("span", { className: "grip", textContent: "⠇" }),
                    refSelect(ref, poolFor(shape.manyPool), (value) => { current[slot] = value }),
                    drop)
-    reorderable(row, current, slot, "slot")
+    reorderable(row, current, slot, { tag: "slot", along: "y" })
     rows.push(row)
   })
 

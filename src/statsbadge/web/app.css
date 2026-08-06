@@ -232,25 +232,33 @@ main > section > ol {
   }
 
   li[data-dragging] { opacity: 0.4; }
-  li[data-over] { box-shadow: inset 3px 0 0 var(--accent); }
+
+  /* Where it will land: down the edge a card would go beside, across the edge a row would
+     go above or below. */
+  > li[data-over="before"] { box-shadow: inset 3px 0 0 var(--accent); }
+  > li[data-over="after"] { box-shadow: inset -3px 0 0 var(--accent); }
+  ol li[data-over="before"] { box-shadow: inset 0 3px 0 var(--accent); }
+  ol li[data-over="after"] { box-shadow: inset 0 -3px 0 var(--accent); }
   > li > :is(header, p, ol) { grid-column: 1 / -1; }
   > li > label { grid-column: 1; }
   > li > input { grid-column: 2 / -1; }
   > li > p { margin: 0; }
 
   header { display: flex; align-items: center; gap: 8px; }
-  header h3 { flex: 1; margin: 0; }
+  header h3 { flex: 1; margin: 0; cursor: grab; user-select: none; }
+  header h3:active { cursor: grabbing; }
 
   header h3::before {
     content: counter(page);
     color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums;
   }
 
-  .grip { cursor: grab; color: var(--dim); user-select: none; }
+  ol .grip { cursor: grab; color: var(--dim); user-select: none; }
+  ol .grip:active { cursor: grabbing; }
   header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
 
   ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  ol li { display: flex; gap: 6px; align-items: center; }
+  ol li { display: flex; gap: 6px; align-items: center; padding: 3px 0; }
   ol li select { flex: 1; }
 
   ol li select:first-of-type { flex: 0 1 40%; max-width: 150px; color: var(--dim);
