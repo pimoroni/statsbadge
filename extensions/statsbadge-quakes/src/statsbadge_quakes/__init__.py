@@ -44,7 +44,20 @@ ORDERS = {"recent": "time", "biggest": "magnitude"}
 
 class Quakes(Source):
     name = "quakes"
+    label = "Earthquakes"
     provides = ("quakes",)
+
+    # The scalars, for a page that wants a number rather than a map. `events` is not in
+    # here on purpose: it is the list the map draws from, and nothing else can draw it, so
+    # offering it as a field would put a row of Python in a text page.
+    #
+    # Slow, because it is: the feed is asked every five minutes and the badge polls every
+    # second. Which only works because `age_s` below is drawn to the minute.
+    groups = {"quakes": {"label": "Earthquakes", "slow": True, "fields": {
+        "biggest": {"label": "Largest magnitude", "full_scale": 9.0},
+        "latest": {"label": "Latest magnitude", "full_scale": 9.0},
+        "count": {"label": "How many"},
+    }}}
 
     badge_module = os.path.join(HERE, "badge", "quakemap.py")
 
@@ -149,13 +162,19 @@ class Quakes(Source):
         """Whatever the fetcher has already brought back. Nothing here touches the network."""
         with self._lock:
             records = list(self._records)
-        now = time.time()
+        # Aged against the minute just gone rather than against this instant. The badge
+        # never draws an age finer than a minute, and this group is declared slow, so what
+        # matters is how often the set *changes*: rounding each age to its own minute is
+        # ten events crossing ten boundaries at ten unrelated moments, which moved the
+        # revision about ten times a minute. Moving the clock instead moves all of them
+        # together, once, and the whole feed goes out once a minute instead of sixty times.
+        now = int(time.time()) // 60 * 60
         events = []
         for record in records:
-            # The age is what the badge draws and the timestamp is only what it is worked out
-            # from, so the timestamp stays here: the set is sent again every second.
+            # The age is what the badge draws and the timestamp is only what it is worked
+            # out from, so the timestamp stays here.
             event = dict(record)
-            event["age_s"] = max(0, int(now - event.pop("at")))
+            event["age_s"] = max(0, now - event.pop("at"))
             events.append(event)
         frame["quakes"] = {
             "events": events,

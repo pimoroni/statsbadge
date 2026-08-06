@@ -1096,7 +1096,7 @@ def test_a_slow_group_travels_only_when_it_changes(h):
     collector = h.service.collector
     collector.extensions.append(feed)
     collector.sample_once()
-    assert collector.slow_groups() == {"feed"}, collector.slow_groups()
+    assert "feed" in collector.slow_groups(), collector.slow_groups()
 
     def stats(query=""):
         status, body = h.signed("GET", f"/v1/stats{query}")

@@ -302,18 +302,23 @@ class Collector:
         """Which fields this host actually produced, for the config UI to offer.
 
         Derived from the live frame, not from what a source claims, so a laptop with
-        no fan header does not offer a fan page.
+        no fan header does not offer a fan page. For a group the model does not define it
+        is both: in the frame, and named in the declaration. A source may put anything in
+        its own group - the quake feed carries the events its page draws from - and only
+        what it declared is a reading somebody can point a dial at.
         """
         frame = self.latest()
         declared = self._declared()
         available = {}
         for group in list(model.GROUPS) + sorted(declared):
             value = frame.get(group)
+            offered = (declared.get(group) or {}).get("fields")
             if isinstance(value, list):
                 if value:
                     available[group] = sorted({k for item in value for k in item})
             elif isinstance(value, dict) and value:
-                available[group] = sorted(value)
+                available[group] = sorted(value if offered is None
+                                          else (key for key in value if key in offered))
         described = model.describe()
         _merge_declared(described, declared)
         return {

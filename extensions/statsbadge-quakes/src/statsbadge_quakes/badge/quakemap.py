@@ -64,7 +64,10 @@ def _mag_fraction(mag):
 def _ago(seconds):
     if seconds is None:
         return None
-    if seconds < 90:
+    # A minute, because the host sends the age to the minute: it is the same set of events
+    # for a whole one, and rounding there is what lets the feed travel only when it moves.
+    # At 90 the first minute of an event read as "just now" for half of the next one too.
+    if seconds < 60:
         return "just now"
     if seconds < 5400:
         return f"{int(seconds / 60)}m ago"
