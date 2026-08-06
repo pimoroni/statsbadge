@@ -39,19 +39,25 @@
   <section aria-label="Pages">
     <form>
       <select aria-label="Page kind">
-        <option value="dial">Dial</option>
-        <option value="dials">Gauges</option>
-        <option value="bars">Bars</option>
-        <option value="graph">Graph</option>
-        <option value="grid">Grid</option>
-        <option value="text">Text</option>
-        <option value="rings">Rings</option>
-        <option value="spark">Sparklines</option>
-        <option value="radar">Radar</option>
-        <option value="trend">Trend</option>
-        <option value="waterfall">Waterfall</option>
-        <option value="notify">Notifications</option>
-        <option value="badge">Badge</option>
+        <optgroup label="Gauges">
+          <option value="dial">Dial</option>
+          <option value="dials">Gauges</option>
+          <option value="rings">Rings</option>
+          <option value="radar">Radar</option>
+        </optgroup>
+        <optgroup label="Plots">
+          <option value="graph">Graph</option>
+          <option value="trend">Trend</option>
+          <option value="spark">Sparklines</option>
+          <option value="waterfall">Waterfall</option>
+        </optgroup>
+        <optgroup label="Readouts">
+          <option value="bars">Bars</option>
+          <option value="grid">Grid</option>
+          <option value="text">Text</option>
+          <option value="notify">Notifications</option>
+          <option value="badge">Badge</option>
+        </optgroup>
       </select>
       <button type="submit">Add page</button>
     </form>

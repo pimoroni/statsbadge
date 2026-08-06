@@ -332,9 +332,9 @@ function pageCard(page, index) {
   const item = el("li", { draggable: true },
                   el("h3", { textContent: page.kind }),
                   el("header", null,
-                     el("span", { className: "grip", textContent: "⠇" }),
                      toggle,
                      title,
+                     el("span", { className: "grip", textContent: "⠇" }),
                      remove))
 
   if (open) {
@@ -425,13 +425,17 @@ function newPage(kind) {
   return page
 }
 
-/** Add the installed extensions' pages to the kind picker, which only lists the built-ins. */
+/** Add the installed extensions' pages to the kind picker, which lists the built-ins in
+ * groups of its own. */
 function offerExtensionPages() {
   const picker = pick("main form select")
-  for (const page of caps.extension_pages || []) {
-    if ([...picker.options].some((option) => option.value === page.kind)) continue
-    picker.append(el("option", { value: page.kind, textContent: page.title || page.kind }))
-  }
+  const offered = (caps.extension_pages || []).filter(
+    (page) => ![...picker.options].some((option) => option.value === page.kind))
+  if (!offered.length) return
+  const group = picker.querySelector("optgroup[label=\"Extensions\"]")
+    || picker.appendChild(el("optgroup", { label: "Extensions" }))
+  group.append(...offered.map(
+    (page) => el("option", { value: page.kind, textContent: page.title || page.kind })))
 }
 
 /** Tell the user when a page they configured will not appear on the badge. */
