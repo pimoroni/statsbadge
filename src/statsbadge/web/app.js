@@ -1420,10 +1420,6 @@ async function boot() {
       textContent: `Cannot reach the server: ${error.message}` }))
     return
   }
-  const sys = (await api("/api/stats")).sys || {}
-  pick("#local p").textContent =
-    `${sys.host || "host"} · ${sys.os || ""} · ${sys.cpu_name || ""}`
-
   offerExtensionPages()
   renderWhose()
   renderPages()

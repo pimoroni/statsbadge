@@ -54,9 +54,6 @@ h2, h3 {
   color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase;
 }
 
-h2 small, h3 small { letter-spacing: 0; text-transform: none;
-                     font-variant-numeric: tabular-nums; }
-
 p { margin: 0 0 8px; color: var(--dim); font-size: var(--text-sm); }
 
 small { color: var(--dim); font-size: var(--text-sm); }
