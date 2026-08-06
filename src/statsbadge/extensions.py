@@ -141,6 +141,22 @@ def model_groups(sources):
     return declared
 
 
+def group_owners(sources):
+    """Which source each declared group came from, by the name the UI should head it with.
+
+    A picker groups the sources it offers by whoever provides them, and the frame is flat:
+    `cf_pinout_xyz` says nothing about being Cloudflare's. Only the groups an extension
+    declared are in here, so anything missing is the host measuring itself.
+    """
+    owners = {}
+    for source in sources:
+        name = getattr(source, "name", "ext")
+        label = getattr(source, "label", None) or name.replace("_", " ").title()
+        for group in (getattr(source, "groups", None) or {}):
+            owners[group] = label
+    return owners
+
+
 def settings_schema(sources):
     """What each loaded extension can be told, keyed by extension name.
 

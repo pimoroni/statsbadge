@@ -34,6 +34,12 @@ def readable(exc):
 class Source:
     name = "source"
 
+    # What the config UI heads this source's groups with, where `name` does not read as a
+    # title: "cloudflare" is a package and "Cloudflare" is what it is called. One source
+    # contributing many groups is what makes this worth saying - the picker heads them all
+    # with this and lists the groups under it. Without one the name is titled.
+    label = None
+
     # Which groups this source can contribute to, for the config UI's benefit.
     provides = ()
 

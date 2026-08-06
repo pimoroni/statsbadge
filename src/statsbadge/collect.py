@@ -238,6 +238,9 @@ class Collector:
             ],
             # What has a history ring. A graph of anything else can only draw the live
             # value twice, which is a flat line whatever the machine is doing.
+            # Which extension each declared group belongs to, so a picker can head them
+            # with it. Only the declared ones: what is not in here is this host.
+            "group_source": extensions.group_owners(self.extensions),
             "graphed": [f"{group}.{field}"
                         for group, field in _GRAPHED + self._extra("graphed")],
             "series_fields": [f"{group}.{field}"

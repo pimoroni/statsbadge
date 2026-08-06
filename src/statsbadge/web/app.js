@@ -154,6 +154,16 @@ function groupLabel(group) {
   return (caps.group_labels || {})[group] || group;
 }
 
+// What the sources this host measures itself with are listed under. Not "System", which is
+// what the `sys` group is already called: that would head a list with a heading its own
+// last entry repeats.
+const HOST_SOURCE = "This host";
+
+/** Who provides a group, for the heading it goes under. */
+function sourceLabel(group) {
+  return (caps.group_source || {})[group] || HOST_SOURCE;
+}
+
 function fieldLabel(ref) {
   const [group, field] = ref.split(".");
   const labels = (caps.field_labels || {})[group] || {};
@@ -187,12 +197,30 @@ function refSelect(value, refs, onChange) {
   const chosen = String(value || options[0] || "").split(".")[0];
   const source = document.createElement("select");
   source.className = "group";
+  // Under whoever provides them, since an extension watching six domains would otherwise
+  // bury this host's own readings in a list of names with nothing saying what they are.
+  const byOwner = new Map();
   for (const group of byGroup.keys()) {
-    const option = document.createElement("option");
-    option.value = group;
-    option.textContent = groupLabel(group);
-    if (group === chosen) option.selected = true;
-    source.appendChild(option);
+    const owner = sourceLabel(group);
+    if (!byOwner.has(owner)) byOwner.set(owner, []);
+    byOwner.get(owner).push(group);
+  }
+  // The host first whatever it is called, since most pages are made of it, and the
+  // extensions after it in the order their groups arrived - which is alphabetical.
+  const owners = [...byOwner.keys()].sort(
+    (a, b) => (a === HOST_SOURCE ? -1 : 0) - (b === HOST_SOURCE ? -1 : 0));
+  for (const owner of owners) {
+    const groups = byOwner.get(owner);
+    const holder = document.createElement("optgroup");
+    holder.label = owner;
+    for (const group of groups) {
+      const option = document.createElement("option");
+      option.value = group;
+      option.textContent = groupLabel(group);
+      if (group === chosen) option.selected = true;
+      holder.appendChild(option);
+    }
+    source.appendChild(holder);
   }
 
   const select = document.createElement("select");
