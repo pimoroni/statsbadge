@@ -3272,6 +3272,32 @@ def test_an_api_key_is_masked_until_it_is_asked_for(_h):
 
 
 @check
+def test_a_number_setting_is_held_to_its_bounds(_h):
+    """What a reading is counted in, and how far it can go, are the extension's to declare.
+
+    The browser stops the spinner and marks a field out of range, but a value typed straight
+    into one still arrives, so the floor is held to on this side as well. It said "Seconds"
+    and why in a note under the field before, which is neither enforceable nor brief.
+    """
+    schema = {"thing": [{"key": "every", "type": "number", "min": 60, "max": 3600,
+                         "unit": "seconds"},
+                        {"key": "loose", "type": "number"}]}
+
+    def stored(settings):
+        return layout.validate({**layout.DEFAULT_CONFIG, "settings": {"thing": settings}},
+                               (), schema)["settings"]["thing"]
+
+    assert stored({"every": 5, "loose": 5}) == {"every": 60.0, "loose": 5.0}
+    assert stored({"every": 9999, "loose": 9999}) == {"every": 3600.0, "loose": 9999.0}
+    assert stored({"every": 120, "loose": None}) == {"every": 120.0, "loose": None}
+
+    # And the UI draws one as a number rather than as text, so the bounds are on the field.
+    ui = (pathlib.Path("src/statsbadge/web") / "app.js").read_text()
+    assert 'setting.type === "number"' in ui, "a number setting is still a text box"
+    assert "setting.unit" in ui, "nowhere to put what it is counted in"
+
+
+@check
 def test_a_notifications_page_sorts_messages_from_counters(_h):
     """One slot list holding two sorts of thing, told apart by looking at the reading.
 

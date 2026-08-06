@@ -147,7 +147,9 @@ main > section section:not(:has(> section)) {
   > label { grid-column: 1; }
   > label:has(+ input[type="checkbox"]) { grid-column: 1 / 3; }
   > select { grid-column: 2 / -1; justify-self: start; max-width: 100%; }
-  > input[type="text"] { grid-column: 2 / -1; }
+  > :is(input[type="text"], input[type="number"]) { grid-column: 2 / -1; }
+  > input[type="number"]:has(+ small) { grid-column: 2; }
+  > input[type="number"] + small { grid-column: 3; }
   > input[type="range"] { grid-column: 2; width: 100%; }
   > input[type="checkbox"] { grid-column: 3; justify-self: end; margin: 0; }
   > output { grid-column: 3; justify-self: end; }
@@ -179,7 +181,7 @@ button {
   &.danger:hover { background: var(--bad); color: #fff; }
 }
 
-select, input[type="text"] {
+select, input[type="text"], input[type="number"] {
   background: var(--panel2); color: var(--ink); border: 0;
   padding: 6px 8px; font: inherit; min-width: 0;
 }

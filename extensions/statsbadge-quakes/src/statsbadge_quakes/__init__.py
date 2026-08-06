@@ -63,14 +63,14 @@ class Quakes(Source):
 
     settings = (
         {"key": "min_mag", "label": "Smallest magnitude", "type": "number",
-         "default": 4.0,
+         "default": 4.0, "min": 0, "max": 10, "step": 0.1,
          "hint": "Below about 4 the feed fills up with events nobody felt: there are "
                  "several thousand a month"},
-        {"key": "count", "label": "How many", "type": "number", "default": 10,
+        {"key": "count", "label": "How many", "type": "number", "default": 10, "min": 1,
          "hint": "How many events the map cycles through, newest first"},
         {"key": "order", "label": "Show the", "type": "choice",
          "options": ["recent", "biggest"], "default": "recent",
-         "hint": "recent is the last few hours, biggest is the largest of the past month"},
+         "hint": "Recent is the last few hours, biggest is the largest of the past month"},
     )
 
     # No field slots: the renderer draws from its own group and never reads `fields`.
@@ -82,8 +82,9 @@ class Quakes(Source):
     }
 
     page_settings = (
-        {"key": "hold", "label": "Seconds each", "type": "number", "default": 6,
-         "hint": "How long the map stays on one quake before travelling to the next"},
+        {"key": "hold", "label": "Each quake", "type": "number", "default": 6, "min": 1,
+         "unit": "seconds",
+         "hint": "How long the map stays on one before travelling to the next"},
     )
 
     @classmethod

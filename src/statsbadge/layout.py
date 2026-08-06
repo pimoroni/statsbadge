@@ -545,9 +545,16 @@ def _coerce_setting(value, entry):
         if value is None or value == "":
             return None
         try:
-            return float(value)
+            number = float(value)
         except (TypeError, ValueError):
             return None
+        # A browser's own min and max stop the spinner and mark the field, but a value typed
+        # straight in still reaches here, so a declared floor is held to on this side.
+        if entry.get("min") is not None:
+            number = max(float(entry["min"]), number)
+        if entry.get("max") is not None:
+            number = min(float(entry["max"]), number)
+        return number
     if kind == "choice":
         options = [str(option) for option in entry.get("options", ())]
         text = "" if value is None else str(value)

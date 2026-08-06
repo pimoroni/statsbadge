@@ -630,6 +630,16 @@ function settingRow(stored, setting, options) {
   if (setting.type === "bool") {
     input = el("input", { type: "checkbox", id, checked: !!current })
     input.onchange = () => { stored[setting.key] = input.checked; markDirty() }
+  } else if (setting.type === "number") {
+    // The bounds are the browser's to enforce while it is being typed; the host clamps what
+    // arrives, a typed value being able to leave the field out of range.
+    input = el("input", { type: "number", id, min: setting.min, max: setting.max,
+                          step: setting.step,
+                          value: current === null || current === undefined ? "" : current })
+    input.oninput = () => {
+      stored[setting.key] = input.value === "" ? null : Number(input.value)
+      markDirty()
+    }
   } else if (setting.type === "choice") {
     input = el("select", { id }, (setting.options || []).map(
       (option) => el("option", { value: option, textContent: option,
@@ -652,7 +662,9 @@ function settingRow(stored, setting, options) {
       markDirty()
     }
   }
-  return [label, input]
+  // What it is counted in, where saying so in the hint would be saying it twice.
+  return setting.unit ? [label, input, el("small", { textContent: setting.unit })]
+                      : [label, input]
 }
 
 // -- look and buttons ------------------------------------------------------

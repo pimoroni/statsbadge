@@ -124,8 +124,10 @@ class Clock(Source):
          "hint": "A town or city, and a country if the name is a common one: Sheffield, "
                  "or Sheffield, US. Weather stays off until somewhere is set"},
         {"key": "latitude", "label": "Default latitude", "type": "number",
+         "min": -90, "max": 90, "step": 0.001, "unit": "degrees",
          "hint": "Instead of the name, for a spot no name lands on"},
-        {"key": "longitude", "label": "Default longitude", "type": "number"},
+        {"key": "longitude", "label": "Default longitude", "type": "number",
+         "min": -180, "max": 180, "step": 0.001, "unit": "degrees"},
         {"key": "units", "label": "Temperature", "type": "choice",
          "options": ["celsius", "fahrenheit"], "default": "celsius"},
         {"key": "wind_units", "label": "Wind speed", "type": "choice",
@@ -150,8 +152,10 @@ class Clock(Source):
          "hint": "Where this page shows. Its weather and its local time both follow "
                  "from it. Empty falls back to the default place"},
         {"key": "latitude", "label": "Latitude", "type": "number",
+         "min": -90, "max": 90, "step": 0.001, "unit": "degrees",
          "hint": "Instead of the name, for a spot no name lands on"},
-        {"key": "longitude", "label": "Longitude", "type": "number"},
+        {"key": "longitude", "label": "Longitude", "type": "number",
+         "min": -180, "max": 180, "step": 0.001, "unit": "degrees"},
         {"key": "face", "label": "Face", "type": "choice",
          "options": ["railway", "dots", "squircle", "digital", "lcd"],
          "default": "railway",
