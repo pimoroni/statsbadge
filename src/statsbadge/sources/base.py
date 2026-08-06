@@ -52,6 +52,8 @@ class Source:
     #   options   the allowed values, for "choice"
     #   default   what it is worth when nothing is stored
     #   hint      a line of explanation, optional
+    #   secret    an API key or token: the UI keeps it masked behind a button rather than
+    #             leaving it on a page that is open on a desk all day
     #
     # A source with no settings declares none and gets no section in the UI. Anything
     # not declared here cannot be set from the UI, only from --extension.

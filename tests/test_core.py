@@ -3107,6 +3107,30 @@ def test_the_version_is_written_down_once(_h):
 
 
 @check
+def test_an_api_key_is_masked_until_it_is_asked_for(_h):
+    """The config page sits open on a desk all day, and a token is readable across a room.
+
+    Masked rather than hidden: "not set" and "set to the wrong one" have to be told apart,
+    and the first few characters are what somebody checking would recognise.
+    """
+    ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
+          / "app.js").read_text()
+    assert "function masked(" in ui and "Edit secrets" in ui
+    # A secret does not go in the ordinary run of rows, or it would be on screen anyway
+    assert "if (setting.secret) continue;" in ui, "a secret is still drawn with the rest"
+    # Reopened by name, so a redraw does not close the box under someone's typing
+    assert "editingSecrets" in ui
+
+    # Whatever declares one is stored and coerced like any other setting: masking is the
+    # UI's business, and the host has to hand the value back or it could not be edited.
+    schema = {"thing": [{"key": "api_token", "type": "text", "secret": True}]}
+    stored = layout.validate({**layout.DEFAULT_CONFIG,
+                              "settings": {"thing": {"api_token": "sekrit"}}},
+                             (), schema)["settings"]
+    assert stored["thing"] == {"api_token": "sekrit"}, stored
+
+
+@check
 def test_a_notifications_page_sorts_messages_from_counters(_h):
     """One slot list holding two sorts of thing, told apart by looking at the reading.
 

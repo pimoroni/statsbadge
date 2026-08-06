@@ -545,7 +545,9 @@ function extensionBox(extension, settings) {
   if (!settings.length) return box;
   config.settings[extension.name] = config.settings[extension.name] || {};
   const stored = config.settings[extension.name];
+  const secrets = settings.filter((setting) => setting.secret);
   for (const setting of settings) {
+    if (setting.secret) continue;
     box.appendChild(settingRow(stored, setting));
     if (setting.hint) {
       const hint = document.createElement("p");
@@ -554,10 +556,77 @@ function extensionBox(extension, settings) {
       box.appendChild(hint);
     }
   }
+  if (secrets.length) box.appendChild(secretsBlock(extension.name, stored, secrets));
   return box;
 }
 
-function settingRow(stored, setting) {
+// How much of a secret is shown, and the most x's drawn after it. Enough to tell which key
+// is in there without putting the key on the screen: a token is what somebody would be
+// checking, and they know their own first few characters.
+const SECRET_SHOWN = 6;
+const SECRET_MAX = 18;
+
+/** A stored secret as something safe to leave on screen. */
+function masked(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  if (!text) return "not set";
+  const shown = text.slice(0, SECRET_SHOWN);
+  return shown + "x".repeat(Math.max(4, Math.min(SECRET_MAX, text.length - shown.length)));
+}
+
+// Which extensions have their secrets open for editing. Module level, so a redraw - and
+// capabilities refresh after a save is one - does not close the box under the typing.
+const editingSecrets = new Set();
+
+/** The API keys, masked behind a button.
+ *
+ * They are the one setting worth not leaving on screen: the page is open on a desk, and a
+ * token is readable from across a room in a way a latitude is not. Masked rather than
+ * hidden, because "not set" and "set to the wrong one" have to be told apart, and the first
+ * few characters are what somebody checking would recognise.
+ */
+function secretsBlock(name, stored, secrets) {
+  const block = document.createElement("div");
+  block.className = "secrets";
+  const open = editingSecrets.has(name);
+
+  if (open) {
+    for (const setting of secrets) {
+      block.appendChild(settingRow(stored, setting, { reveal: true }));
+      if (setting.hint) {
+        const hint = document.createElement("p");
+        hint.className = "hint";
+        hint.textContent = setting.hint;
+        block.appendChild(hint);
+      }
+    }
+  } else {
+    for (const setting of secrets) {
+      const row = document.createElement("div");
+      row.className = "kv";
+      const label = document.createElement("span");
+      label.textContent = setting.label || setting.key;
+      const value = document.createElement("span");
+      const held = stored[setting.key];
+      value.className = held ? "mask" : "mask none";
+      value.textContent = masked(held);
+      row.append(label, value);
+      block.appendChild(row);
+    }
+  }
+
+  const button = document.createElement("button");
+  button.className = "small";
+  button.textContent = open ? "Hide secrets" : "Edit secrets";
+  button.onclick = () => {
+    if (open) editingSecrets.delete(name); else editingSecrets.add(name);
+    renderSettings();               // not markDirty: opening a box changes nothing
+  };
+  block.appendChild(button);
+  return block;
+}
+
+function settingRow(stored, setting, options) {
   const label = document.createElement("label");
   const name = document.createElement("span");
   name.className = "name";
@@ -586,6 +655,15 @@ function settingRow(stored, setting) {
     input = document.createElement("input");
     input.type = "text";
     input.value = current === null || current === undefined ? "" : current;
+    if (setting.secret) {
+      // Shown in full, since the whole of asking to edit these is to read one back and
+      // replace it - the masked line above is what stops it being on screen the rest of
+      // the time. Kept out of autofill and the spellchecker, neither of which has any
+      // business with a token.
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.placeholder = (options && options.reveal) ? "paste the key here" : "";
+    }
     // Empty means unset, which is not the same as zero: a latitude of 0 is the equator.
     input.oninput = () => {
       stored[setting.key] = input.value === "" ? null : input.value;

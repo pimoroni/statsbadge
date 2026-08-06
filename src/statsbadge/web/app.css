@@ -216,6 +216,16 @@ header .pairing { position: absolute; top: 100%; right: 20px; width: 340px;
 .boxes .col .hint { margin: 0 0 6px; }
 .boxes .col .hint.bad { color: var(--bad); }
 
+/* An extension's API keys, kept off the screen until asked for. A masked line rather than
+   nothing, so "not set" and "set to the wrong one" can be told apart. */
+.secrets { grid-column: 1 / -1; border-left: 2px solid var(--line);
+           padding: 8px 0 4px 10px; margin: 2px 0 8px; }
+.secrets .kv { display: flex; justify-content: space-between; gap: 10px;
+               font-size: 12px; padding: 2px 0; }
+.secrets .mask { font-family: ui-monospace, monospace; color: var(--dim); }
+.secrets .mask.none { font-style: italic; }
+.secrets button { margin-top: 6px; }
+
 /* -- sources, settings and live ---------------------------------------- */
 
 .sources { font-size: 12px; color: var(--dim); }
