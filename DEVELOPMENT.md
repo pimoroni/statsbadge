@@ -297,7 +297,7 @@ The page costs 35ms on the frame it first appears, 44ms on the one after, and 24
 
 A picture is cropped to the block it goes in and never scaled: two messages to a page leave 78px for one 96 tall and three leave 52, and the pixels are palette indices, so halfway between two of them is a third colour rather than a blend of the two. A band from the middle, the crop that made the picture having put what matters there, and none at all below the height a band stops being a picture.
 
-Pillow is an extra rather than a dependency. A JPEG decoder is the one part of this not worth writing, and it is a large thing to carry on a host that shows no pictures, so `imaging.available()` is what a source asks before offering one at all.
+Pillow is a dependency. A JPEG decoder is the one part of this not worth writing, and the badge is the display - a host with no screen of its own is the ordinary case here, not the one that never shows a picture.
 
 **A group whose readings change slower than the badge polls travels only when it changes.** Six Cloudflare domains took a frame from 832 bytes to 3947, all of it standing still between the host's own fetches: a reading fetched once a minute was sent sixty times. So a group can declare itself `slow`, and `/v1/stats?have=<rev>` leaves those out for a badge that already holds that revision, or sends them under `slow` when it does not. The revision comes from comparing the slow half with what it last was rather than from a clock, because only the source knows when its readings moved - and a peak travels with them, being worked out from the reading it scales. Measured over the signed endpoint: 3947 bytes a second to 2271, and what is left of that is the quakes feed doing the same thing with a 300 second refresh.
 

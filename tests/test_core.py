@@ -3202,11 +3202,9 @@ def test_a_picture_is_cropped_to_what_is_in_it(_h):
     What travels is indices on a ramp the badge assigns, not colours: one image then suits
     every badge whatever theme it is on, and the host never has to know which.
     """
-    from statsbadge import imaging
-
-    if not imaging.available():
-        return                  # the images extra is not installed here
     from PIL import Image
+
+    from statsbadge import imaging
 
     # A wide picture with everything happening down the right-hand end. A crop by the middle
     # would take the flat grey, which on a photograph is the wall behind the subject.

@@ -336,14 +336,12 @@ wheels = [
 name = "statsbadge"
 source = { editable = "." }
 dependencies = [
+    { name = "pillow" },
     { name = "psutil" },
     { name = "pyserial" },
 ]
 
 [package.optional-dependencies]
-images = [
-    { name = "pillow" },
-]
 nvidia = [
     { name = "nvidia-ml-py" },
 ]
@@ -361,11 +359,11 @@ fonts = [
 [package.metadata]
 requires-dist = [
     { name = "nvidia-ml-py", marker = "extra == 'nvidia'", specifier = ">=12" },
-    { name = "pillow", marker = "extra == 'images'", specifier = ">=10" },
+    { name = "pillow", specifier = ">=10" },
     { name = "psutil", specifier = ">=5.9" },
     { name = "pyserial", specifier = ">=3.5" },
 ]
-provides-extras = ["images", "nvidia"]
+provides-extras = ["nvidia"]
 
 [package.metadata.requires-dev]
 dev = [

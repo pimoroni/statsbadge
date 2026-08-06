@@ -15,7 +15,6 @@ Each tile is drawn on that theme's own background with its ink beside it, becaus
 is only ever seen on a page: shades that look fine on white can disappear on the page they
 are actually going on.
 
-Needs `statsbadge[images]` for the decoding, the same as `imaging` itself.
 """
 
 import argparse
@@ -162,12 +161,10 @@ def main(argv=None):
                              "instead of a sheet")
     args = parser.parse_args(argv)
 
-    if not imaging.available():
-        return "install statsbadge[images] - Pillow does the decoding"
     data = pathlib.Path(args.picture).read_bytes() if args.picture else test_card()
     if args.cards:
         write_cards(data)
-        return None
+        return
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -199,7 +196,6 @@ def main(argv=None):
         loudest = max(derive.oklch(tuple(rgb))[1]
                       for rgb in palette["image"][str(wanted[-1])])
         print(f"  {name:20} {share:13.2f} {loudest:16.3f}")
-    return None
 
 
 if __name__ == "__main__":

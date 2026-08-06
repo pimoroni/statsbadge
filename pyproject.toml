@@ -18,6 +18,10 @@ license-files = ["LICENSE", "licences/*.txt"]
 requires-python = ">=3.11"
 dependencies = [
     "psutil>=5.9",
+    # Decoding a feed's pictures for `imaging`. A JPEG decoder is the one part of this not
+    # worth writing, and the badge is the display: a host with no screen of its own is the
+    # ordinary case here, not the one that shows no pictures.
+    "pillow>=10",
     # Finding the badge's port and talking to its REPL. Not an extra: `statsbadge install`
     # is how a badge is set up, so it has to work from a plain install.
     "pyserial>=3.5",
@@ -36,10 +40,6 @@ classifiers = [
 [project.optional-dependencies]
 # NVIDIA cards, via the same library nvidia-smi uses.
 nvidia = ["nvidia-ml-py>=12"]
-# Turning a feed's pictures into something a badge can hold, in `imaging`. An extra because
-# a JPEG decoder is the one part of it not worth writing and Pillow is a large thing to carry
-# on a host that shows no pictures; `imaging.available()` is what a source asks first.
-images = ["pillow>=10"]
 
 [project.urls]
 Homepage = "https://github.com/pimoroni/statsbadge"

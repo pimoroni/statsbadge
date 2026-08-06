@@ -16,9 +16,7 @@ same colours as the page around it. A source that quantised to a theme's colours
 be sending the wrong ones to the second badge.
 
 Pillow does the decoding, which is the one part not worth writing: a JPEG decoder is not a
-weekend. It is an extra rather than a dependency - `statsbadge[images]` - so a host that
-never shows a picture does not carry it, and `available()` is what a source asks before
-offering one.
+weekend.
 """
 
 import struct
@@ -67,32 +65,12 @@ class ImagingError(Exception):
     """A picture that could not be turned into a thumbnail, as one line."""
 
 
-def available():
-    """Whether this host can process a picture at all.
-
-    Asked by a source before it offers one: without the extra there is no decoder, and a
-    feed's images should be quietly absent rather than a fault on every fetch.
-    """
-    try:
-        import PIL.Image  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def thumbnail(data, preset="low", orientation="landscape"):
     """`data` as an indexed PNG of the chosen preset. Bytes in, bytes out.
 
-    Raises `ImagingError` for anything that is not a picture this can read, which includes
-    the extra not being installed - a caller that wants to degrade quietly asks `available()`
-    first and does not offer an image at all.
+    Raises `ImagingError` for anything that is not a picture this can read.
     """
-    try:
-        from PIL import Image
-    except ImportError:
-        raise ImagingError(
-            "install statsbadge[images] to show pictures - Pillow does the decoding"
-        ) from None
+    from PIL import Image
 
     if (preset, orientation) not in SIZES:
         raise ImagingError(f"no such size: {preset} {orientation}")
