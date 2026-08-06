@@ -3106,6 +3106,57 @@ def test_the_version_is_written_down_once(_h):
 
 
 @check
+def test_a_plugin_wanting_a_newer_statsbadge_is_explained(_h):
+    """uv resolves the whole tool environment at once, so an extension asking for a newer
+    statsbadge either takes the tool up with it or fails - and which one depends on whether
+    the tool was installed with a pin. Both were measured against real wheels in a throwaway
+    UV_TOOL_DIR; what is checked here is that uv's prose comes out as something to act on.
+
+    Its own last line is "your requirements are unsatisfiable", which is true of every
+    resolution failure and says nothing about the versions - and the versions are the whole
+    of it. uv wraps its prose to the terminal, so the phrase spans the fold."""
+    from statsbadge import tooling
+
+    said = (
+        "  × No solution found when resolving dependencies:\n"
+        "  ╰─▶ Because all versions of statsbadge-cloudflare depend on\n"
+        "      statsbadge>=1.1.0 and you require statsbadge==1.0.0, we can conclude\n"
+        "      that your requirements and all versions of statsbadge-cloudflare are\n"
+        "      incompatible.\n"
+        "      And because you require statsbadge-cloudflare, we can conclude that your\n"
+        "      requirements are unsatisfiable.\n")
+    line = tooling.explain(said)
+    assert line == ("statsbadge-cloudflare needs statsbadge>=1.1.0, and this tool is "
+                    "installed as statsbadge==1.0.0"), line
+    # And the extension is named, so the caller can tell a plugin just asked for from one
+    # that was already in the list.
+    assert tooling.blamed(line) == "statsbadge-cloudflare", tooling.blamed(line)
+    assert tooling.blamed(said) == "statsbadge-cloudflare"
+
+    # The fix is to let statsbadge move, which means dropping the pin the tool carries.
+    assert tooling.unpinned("statsbadge==1.0.0") == "statsbadge"
+    assert tooling.unpinned("statsbadge[nvidia]>=1.0") == "statsbadge[nvidia]"
+    # Nothing to relax: a checkout resolves to whatever is in it, and no pin is no pin.
+    assert tooling.unpinned("statsbadge") is None
+    assert tooling.unpinned("/home/someone/statsbadge") is None
+    assert tooling.unpinned("statsbadge[nvidia]") is None
+
+    # A name that is not a package is still answered as one, and not as a version clash.
+    assert tooling.explain("error: Because nosuchthing was not found in the package "
+                           "registry and you require nosuchthing, we can conclude that "
+                           "your requirements are unsatisfiable.") == (
+        "no such package: nosuchthing")
+
+    # The command offered has to rebuild what is there now, so nothing already installed is
+    # dropped by the fix for something that was not.
+    with tempfile.TemporaryDirectory() as directory:
+        tooling.write_wanted(directory, ["statsbadge-clock"])
+        argv = tooling.install_argv("statsbadge", directory)
+        assert "--with-requirements" in argv, argv
+        assert tooling.wanted_path(directory) in argv, argv
+
+
+@check
 def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs(_h):
     """Installed against a host too old, `groups` and `series` are read by nothing.
 

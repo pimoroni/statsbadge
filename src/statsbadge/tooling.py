@@ -17,6 +17,7 @@ printed here, and `--verbose` hands the terminal back to uv for when the reason 
 is not used: nothing would record it, so the next `uv tool upgrade` would drop it again.
 """
 
+import importlib.metadata
 import os
 import re
 import shutil
@@ -172,6 +173,33 @@ def install_argv(base, config_dir, fresh=False):
     return argv
 
 
+def unpinned(base):
+    """`statsbadge==1.0.0` as `statsbadge`, or None where there is no pin to drop.
+
+    Only a registry requirement: a path install resolves to whatever is in the checkout, so
+    there is nothing to relax, and a URL is already exact on purpose.
+    """
+    if not base or any(mark in base for mark in "/\\"):
+        return None
+    loosened = re.split(r"[=<>!~]", base, maxsplit=1)[0].strip()
+    return loosened if loosened and loosened != base else None
+
+
+def installed_version(name="statsbadge", prefix=None):
+    """What version of `name` is in the environment on disk, or None.
+
+    Read from the environment rather than from this process, because the point of asking is
+    to notice that a rebuild moved it: `uv tool install` resolves the whole environment at
+    once, so an extension asking for a newer statsbadge takes the tool with it.
+    """
+    site = importlib.metadata.MetadataPathFinder()
+    context = importlib.metadata.DistributionFinder.Context(
+        name=name, path=[p for p in sys.path if (prefix or sys.prefix) in p])
+    for distribution in site.find_distributions(context):
+        return distribution.version
+    return None
+
+
 def quoted(argv):
     """The command as a line someone can paste."""
     return " ".join(f'"{part}"' if " " in part else part for part in argv)
@@ -203,22 +231,37 @@ def on_index(requirement, timeout=4.0):
 
 
 def blamed(said):
-    """The package that could not be found, out of uv's own words or out of `explain`'s.
+    """The package that could not be installed, out of uv's own words or out of `explain`'s.
 
     Both, because the caller has the explained line and not the original: `explain` is what
     turns a resolver's paragraph into something worth printing, and the name survives it.
     """
     said = said or ""
-    summarised = re.search(r"no such package: (\S+)", said)
-    if summarised:
-        return summarised.group(1)
-    found = MISSING.search(said)
-    return found.group(1) if found else None
+    for pattern in (r"no such package: (\S+)", r"^(\S+) needs "):
+        summarised = re.search(pattern, said, re.M)
+        if summarised:
+            return summarised.group(1)
+    for pattern in (MISSING, CONFLICT):
+        found = pattern.search(_collapsed(said))
+        if found:
+            return found.group(1)
+    return None
+
+
+def _collapsed(said):
+    """One line, since uv wraps its prose to the terminal and a phrase spans the fold."""
+    return " ".join((said or "").split())
 
 
 # uv's answer when a name is not a package. Its resolver explains itself at length, and the
 # useful part is the name.
 MISSING = re.compile(r"Because (\S+) was not found in the package registry")
+
+# And its answer when an extension wants a statsbadge this tool cannot have, which is what
+# a plugin built against a newer host looks like from here. Three things are worth keeping:
+# which extension, what it asks for, and what this tool is pinned to.
+CONFLICT = re.compile(
+    r"Because (?:all versions of )?(\S+) depends? on (\S+) and you require (\S+?)[,\s]")
 
 
 def run_install(base, config_dir, fresh=False, verbose=False):
@@ -247,9 +290,18 @@ def run_install(base, config_dir, fresh=False, verbose=False):
 def explain(said):
     """uv's complaint as one line, or the name of whatever does not exist."""
     said = (said or "").strip()
-    missing = MISSING.search(said)
+    flat = _collapsed(said)
+    missing = MISSING.search(flat)
     if missing:
         return f"no such package: {missing.group(1)}"
+    # An extension built against a newer statsbadge than this tool is pinned to. Worth
+    # translating rather than passing on: uv's own last line is "your requirements are
+    # unsatisfiable", which is true of every resolution failure and says nothing about the
+    # versions, and the versions are the whole of it.
+    clash = CONFLICT.search(flat)
+    if clash:
+        wants, needs, held = clash.groups()
+        return f"{wants} needs {needs}, and this tool is installed as {held}"
     for line in said.splitlines():
         if line.startswith("error: "):
             return line[len("error: "):]

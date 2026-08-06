@@ -2,6 +2,7 @@
 
 import argparse
 import getpass
+import importlib
 import json
 import os
 import sys
@@ -591,9 +592,16 @@ def _change_extensions(args, verb):
     tooling.write_wanted(directory, wanted)
     doing = "installing" if verb != "remove" else "removing"
     print(f"{doing} {', '.join(tooling.short_name(r) for r in changed or wanted)}...")
+    # uv resolves the whole environment at once, so an extension asking for a newer
+    # statsbadge takes the tool with it. That is the right answer and a quiet one.
+    was = tooling.installed_version()
     ok, why = tooling.run_install(base, directory, fresh=verb != "add",
                                   verbose=args.verbose)
     if ok:
+        importlib.invalidate_caches()
+        now = tooling.installed_version()
+        if was and now and was != now:
+            print(f"statsbadge itself moved {was} to {now}: an extension asked for it.")
         print("done. Run `statsbadge install` to push any badge-side code they ship.")
         return 0
 
@@ -603,6 +611,19 @@ def _change_extensions(args, verb):
     else:
         tooling.forget_wanted(directory)
     print(why, file=sys.stderr)
+    # An extension wanting a statsbadge newer than this tool is pinned to. The fix is not to
+    # take it out, it is to let statsbadge move: the list is back to what it was, so the
+    # command below rebuilds exactly what is there now, unpinned.
+    loosened = tooling.unpinned(base) if "needs statsbadge" in why else None
+    if loosened:
+        print(f"  this tool was installed as {base}, so statsbadge cannot move. Unpin it, "
+              f"then add again:", file=sys.stderr)
+        print(f"    {tooling.quoted(tooling.install_argv(loosened, directory))}",
+              file=sys.stderr)
+        for requirement in changed:
+            print(f"    statsbadge ext add {tooling.short_name(requirement)}",
+                  file=sys.stderr)
+        return 1
     # uv names one package, and it need not be one of the ones just asked for: the rebuild
     # installs the whole list, so an entry that was already there and cannot be installed fails
     # every add until it is taken out. Saying which is which is the difference between a message
