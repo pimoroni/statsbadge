@@ -799,13 +799,6 @@ function renderTint() {
   second.value = config.accent_b || "same"
   second.onchange = () => { config.accent_b = second.value; markDirty(); renderTint() }
 
-  // What the ramp does is the difference between the two pairs, so the hint says which.
-  pick("p[data-tint]").textContent = (caps.bold || []).includes(config.theme)
-    ? "The rest of the palette is worked out from this colour, and the ramp stays in its hue, "
-      + "sweeping from a dark version through it to a pale one."
-    : "The rest of the palette is worked out from this colour, and the ramp travels to red "
-      + "unless the colour is already there."
-
   const accents = pick("div[data-tint]")
   accents.replaceChildren()
   if (tinted) {
