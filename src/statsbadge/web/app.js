@@ -747,12 +747,18 @@ function renderCaseLights() {
 }
 
 function renderButtons() {
-  // The badge's own first, being the ones that need no host at all.
+  // What the badge answers itself, then what it asks this host to run. An empty group would
+  // draw its own heading over nothing.
+  const groups = [
+    ["Badge", (caps.local_actions || []).map(
+      (local) => el("option", { value: local.action, textContent: titleCase(local.label) }))],
+    ["Local", caps.commands.map(
+      (name) => el("option", { value: name, textContent: titleCase(name) }))],
+  ].filter(([, options]) => options.length)
+
   const offered = [
     el("option", { value: "", textContent: "Nothing" }),
-    ...(caps.local_actions || []).map((local) => el("option", {
-      value: local.action, textContent: `${titleCase(local.label)} (on the badge)` })),
-    ...caps.commands.map((name) => el("option", { value: name, textContent: titleCase(name) })),
+    ...groups.map(([label, options]) => el("optgroup", { label }, options)),
   ]
   for (const which of ["a", "b", "c"]) {
     const select = $(`btn-${which}`)
