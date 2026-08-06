@@ -223,27 +223,23 @@ main > section > ol {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
   gap: 10px; align-items: start;
 
-  > li { background: var(--panel); padding: 12px var(--pad); }
+  > li { background: var(--panel); padding: var(--pad); }
   > li[data-dragging] { opacity: 0.4; }
   > li[data-over] { box-shadow: inset 3px 0 0 var(--accent); }
 
-  header { display: flex; align-items: center; gap: 8px; }
-
-  header::before {
+  > li > h3::before {
     content: counter(list-item);
-    color: var(--dim); font-size: var(--text-sm);
-    font-variant-numeric: tabular-nums; min-width: 1.5em; text-align: right;
+    color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums;
   }
 
-  header small { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  > li > p { margin: 10px 0 0; }
+
+  header { display: flex; align-items: center; gap: 8px; }
   header input { flex: 1; }
   header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
   header .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
 
-  > li > p { margin: 0; padding: 0 4px 0 52px;
-             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+  ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
   ol li { display: flex; gap: 6px; align-items: center; }
   ol li select { flex: 1; }
 

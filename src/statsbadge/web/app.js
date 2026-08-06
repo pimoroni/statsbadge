@@ -330,10 +330,10 @@ function pageCard(page, index) {
   }
 
   const item = el("li", { draggable: true },
+                  el("h3", { textContent: page.kind }),
                   el("header", null,
                      el("span", { className: "grip", textContent: "⠇" }),
                      toggle,
-                     el("small", { textContent: page.kind }),
                      title,
                      remove))
 
