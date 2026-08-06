@@ -323,8 +323,9 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 .accents {
   .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
 
-  .tabs button { flex: 1; padding: 4px 2px; font-size: var(--text-sm); color: var(--dim);
-                 background: var(--panel2); border-bottom: 2px solid transparent; }
+  .tabs button { flex: 1; padding: 0.4rem 0.5rem; font-size: var(--text-md);
+                 color: var(--dim); background: var(--panel2);
+                 border-bottom: 2px solid transparent; }
 
   .tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--accent); }
   .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
