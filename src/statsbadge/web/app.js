@@ -1330,8 +1330,12 @@ function renderSources() {
 
 /** What an extension offers, as one string, so a change in it can be noticed cheaply. */
 function capsSignature() {
+  // What each source is complaining about, and not how many times: a source failing every
+  // poll counts one a second, and a signature that moved with it would redraw the whole
+  // page - `/api/preview` and all - once a second for as long as it was broken.
+  const faults = (caps.sources || []).map((source) => [source.name, source.last_fault]);
   return JSON.stringify([caps.available, caps.extension_settings, caps.graphed,
-                         caps.group_source, caps.extension_pages]);
+                         caps.group_source, caps.extension_pages, faults]);
 }
 
 /** Refetch capabilities and redraw if what the host offers has changed.
