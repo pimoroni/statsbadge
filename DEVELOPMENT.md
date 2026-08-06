@@ -213,6 +213,8 @@ Two things it turns on. `screen` is a *builtin*, so it is rebound for the offscr
 | Host, text | 10.2ms |
 | Swiss clock | 14.2ms |
 | At a glance, six sparklines | 28.4ms |
+| Notifications, two messages and four counters | 34.9ms |
+| Notifications, one message and a picture | 17.7ms |
 | page turn, cold caches | 37.5ms |
 | nothing changed | 0ms |
 
@@ -286,6 +288,10 @@ python3 tools/make_text_font.py build/fonts/DSEG7Classic-Bold.ttf \
 **A picture travels as indices, and the theme owns the colours.** `imaging.thumbnail` takes what a feed sent and returns a small indexed PNG: a content weighted crop, levelled, ordered dithered, at 2 or 4 bits a pixel. Measured on a 357KB attachment, 708 bytes at 64x48 in four shades and 3.0KB at 128x96 in eight, which is 944 and 4.0KB once base64'd into a frame - affordable only because a message is in a slow group and travels when it changes. Ordered dithering rather than diffused for the same reason: at four levels diffusion is a field of noise that differs everywhere between two nearly identical pictures, so every frame would be a new one to send.
 
 The palette in the file is a grey ramp and is not the point. The badge assigns its theme's greys over the top - `img.palette[0:n] = ramp` recolours every pixel indexing it in one write - so one picture suits every badge whatever theme it is on, and a source quantising to a theme's colours here would be sending the wrong ones to the second badge. What makes that work is that `derive.image_ramp` places the levels at **fixed OKLCH lightnesses**, 0.16 to 0.94, the same on every palette: the host dithers knowing nothing about which theme will draw the result, so index 2 of four has to mean the same brightness everywhere. Both level counts travel, index 2 of four and index 2 of eight being different brightnesses. The theme's own `ramp` is no use for this - it goes calm to alarming, and a photograph drawn in it is a heat map.
+
+Measured on the badge with `tools/notify_probe.py`, which is the only way to check the half the host cannot: that an indexed PNG decodes on the firmware, that its table comes back the size the bit depth says, and that writing the theme's shades into it recolours the picture. A table is sized by the depth and **not** by how many colours the file carries - "1/2/4/8 bits index 2/4/16/256 entries" - so eight shades at four bits arrive in a table of sixteen, and `draw.shades_for` takes the largest ramp that fits rather than one keyed on the table's length.
+
+The page costs 50ms on the frame it first appears, 80ms on the one after, and 34.9ms settled. That middle frame is the label cache doing what it is for: a string is drawn live on its first sighting and baked into a sprite on its second, so the second draw of a page pays for every sprite on it at once. Nothing here animates, so what a reader sees is one 35ms hitch a poll.
 
 Pillow is an extra rather than a dependency. A JPEG decoder is the one part of this not worth writing, and it is a large thing to carry on a host that shows no pictures, so `imaging.available()` is what a source asks before offering one at all.
 

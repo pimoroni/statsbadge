@@ -1254,7 +1254,10 @@ def wrap(text_value, size, room, rows):
     # long reads as cut off rather than as having stopped mid-sentence.
     used = sum(len(part.split()) for part in out)
     if used < len(words) and out:
-        out[-1] = fit(out[-1] + " " + " ".join(words[used:]), size, room)
+        # One word past the fold, not the whole of what is left: either overflows the line
+        # by the same amount as far as the reader is concerned, and the ellipsis lands in
+        # the same place.
+        out[-1] = fit(f"{out[-1]} {words[used]}", size, room)
     else:
         out = [fit(part, size, room) for part in out]
     return out
@@ -1298,6 +1301,20 @@ def notification(theme, items, counters):
 PICTURE_GAP = 8
 
 
+def shades_for(theme, entries):
+    """The ramp to write into an indexed image's table of `entries`.
+
+    A table is sized by the file's bit depth and not by how many colours it carries - 1/2/4/8
+    bits index 2/4/16/256 entries - so a picture of eight shades at four bits arrives in a
+    table of sixteen. The largest ramp that fits is the picture's own; the entries past it
+    are left alone, nothing indexing them.
+    """
+    if entries in theme.image:
+        return theme.image[entries]
+    fits = [count for count in theme.image if count <= entries]
+    return theme.image[max(fits)] if fits else None
+
+
 def picture(theme, data):
     """An indexed image off the wire, in this theme's greys. None if it will not decode.
 
@@ -1321,7 +1338,7 @@ def picture(theme, data):
         return None
     table = img.palette
     if table:
-        greys = theme.image.get(len(table))
+        greys = shades_for(theme, len(table))
         if greys:
             img.palette[0:len(greys)] = greys
     if len(_pictures) >= PICTURE_CACHE:
@@ -1460,10 +1477,18 @@ def fit(text, size, room):
     """
     if screen.measure_text(text, font_size=size)[0] <= room:
         return text
-    cut = text
-    while cut and screen.measure_text(cut + "...", font_size=size)[0] > room:
-        cut = cut[:-1]
-    return (cut + "...") if cut else text
+    # Halving rather than a character at a time: a string is only ever wider the longer it
+    # gets, so the longest prefix that fits can be found in a handful of measurements
+    # instead of one per character trimmed. A post cut from 160 characters to 35 is eight
+    # measurements against a hundred and twenty five.
+    low, high = 0, len(text)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if screen.measure_text(text[:middle] + "...", font_size=size)[0] <= room:
+            low = middle
+        else:
+            high = middle - 1
+    return (text[:low] + "...") if low else text
 
 
 # How long a toast takes to go, and how much of that is left when the fade starts. It holds

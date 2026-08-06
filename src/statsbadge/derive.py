@@ -339,17 +339,14 @@ def _bold_ramp(lightness, chroma, hue, shape):
 # in the screen rather than a dark patch.
 IMAGE_DARK = 0.16
 IMAGE_LIGHT = 0.94
-# How colourful a picture is: the same share of what its hue can hold that the theme's own
-# accent takes of its. Not a fixed chroma, which was the first attempt and came out grey -
-# 0.03 is 17% of the limit in the midtones, where the eye reads a tint, so every theme
-# rendered the same near-neutral picture whatever its accent was. A share instead means a
-# picture is as colourful as the theme is: `luminescence` takes 0.91 of its green and gets a
-# phosphor screen, `mono` has a grey accent at 0.00 and gets a grey picture, which is the
-# convention it exists for. The level is still the information; the hue is whose screen it is.
+# How colourful a picture is: the share of what its hue can hold that the theme's own accent
+# takes of its. So `luminescence` takes 0.91 of its green and gets a phosphor screen, and
+# `mono` has a grey accent at 0.00 and gets a grey picture, which is the convention it exists
+# for. The level is the information; the hue is whose screen it is on.
 #
-# Taken against the hue's own limit at each lightness rather than as one number, because how
-# much chroma a hue can hold varies enormously along the scale - so the ends come out near
-# neutral on their own, which is what a monochrome display does with its blacks and whites.
+# Against the hue's limit at each lightness rather than one number for the ramp: how much
+# chroma a hue can hold varies enormously along the scale, so the ends come out near neutral
+# on their own, which is what a monochrome display does with its blacks and whites.
 
 # The level counts `imaging` produces. Both travel, because index 2 of four and index 2 of
 # eight are different brightnesses: a badge cannot work one out from the other, and having it

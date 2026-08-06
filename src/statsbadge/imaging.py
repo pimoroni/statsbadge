@@ -129,9 +129,7 @@ def _best_crop(grey, aspect):
     width, height = grey.size
     if width <= 0 or height <= 0:
         raise ImagingError("the image has no pixels")
-    # Wider than what is wanted means the width is what gets cut, and the full height is
-    # kept. Backwards, this asks for a window bigger than the picture, which clamps to the
-    # whole of it and crops nothing at all.
+    # Wider than what is wanted means the width is what gets cut, keeping the full height.
     if width / height > aspect:
         want_w, want_h = int(round(height * aspect)), height
     else:
