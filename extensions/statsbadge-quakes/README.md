@@ -6,8 +6,6 @@ Recent earthquakes on a world map, for [statsbadge](https://github.com/pimoroni/
 
 The page cycles through the set on its own, closing in on each event and pulling back out to cross an ocean. Rings leave the epicentre in the magnitude's own colour off the theme ramp, so how big it was is something you can read at a glance from across the room. Under the map: the magnitude, where it was, how deep and how long ago.
 
-It is ambient. There is nothing to press.
-
 Events come from [USGS](https://earthquake.usgs.gov/fdsnws/event/1/), which needs no key and no account.
 
 ## Install
