@@ -11,6 +11,7 @@ badge's builtins.
 import ast
 import pathlib
 import sys
+import tomllib
 
 WANTED = (
     "__init__.py",
@@ -24,19 +25,32 @@ WANTED = (
     "worldmap.py",
 )
 
-# Names the badge injects into builtins from `badgeware`, plus the app's own modules.
-BADGE_GLOBALS = {
-    "screen", "display", "badge", "image", "shape", "brush", "color", "font",
-    "vec2", "rect", "mat3", "tween", "State", "text", "clamp", "rnd", "frnd",
-    "file_exists", "is_dir", "rtc", "run", "launch", "reset", "fatal_error",
-    "loop", "HIRES", "LORES", "VSYNC", "LEFT", "CENTER", "RIGHT", "TOP",
-    "MIDDLE", "BOTTOM", "CLIP", "ELLIPSES",
-    # badgeware.badge sets these on builtins, so dir(builtins) does not list them.
-    "BUTTON_A", "BUTTON_B", "BUTTON_C", "BUTTON_UP", "BUTTON_DOWN", "BUTTON_HOME",
-}
+# The names the badge injects into builtins are written down in the ruff config, so ruff
+# does not flag them, grouped there by the firmware module each comes from. That list is
+# the one this reads: a second copy is a second thing to remember when the firmware gains
+# a builtin, and the failure it hides is a NameError on the badge months later.
+RUFF_CONFIG = pathlib.Path(__file__).resolve().parent.parent / "ci" / "ruff.toml"
+
+
+def badge_globals(config=RUFF_CONFIG):
+    """The injected names, or a fault string if the ruff config cannot be read."""
+    try:
+        with config.open("rb") as handle:
+            names = tomllib.load(handle).get("builtins")
+    except OSError as exc:
+        return f"cannot read {config}: {exc.strerror}"
+    except tomllib.TOMLDecodeError as exc:
+        return f"{config}: {exc}"
+    if not names:
+        return f"{config}: no `builtins` list to take the badge's injected names from"
+    return set(names)
 
 
 def main(app):
+    injected = badge_globals()
+    if isinstance(injected, str):
+        return injected
+
     if not app.is_dir():
         return f"no such directory: {app}"
 
@@ -49,7 +63,7 @@ def main(app):
             tree = ast.parse(path.read_text(), filename=str(path))
         except SyntaxError as exc:
             return f"{path}:{exc.lineno}: {exc.msg}"
-        fault = check_names(path, tree)
+        fault = check_names(path, tree, injected)
         if fault:
             return fault
         print(f"parsed {path}")
@@ -62,7 +76,7 @@ def main(app):
 
 
 
-def check_names(path, tree):
+def check_names(path, tree, injected):
     """Catch a name that is neither defined here, imported, nor a badge builtin.
 
     Worth doing because these modules cannot be imported on the host to find out,
@@ -70,7 +84,7 @@ def check_names(path, tree):
     """
     import builtins
 
-    defined = set(dir(builtins)) | BADGE_GLOBALS | {"__name__", "__file__"}
+    defined = set(dir(builtins)) | injected | {"__name__", "__file__"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:

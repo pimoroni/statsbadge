@@ -3280,46 +3280,26 @@ def test_a_notifications_page_sorts_messages_from_counters(_h):
 
 
 @check
-def test_a_message_is_wrapped_to_the_lines_it_has(_h):
-    """A feed sends whatever length it sends, and the page has two or three lines for it.
+def test_a_message_shortens_the_way_the_firmware_does(_h):
+    """A post is whatever length it is and the block has room for two or three lines.
 
-    Split on spaces and measured: a proportional font has no character count that means
-    anything, a line of capitals being half again the width of the same count in lowercase.
+    The firmware flows and truncates - `screen.text` takes a rect and an overflow - so this
+    checks the page asks for that rather than reimplementing it: doing it here is a
+    `measure_text` a word to find the breaks and another per character to trim the last
+    line, in Python, on every draw. Measured on a Tufty, that was the page at 34.9ms
+    settled against 24.8 for the same page drawn by the firmware.
     """
-    sys.path.insert(0, install.app_source_dir())
-    import draw
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    body = source[source.index("def flow("):source.index("def picture(")]
+    assert "overflow=ELLIPSES" in body, "the page is not asking for the truncation"
+    assert "screen.measure_text(" not in body, "still measuring text to lay it out"
+    assert "def wrap(" not in source, "the hand-rolled wrapper is still here"
 
-    class Measuring:
-        """Enough `screen` to measure a string. Half the point size per character, which is
-        an approximation of a proportional font and exact enough to decide where a line
-        breaks; what a glyph really measures is the badge's business."""
-
-        @staticmethod
-        def measure_text(text, font_size=17):
-            return (len(text) * font_size * 0.5, font_size)
-
-    was = getattr(builtins, "screen", None)
-    builtins.screen = Measuring
-    try:
-        # Ten characters a line at this size, so the breaks are countable by hand
-        assert draw.wrap("one two three four", 20, 100, 3) == ["one two", "three four"]
-        assert draw.wrap("short", 20, 100, 2) == ["short"]
-        assert draw.wrap("", 20, 100, 2) == []
-        assert draw.wrap(None, 20, 100, 2) == []
-
-        # What does not fit is said with an ellipsis rather than stopping mid-sentence
-        cut = draw.wrap("one two three four five six", 20, 100, 2)
-        assert len(cut) == 2 and cut[-1].endswith("..."), cut
-
-        # A word longer than the line goes on one of its own rather than being broken: what
-        # arrives here is a URL about as often as it is a long word.
-        alone = draw.wrap("hi averyveryverylongwordindeed", 20, 100, 2)
-        assert alone[0] == "hi", alone
-    finally:
-        if was is None:
-            del builtins.screen
-        else:
-            builtins.screen = was
+    # `fit` is still needed for a single line - a name beside a time - and halves rather
+    # than trimming a character per measurement.
+    fitting = source[source.index("def fit("):]
+    fitting = fitting[:fitting.index("\n\n\n")]
+    assert "low, high" in fitting and "middle" in fitting, "fit is back to one at a time"
 
 
 @check

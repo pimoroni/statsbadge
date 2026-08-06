@@ -213,8 +213,8 @@ Two things it turns on. `screen` is a *builtin*, so it is rebound for the offscr
 | Host, text | 10.2ms |
 | Swiss clock | 14.2ms |
 | At a glance, six sparklines | 28.4ms |
-| Notifications, two messages and four counters | 34.9ms |
-| Notifications, one message and a picture | 17.7ms |
+| Notifications, two messages and four counters | 24.8ms |
+| Notifications, one message and a picture | 15.2ms |
 | page turn, cold caches | 37.5ms |
 | nothing changed | 0ms |
 
@@ -291,7 +291,9 @@ The palette in the file is a grey ramp and is not the point. The badge assigns i
 
 Measured on the badge with `tools/notify_probe.py`, which is the only way to check the half the host cannot: that an indexed PNG decodes on the firmware, that its table comes back the size the bit depth says, and that writing the theme's shades into it recolours the picture. A table is sized by the depth and **not** by how many colours the file carries - "1/2/4/8 bits index 2/4/16/256 entries" - so eight shades at four bits arrive in a table of sixteen, and `draw.shades_for` takes the largest ramp that fits rather than one keyed on the table's length.
 
-The page costs 50ms on the frame it first appears, 80ms on the one after, and 34.9ms settled. That middle frame is the label cache doing what it is for: a string is drawn live on its first sighting and baked into a sprite on its second, so the second draw of a page pays for every sprite on it at once. Nothing here animates, so what a reader sees is one 35ms hitch a poll.
+**The firmware flows text into a rect, so nothing here lays one out.** `screen.text` takes a rect and an `overflow`, wraps on words and truncates with an ellipsis. Doing that here is a `measure_text` a word to find the breaks and another per character to trim the last line, in Python, on every draw: measured, the same page is 34.9ms that way against 24.8 handing the rect over. Body text goes live rather than through the label cache, which keys on a string - a post is long, unique and read once, so a sprite of it is baked, blitted once and dropped. `fit` is still what shortens a single line, and halves rather than trimming a character per measurement.
+
+The page costs 35ms on the frame it first appears, 44ms on the one after, and 24.8ms settled. That middle frame is the label cache doing what it is for: a string is drawn live on its first sighting and baked into a sprite on its second, so the second draw of a page pays for every sprite on it at once. Nothing here animates, so what a reader sees is one 35ms hitch a poll.
 
 Pillow is an extra rather than a dependency. A JPEG decoder is the one part of this not worth writing, and it is a large thing to carry on a host that shows no pictures, so `imaging.available()` is what a source asks before offering one at all.
 

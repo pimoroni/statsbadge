@@ -1227,47 +1227,32 @@ def lines(theme, entries):
         screen.hspan(look.PAD, y - 5, look.W - look.PAD * 2)
 
 
-def wrap(text_value, size, room, rows):
-    """`text_value` broken over at most `rows` lines of `room` pixels, the last one fitted.
+def flow(text_value, size, pen, box, name=TEXT):
+    """A run of text filled into `box`, wrapped, with an ellipsis where it does not fit.
 
-    Split on spaces and measured, because a proportional font has no character count that
-    means anything: a line of capitals is half again the width of the same count in
-    lowercase. A word longer than the line is left to `fit` on its own line rather than
-    broken, since what arrives here is a URL about as often as it is a long word.
+    The firmware flows and truncates: `screen.text` takes a rect and an overflow. Doing it
+    here would be a `measure_text` a word to find the breaks and another per character to
+    trim the last line, in Python, on every draw.
+
+    Live rather than through the label cache, which keys on a string: a post is long,
+    unique and read once, so a sprite of it is baked, blitted once and dropped.
     """
-    words = (text_value or "").split()
-    if not words:
-        return []
-    out, line = [], ""
-    for word in words:
-        candidate = f"{line} {word}" if line else word
-        if line and screen.measure_text(candidate, font_size=size)[0] > room:
-            out.append(line)
-            if len(out) == rows:
-                break
-            line = word
-        else:
-            line = candidate
-    if len(out) < rows and line:
-        out.append(line)
-    # Whatever did not fit is said with an ellipsis on the last line, so a message that runs
-    # long reads as cut off rather than as having stopped mid-sentence.
-    used = sum(len(part.split()) for part in out)
-    if used < len(words) and out:
-        # One word past the fold, not the whole of what is left: either overflows the line
-        # by the same amount as far as the reader is concerned, and the ellipsis lands in
-        # the same place.
-        out[-1] = fit(f"{out[-1]} {words[used]}", size, room)
-    else:
-        out = [fit(part, size, room) for part in out]
-    return out
+    face = _fonts.get(name)
+    if face is None or not text_value:
+        return
+    was = screen.font
+    screen.font = face
+    try:
+        screen.pen = pen
+        screen.text(text_value, box, size, align=(LEFT, TOP), overflow=ELLIPSES)
+    finally:
+        screen.font = was
 
 
-# A message block: the line above it, the body, and how many rows of body a block gets when
-# there is one on the page against two. One message can afford to be read; two share the band.
+# A message block: the line naming it, and the body under it. How many lines of body there
+# is room for follows from the block's height, which the firmware works out as it flows.
 ITEM_TITLE = look.SIZE_SMALL
 ITEM_TEXT = look.SIZE_VALUE
-ITEM_ROWS = (3, 2, 1)
 # The strip of counters along the bottom, when a page has any.
 COUNT_H = 34
 
@@ -1288,10 +1273,9 @@ def notification(theme, items, counters):
         blit_label("nothing yet", ITEM_TEXT, theme.dim, look.W // 2,
                    (top + bottom) // 2 - 8, align=1)
         return
-    rows = ITEM_ROWS[min(len(items), len(ITEM_ROWS)) - 1]
     height = (bottom - top) // len(items)
     for index, item in enumerate(items):
-        _item_block(theme, item, top + index * height, height, rows)
+        _item_block(theme, item, top + index * height, height)
         if index:
             screen.pen = theme.grid
             screen.hspan(look.PAD, top + index * height, look.W - look.PAD * 2)
@@ -1347,7 +1331,7 @@ def picture(theme, data):
     return img
 
 
-def _item_block(theme, item, top, height, rows):
+def _item_block(theme, item, top, height):
     """One message: who it is from and how long ago, then what it says."""
     room = look.W - look.PAD * 2
     y = top + 6
@@ -1374,12 +1358,8 @@ def _item_block(theme, item, top, height, rows):
             blit_label(fit(note, ITEM_TITLE, room - used - 6), ITEM_TITLE, theme.dim,
                        left + used + 6, y)
         y += int(ITEM_TITLE * 1.45)
-    step = int(ITEM_TEXT * 1.35)
-    fits = max(1, min(rows, (top + height - y - 4) // step))
-    for line in wrap(str((item or {}).get("text") or ""), ITEM_TEXT,
-                     look.W - look.PAD - left, fits):
-        blit_label(line, ITEM_TEXT, theme.ink, left, y)
-        y += step
+    flow(str((item or {}).get("text") or ""), ITEM_TEXT, theme.ink,
+         rect(left, y, look.W - look.PAD - left, top + height - y - 4))
 
 
 def _counter_row(theme, counters, top, bottom):

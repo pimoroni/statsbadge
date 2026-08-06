@@ -1,0 +1,151 @@
+# What tools/callgraph.py reads. Everything project-specific lives here, so pointing the
+# tool at another codebase is an edit to this file and not to the code.
+#
+# A target is one tree plus how names resolve inside it. `flat` is the important one: the
+# badge app inserts its own directory on sys.path and imports its siblings by bare name,
+# so every file in a flat target shares one namespace. Without it the badge side comes
+# out as eleven disconnected modules and nothing says so.
+
+out = "build/callgraph"
+
+# Which packaging metadata to read Source subclasses out of.
+entry_points = ["extensions/*/pyproject.toml"]
+
+[[target]]
+name = "host"
+label = "Host (CPython)"
+lang = "cpython"
+roots = ["src/statsbadge"]
+exclude = ["**/badge_app/**"]
+# Runtime dependencies, so they are expected not to resolve to a file here.
+external_modules = ["psutil", "serial", "pynvml"]
+entrypoints = ["statsbadge.__main__:main"]
+# The stdlib calls these, so they start requests rather than being dead code.
+framework_entry = ["statsbadge.server:Handler.do_*"]
+
+[[target]]
+name = "ext"
+label = "Extensions (host)"
+lang = "cpython"
+roots = ["extensions/*/src"]
+exclude = ["**/badge/**", "**/*.egg-info/**"]
+
+[[target]]
+name = "badge"
+label = "Badge (MicroPython)"
+lang = "micropython"
+roots = ["src/statsbadge/badge_app", "extensions/*/src/statsbadge_*/badge"]
+# mpy/ is the precompiled build, holding a byte-identical copy of __init__.py.
+exclude = ["**/mpy/**"]
+flat = true
+builtins_from = "ci/ruff.toml"
+# Firmware modules the app imports by name rather than having injected, so they are
+# expected not to resolve to a file here.
+external_modules = ["wifi", "machine"]
+entrypoints = ["__init__:main", "__init__:on_exit"]
+# Drawing primitives are called from everywhere including the extensions, so an
+# unreferenced one here is API surface rather than dead code.
+library_modules = ["draw", "look", "worldmap"]
+
+# -- what things cost -------------------------------------------------------
+#
+# Microseconds, measured on the board and written down in DEVELOPMENT.md. These are what
+# separate the cost estimate from an invented complexity score, and every one has the line
+# it came from beside it.
+
+[price.badge]
+"shape.arc" = 1820            # a 270deg arc at r82 with a 20px band, :186
+"shape.circle" = 1760         # a solid disc of the same radius, :186
+"shape.custom" = 2430         # one series polyline of 50 points, :174
+"shape.rounded_rectangle" = 700   # 147x86, against 140 for the same box raster, :186
+"screen.text" = 1000          # a line of live text, :162
+"screen.blit" = 260           # a cached label sprite at 17pt, :165
+"screen.rectangle" = 140      # raster fill, 10ns a pixel, :186
+"screen.hspan" = 20
+"screen.vspan" = 20
+"screen.measure_text" = 60
+"brush.gradient" = 1700       # built from OKLCH stops, :183
+"color.ramp" = 850            # 65 steps in one call, :69
+"badge.update" = 7500         # the transfer, before vsync rounds the frame up, :164
+"badge.light_level" = 16      # :51
+"gc.collect" = 3900           # :47
+"gc.mem_free" = 44000         # walks the allocation table of 8MB of PSRAM, :47
+"os.uname" = 40000            # searched down sys.path on every call, :49
+"machine.freq" = 40000        # :49
+"image" = 45000               # drawing a whole page into an image, :199
+
+# The host is a PC, so nothing here is worth pricing individually.
+[price.host]
+
+[cost.badge]
+base = 10.0
+call = 8.0
+alloc = 20.0
+statement = 2.0
+loop_factor = 8.0
+
+[cost.host]
+base = 1.0
+call = 1.0
+alloc = 2.0
+statement = 0.3
+loop_factor = 8.0
+
+# Measured frame times, printed against the prediction on every run so a wrong model says
+# so straight away rather than looking convincing.
+[calibration.badge]
+"pages:_dial" = 18200         # the dial page, :191
+"pages:_dials" = 22100        # four gauges, :191
+"pages:_rings" = 27000        # the ring stack, :191
+
+# -- what to step through ---------------------------------------------------
+#
+# A scenario is one named walk from one starting point. `choose` pins a dispatch lookup to
+# a key, which is what makes these readable: without it a frame fires all fifteen page
+# renderers, and a frame draws one page.
+
+[[scenario]]
+name = "Badge launch"
+entry = "__init__:main"
+
+[[scenario]]
+name = "A frame, dial page"
+entry = "pages:render"
+choose = { "pages:_KINDS" = "dial" }
+
+[[scenario]]
+name = "A frame, four gauges"
+entry = "pages:render"
+choose = { "pages:_KINDS" = "dials" }
+
+[[scenario]]
+name = "A frame, waterfall"
+entry = "pages:render"
+choose = { "pages:_KINDS" = "waterfall" }
+
+[[scenario]]
+name = "A frame, the clock extension"
+entry = "pages:render"
+choose = { "pages:EXTRA" = "clockface" }
+
+[[scenario]]
+name = "A badge polls for a frame"
+entry = "statsbadge.server:Handler.do_GET"
+
+[[scenario]]
+name = "statsbadge install"
+entry = "statsbadge.__main__:cmd_install"
+
+# Edges no rule can find. `why` is required and shown verbatim in the detail panel, so the
+# graph explains its own non-obvious edges instead of just asserting them.
+[[hint]]
+kind = "resume"
+from = "net:Client.step"
+to = "net:Client._exchange"
+why = "A hand-rolled coroutine: _begin() stores self._gen = self._exchange(...) and step() drives it with next(self._gen) under a microsecond budget. The call edge is real; the control flow is inverted."
+
+[[hint]]
+kind = "call"
+from = "__init__:on_exit"
+to = "__init__:App.save_page"
+why = "Through the module-level _app singleton, which main() sets under `global _app`."
