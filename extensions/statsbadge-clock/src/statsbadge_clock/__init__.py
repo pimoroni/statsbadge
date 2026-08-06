@@ -121,9 +121,8 @@ class Clock(Source):
     # carries the explanation; coordinates are for pinning it exactly.
     settings = (
         {"key": "place", "label": "Default place", "type": "text",
-         "hint": "Used by any clock page that does not name its own. A town or city, "
-                 "and a country if the name is a common one: Sheffield, or "
-                 "Sheffield, US. Weather stays off until somewhere is set"},
+         "hint": "A town or city, and a country if the name is a common one: Sheffield, "
+                 "or Sheffield, US. Weather stays off until somewhere is set"},
         {"key": "latitude", "label": "Default latitude", "type": "number",
          "hint": "Instead of the name, for a spot no name lands on"},
         {"key": "longitude", "label": "Default longitude", "type": "number"},
