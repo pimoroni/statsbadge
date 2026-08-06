@@ -331,7 +331,7 @@ function pageCard(page, index) {
     return renderPages()
   }
 
-  const item = el("li", { draggable: true },
+  const item = el("li", null,
                   el("header", null,
                      el("span", { className: "grip", textContent: "⠇" }),
                      el("h3", { textContent: page.kind }),
@@ -350,24 +350,41 @@ function pageCard(page, index) {
     item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
   }
 
-  item.ondragstart = (event) => {
-    item.dataset.dragging = ""
-    event.dataTransfer.setData("text/plain", String(index))
+  reorderable(item, config.pages, index, "page")
+  return item
+}
+
+/** Drag one of `items` to another place in it.
+ *
+ * The tag names the list a drag came from. A page card is draggable and so are the slots
+ * inside it, so without one a slot dropped on its own card would reorder the pages; the
+ * events are stopped on the way up for the same reason.
+ */
+function reorderable(node, items, index, tag) {
+  node.draggable = true
+  node.ondragstart = (event) => {
+    event.stopPropagation()
+    node.dataset.dragging = ""
+    event.dataTransfer.setData("text/plain", `${tag}:${index}`)
   }
-  item.ondragend = () => delete item.dataset.dragging
-  item.ondragover = (event) => { event.preventDefault(); item.dataset.over = "" }
-  item.ondragleave = () => delete item.dataset.over
-  item.ondrop = (event) => {
+  node.ondragend = () => delete node.dataset.dragging
+  node.ondragover = (event) => {
     event.preventDefault()
-    delete item.dataset.over
-    const from = parseInt(event.dataTransfer.getData("text/plain"), 10)
-    if (Number.isNaN(from) || from === index) return
-    const [moved] = config.pages.splice(from, 1)
-    config.pages.splice(index, 0, moved)
+    event.stopPropagation()
+    node.dataset.over = ""
+  }
+  node.ondragleave = () => delete node.dataset.over
+  node.ondrop = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    delete node.dataset.over
+    const [from, at] = event.dataTransfer.getData("text/plain").split(":")
+    const moved = parseInt(at, 10)
+    if (from !== tag || Number.isNaN(moved) || moved === index) return
+    items.splice(index, 0, items.splice(moved, 1)[0])
     markDirty()
     renderPages()
   }
-  return item
 }
 
 /** The readings a page is made of, one row per slot. */
@@ -390,9 +407,12 @@ function slotList(page, shape) {
     const drop = el("button", { type: "button", className: "small", textContent: "−",
                                 title: "Remove this slot" })
     drop.onclick = () => { current.splice(slot, 1); markDirty(); renderPages() }
-    rows.push(el("li", null,
-                 refSelect(ref, poolFor(shape.manyPool), (value) => { current[slot] = value }),
-                 drop))
+    const row = el("li", null,
+                   el("span", { className: "grip", textContent: "⠇" }),
+                   refSelect(ref, poolFor(shape.manyPool), (value) => { current[slot] = value }),
+                   drop)
+    reorderable(row, current, slot, "slot")
+    rows.push(row)
   })
 
   if (shape.many && current.length < shape.max) {
