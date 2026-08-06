@@ -39,7 +39,7 @@ body {
 
 h1 {
   display: flex; align-items: center; gap: 0.35em; width: fit-content;
-  font-size: var(--text-lg); font-weight: 600; margin: 0;
+  font-size: var(--text-xl); font-weight: 600; margin: 0;
   letter-spacing: 0.06em; text-transform: uppercase;
   background: linear-gradient(100deg, var(--ramp-0), var(--ramp-1) 45%,
                               var(--ramp-2) 72%, var(--ramp-3));

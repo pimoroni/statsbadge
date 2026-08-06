@@ -983,7 +983,7 @@ function renderWhose() {
   const own = whose && badges[whose] && badges[whose].configured
   pick("header > small").textContent = whose && !own
     ? "on the default layout, until you save"
-    : (!whose && ids.length ? "what a newly paired badge draws" : "")
+    : (!whose && ids.length ? "defaults for a newly paired badge" : "")
 }
 
 /** Load another badge's layout into the page. */
