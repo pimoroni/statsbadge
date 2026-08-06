@@ -5,6 +5,21 @@
 // null for the layout a badge draws before it has been given one of its own.
 
 const $ = (id) => document.getElementById(id)
+const pick = (selector) => document.querySelector(selector)
+const all = (selector) => [...document.querySelectorAll(selector)]
+
+/** An element, its properties, and whatever goes inside it. A key with a dash is set as an
+ * attribute, since `aria-` and `data-` have no property of their own. */
+function el(tag, props, ...children) {
+  const node = document.createElement(tag)
+  for (const [key, value] of Object.entries(props || {})) {
+    if (value === null || value === undefined) continue
+    if (key.includes("-")) node.setAttribute(key, value)
+    else node[key] = value
+  }
+  node.append(...children.flat().filter((child) => child !== null && child !== undefined))
+  return node
+}
 
 let config = null
 let caps = null
@@ -55,9 +70,7 @@ function titleCase(text) {
 }
 
 function toast(message, bad) {
-  const node = document.createElement("div")
-  node.className = bad ? "toast bad" : "toast"
-  node.textContent = message
+  const node = el("div", { className: bad ? "toast bad" : "toast", textContent: message })
   document.body.appendChild(node)
   setTimeout(() => node.remove(), 2600)
 }
@@ -65,6 +78,34 @@ function toast(message, bad) {
 function markDirty() {
   dirty = true
   $("save").disabled = false
+}
+
+// -- tabs ------------------------------------------------------------------
+//
+// One sheet at a time, so a phone gets a page it can read and a wide screen gets boxes that
+// flow across it. The nav and the sheets are in the same order; nothing else pairs them.
+
+const REMEMBERED_TAB = "statsbadge.tab"
+
+function showSheet(wanted) {
+  const tabs = all("header nav button")
+  const sheets = all("main > section")
+  tabs.forEach((tab, index) => {
+    if (index === wanted) tab.setAttribute("aria-current", "page")
+    else tab.removeAttribute("aria-current")
+    sheets[index].hidden = index !== wanted
+  })
+  try { window.localStorage.setItem(REMEMBERED_TAB, wanted) } catch (error) { /* private */ }
+}
+
+function bindTabs() {
+  const tabs = all("header nav button")
+  tabs.forEach((tab, index) => { tab.onclick = () => showSheet(index) })
+  let opening = 0
+  try { opening = Number(window.localStorage.getItem(REMEMBERED_TAB)) } catch (error) {
+    /* private mode */
+  }
+  showSheet(tabs[opening] ? opening : 0)
 }
 
 // -- field pickers ---------------------------------------------------------
@@ -181,7 +222,6 @@ function fieldLabel(ref) {
  * six of them - so the source is picked first and the metric list is only ever that source's.
  * Returned as a fragment, so the row's flex layout still reaches the selects. */
 function refSelect(value, refs, onChange) {
-  const holder = document.createDocumentFragment()
   // Deduplicated here as well as by the caller: a repeated option is impossible to tell apart
   // once it is on screen.
   const options = [...new Set(refs)]
@@ -193,11 +233,6 @@ function refSelect(value, refs, onChange) {
     if (!byGroup.has(group)) byGroup.set(group, [])
     byGroup.get(group).push(ref)
   }
-
-  const chosen = String(value || options[0] || "").split(".")[0]
-  const source = document.createElement("select")
-  source.className = "group"
-  source.setAttribute("aria-label", "Source")
 
   // Grouped under whoever provides them, since an extension watching six domains would
   // otherwise bury this host's own readings in a list of names with nothing saying what
@@ -211,32 +246,20 @@ function refSelect(value, refs, onChange) {
   // The host first whatever it is called, since most pages are made of it.
   const owners = [...byOwner.keys()].sort(
     (a, b) => (a === HOST_SOURCE ? -1 : 0) - (b === HOST_SOURCE ? -1 : 0))
-  for (const owner of owners) {
-    const optgroup = document.createElement("optgroup")
-    optgroup.label = owner
-    for (const group of byOwner.get(owner)) {
-      const option = document.createElement("option")
-      option.value = group
-      option.textContent = groupLabel(group)
-      if (group === chosen) option.selected = true
-      optgroup.appendChild(option)
-    }
-    source.appendChild(optgroup)
-  }
 
-  const select = document.createElement("select")
-  select.setAttribute("aria-label", "Reading")
+  const chosen = String(value || options[0] || "").split(".")[0]
+  const source = el("select", { "aria-label": "Source" }, owners.map(
+    (owner) => el("optgroup", { label: owner }, byOwner.get(owner).map(
+      (group) => el("option", { value: group, textContent: groupLabel(group),
+                                selected: group === chosen })))))
+
+  const select = el("select", { "aria-label": "Reading" })
   // Told which ref rather than reading it back off the select, so the first paint does not
   // depend on `value` already reflecting the option marked selected.
   const fill = (group, ref) => {
-    select.innerHTML = ""
-    for (const each of byGroup.get(group) || []) {
-      const option = document.createElement("option")
-      option.value = each
-      option.textContent = fieldLabel(each)
-      if (each === ref) option.selected = true
-      select.appendChild(option)
-    }
+    select.replaceChildren(...(byGroup.get(group) || []).map(
+      (each) => el("option", { value: each, textContent: fieldLabel(each),
+                               selected: each === ref })))
   }
   fill(chosen, value)
 
@@ -248,8 +271,7 @@ function refSelect(value, refs, onChange) {
     markDirty()
   }
   select.onchange = () => { onChange(select.value); markDirty() }
-  holder.append(source, select)
-  return holder
+  return [source, select]
 }
 
 // -- pages -----------------------------------------------------------------
@@ -259,9 +281,7 @@ function refSelect(value, refs, onChange) {
 const expanded = new Set()
 
 function renderPages() {
-  const list = $("pages")
-  list.innerHTML = ""
-  config.pages.forEach((page, index) => list.appendChild(pageCard(page, index)))
+  $("pages").replaceChildren(...config.pages.map(pageCard))
   refreshPruned()
 }
 
@@ -285,135 +305,58 @@ function singular(label) {
 
 function pageCard(page, index) {
   const shape = shapeFor(page.kind)
-  const item = document.createElement("li")
-  item.className = "page"
-  item.draggable = true
-
-  const top = document.createElement("div")
-  top.className = "top"
-
-  const grip = document.createElement("span")
-  grip.className = "grip"
-  grip.textContent = "⠇"
-  top.appendChild(grip)
-
   const open = expanded.has(page.id)
-  const toggle = document.createElement("button")
-  toggle.type = "button"
-  toggle.className = "small twist"
-  toggle.textContent = open ? "▾" : "▸"
-  toggle.title = open ? "Collapse" : "Configure"
+  const settings = (caps.extension_page_settings || {})[page.kind] || []
+
+  const title = el("input", { type: "text", value: page.title || "",
+                              "aria-label": "Page title" })
+  title.oninput = () => { page.title = title.value; markDirty() }
+
+  const toggle = el("button", { type: "button", textContent: open ? "▾" : "▸",
+                                title: open ? "Collapse" : "Configure",
+                                "aria-expanded": String(open) })
   toggle.onclick = () => {
     if (open) expanded.delete(page.id); else expanded.add(page.id)
     renderPages()               // not markDirty: opening a card changes nothing
   }
-  top.appendChild(toggle)
 
-  const kind = document.createElement("span")
-  kind.className = "kind"
-  kind.textContent = page.kind
-  top.appendChild(kind)
-
-  const heading = document.createElement("input")
-  heading.type = "text"
-  heading.className = "title"
-  heading.value = page.title || ""
-  heading.setAttribute("aria-label", "Page title")
-  heading.oninput = () => { page.title = heading.value; markDirty() }
-  top.appendChild(heading)
-
-  const remove = document.createElement("button")
-  remove.type = "button"
-  remove.className = "small danger"
-  remove.textContent = "✕"
-  remove.title = "Remove this page"
+  const remove = el("button", { type: "button", className: "danger small",
+                                textContent: "✕", title: "Remove this page" })
   remove.onclick = () => {
     if (config.pages.length <= 1) return toast("Keep at least one page", true)
     config.pages.splice(index, 1)
     markDirty()
     return renderPages()
   }
-  top.appendChild(remove)
-  item.appendChild(top)
 
-  const fields = document.createElement("div")
-  fields.className = "fields"
+  const item = el("li", { draggable: true },
+                  el("header", null,
+                     el("span", { className: "grip", textContent: "⠇" }),
+                     toggle,
+                     el("small", { textContent: page.kind }),
+                     title,
+                     remove))
 
-  if (open && shape.one) {
-    const row = document.createElement("div")
-    row.className = "fieldrow"
-    const tag = document.createElement("span")
-    tag.textContent = page.kind === "bars" ? "List" : "Gauge"
-    row.appendChild(tag)
-    const pool = (POOLS[shape.pool] || POOLS.any)()
-    row.appendChild(refSelect(page[shape.one], pool.length ? pool : availableRefs(),
-                              (value) => { page[shape.one] = value }))
-    fields.appendChild(row)
-  }
-
-  if (open && shape.many) {
-    const current = page[shape.many] || []
-    current.forEach((ref, slot) => {
-      const row = document.createElement("div")
-      row.className = "fieldrow"
-      const pool = (POOLS[shape.manyPool] || POOLS.any)()
-      row.appendChild(refSelect(ref, pool.length ? pool : availableRefs(),
-                                (value) => { current[slot] = value }))
-      const drop = document.createElement("button")
-      drop.type = "button"
-      drop.className = "small"
-      drop.textContent = "−"
-      drop.title = "Remove this slot"
-      drop.onclick = () => { current.splice(slot, 1); markDirty(); renderPages() }
-      row.appendChild(drop)
-      fields.appendChild(row)
-    })
-    if (current.length < shape.max) {
-      const add = document.createElement("button")
-      add.type = "button"
-      add.className = "small"
-      add.textContent = `Add ${singular(shape.label).toLowerCase()}`
-      add.onclick = () => {
-        const pool = (POOLS[shape.manyPool] || POOLS.any)()
-        page[shape.many] = current.concat([pool[0] || availableRefs()[0]])
-        markDirty()
-        renderPages()
-      }
-      fields.appendChild(add)
-    }
-  }
-
-  // What this page in particular can be told, as against what the extension is told once for
-  // every page: a place here, units there.
-  const pageSettings = (caps.extension_page_settings || {})[page.kind] || []
   if (open) {
-    for (const setting of pageSettings) {
-      const row = document.createElement("div")
-      row.className = "fieldrow"
-      row.appendChild(settingRow(page, setting))
-      fields.appendChild(row)
-    }
-    item.appendChild(fields)
+    item.append(slotList(page, shape),
+                ...settings.flatMap((setting) => settingRow(page, setting)))
   } else {
-    const summary = document.createElement("div")
-    summary.className = "summary"
     const refs = shape.one ? [page[shape.one]] : (page[shape.many] || [])
-    const named = refs.filter(Boolean).map((ref) => fieldLabel(ref))
-    const extra = pageSettings.map((setting) => page[setting.key]).filter(Boolean)
-    summary.textContent = named.concat(extra).join(", ") || "nothing chosen"
-    item.appendChild(summary)
+    const named = refs.filter(Boolean).map(fieldLabel)
+    const extra = settings.map((setting) => page[setting.key]).filter(Boolean)
+    item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
   }
 
   item.ondragstart = (event) => {
-    item.classList.add("dragging")
+    item.dataset.dragging = ""
     event.dataTransfer.setData("text/plain", String(index))
   }
-  item.ondragend = () => item.classList.remove("dragging")
-  item.ondragover = (event) => { event.preventDefault(); item.classList.add("over") }
-  item.ondragleave = () => item.classList.remove("over")
+  item.ondragend = () => delete item.dataset.dragging
+  item.ondragover = (event) => { event.preventDefault(); item.dataset.over = "" }
+  item.ondragleave = () => delete item.dataset.over
   item.ondrop = (event) => {
     event.preventDefault()
-    item.classList.remove("over")
+    delete item.dataset.over
     const from = parseInt(event.dataTransfer.getData("text/plain"), 10)
     if (Number.isNaN(from) || from === index) return
     const [moved] = config.pages.splice(from, 1)
@@ -422,6 +365,44 @@ function pageCard(page, index) {
     renderPages()
   }
   return item
+}
+
+/** The readings a page is made of, one row per slot. */
+function slotList(page, shape) {
+  const rows = []
+  const poolFor = (name) => {
+    const refs = (POOLS[name] || POOLS.any)()
+    return refs.length ? refs : availableRefs()
+  }
+
+  if (shape.one) {
+    rows.push(el("li", null,
+                 el("span", { textContent: page.kind === "bars" ? "List" : "Gauge" }),
+                 refSelect(page[shape.one], poolFor(shape.pool),
+                           (value) => { page[shape.one] = value })))
+  }
+
+  const current = shape.many ? page[shape.many] || [] : []
+  current.forEach((ref, slot) => {
+    const drop = el("button", { type: "button", className: "small", textContent: "−",
+                                title: "Remove this slot" })
+    drop.onclick = () => { current.splice(slot, 1); markDirty(); renderPages() }
+    rows.push(el("li", null,
+                 refSelect(ref, poolFor(shape.manyPool), (value) => { current[slot] = value }),
+                 drop))
+  })
+
+  if (shape.many && current.length < shape.max) {
+    const add = el("button", { type: "button", className: "small",
+                               textContent: `Add ${singular(shape.label).toLowerCase()}` })
+    add.onclick = () => {
+      page[shape.many] = current.concat([poolFor(shape.manyPool)[0]])
+      markDirty()
+      renderPages()
+    }
+    rows.push(el("li", null, add))
+  }
+  return el("ol", null, rows)
 }
 
 function newPage(kind) {
@@ -446,13 +427,10 @@ function newPage(kind) {
 
 /** Add the installed extensions' pages to the kind picker, which only lists the built-ins. */
 function offerExtensionPages() {
-  const picker = $("addkind")
+  const picker = pick("main form select")
   for (const page of caps.extension_pages || []) {
     if ([...picker.options].some((option) => option.value === page.kind)) continue
-    const option = document.createElement("option")
-    option.value = page.kind
-    option.textContent = page.title || page.kind
-    picker.appendChild(option)
+    picker.append(el("option", { value: page.kind, textContent: page.title || page.kind }))
   }
 }
 
@@ -462,7 +440,7 @@ async function refreshPruned() {
     const shown = await api(configPath("/api/preview"))
     const kept = new Set(shown.pages.map((page) => page.id))
     const dropped = config.pages.filter((page) => !kept.has(page.id)).map((page) => page.title)
-    const node = $("pruned")
+    const node = pick('p[role="status"]')
     node.textContent = "Not shown on the badge, because this host reports no data for "
       + `them: ${dropped.join(", ")}`
     node.hidden = !dropped.length
@@ -477,32 +455,22 @@ async function refreshPruned() {
  * nothing had nothing in the UI at all, and one that failed to import was invisible until a
  * page it was meant to draw did not appear. */
 function renderSettings() {
-  const node = $("settings")
-  node.innerHTML = ""
   const schema = caps.extension_settings || {}
   const installed = caps.extensions || []
   if (!installed.length) {
-    node.innerHTML = '<section class="panel form"><p class="hint">None installed. '
-      + "<code>pip install</code> one, then <code>statsbadge install</code>.</p></section>"
+    $("extensions").replaceChildren(el("section", null, el("p", { textContent:
+      "None installed. pip install one, then run statsbadge install." })))
     return
   }
   config.settings = config.settings || {}
-  for (const extension of installed) {
-    node.appendChild(extensionBox(extension, schema[extension.name] || []))
-  }
+  $("extensions").replaceChildren(
+    ...installed.map((extension) => extensionBox(extension, schema[extension.name] || [])))
 }
 
 function extensionBox(extension, settings) {
-  const box = document.createElement("section")
-  box.className = "panel form"
-  const heading = document.createElement("h3")
-  heading.textContent = extension.name
-  box.appendChild(heading)
-
-  const state = document.createElement("p")
-  state.className = "hint"
+  const state = el("p")
   if (extension.error) {
-    state.className = "hint bad"
+    state.className = "bad"
     state.textContent = extension.error
   } else if (extension.available === false) {
     state.textContent = "Installed, but not usable on this host."
@@ -513,26 +481,20 @@ function extensionBox(extension, settings) {
     if (extension.badge_module) parts.push("draws its own page")
     state.textContent = parts.join(" · ")
   }
-  box.appendChild(state)
 
+  const box = el("section", null, el("h3", { textContent: extension.name }), state)
   if (!settings.length) return box
+
   config.settings[extension.name] = config.settings[extension.name] || {}
   const stored = config.settings[extension.name]
-  const secrets = settings.filter((setting) => setting.secret)
   for (const setting of settings) {
     if (setting.secret) continue
-    box.appendChild(settingRow(stored, setting))
-    if (setting.hint) box.appendChild(hintLine(setting.hint))
+    box.append(...settingRow(stored, setting))
+    if (setting.hint) box.append(el("p", { textContent: setting.hint }))
   }
-  if (secrets.length) box.appendChild(secretsBlock(extension.name, stored, secrets))
+  const secrets = settings.filter((setting) => setting.secret)
+  if (secrets.length) box.append(secretsBlock(extension.name, stored, secrets))
   return box
-}
-
-function hintLine(text) {
-  const hint = document.createElement("p")
-  hint.className = "hint"
-  hint.textContent = text
-  return hint
 }
 
 // How much of a secret is shown, and the most x's drawn after it. Enough to tell which key is
@@ -540,10 +502,11 @@ function hintLine(text) {
 const SECRET_SHOWN = 6
 const SECRET_MAX = 18
 
-/** A stored secret as something safe to leave on screen. */
+/** A stored secret as something safe to leave on screen. Empty for one that is not set, which
+ * the sheet draws as "not set" - the two have to be told apart. */
 function masked(value) {
   const text = value === null || value === undefined ? "" : String(value)
-  if (!text) return "not set"
+  if (!text) return ""
   const shown = text.slice(0, SECRET_SHOWN)
   return shown + "x".repeat(Math.max(4, Math.min(SECRET_MAX, text.length - shown.length)))
 }
@@ -557,37 +520,28 @@ const editingSecrets = new Set()
  * Masked rather than hidden, because "not set" and "set to the wrong one" have to be told
  * apart, and the first few characters are what somebody checking would recognise. */
 function secretsBlock(name, stored, secrets) {
-  const block = document.createElement("div")
-  block.className = "secrets"
   const open = editingSecrets.has(name)
+  const block = el("div", { className: "secrets" })
 
-  for (const setting of secrets) {
-    if (open) {
-      block.appendChild(settingRow(stored, setting, { reveal: true }))
-      if (setting.hint) block.appendChild(hintLine(setting.hint))
-      continue
+  if (open) {
+    for (const setting of secrets) {
+      block.append(...settingRow(stored, setting, { reveal: true }))
+      if (setting.hint) block.append(el("p", { textContent: setting.hint }))
     }
-    const row = document.createElement("div")
-    row.className = "kv"
-    const label = document.createElement("span")
-    label.textContent = setting.label || setting.key
-    const value = document.createElement("span")
-    const held = stored[setting.key]
-    value.className = held ? "mask" : "mask none"
-    value.textContent = masked(held)
-    row.append(label, value)
-    block.appendChild(row)
+  } else {
+    block.append(el("dl", null, secrets.flatMap((setting) => [
+      el("dt", { textContent: setting.label || setting.key }),
+      el("dd", { textContent: masked(stored[setting.key]) }),
+    ])))
   }
 
-  const button = document.createElement("button")
-  button.type = "button"
-  button.className = "small"
-  button.textContent = open ? "Hide secrets" : "Edit secrets"
+  const button = el("button", { type: "button", className: "small",
+                                textContent: open ? "Hide secrets" : "Edit secrets" })
   button.onclick = () => {
     if (open) editingSecrets.delete(name); else editingSecrets.add(name)
     renderSettings()               // not markDirty: opening a box changes nothing
   }
-  block.appendChild(button)
+  block.append(button)
   return block
 }
 
@@ -598,34 +552,22 @@ let controlSerial = 0
 /** A form row: the name, then the control it names. Two siblings and not one wrapping the
  * other, so both land in the tracks of whichever grid the row is added to. */
 function settingRow(stored, setting, options) {
-  const row = document.createDocumentFragment()
   const id = `setting${++controlSerial}`
-  const label = document.createElement("label")
-  label.htmlFor = id
-  label.textContent = setting.label || setting.key
-  const current = stored[setting.key] !== undefined
-    ? stored[setting.key] : setting.default
+  const label = el("label", { htmlFor: id, textContent: setting.label || setting.key })
+  const current = stored[setting.key] !== undefined ? stored[setting.key] : setting.default
 
   let input
   if (setting.type === "bool") {
-    input = document.createElement("input")
-    input.type = "checkbox"
-    input.checked = !!current
+    input = el("input", { type: "checkbox", id, checked: !!current })
     input.onchange = () => { stored[setting.key] = input.checked; markDirty() }
   } else if (setting.type === "choice") {
-    input = document.createElement("select")
-    for (const option of setting.options || []) {
-      const node = document.createElement("option")
-      node.value = option
-      node.textContent = option
-      if (option === current) node.selected = true
-      input.appendChild(node)
-    }
+    input = el("select", { id }, (setting.options || []).map(
+      (option) => el("option", { value: option, textContent: option,
+                                 selected: option === current })))
     input.onchange = () => { stored[setting.key] = input.value; markDirty() }
   } else {
-    input = document.createElement("input")
-    input.type = "text"
-    input.value = current === null || current === undefined ? "" : current
+    input = el("input", { type: "text", id,
+                          value: current === null || current === undefined ? "" : current })
     if (setting.secret) {
       // Shown in full, since the whole of asking to edit these is to read one back and replace
       // it. Kept out of autofill and the spellchecker, neither of which has any business with
@@ -640,30 +582,20 @@ function settingRow(stored, setting, options) {
       markDirty()
     }
   }
-  input.id = id
-  row.append(label, input)
-  return row
+  return [label, input]
 }
 
 // -- look and buttons ------------------------------------------------------
 
 function renderLook() {
   const theme = $("theme")
-  theme.innerHTML = ""
   // Grouped by mode: which of them suit a lit room is the first thing anybody is choosing
   // between, and a flat list of twenty had the pairs scattered through it.
-  for (const [mode, heading] of [["dark", "Dark"], ["light", "Light"]]) {
-    const group = document.createElement("optgroup")
-    group.label = heading
-    for (const record of caps.themes.filter((entry) => entry.mode === mode)) {
-      const option = document.createElement("option")
-      option.value = record.name
-      option.textContent = record.label || titleCase(record.name)
-      if (record.name === config.theme) option.selected = true
-      group.appendChild(option)
-    }
-    if (group.children.length) theme.appendChild(group)
-  }
+  theme.replaceChildren(...[["dark", "Dark"], ["light", "Light"]].map(([mode, heading]) =>
+    el("optgroup", { label: heading }, caps.themes
+      .filter((entry) => entry.mode === mode)
+      .map((record) => el("option", { value: record.name, selected: record.name === config.theme,
+                                      textContent: record.label || titleCase(record.name) })))))
   theme.onchange = () => { config.theme = theme.value; markDirty(); renderTint() }
   renderTint()
 
@@ -675,107 +607,29 @@ function renderLook() {
   bindRange("advance", "advance_every_s", (value) => `${value}s`)
 
   // Stored as a flag, offered as the two things it looks like.
-  const smooth = $("smooth")
-  smooth.value = config.smooth === false ? "straight" : "curved"
-  smooth.onchange = () => { config.smooth = smooth.value === "curved"; markDirty() }
-
-  const animate = $("animate")
-  animate.checked = !!config.animate
-  animate.onchange = () => { config.animate = animate.checked; markDirty() }
-
+  bindSelect("smooth", () => (config.smooth === false ? "straight" : "curved"),
+             (value) => { config.smooth = value === "curved" })
+  bindSelect("rows", () => config.rows || "zebra", (value) => { config.rows = value })
   // Older configs stored a flag here, before there was a third way for a page to turn.
-  const slide = $("slide")
-  slide.value = typeof config.slide === "string"
-    ? config.slide
-    : (config.slide ? "over" : "off")
-  slide.onchange = () => { config.slide = slide.value; markDirty() }
-
-  const plotanim = $("plotanim")
-  plotanim.checked = !!config.plot_animation
-  plotanim.onchange = () => { config.plot_animation = plotanim.checked; markDirty() }
-
-  const rows = $("rows")
-  rows.value = config.rows || "zebra"
-  rows.onchange = () => { config.rows = rows.value; markDirty() }
-
-  const gaugefill = $("gaugefill")
-  gaugefill.value = config.gauge_fill || "solid"
-  gaugefill.onchange = () => {
-    config.gauge_fill = gaugefill.value
-    markDirty()
+  const turn = () => (typeof config.slide === "string" ? config.slide
+    : (config.slide ? "over" : "off"))
+  bindSelect("slide", turn, (value) => { config.slide = value })
+  bindSelect("gaugefill", () => config.gauge_fill || "solid", (value) => {
+    config.gauge_fill = value
     preview()                          // the preview draws the gauge the way the badge will
-  }
+  })
 
-  const autobright = $("autobright")
-  autobright.checked = !!config.auto_brightness
-  autobright.onchange = () => { config.auto_brightness = autobright.checked; markDirty() }
+  bindCheck("animate", "animate")
+  bindCheck("plotanim", "plot_animation")
+  bindCheck("autobright", "auto_brightness")
 
   renderCaseLights()
   renderButtons()
 }
 
-/** Off, the theme's own level, or a reading for the lights to follow. The stored value is
- * false, true, or a field ref, so the option values carry it directly. */
-function renderCaseLights() {
-  const caselights = $("caselights")
-  caselights.innerHTML = ""
-  const options = [["off", "Off"], ["theme", "Follow the Theme"]]
-  for (const ref of numericRefs()) {
-    options.push([ref, `${groupLabel(ref.split(".")[0])} - ${fieldLabel(ref)}`])
-  }
-  const current = config.caselights === true
-    ? "theme"
-    : config.caselights || "off"
-  // A reading this host has stopped sending still has to be selectable, or opening the page
-  // and saving it would quietly turn the lights off.
-  if (!options.some(([value]) => value === current)) options.push([current, current])
-  for (const [value, text] of options) {
-    const option = document.createElement("option")
-    option.value = value
-    option.textContent = text
-    if (value === current) option.selected = true
-    caselights.appendChild(option)
-  }
-  caselights.onchange = () => {
-    const value = caselights.value
-    config.caselights = value === "off" ? false : value === "theme" ? true : value
-    markDirty()
-  }
-}
-
-function renderButtons() {
-  for (const which of ["a", "b", "c"]) {
-    const select = $(`btn-${which}`)
-    select.innerHTML = ""
-    const none = document.createElement("option")
-    none.value = ""
-    none.textContent = "Nothing"
-    select.appendChild(none)
-    // The badge's own first, being the ones that need no host at all.
-    for (const local of caps.local_actions || []) {
-      const option = document.createElement("option")
-      option.value = local.action
-      option.textContent = `${titleCase(local.label)} (on the badge)`
-      select.appendChild(option)
-    }
-    for (const name of caps.commands) {
-      const option = document.createElement("option")
-      option.value = name
-      option.textContent = titleCase(name)
-      select.appendChild(option)
-    }
-    select.value = (config.buttons && config.buttons[which]) || ""
-    select.onchange = () => {
-      config.buttons = config.buttons || {}
-      config.buttons[which] = select.value || null
-      markDirty()
-    }
-  }
-}
-
 function bindRange(id, key, format, scale) {
   const input = $(id)
-  const out = $(`${id}out`)
+  const out = pick(`output[for="${id}"]`)
   const factor = scale || 1
   input.value = Math.round((config[key] || 0) * factor)
   out.textContent = format(input.value)
@@ -785,6 +639,60 @@ function bindRange(id, key, format, scale) {
       : parseInt(input.value, 10) / factor
     out.textContent = format(input.value)
     markDirty()
+  }
+}
+
+function bindSelect(id, read, write) {
+  const select = $(id)
+  select.value = read()
+  select.onchange = () => { write(select.value); markDirty() }
+}
+
+function bindCheck(id, key) {
+  const input = $(id)
+  input.checked = !!config[key]
+  input.onchange = () => { config[key] = input.checked; markDirty() }
+}
+
+/** Off, the theme's own level, or a reading for the lights to follow. The stored value is
+ * false, true, or a field ref, so the option values carry it directly. */
+function renderCaseLights() {
+  const options = [["off", "Off"], ["theme", "Follow the Theme"]]
+  for (const ref of numericRefs()) {
+    options.push([ref, `${groupLabel(ref.split(".")[0])} - ${fieldLabel(ref)}`])
+  }
+  const current = config.caselights === true ? "theme" : config.caselights || "off"
+  // A reading this host has stopped sending still has to be selectable, or opening the page
+  // and saving it would quietly turn the lights off.
+  if (!options.some(([value]) => value === current)) options.push([current, current])
+
+  const caselights = $("caselights")
+  caselights.replaceChildren(...options.map(([value, text]) =>
+    el("option", { value, textContent: text, selected: value === current })))
+  caselights.onchange = () => {
+    const value = caselights.value
+    config.caselights = value === "off" ? false : value === "theme" ? true : value
+    markDirty()
+  }
+}
+
+function renderButtons() {
+  // The badge's own first, being the ones that need no host at all.
+  const offered = [
+    el("option", { value: "", textContent: "Nothing" }),
+    ...(caps.local_actions || []).map((local) => el("option", {
+      value: local.action, textContent: `${titleCase(local.label)} (on the badge)` })),
+    ...caps.commands.map((name) => el("option", { value: name, textContent: titleCase(name) })),
+  ]
+  for (const which of ["a", "b", "c"]) {
+    const select = $(`btn-${which}`)
+    select.replaceChildren(...offered.map((option) => option.cloneNode(true)))
+    select.value = (config.buttons && config.buttons[which]) || ""
+    select.onchange = () => {
+      config.buttons = config.buttons || {}
+      config.buttons[which] = select.value || null
+      markDirty()
+    }
   }
 }
 
@@ -815,62 +723,56 @@ function renderTint() {
   const tinted = !!(caps.tinted || {})[config.theme]
   // How the second accent is picked, which only a derived palette works out: a written-down
   // one either names its own or has none.
-  for (const node of [$("accents"), $("tinthint"), $("accentblabel"), $("accentbrow")]) {
-    node.hidden = !tinted
-  }
+  for (const node of all("[data-tint]")) node.hidden = !tinted
 
   const second = $("accentb")
   second.value = config.accent_b || "same"
   second.onchange = () => { config.accent_b = second.value; markDirty(); renderTint() }
 
   // What the ramp does is the difference between the two pairs, so the hint says which.
-  $("tinthint").textContent = (caps.bold || []).includes(config.theme)
+  pick("p[data-tint]").textContent = (caps.bold || []).includes(config.theme)
     ? "The rest of the palette is worked out from this colour, and the ramp stays in its hue, "
       + "sweeping from a dark version through it to a pale one."
     : "The rest of the palette is worked out from this colour, and the ramp travels to red "
       + "unless the colour is already there."
 
-  const accents = $("accents")
-  accents.innerHTML = ""
+  const accents = pick("div[data-tint]")
+  accents.replaceChildren()
   if (tinted) {
     if (!family) family = familyOf(config.tint)
-    // Four rows of twelve, one row at a time: the family is how loud the accent is and the hue
-    // is the choice. A swatch is the colour that will be used, not a stand-in for it.
-    const tabs = document.createElement("div")
-    tabs.className = "tabs"
-    for (const name of Object.keys(caps.accents || {})) {
-      const tab = document.createElement("button")
-      tab.type = "button"
-      tab.textContent = titleCase(name)
-      if (name === family) tab.classList.add("on")
-      tab.onclick = () => { family = name; renderTint() }   // a look, not yet a change
-      tabs.appendChild(tab)
-    }
-    accents.appendChild(tabs)
-
-    const strip = document.createElement("div")
-    strip.className = "swatches"
-    for (const accent of (caps.accents || {})[family] || []) {
-      const chip = document.createElement("button")
-      chip.type = "button"
-      chip.style.background = `rgb(${accent.join(", ")})`
-      chip.title = `rgb(${accent.join(", ")})`
-      if (String(config.tint) === String(accent)) chip.classList.add("on")
-      chip.onclick = () => {
-        config.tint = accent.slice()
-        markDirty()
-        renderTint()
-      }
-      strip.appendChild(chip)
-    }
-    accents.appendChild(strip)
+    accents.append(familyTabs(), swatches())
   }
   preview()
+}
+
+/** Which family of accents the picker is showing: four rows of twelve, one at a time. */
+function familyTabs() {
+  return el("div", { className: "tabs" }, Object.keys(caps.accents || {}).map((name) => {
+    const tab = el("button", { type: "button", textContent: titleCase(name),
+                               "aria-pressed": String(name === family) })
+    tab.onclick = () => { family = name; renderTint() }   // a look, not yet a change
+    return tab
+  }))
+}
+
+/** A swatch is the colour that will be used, not a stand-in for it. */
+function swatches() {
+  return el("div", { className: "swatches" }, ((caps.accents || {})[family] || []).map(
+    (accent) => {
+      const shown = `rgb(${accent.join(", ")})`
+      const chip = el("button", { type: "button", title: shown,
+                                  "aria-pressed": String(String(config.tint) === String(accent)) })
+      chip.style.background = shown
+      chip.onclick = () => { config.tint = accent.slice(); markDirty(); renderTint() }
+      return chip
+    }))
 }
 
 // Where each of the preview's three bars sits on the ramp, in row order. The readings printed
 // beside them are in the HTML.
 const PREVIEW_BARS = [0.62, 0.46, 0.78]
+
+const rgb = (parts) => `rgb(${parts.join(", ")})`
 
 async function preview() {
   const query = new URLSearchParams({ theme: config.theme || "dark" })
@@ -888,8 +790,8 @@ async function preview() {
   if (mine !== previewWanted) return
 
   const palette = shown.palette
-  const node = $("preview")
-  const set = (name, rgb) => node.style.setProperty(name, `rgb(${rgb.join(", ")})`)
+  const node = pick("main figure")
+  const set = (name, parts) => node.style.setProperty(name, rgb(parts))
   set("--pv-bg", palette.bg)
   set("--pv-panel", palette.panel)
   set("--pv-ink", palette.ink)
@@ -897,12 +799,12 @@ async function preview() {
   // The header's rule and the current pip, which on the badge take the second accent.
   set("--pv-accent", palette.accent_b || palette.accent)
   set("--pv-grid", palette.grid)
-  paintDial(node.querySelector(".dial"), palette, config.gauge_fill)
-  $("accentbchip").style.background = `rgb(${(palette.accent_b || palette.accent).join(", ")})`
-  node.querySelectorAll(".rows .fill").forEach((bar, index) => {
+  paintDial(node.querySelector("strong"), palette, config.gauge_fill)
+  $("accentbchip").style.background = rgb(palette.accent_b || palette.accent)
+  node.querySelectorAll("dd").forEach((bar, index) => {
     const at = PREVIEW_BARS[index]
-    bar.style.width = `${at * 100}%`
-    bar.style.background = `rgb(${rampAt(palette.ramp, at).join(", ")})`
+    bar.style.setProperty("--at", `${at * 100}%`)
+    bar.style.setProperty("--bar", rgb(rampAt(palette.ramp, at)))
   })
 }
 
@@ -918,10 +820,9 @@ const PV_TRACK_ALPHA = 32 / 255
 
 function paintDial(dial, palette, fill) {
   if (!dial) return
-  const colour = (rgb) => `rgb(${rgb.join(", ")})`
-  const faint = (rgb) => colour(rgb.map((part, index) =>
+  const faint = (parts) => rgb(parts.map((part, index) =>
     Math.round(part * PV_TRACK_ALPHA + palette.bg[index] * (1 - PV_TRACK_ALPHA))))
-  const bg = colour(palette.bg)
+  const bg = rgb(palette.bg)
   const filled = PV_SWEEP * PV_READING
   const at = (part) => `${(part * 100).toFixed(1)}%`
   const reached = rampAt(palette.ramp, PV_READING)
@@ -931,21 +832,21 @@ function paintDial(dial, palette, fill) {
     // The whole ramp laid round the arc, as the conical gradient does it: a colour's place is
     // its place on the ramp, so the sweep ends at the reading's own colour and the rest of the
     // ramp shows faintly beyond it.
-    for (const [position, rgb] of palette.ramp) {
-      if (position < PV_READING) stops.push(`${colour(rgb)} ${at(position * PV_SWEEP)}`)
+    for (const [position, parts] of palette.ramp) {
+      if (position < PV_READING) stops.push(`${rgb(parts)} ${at(position * PV_SWEEP)}`)
     }
-    stops.push(`${colour(reached)} ${at(filled)}`)
-    stops.push(`${colour(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`)
+    stops.push(`${rgb(reached)} ${at(filled)}`)
+    stops.push(`${rgb(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`)
     stops.push(`${faint(reached)} ${at(filled + 0.004)}`)
-    for (const [position, rgb] of palette.ramp) {
-      if (position > PV_READING) stops.push(`${faint(rgb)} ${at(position * PV_SWEEP)}`)
+    for (const [position, parts] of palette.ramp) {
+      if (position > PV_READING) stops.push(`${faint(parts)} ${at(position * PV_SWEEP)}`)
     }
   } else {
-    stops.push(`${colour(reached)} ${at(filled)}`)
-    stops.push(`${colour(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`)
-    stops.push(`${colour(palette.grid)} ${at(filled + 0.004)}`)
+    stops.push(`${rgb(reached)} ${at(filled)}`)
+    stops.push(`${rgb(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`)
+    stops.push(`${rgb(palette.grid)} ${at(filled + 0.004)}`)
   }
-  stops.push(`${colour(palette.grid)} ${at(PV_SWEEP)}`, `${bg} ${at(PV_SWEEP)}`)
+  stops.push(`${rgb(palette.grid)} ${at(PV_SWEEP)}`, `${bg} ${at(PV_SWEEP)}`)
   // Built here and not in the sheet: a stop list cannot be handed to a gradient through a
   // custom property and then given positions of its own - the declaration parses as invalid
   // and the whole gauge disappears.
@@ -998,24 +899,19 @@ function remember(id) {
 }
 
 function renderWhose() {
-  const select = $("whose")
   const ids = Object.keys(badges)
-  select.innerHTML = ""
-  for (const id of ids) {
-    const option = document.createElement("option")
-    option.value = id
-    option.textContent = badgeName(id)
-    select.appendChild(option)
-  }
-  const fallback = document.createElement("option")
-  fallback.value = ""
-  fallback.textContent = ids.length ? "Default, for any other badge" : "No badge paired yet"
-  select.appendChild(fallback)
+  const select = pick("header label select")
+  select.replaceChildren(
+    ...ids.map((id) => el("option", { value: id, textContent: badgeName(id) })),
+    el("option", { value: "",
+                   textContent: ids.length
+                     ? "Default, for any other badge"
+                     : "No badge paired yet" }))
   select.value = whose || ""
   select.onchange = () => switchTo(select.value).catch((error) => toast(error.message, true))
 
   const own = whose && badges[whose] && badges[whose].configured
-  $("whosenote").textContent = whose && !own
+  pick("header > small").textContent = whose && !own
     ? "on the default layout, until you save"
     : (!whose && ids.length ? "what a newly paired badge draws" : "")
   $("forget").disabled = !whose
@@ -1061,30 +957,22 @@ function ownIds(pages, badgeId) {
 }
 
 function renderBadges() {
-  const node = $("badges")
-  node.innerHTML = ""
+  const list = $("badges").querySelector("menu")
   const ids = Object.keys(badges)
   if (!ids.length) {
-    node.appendChild(hintLine("None paired. Use the USB installer, or pair over the network."))
+    list.replaceChildren(el("li", null, el("p", {
+      textContent: "None paired. Use the USB installer, or pair over the network." })))
     return
   }
-  for (const id of ids) {
-    const row = document.createElement("div")
-    row.className = id === whose ? "badge-row on" : "badge-row"
-    const name = document.createElement("span")
-    name.className = "name"
-    name.textContent = badges[id].name || id
-    const code = document.createElement("code")
-    code.textContent = id
-    name.append(document.createElement("br"), code)
-    const state = document.createElement("span")
-    state.className = "state"
-    state.textContent = badges[id].configured ? "own layout" : "default"
-    row.append(name, state)
-    // Clicking a row is the other way to get at a badge, the picker being in the header.
+  list.replaceChildren(...ids.map((id) => {
+    // A button, since picking a badge is what a row is for and a keyboard has to reach it.
+    const row = el("button", { type: "button", "aria-current": id === whose ? "true" : null },
+                   el("span", { textContent: badges[id].name || id }),
+                   el("small", { textContent: badges[id].configured ? "own layout" : "default" }),
+                   el("code", { textContent: id }))
     row.onclick = () => switchTo(id).catch((error) => toast(error.message, true))
-    node.appendChild(row)
-  }
+    return el("li", null, row)
+  }))
 }
 
 // -- pairing ---------------------------------------------------------------
@@ -1121,50 +1009,21 @@ async function answer(requestId, approve) {
   watchPairing()
 }
 
-function whereLine(text) {
-  const line = document.createElement("div")
-  line.className = "where"
-  line.textContent = text
-  return line
-}
-
-function paintPending(node, pending) {
-  if (!pending.length) return
-  const list = document.createElement("div")
-  list.className = "pending"
-  for (const request of pending) {
-    const row = document.createElement("div")
-    row.className = "ask"
-
-    const left = document.createElement("div")
-    const name = document.createElement("div")
-    name.className = "askname"
-    name.textContent = request.name
-    const id = document.createElement("code")
-    id.textContent = request.badge_id
-    left.append(name, id)
-
-    const code = document.createElement("div")
-    code.className = "askcode"
-    code.textContent = request.code
-
-    const buttons = document.createElement("div")
-    buttons.className = "askbuttons"
-    for (const [label, approve, className] of [["Approve", true, "primary small"],
-                                               ["Deny", false, "small danger"]]) {
-      const button = document.createElement("button")
-      button.type = "button"
-      button.className = className
-      button.textContent = label
-      button.onclick = () => answer(request.request_id, approve)
-        .catch((error) => toast(error.message, true))
-      buttons.appendChild(button)
-    }
-
-    row.append(left, code, buttons)
-    list.appendChild(row)
-  }
-  node.append(whereLine("Approve the one whose code matches the badge."), list)
+function pendingList(pending) {
+  return el("ul", null, pending.map((request) => {
+    const buttons = [["Approve", true, "primary small"], ["Deny", false, "small danger"]]
+      .map(([label, approve, className]) => {
+        const button = el("button", { type: "button", className, textContent: label })
+        button.onclick = () => answer(request.request_id, approve)
+          .catch((error) => toast(error.message, true))
+        return button
+      })
+    return el("li", null,
+              el("span", { textContent: request.name }),
+              el("samp", { textContent: request.code }),
+              el("code", { textContent: request.badge_id }),
+              el("div", null, buttons))
+  }))
 }
 
 async function watchPairing(announce) {
@@ -1172,25 +1031,25 @@ async function watchPairing(announce) {
     clearInterval(pairingPoll)
     pairingPoll = null
   }
-  const node = $("pairing")
+  const panel = pick("dialog")
   const button = $("pair")
 
   const paint = (state, pending) => {
     if (!state.active) {
-      node.hidden = true
+      panel.close()
       button.textContent = "Pair a badge…"
       button.onclick = () => startPairing().catch((error) => toast(error.message, true))
       return false
     }
     button.textContent = "Stop pairing"
     button.onclick = () => stopPairing().catch((error) => toast(error.message, true))
-    node.hidden = false
-    node.innerHTML = ""
-    const countdown = whereLine(`closes in ${state.expires_in}s`)
-    countdown.classList.add("countdown")
-    node.append(whereLine("On the badge: launch Stats, press B to set up, and pick "
-                          + `${(state.hosts || []).join(" / ")}:${state.port}`), countdown)
-    paintPending(node, pending || [])
+    panel.replaceChildren(
+      el("p", { textContent: "On the badge: launch Stats, press B to set up, and pick "
+                             + `${(state.hosts || []).join(" / ")}:${state.port}` }),
+      el("p", { textContent: `closes in ${state.expires_in}s` }),
+      pending.length ? el("p", { textContent: "Approve the one whose code matches." }) : null,
+      pending.length ? pendingList(pending) : null)
+    if (!panel.open) panel.show()
     return true
   }
 
@@ -1243,33 +1102,26 @@ async function renderLive() {
   }
 
   const node = $("live")
-  node.innerHTML = ""
+  if (node.closest("main > section").hidden) return
+
+  const groups = []
   for (const group of Object.keys(frame)) {
     if (FRAME_SCALARS.includes(group)) continue
     const items = Array.isArray(frame[group]) ? frame[group] : [frame[group]]
     for (const [index, item] of items.entries()) {
       if (!item || !Object.keys(item).length) continue
-      node.appendChild(liveGroup(items.length > 1 ? `${group} ${index}` : group, item))
+      groups.push(liveGroup(items.length > 1 ? `${group} ${index}` : group, item))
     }
   }
+  node.replaceChildren(node.querySelector("h2"), ...groups)
 }
 
 function liveGroup(name, item) {
-  const box = document.createElement("div")
-  box.className = "group"
-  const heading = document.createElement("h3")
-  heading.textContent = name
-  box.appendChild(heading)
-
+  const rows = []
   for (const key of Object.keys(item)) {
     const value = item[key]
-    const row = document.createElement("div")
-    row.className = "kv"
-    const label = document.createElement("span")
-    label.textContent = key
-    const shown = document.createElement("span")
+    const shown = el("dd")
     if (value === null || value === undefined) {
-      shown.className = "none"
       shown.textContent = "unknown"
     } else if (Array.isArray(value)) {
       shown.textContent = value.map((each) => Math.round(each)).join(" ")
@@ -1278,47 +1130,29 @@ function liveGroup(name, item) {
     } else {
       shown.textContent = String(value)
     }
-    row.append(label, shown)
-    box.appendChild(row)
-
     if (PERCENT.includes(key) && typeof value === "number") {
-      const bar = document.createElement("div")
-      bar.className = "bar"
-      const fill = document.createElement("span")
-      fill.className = "fill"
-      fill.style.width = `${Math.max(0, Math.min(100, value))}%`
-      bar.appendChild(fill)
-      box.appendChild(bar)
+      shown.style.setProperty("--at", `${Math.max(0, Math.min(100, value))}%`)
     }
+    rows.push(el("dt", { textContent: key }), shown)
   }
-  return box
+  return el("section", null, el("h3", { textContent: name }), el("dl", null, rows))
 }
 
 function renderSources() {
-  const node = $("sources")
-  node.innerHTML = ""
-  for (const source of caps.sources) {
-    const row = document.createElement("div")
+  $("sources").querySelector("ul").replaceChildren(...caps.sources.map((source) => {
     // A fault goes underneath what a source provides rather than in place of it, and one it
     // has recovered from is a footnote: an upstream 503 an hour ago should not still be a
     // source's whole description.
-    if (source.last_fault) row.className = "faulty"
-    row.textContent = `${source.name} → ${source.provides.join(", ") || "nothing"}`
-    const note = document.createElement("i")
+    const row = el("li", { className: source.last_fault ? "faulty" : null,
+                           textContent: `${source.name} → ${source.provides.join(", ") || "nothing"}` })
     if (source.last_fault) {
-      note.className = "why"
-      note.textContent = source.last_fault
-      row.appendChild(note)
+      row.append(el("small", { textContent: source.last_fault }))
     } else if (source.faults) {
-      note.textContent = ` recovered, ${source.faults} fault${source.faults === 1 ? "" : "s"} so far`
-      row.appendChild(note)
+      row.append(el("small", { textContent:
+        ` recovered, ${source.faults} fault${source.faults === 1 ? "" : "s"} so far` }))
     }
-    node.appendChild(row)
-  }
-  const summary = document.createElement("div")
-  summary.className = "reporting"
-  summary.textContent = `reporting: ${Object.keys(caps.available || {}).join(", ") || "nothing yet"}`
-  node.appendChild(summary)
+    return row
+  }))
 }
 
 // -- keeping up with the host ----------------------------------------------
@@ -1399,19 +1233,19 @@ async function save() {
 }
 
 async function boot() {
+  bindTabs()
   try {
     [caps, badges] = await Promise.all([api("/api/capabilities"), api("/api/badges")])
     whose = pickBadge()
     config = await api(configPath())
   } catch (error) {
-    const failed = document.createElement("p")
-    failed.style.padding = "20px"
-    failed.textContent = `Cannot reach the server: ${error.message}`
-    document.body.replaceChildren(failed)
+    document.body.replaceChildren(el("p", {
+      textContent: `Cannot reach the server: ${error.message}` }))
     return
   }
   const sys = (await api("/api/stats")).sys || {}
-  $("hostline").textContent = `${sys.host || "host"} · ${sys.os || ""} · ${sys.cpu_name || ""}`
+  pick("#local p").textContent =
+    `${sys.host || "host"} · ${sys.os || ""} · ${sys.cpu_name || ""}`
 
   offerExtensionPages()
   renderWhose()
@@ -1423,10 +1257,12 @@ async function boot() {
   renderLive()
 
   $("save").onclick = save
-  $("add").onclick = () => {
+  const form = pick("main form")
+  form.onsubmit = (event) => {
+    event.preventDefault()
     // At the top: added at the bottom it lands off the end of a long list, and the first thing
     // anyone does with a new page is configure it.
-    config.pages.unshift(newPage($("addkind").value))
+    config.pages.unshift(newPage(form.querySelector("select").value))
     expanded.add(config.pages[0].id)
     markDirty()
     renderPages()

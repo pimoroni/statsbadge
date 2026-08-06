@@ -1,13 +1,14 @@
-/* The config UI. Dark, because it sits next to a badge that is.
-
-Flat: surfaces are told apart by their fill and the space around them, not by an outline
-each. A panel inside a panel with a border on both reads as two things when it is one, so
-the only rules left are the header's accent edge and the left bars that mark something
-wanting attention. */
-
-/* -- palette ------------------------------------------------------------ */
+/* -- palette and scale --------------------------------------------------- */
 
 :root {
+  font-size: 100%;
+
+  --text-xl: 1.75rem;
+  --text-lg: 1.125rem;
+  --text-md: 0.875rem;
+  --text-sm: 0.75rem;
+  --gap: 20px;
+  --pad: 16px;
   --bg: #0e0e11;
   --panel: #17171c;
   --panel2: #1f1f26;
@@ -15,12 +16,13 @@ wanting attention. */
   --dim: #8b8b96;
   --line: #2b2b34;
   --accent: #38e8d1;
+  --accent-lit: #6ff2e2;
   --good: #78e65a;
   --bad: #ff4530;
   --on-accent: #0a1614;
 }
 
-/* -- page furniture ----------------------------------------------------- */
+/* -- page furniture ------------------------------------------------------ */
 
 * { box-sizing: border-box; }
 
@@ -28,74 +30,132 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: var(--text-md)/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-h1 { font-size: 17px; margin: 0; letter-spacing: 0.06em; text-transform: uppercase; }
+h1 {
+  font-size: var(--text-lg); font-weight: 600; margin: 0;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
 
-/* Section titles sit on the page, not on the panel they introduce. */
-h2 { font-size: 17px; font-weight: 600; margin: 26px 0 8px; }
+h2, h3 {
+  font-size: var(--text-md); font-weight: 600; margin: 0 0 8px;
+  color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase;
+}
 
-h3 { font-size: 12px; margin: 0 0 4px; color: var(--dim); }
+h2 small, h3 small { letter-spacing: 0; text-transform: none;
+                     font-variant-numeric: tabular-nums; }
 
-code { font-family: ui-monospace, monospace; }
+p { margin: 0 0 8px; color: var(--dim); font-size: var(--text-sm); }
 
-.hint { color: var(--dim); font-size: 12px; margin: -4px 0 10px; }
+small { color: var(--dim); font-size: var(--text-sm); }
+code, samp { font-family: ui-monospace, monospace; font-size: var(--text-sm); }
 
-/* -- header ------------------------------------------------------------- */
+/* -- header -------------------------------------------------------------- */
 
-header {
+body > header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 16px;
-  padding: 12px 20px;
+  padding: 12px var(--gap) 0;
   background: var(--panel);
   border-bottom: 2px solid var(--accent);
   position: sticky;
   top: 0;
   z-index: 5;
 
-  .host { margin: 0; flex: 1; color: var(--dim); font-variant-numeric: tabular-nums; }
-  .note { margin: 0; color: var(--dim); font-size: 12px; }
+  h1 { margin: 0 auto 0 0; }
 
-  /* Which badge the page below is configuring. */
-  .whose {
+  label {
     display: flex; align-items: center; gap: 6px;
-    color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
-
-    select { color: var(--ink); font-size: 14px; text-transform: none; letter-spacing: 0;
-             max-width: 220px; }
+    color: var(--dim); font-size: var(--text-sm);
+    text-transform: uppercase; letter-spacing: 0.06em;
   }
 
-  /* Hung off the button that opens it, this being sticky. */
-  .pairing { position: absolute; top: 100%; right: 20px; width: 340px; margin: 0;
-             box-shadow: 0 8px 24px #0009; }
+  label select { font-size: var(--text-md); text-transform: none; letter-spacing: 0;
+                 max-width: 220px; }
+
+  nav { flex-basis: 100%; display: flex; gap: 2px; }
+
+  nav button {
+    background: none; color: var(--dim); padding: 8px 12px;
+    font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  nav button:hover:not(:disabled) { background: var(--panel2); }
+  nav button[aria-current] { background: var(--accent); color: var(--on-accent); }
+  nav button[aria-current]:hover { background: var(--accent-lit); }
 }
 
-/* -- layout ------------------------------------------------------------- */
+/* -- pairing ------------------------------------------------------------- */
 
-/* Four columns: the pages, what they look like, what is installed, and this host. The
-   first is wider, being a list of cards with a picker in each. */
-main {
+dialog {
+  position: absolute; inset: 100% var(--gap) auto auto; width: 340px;
+  margin: 0; padding: 12px; border: 0;
+  background: var(--panel2); border-left: 3px solid var(--accent); color: var(--ink);
+  box-shadow: 0 8px 24px #0009;
+
+  p { text-align: center; }
+  p:last-of-type { font-variant-numeric: tabular-nums; }
+  ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+
+  li {
+    display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center;
+    background: var(--panel); padding: 8px 10px;
+  }
+
+  li samp {
+    grid-column: 2; font-size: var(--text-xl); font-weight: 700; letter-spacing: 0.14em;
+    color: var(--accent); text-align: right;
+  }
+
+  li div { grid-column: 1 / -1; display: flex; gap: 6px; }
+}
+
+/* -- the sheet a tab shows ----------------------------------------------- */
+
+main > section {
   display: grid;
-  grid-template-columns: minmax(300px, 1.25fr) repeat(3, minmax(230px, 1fr));
-  gap: 20px;
-  padding: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  gap: var(--gap);
+  padding: var(--gap);
   align-items: start;
 }
 
-@media (width <= 1240px) {
-  main { grid-template-columns: minmax(300px, 1.2fr) minmax(240px, 1fr); }
+main > section[hidden] { display: none; }
+
+main > section > :is(form, ol, menu, p, section:has(> section)) { grid-column: 1 / -1; }
+
+main > section section:not(:has(> section)) {
+  background: var(--panel);
+  padding: var(--pad);
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  gap: 9px 10px;
+  align-items: center;
+
+  > :is(h2, h3, p, div, span, figure, button, ol, ul, dl, menu) { grid-column: 1 / -1; }
+  > label { grid-column: 1; }
+  > label:has(+ input[type="checkbox"]) { grid-column: 1 / 3; }
+  > select { grid-column: 2 / -1; justify-self: start; max-width: 100%; }
+  > input[type="text"] { grid-column: 2 / -1; }
+  > input[type="range"] { grid-column: 2; width: 100%; }
+  > input[type="checkbox"] { grid-column: 3; justify-self: end; margin: 0; }
+  > output { grid-column: 3; justify-self: end; }
+
+  > [hidden] { display: none; }
+  > :last-child { margin-bottom: 0; }
 }
 
-@media (width <= 900px) {
-  main { grid-template-columns: 1fr; }
+main section > span[data-tint]:not([hidden]) {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+
+  > select { max-width: 100%; }
+  > i { width: 18px; height: 18px; flex: none; }
 }
 
-.column > section:first-child h2 { margin-top: 0; }
-
-/* -- controls ----------------------------------------------------------- */
+/* -- controls ------------------------------------------------------------ */
 
 button {
   background: var(--panel2); color: var(--ink); border: 0;
@@ -104,7 +164,7 @@ button {
   &:hover:not(:disabled) { background: var(--line); }
   &:disabled { opacity: 0.45; cursor: default; }
   &.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
-  &.small { padding: 3px 7px; font-size: 12px; }
+  &.small { padding: 3px 7px; font-size: var(--text-sm); }
   &.danger:hover { background: var(--bad); color: #fff; }
 }
 
@@ -117,259 +177,180 @@ input[type="range"] { accent-color: var(--accent); }
 input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
 
 output {
-  color: var(--dim); font-variant-numeric: tabular-nums;
-  min-width: 62px; text-align: right; font-size: 12px;
+  color: var(--dim); font-variant-numeric: tabular-nums; font-size: var(--text-sm);
+  min-width: 62px; text-align: right;
 }
 
-/* -- panels and form rows ------------------------------------------------ */
+/* -- readings ------------------------------------------------------------ */
 
-.panel { background: var(--panel); padding: 16px; }
+dl {
+  display: grid; grid-template-columns: 1fr minmax(90px, auto); gap: 1px 8px;
+  margin: 0; font-size: var(--text-sm);
 
-/* A form is one grid, and every row lands in the same three tracks - name, control,
-   readout - so the controls line up down the panel instead of each row settling its own
-   widths. A statement with a checkbox spans the first two, so a long one does not push
-   every control on the page to the right. */
-.form {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
-  gap: 9px 10px;
-  align-items: center;
+  dt { color: var(--dim); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 
-  > label { grid-column: 1; }
-  > label:has(+ input[type="checkbox"]) { grid-column: 1 / 3; }
-  > select { grid-column: 2 / -1; justify-self: start; max-width: 100%; }
-  > input[type="text"] { grid-column: 2 / -1; }
-  > input[type="range"] { grid-column: 2; width: 100%; }
-  > input[type="checkbox"] { grid-column: 3; justify-self: end; margin: 0; }
-  > output { grid-column: 3; justify-self: end; }
-
-  /* Anything that is not a row of the form takes the whole width. */
-  > h3, > p, > div, > span, > button { grid-column: 1 / -1; }
-  > .hint { margin: 0 0 2px; }
-
-  /* Beats the display each of those carries, which the browser's own rule for the
-     attribute cannot. */
-  > [hidden] { display: none; }
+  dd[style] {
+    background: linear-gradient(to left, var(--bar, var(--accent)) var(--at), #0000 0)
+                bottom / 100% 3px no-repeat;
+    padding-bottom: 4px;
+  }
 }
 
-/* A control with a swatch beside it showing what the choice resolved to. Lays the pair
-   out itself, so the select still sizes to its options. */
-.with-chip {
-  display: flex; align-items: center; gap: 8px; min-width: 0;
+/* -- pages --------------------------------------------------------------- */
 
-  > select { max-width: 100%; }
-  > .chip { width: 18px; height: 18px; flex: none; }
-}
+main form { display: flex; gap: 8px; }
 
-/* -- pages -------------------------------------------------------------- */
-
-/* Above the list, where it stays reachable however many pages there are. */
-.toolbar {
-  display: flex; gap: 8px; margin-bottom: 10px;
-
-  /* Sized to its options, like every other picker here. */
-  select { flex: 0 1 auto; background: var(--panel); }
-  button { background: var(--panel); }
-  button:hover { background: var(--panel2); }
-}
-
-/* A box under the picker, not a note under the list, where a long list of pages pushes it
-   off the screen. */
-.warn {
-  color: var(--accent); font-size: 12px; margin: 0 0 10px;
+main p[role="status"] {
+  color: var(--accent);
   background: var(--panel); border-left: 2px solid var(--accent);
   border-radius: 0 6px 6px 0; padding: 8px 10px;
 }
 
-.pages { list-style: none; margin: 0; padding: 0; }
+main > section > ol {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  gap: 10px; align-items: start;
 
-/* Each page is its own panel on the page background, like a live group. */
-.page {
-  background: var(--panel); padding: 12px 16px; margin-bottom: 10px;
+  > li { background: var(--panel); padding: 12px var(--pad); }
+  > li[data-dragging] { opacity: 0.4; }
+  > li[data-over] { box-shadow: inset 3px 0 0 var(--accent); }
 
-  &.dragging { opacity: 0.4; }
-  &.over { box-shadow: inset 3px 0 0 var(--accent); }
+  header { display: flex; align-items: center; gap: 8px; }
+  header small { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  header input { flex: 1; }
+  header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
+  header .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
 
-  .top { display: flex; align-items: center; gap: 8px; }
-  .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
-
-  .kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-          color: var(--accent); }
-  .title { flex: 1; }
-  .twist { padding: 2px 6px; min-width: 24px; }
-  .fields { margin-top: 8px; display: grid; gap: 6px; }
-  .fieldrow { display: flex; gap: 6px; align-items: center; }
-  .fieldrow select { flex: 1; }
-
-  /* Which source the reading comes from. Narrower than the metric beside it and capped, so
-     the selects below each other line up instead of stepping in and out with the longest
-     domain name an account holds. */
-  .fieldrow select.group { flex: 0 1 40%; max-width: 150px; color: var(--dim);
-                           font-size: 12px; }
-
-  /* What a collapsed card is showing, so the overview is still readable. */
-  .summary { color: var(--dim); font-size: 12px; padding: 0 4px 2px 26px;
+  > li > p { margin: 0; padding: 0 4px 0 26px;
              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-}
 
-/* -- badges and pairing -------------------------------------------------- */
+  ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+  ol li { display: flex; gap: 6px; align-items: center; }
+  ol li select { flex: 1; }
 
-.badge-row {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
-  border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer;
-
-  &:hover { background: var(--panel2); }
-
-  /* The one the page is configuring, marked the way the pages list marks a drop target. */
-  &.on { box-shadow: inset 3px 0 0 var(--accent); }
-
-  code { color: var(--dim); font-size: 11px; }
-  .name { flex: 1; }
-  .state { color: var(--dim); font-size: 11px; }
-}
-
-.pairing {
-  margin-top: 10px; padding: 12px; background: var(--panel2);
-  border-left: 3px solid var(--accent);
-
-  .code { font: 700 28px/1.2 ui-monospace, monospace; letter-spacing: 0.14em;
-          color: var(--accent); text-align: center; margin: 6px 0; }
-  .where { text-align: center; color: var(--dim); font-size: 12px; }
-  .countdown { margin-top: 6px; font-variant-numeric: tabular-nums; }
-}
-
-.pending { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-
-.ask {
-  display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center;
-  background: var(--panel2); padding: 8px 10px;
-
-  code { font-size: 11px; color: var(--dim); }
-  .askname { font-size: 13px; color: var(--ink); }
-
-  .askcode { font: 700 22px/1 ui-monospace, monospace; letter-spacing: 0.14em;
-             color: var(--accent); text-align: right; }
-  .askbuttons { grid-column: 1 / -1; display: flex; gap: 6px; }
+  ol li select:first-of-type { flex: 0 1 40%; max-width: 150px; color: var(--dim);
+                               font-size: var(--text-sm); }
 }
 
 /* -- extensions ---------------------------------------------------------- */
 
-/* One box per extension, titled with its name, so an install that took is visible before
-   anything it draws is: a section of settings said nothing about an extension that asks to
-   be told nothing, and nothing at all about one that failed to import. */
-.boxes {
-  display: grid; gap: 10px;
+p.bad { color: var(--bad); }
 
-  h3 { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em;
-       font-size: 12px; margin-bottom: 2px; }
-  .hint { margin: 0 0 6px; }
-  .hint.bad { color: var(--bad); }
-}
-
-/* An extension's API keys, kept off the screen until asked for. A masked line rather than
-   nothing, so "not set" and "set to the wrong one" can be told apart. */
 .secrets {
   border-left: 2px solid var(--line);
   padding: 8px 0 4px 10px; margin: 2px 0 8px;
   display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
   gap: 6px 10px; align-items: center;
 
-  .kv { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 10px;
-        font-size: 12px; }
-  .mask { font-family: ui-monospace, monospace; color: var(--dim); }
-  .mask.none { font-style: italic; }
   input[type="text"] { grid-column: 2; }
   button { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
+  dl { grid-column: 1 / -1; }
+  dd { font-family: ui-monospace, monospace; color: var(--dim); }
+  dd:empty::before { content: "not set"; font-style: italic; }
 }
 
 /* -- this host and live readings ----------------------------------------- */
 
-.sources {
-  font-size: 12px; color: var(--dim);
+main ul {
+  list-style: none; margin: 0; padding: 0;
+  font-size: var(--text-sm); color: var(--dim);
 
-  div { padding: 3px 0; }
-  .faulty { color: var(--bad); }
-
-  /* Why it is failing, under the name of the thing that is. */
-  .why { display: block; }
-  .reporting { margin-top: 6px; }
+  li { padding: 3px 0; }
+  li.faulty { color: var(--bad); }
+  li small { display: block; color: inherit; }
 }
 
-/* A group is its own panel: one box per reading, not a box of boxes. */
-.live {
-  display: grid; gap: 10px;
+main section:has(> section) {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 10px; align-items: start;
 
-  .group { background: var(--panel); padding: 12px 16px; }
-  .group h3 { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  > h2 {
+    grid-column: 1 / -1; margin: 0;
+    font-size: var(--text-lg); color: var(--ink);
+    letter-spacing: 0; text-transform: none;
+  }
+}
 
-  .kv { display: flex; justify-content: space-between; gap: 8px; font-size: 12px;
-        padding: 1px 0; }
-  .kv span:last-child { font-variant-numeric: tabular-nums; }
-  .kv .none { color: var(--dim); }
-  .bar { height: 3px; background: var(--line); margin-top: 3px; }
-  .bar .fill { display: block; height: 100%; background: var(--accent); }
+/* -- badges -------------------------------------------------------------- */
+
+main menu + button { margin-top: 10px; justify-self: start; }
+
+main menu {
+  list-style: none; margin: 0; padding: 0;
+
+  button {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 8px;
+    width: 100%; text-align: left; background: none;
+    padding: 8px 10px; border-bottom: 1px solid var(--line);
+  }
+
+  button:hover { background: var(--panel2); }
+  button[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
+  span { grid-column: 1; }
+  small { grid-column: 2; grid-row: 1; }
+  code { grid-column: 1; color: var(--dim); }
 }
 
 /* -- the accent picker --------------------------------------------------- */
 
 .accents {
-  margin: 8px 0 4px;
-
-  /* Which family of accents is showing: four rows of twelve, one at a time. */
   .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
 
-  .tabs button { flex: 1; padding: 4px 2px; font-size: 11px; color: var(--dim);
+  .tabs button { flex: 1; padding: 4px 2px; font-size: var(--text-sm); color: var(--dim);
                  background: var(--panel2); border-bottom: 2px solid transparent; }
-  .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+
+  .tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--accent); }
   .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
-  .swatches button { width: 30px; height: 30px; padding: 0; border: 2px solid transparent; }
-  .swatches button.on { border-color: var(--ink); }
+
+  .swatches button { width: 30px; height: 30px; padding: 0;
+                     border: 2px solid transparent; }
+
+  .swatches button[aria-pressed="true"] { border-color: var(--ink); }
 }
 
 /* -- the theme preview --------------------------------------------------- */
 
-/* A loose impression of the badge drawn in the palette it would use. Not a rendering of
-   the app - it is here so a choice can be judged before it is sent, so what matters is
-   that the colours sit next to each other the way they will. The badge's own 4:3, down to
-   whatever the column allows: at 320px it is life size. */
-.preview {
+figure {
+  container-type: inline-size;
   width: 100%; max-width: 320px; aspect-ratio: 4 / 3;
   display: flex; flex-direction: column;
-  background: var(--pv-bg); font-size: 11px; overflow: hidden; margin: 4px 0;
+  margin: 4px 0; overflow: hidden;
+  background: var(--pv-bg); font-size: var(--text-sm);
 
-  .head { height: 30px; background: var(--pv-panel);
-          border-bottom: 2px solid var(--pv-accent);
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 0 10px; }
-  .head .title { color: var(--pv-ink); font-size: 15px; letter-spacing: 0.06em; }
-  .head .host { color: var(--pv-dim); }
+  header {
+    height: 9.4cqw; padding: 0 3cqw;
+    background: var(--pv-panel); border-bottom: 0.6cqw solid var(--pv-accent);
+    display: flex; align-items: center; justify-content: space-between;
+    color: var(--pv-ink); font-size: 4.7cqw; letter-spacing: 0.06em;
+  }
 
-  .body { flex: 1; display: flex; align-items: center; gap: 14px; padding: 0 12px; }
+  header small { color: var(--pv-dim); font-size: 3.4cqw; }
+  div { flex: 1; display: flex; align-items: center; gap: 4.4cqw; padding: 0 3.8cqw; }
 
-  /* The gauge. Its background is built in app.js, where the ramp's stops are: a stop list
-     cannot be handed to a gradient through a custom property and then given positions of
-     its own - the declaration parses as invalid and the whole gauge disappears. */
-  .dial { width: 96px; height: 96px; border-radius: 50%; flex: none;
-          display: grid; place-items: center; }
-  .reading { color: var(--pv-ink); font-size: 21px; }
+  strong {
+    width: 30cqw; height: 30cqw; border-radius: 50%; flex: none;
+    display: grid; place-items: center;
+    color: var(--pv-ink); font-size: 6.6cqw; font-weight: 400;
+  }
 
-  .rows { flex: 1; display: grid; gap: 10px; }
-  .row { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; }
-  .row .name { color: var(--pv-dim); }
-  .row .value { color: var(--pv-ink); }
-  .row .bar { grid-column: 1 / -1; height: 3px; background: var(--pv-grid); }
-  .row .fill { display: block; height: 100%; }
+  dl { flex: 1; grid-template-columns: 1fr 40%; font-size: 3.4cqw; gap: 5px 6px; }
+  dt { color: var(--pv-dim); }
+  dd { color: var(--pv-ink); }
 
-  .pips { height: 20px; background: var(--pv-panel); display: flex; align-items: center;
-          justify-content: center; gap: 6px; }
-  .pips span { width: 14px; height: 4px; background: var(--pv-grid); }
-  .pips span:first-child { background: var(--pv-accent); width: 18px; }
+  footer {
+    height: 6.2cqw; background: var(--pv-panel);
+    display: flex; align-items: center; justify-content: center; gap: 1.9cqw;
+  }
+
+  footer span { width: 4.4cqw; height: 1.2cqw; background: var(--pv-grid); }
+  footer span:first-child { width: 5.6cqw; background: var(--pv-accent); }
 }
 
-/* -- toast ---------------------------------------------------------------- */
+/* -- toast --------------------------------------------------------------- */
 
 .toast {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: var(--gap); left: 50%; transform: translateX(-50%);
   background: var(--accent); color: var(--on-accent); padding: 9px 18px;
   font-weight: 600; box-shadow: 0 6px 20px #0009;
 

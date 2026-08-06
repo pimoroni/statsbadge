@@ -970,7 +970,7 @@ def test_extensions_describe_finds_the_clock(h):
     described = {record["name"] for record in caps["extensions"]}
     assert described == set(found), (described, set(found))
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="settings" class="boxes"' in (web / "index.html").read_text()
+    assert 'id="extensions"' in (web / "index.html").read_text()
     script = (web / "app.js").read_text()
     assert "caps.extensions" in script, "the UI still lists only what has settings"
     assert "extensionBox" in script, "an extension is not a box of its own"
@@ -1836,7 +1836,8 @@ def test_a_gauge_can_sweep_to_its_reading(_h):
 
     web = pathlib.Path("src/statsbadge/web")
     assert 'id="animate"' in (web / "index.html").read_text(), "no control in the UI"
-    assert "config.animate" in (web / "app.js").read_text(), "the control is not bound"
+    assert 'bindCheck("animate", "animate")' in (web / "app.js").read_text(), \
+        "the control is not bound"
 
     sys.path.insert(0, install.app_source_dir())
     import pages
@@ -2351,7 +2352,7 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     assert caps["accents"]["saturated"] == [list(a) for a in derive.accents("saturated")]
     web = pathlib.Path("src/statsbadge/web")
     page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
-    assert 'id="accents"' in page and 'id="preview"' in page, "no picker or preview in the UI"
+    assert "data-tint" in page and "<figure" in page, "no picker or preview in the UI"
     assert "caps.tinted" in script and "config.tint" in script
     # Clicking along the swatches starts several previews; the last click has to win rather
     # than the last reply, or the panel shows a colour nobody chose.
@@ -2447,8 +2448,10 @@ def test_each_badge_has_its_own_layout(h):
     web = pathlib.Path("src/statsbadge/web")
     page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
     header = page[page.index("<header>"):page.index("</header>")]
-    for control in ('id="whose"', 'id="forget"', 'id="pair"', 'id="save"'):
+    for control in ("<label>Badge", 'id="pair"', 'id="save"'):
         assert control in header, control
+    # Forgetting one belongs with the list of them, not beside the picker.
+    assert 'id="forget"' in page[page.index("</header>"):], "no way to forget a badge"
     assert "?badge=" in script, "the UI saves without saying whose layout it is"
     assert "ownIds" in script, "a badge's pages can collide with another's"
 
@@ -2546,11 +2549,10 @@ def test_the_settings_are_grouped_by_what_they_do(_h):
     page = pathlib.Path("src/statsbadge/web/index.html").read_text()
     sections = sections_of(page)
     wanted = {
-        "Look": ("theme", "preview", "accents", "slide", "interval"),
-        "Graphs &amp; Gauges": ("points", "smooth", "plotanim", "rows", "animate",
-                                "gaugefill"),
-        "Auto Advance": ("idle", "advance"),
-        "Backlight &amp; Case Lights": ("brightness", "autobright", "caselights"),
+        "Look": ("theme", "accentb", "slide", "interval"),
+        "Graphs and gauges": ("points", "smooth", "plotanim", "rows", "animate", "gaugefill"),
+        "Auto advance": ("idle", "advance"),
+        "Backlight and case lights": ("brightness", "autobright", "caselights"),
     }
     for heading, controls in wanted.items():
         assert heading in sections, heading
@@ -2819,7 +2821,8 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
                             "pages": layout.DEFAULT_PAGES})["plot_animation"] is True
     web = pathlib.Path("src/statsbadge/web")
     assert 'id="plotanim"' in (web / "index.html").read_text(), "no control in the UI"
-    assert "config.plot_animation" in (web / "app.js").read_text(), "it is not bound"
+    assert 'bindCheck("plotanim", "plot_animation")' in (web / "app.js").read_text(), \
+        "it is not bound"
 
     # A graph keeps room on its right for the samples still coming in, so the box stays full
     # while it moves. Laid across the width alone it would shift left and leave a gap that
@@ -3280,48 +3283,79 @@ def test_a_notifications_page_sorts_messages_from_counters(_h):
         None, "just now", "1m ago", "66m ago", "27h ago", "4d ago"]
 
 
+def rules_of(css):
+    """Every rule in the sheet, as its full selector and the declarations of its own. The
+    sheet nests, so a rule's selector is the chain of the ones it sits inside."""
+    chain, declarations, found, buffer = [], [], [], ""
+    for char in css:
+        if char == "{":
+            above, _, selector = buffer.rpartition(";")
+            if declarations:
+                declarations[-1] += above
+            chain.append(selector.strip())
+            declarations.append("")
+            buffer = ""
+        elif char == "}":
+            declarations[-1] += buffer
+            found.append((" ".join(chain), declarations[-1]))
+            chain.pop()
+            declarations.pop()
+            buffer = ""
+        else:
+            buffer += char
+    return found
+
+
 @check
 def test_a_hidden_row_is_actually_hidden(_h):
-    """The browser's own rule for `hidden` is one attribute selector, so a class naming a
-    display outranks it.
+    """The browser's own rule for `hidden` is one attribute selector, so anything naming a
+    class or an attribute outranks it and the row stays on screen.
 
-    `.with-chip` sets `display: flex`, and the second accent's select stayed on screen for
-    every theme, where only a derived palette works one out. Hence the rule inside `.form`,
-    which every hidden row is a child of.
+    The second accent takes `display: flex`, to sit its swatch beside the select, and showed
+    for every theme - where only a derived palette works one out.
     """
     web = pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
     css, markup = (web / "app.css").read_text(), (web / "index.html").read_text()
 
-    assert "> [hidden] { display: none; }" in css, "a form row cannot be hidden"
-
     class Hidden(html.parser.HTMLParser):
-        """Every element the page starts out hiding, and the classes it sits inside."""
+        """Every element the page starts out hiding, and how a rule could name it."""
 
         def __init__(self):
             super().__init__()
-            self.open, self.found = [], []
+            self.depth, self.found = 0, []
 
         def handle_starttag(self, tag, attrs):
             attrs = dict(attrs)
             if "hidden" in attrs:
-                self.found.append((tag, attrs.get("class", ""), list(self.open)))
+                named = {tag} | {f".{name}" for name in attrs.get("class", "").split()}
+                named |= {f"[{key}]" for key in attrs if key.startswith("data-")}
+                self.found.append((tag, self.depth, named))
             if tag not in ("input", "link", "meta", "br"):
-                self.open.append(attrs.get("class", ""))
+                self.depth += 1
 
         def handle_endtag(self, _tag):
-            if self.open:
-                self.open.pop()
+            self.depth -= 1
 
     parser = Hidden()
     parser.feed(markup)
-    assert parser.found, "nothing on the page starts out hidden"
-    for tag, classes, ancestors in parser.found:
-        if any("form" in each.split() for each in ancestors):
+    # The sheet each tab shows, and the rows only a derived palette has.
+    assert len({depth for _tag, depth, _named in parser.found}) > 1, parser.found
+
+    # A rule that gives one of them a display has to stand aside when it is hidden: the two
+    # selectors are otherwise close enough that source order decides which wins.
+    for selector, declarations in rules_of(css):
+        last = re.split(r"[\s>+~]+", selector)[-1]
+        if "display:" not in declarations or "[hidden]" in selector:
             continue
-        # Outside the form there is no such rule, so nothing may give it a display.
-        for name in classes.split():
-            assert f".{name} {{ display" not in css, (
-                f"{tag}.{name} sets a display that outranks [hidden]")
+        if not (selector.startswith("main") or selector == last):
+            continue            # it cannot reach inside a sheet
+        for tag, depth, named in parser.found:
+            if tag == "section":
+                continue        # the sheets, hidden by a rule of their own
+            for each in named:
+                found = (re.search(rf"\b{each}\b", last) if each.isalpha()
+                         else each in last)
+                assert not found, (selector, tag, depth, each)
 
 
 @check
@@ -3561,7 +3595,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
         assert "note_ok" in text, f"{path} records faults and never clears one"
     # The UI puts the reason under the name rather than instead of it.
     script = pathlib.Path("src/statsbadge/web/app.js").read_text()
-    assert 'if (source.last_fault) row.className = "faulty"' in script, \
+    assert 'source.last_fault ? "faulty" : null' in script, \
         "a recovered source reads as broken"
     assert 'provides.join(", ")' in script.split("function renderSources")[1][:600]
 
