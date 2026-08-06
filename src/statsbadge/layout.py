@@ -26,11 +26,11 @@ from . import derive, themes
 #   text    labelled lines, for names and versions
 #   badge   the badge's own vitals, which need no field and come from no host
 KINDS = ("dial", "dials", "bars", "graph", "grid", "text",
-         "rings", "spark", "radar", "trend", "waterfall", "badge")
+         "rings", "spark", "radar", "trend", "waterfall", "notify", "badge")
 
 # How many fields a kind can draw. What is left out is the badge's own layout table.
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
-              "rings": 4, "spark": 6, "radar": 6}
+              "rings": 4, "spark": 6, "radar": 6, "notify": 6}
 
 # How a page turn moves. "over" draws the incoming page over the outgoing one; "deck" moves
 # them together, the outgoing page leaving to the left.

@@ -61,21 +61,6 @@ def _mag_fraction(mag):
     return max(0.0, min(1.0, (float(mag) - MAG_LOW) / (MAG_HIGH - MAG_LOW)))
 
 
-def _ago(seconds):
-    if seconds is None:
-        return None
-    # A minute, because the host sends the age to the minute: it is the same set of events
-    # for a whole one, and rounding there is what lets the feed travel only when it moves.
-    # At 90 the first minute of an event read as "just now" for half of the next one too.
-    if seconds < 60:
-        return "just now"
-    if seconds < 5400:
-        return f"{int(seconds / 60)}m ago"
-    if seconds < 172800:
-        return f"{int(seconds / 3600)}h ago"
-    return f"{int(seconds / 86400)}d ago"
-
-
 def _page_state(page):
     key = (page or {}).get("id") or "quakes"
     state = _state.get(key)
@@ -173,7 +158,7 @@ def _band(theme, event, index, total, note="waiting for the feed"):
     detail = []
     if event.get("depth") is not None:
         detail.append(f"{event['depth']:.0f} km deep")
-    aged = _ago(event.get("age_s"))
+    aged = draw.ago(event.get("age_s"))
     if aged:
         detail.append(aged)
     if detail:

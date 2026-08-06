@@ -1218,6 +1218,131 @@ def lines(theme, entries):
         screen.hspan(look.PAD, y - 5, look.W - look.PAD * 2)
 
 
+def wrap(text_value, size, room, rows):
+    """`text_value` broken over at most `rows` lines of `room` pixels, the last one fitted.
+
+    Split on spaces and measured, because a proportional font has no character count that
+    means anything: a line of capitals is half again the width of the same count in
+    lowercase. A word longer than the line is left to `fit` on its own line rather than
+    broken, since what arrives here is a URL about as often as it is a long word.
+    """
+    words = (text_value or "").split()
+    if not words:
+        return []
+    out, line = [], ""
+    for word in words:
+        candidate = f"{line} {word}" if line else word
+        if line and screen.measure_text(candidate, font_size=size)[0] > room:
+            out.append(line)
+            if len(out) == rows:
+                break
+            line = word
+        else:
+            line = candidate
+    if len(out) < rows and line:
+        out.append(line)
+    # Whatever did not fit is said with an ellipsis on the last line, so a message that runs
+    # long reads as cut off rather than as having stopped mid-sentence.
+    used = sum(len(part.split()) for part in out)
+    if used < len(words) and out:
+        out[-1] = fit(out[-1] + " " + " ".join(words[used:]), size, room)
+    else:
+        out = [fit(part, size, room) for part in out]
+    return out
+
+
+# A message block: the line above it, the body, and how many rows of body a block gets when
+# there is one on the page against two. One message can afford to be read; two share the band.
+ITEM_TITLE = look.SIZE_SMALL
+ITEM_TEXT = look.SIZE_VALUE
+ITEM_ROWS = (3, 2, 1)
+# The strip of counters along the bottom, when a page has any.
+COUNT_H = 34
+
+
+def notification(theme, items, counters):
+    """Messages down the page, with a row of counters under them.
+
+    One shape for a post, a mention, a headline and an RSS entry, because they are the same
+    four things: who or where it came from, what it says, how long ago, and sometimes a word
+    about why it is here. Anything numeric on the same page is a counter, drawn small along
+    the bottom - a follower count is context for the message, not the point of the page.
+    """
+    top, bottom = look.BODY_TOP, look.BODY_TOP + look.BODY_H
+    if counters:
+        bottom -= COUNT_H
+        _counter_row(theme, counters, bottom, look.BODY_TOP + look.BODY_H)
+    if not items:
+        blit_label("nothing yet", ITEM_TEXT, theme.dim, look.W // 2,
+                   (top + bottom) // 2 - 8, align=1)
+        return
+    rows = ITEM_ROWS[min(len(items), len(ITEM_ROWS)) - 1]
+    height = (bottom - top) // len(items)
+    for index, item in enumerate(items):
+        _item_block(theme, item, top + index * height, height, rows)
+        if index:
+            screen.pen = theme.grid
+            screen.hspan(look.PAD, top + index * height, look.W - look.PAD * 2)
+
+
+def _item_block(theme, item, top, height, rows):
+    """One message: who it is from and how long ago, then what it says."""
+    room = look.W - look.PAD * 2
+    y = top + 6
+    title = str((item or {}).get("title") or "")
+    aged = ago((item or {}).get("age_s"))
+    if aged:
+        width = blit_label(aged, ITEM_TITLE, theme.dim, look.W - look.PAD, y, align=2)
+        room -= width + 8
+    note = str((item or {}).get("note") or "")
+    if title:
+        used = blit_label(fit(title, ITEM_TITLE, room), ITEM_TITLE, theme.accent,
+                          look.PAD, y)
+        if note:
+            # Why this message is here - boosted, a reply, a section - beside the name and
+            # in the dim, since it qualifies the line rather than being part of it.
+            blit_label(fit(note, ITEM_TITLE, room - used - 6), ITEM_TITLE, theme.dim,
+                       look.PAD + used + 6, y)
+        y += int(ITEM_TITLE * 1.45)
+    step = int(ITEM_TEXT * 1.35)
+    fits = max(1, min(rows, (top + height - y - 4) // step))
+    for line in wrap(str((item or {}).get("text") or ""), ITEM_TEXT,
+                     look.W - look.PAD * 2, fits):
+        blit_label(line, ITEM_TEXT, theme.ink, look.PAD, y)
+        y += step
+
+
+def _counter_row(theme, counters, top, bottom):
+    """Up to four labelled figures along the bottom, each in its share of the width."""
+    counters = counters[:4]
+    width = (look.W - look.PAD * 2) // len(counters)
+    screen.pen = theme.grid
+    screen.hspan(look.PAD, top, look.W - look.PAD * 2)
+    for index, (name, value_text) in enumerate(counters):
+        x = look.PAD + index * width + width // 2
+        blit_label(value_text, look.SIZE_VALUE, theme.ink, x, top + 5, align=1)
+        blit_label(fit(name, look.SIZE_SMALL, width - 4), look.SIZE_SMALL, theme.dim,
+                   x, bottom - 13, align=1)
+
+
+def ago(seconds):
+    """"3m ago", for a message. None where there is no age to draw.
+
+    Public because every feed carries one and each of them would otherwise write this out
+    again: a post, a mention and a headline are all "how long ago" to a reader.
+    """
+    if seconds is None:
+        return None
+    seconds = int(seconds)
+    if seconds < 60:
+        return "just now"
+    if seconds < 5400:
+        return f"{seconds // 60}m ago"
+    if seconds < 172800:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
+
+
 def banner(theme, title, message, detail=None):
     """A full-screen notice: connecting, no host, an error.
 

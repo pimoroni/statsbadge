@@ -48,6 +48,20 @@ FRAME = {
     "disk": {"pct": 74.2, "read_bps": 52428800, "write_bps": 8388608,
              "used_mb": 703840, "total_mb": 948584},
     "power": {"battery_pct": 91, "charging": True, "package_w": 44.2},
+    # A feed, for the notifications page. Four things - who, what, when, why - which is a
+    # post, a mention, a headline and an RSS entry alike.
+    "feed": {
+        "home": {"title": "Maaike", "text": "All of the above! I inherited my dad's old "
+                                            "cameras, my mum taught me how to see and knit",
+                 "age_s": 420, "note": "boosted"},
+        "mention": {"title": "dinkster75", "text": "@gadgetoid how did you side load onto "
+                                                   "the yaber t2? what cable?",
+                    "age_s": 34200},
+        "headline": {"title": "BBC News", "text": "Something has happened somewhere, and "
+                                                  "this is the headline about it",
+                     "age_s": 90, "note": "Technology"},
+        "followers": 1350, "following": 663, "posts": 6466, "likes": 21,
+    },
     # What the collector sends as the scale for each rate.
     "peaks": {"net.down_bps": 23068672, "net.up_bps": 2516582,
               "disk.read_bps": 104857600, "disk.write_bps": 33554432},
@@ -131,6 +145,11 @@ PAGES = [
      "fields": ["cpu.pct", "mem.pct", "gpu.pct", "disk.pct", "gpu.temp"]},
     {"id": "trend", "kind": "trend", "title": "CPU", "field": "cpu.pct"},
     {"id": "waterfall", "kind": "waterfall", "title": "Cores", "field": "cpu.cores"},
+    {"id": "notify", "kind": "notify", "title": "Mastodon",
+     "fields": ["feed.home", "feed.mention",
+                "feed.followers", "feed.following", "feed.posts", "feed.likes"]},
+    {"id": "notify_one", "kind": "notify", "title": "Headlines",
+     "fields": ["feed.headline"]},
     # The clock extension's pages, one per face. The ids name the shots, and each page
     # id is also the key its place is published under.
     {"id": "swiss_clock", "kind": "clockface", "title": "Clock", "face": "railway"},

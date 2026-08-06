@@ -26,6 +26,10 @@ const SHAPE = {
   radar: { one: null, many: "fields", max: 6, label: "Axes", manyPool: "gauge" },
   trend: { one: "field", many: null, max: 0, label: "", pool: "series" },
   waterfall: { one: "field", many: null, max: 0, label: "", pool: "list" },
+  // One slot list holding two sorts of thing. A message and a counter are told apart by
+  // looking at the reading, so a feed, a mention and a follower count go in one page in
+  // whatever mixture suits, and the renderer lays out whichever it was given.
+  notify: { one: null, many: "fields", max: 6, label: "Lines", manyPool: "notify" },
   // The badge's own vitals: no fields at all, since none of it comes from the host.
   badge: { one: null, many: null, max: 0, label: "" },
 };
@@ -87,23 +91,44 @@ function availableRefs() {
  */
 function preferredRefs() {
   // Lists are left out of even this: fmt has nothing to do with one but print it, so a
-  // grid cell handed cpu.cores shows a row of Python.
+  // grid cell handed cpu.cores shows a row of Python. A message likewise.
   const printable = availableRefs().filter(
-    (ref) => !listFields().includes(ref.split(".")[1]));
+    (ref) => !listFields().includes(ref.split(".")[1])
+             && !itemFields().includes(ref.split(".")[1]));
   return [...new Set(numericRefs().concat(printable))];
 }
 
-/** Refs that are a number at all: not a name, a flag or a list. */
+/** Refs that are a number at all: not a name, a flag, a list or a message. */
 function numericRefs() {
   return availableRefs().filter((ref) => {
     const field = ref.split(".")[1];
     return !["name", "host", "os", "arch", "cpu_name", "iface", "charging"]
-      .includes(field) && !listFields().includes(field);
+      .includes(field) && !listFields().includes(field)
+      && !itemFields().includes(field);
   });
 }
 
 function listFields() {
   return caps.list_fields || ["cores", "load"];
+}
+
+function itemFields() {
+  return caps.item_fields || [];
+}
+
+/** Refs that are a message rather than a reading: a post, a mention, a headline. */
+function itemRefs() {
+  return availableRefs().filter((ref) => itemFields().includes(ref.split(".")[1]));
+}
+
+/** What a notifications page can hold: the messages first, then anything countable.
+ *
+ * One pool for one slot list, because the page tells them apart by looking rather than by
+ * which slot they went in - so the same page is a feed, a mention and a follower count in
+ * whatever mixture. Messages lead, since adding a row to this page usually means one.
+ */
+function notifyRefs() {
+  return [...new Set(itemRefs().concat(numericRefs()))];
 }
 
 /** Refs a gauge can place a needle on: a percentage, or something with a top end.
@@ -141,11 +166,12 @@ function listRefs() {
 
 // Which pool each slot draws from. "gauge" needs a top end, "series" only needs to be a
 // number since it scales itself from the data, "list" wants one value per element, and
-// "any" prints whatever it is given.
+// "notify" takes a message or a number, and "any" prints whatever it is given.
 const POOLS = {
   gauge: gaugeRefs,
   series: seriesRefs,
   list: listRefs,
+  notify: notifyRefs,
   any: preferredRefs,
 };
 

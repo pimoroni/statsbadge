@@ -1692,7 +1692,8 @@ def test_every_kind_picks_from_a_pool_that_suits_it(_h):
     shape = ui[ui.index("const SHAPE = {"):ui.index("async function api(")]
     pools = ui[ui.index("const POOLS = {"):]
     pools = pools[:pools.index("}")]
-    named = {name for name in ("gauge", "series", "list", "any") if name in pools}
+    named = {name for name in ("gauge", "series", "list", "notify", "any")
+             if name in pools}
 
     for kind in layout.KINDS:
         # An entry may be wrapped over two lines, so take it up to its closing brace
@@ -3103,6 +3104,101 @@ def test_the_version_is_written_down_once(_h):
         assert f"TAG_PREFIX: {prefix}v" in workflow, (short, prefix)
         for module in (directory / "src").rglob("__init__.py"):
             assert not re.search(r"^__version__\s*=", module.read_text(), re.M), module
+
+
+@check
+def test_a_notifications_page_sorts_messages_from_counters(_h):
+    """One slot list holding two sorts of thing, told apart by looking at the reading.
+
+    That is what lets one page kind be a feed, a mention, a headline and a follower count in
+    whatever mixture: a message is a dict carrying `text`, everything else is a number. The
+    alternative was two slot lists and a UI that has to know which is which.
+    """
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+    import look
+    import pages
+
+    frame = {"feed": {
+        "home": {"title": "Maaike", "text": "a post", "age_s": 420, "note": "boosted"},
+        "mention": {"title": "dinkster75", "text": "a mention", "age_s": 34200},
+        "followers": 1350, "posts": 6466}}
+
+    drawn = {}
+    was = draw.notification
+    draw.notification = lambda _theme, items, counters: drawn.update(
+        items=items, counters=counters)
+    try:
+        def render(fields):
+            drawn.clear()
+            pages._notify({"kind": "notify", "fields": fields}, frame, {},
+                          look.get("dark"))
+            return drawn
+
+        out = render(["feed.home", "feed.mention", "feed.followers", "feed.posts"])
+        assert [item["title"] for item in out["items"]] == ["Maaike", "dinkster75"]
+        assert out["counters"] == [("FOLLOWERS", "1350"), ("POSTS", "6466")], out["counters"]
+
+        # Order in the slot list does not have to be messages first
+        out = render(["feed.followers", "feed.home"])
+        assert len(out["items"]) == 1 and len(out["counters"]) == 1, out
+
+        # A page of only one or the other still draws
+        assert render(["feed.home"])["counters"] == []
+        assert render(["feed.followers"])["items"] == []
+        # And a field the host stopped producing is a counter of "--", not a crash
+        assert render(["feed.gone"])["counters"] == [("GONE", "--")], render(["feed.gone"])
+    finally:
+        draw.notification = was
+
+    # The message shape is four things, and the age is drawn to whatever suits its size.
+    # Minutes up to ninety of them, then hours, then days - the thresholds the quake
+    # page has always used, now that both read them off one function.
+    assert [draw.ago(s) for s in (None, 5, 90, 4000, 100000, 400000)] == [
+        None, "just now", "1m ago", "66m ago", "27h ago", "4d ago"]
+
+
+@check
+def test_a_message_is_wrapped_to_the_lines_it_has(_h):
+    """A feed sends whatever length it sends, and the page has two or three lines for it.
+
+    Split on spaces and measured: a proportional font has no character count that means
+    anything, a line of capitals being half again the width of the same count in lowercase.
+    """
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+
+    class Measuring:
+        """Enough `screen` to measure a string. Half the point size per character, which is
+        an approximation of a proportional font and exact enough to decide where a line
+        breaks; what a glyph really measures is the badge's business."""
+
+        @staticmethod
+        def measure_text(text, font_size=17):
+            return (len(text) * font_size * 0.5, font_size)
+
+    was = getattr(builtins, "screen", None)
+    builtins.screen = Measuring
+    try:
+        # Ten characters a line at this size, so the breaks are countable by hand
+        assert draw.wrap("one two three four", 20, 100, 3) == ["one two", "three four"]
+        assert draw.wrap("short", 20, 100, 2) == ["short"]
+        assert draw.wrap("", 20, 100, 2) == []
+        assert draw.wrap(None, 20, 100, 2) == []
+
+        # What does not fit is said with an ellipsis rather than stopping mid-sentence
+        cut = draw.wrap("one two three four five six", 20, 100, 2)
+        assert len(cut) == 2 and cut[-1].endswith("..."), cut
+
+        # A word longer than the line goes on one of its own rather than being broken: what
+        # arrives here is a URL about as often as it is a long word.
+        alone = draw.wrap("hi averyveryverylongwordindeed", 20, 100, 2)
+        assert alone[0] == "hi", alone
+    finally:
+        if was is None:
+            del builtins.screen
+        else:
+            builtins.screen = was
 
 
 @check

@@ -72,6 +72,11 @@ PERCENT_FIELDS = frozenset(
 # use. A gauge handed one has nothing to point at.
 LIST_FIELDS = frozenset(("cores", "load"))
 
+# Fields whose value is a message - a post, a mention, a headline, an RSS entry - rather
+# than a reading. Only a `notify` page draws one; anything else would print a dict. None of
+# the model's own groups has one, since a host measuring itself has nothing to say.
+ITEM_FIELDS = frozenset()
+
 # Sensible full-scale values for the rest, used when a page does not override it.
 FULL_SCALE = {
     "temp": 100.0,      # degrees C
@@ -141,6 +146,8 @@ def describe():
         # reading with no full scale draws an empty ring and says nothing.
         "full_scale": dict(FULL_SCALE),
         "list_fields": sorted(LIST_FIELDS),
+        # What a `notify` page draws, and what every other kind has to be kept away from.
+        "item_fields": sorted(ITEM_FIELDS),
         "units": dict(UNITS),
         "group_labels": dict(GROUP_LABELS),
         "field_labels": {group: dict(fields)

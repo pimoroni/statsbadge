@@ -459,6 +459,26 @@ def _text(page, frame, _history, theme):
     draw.lines(theme, entries)
 
 
+def _notify(page, frame, _history, theme):
+    """Messages and counters, sorted out by what the reading turned out to be.
+
+    One slot list rather than two, because the kinds of thing on this page are told apart by
+    looking: a message is a dict carrying `text`, and everything else is a number. That is
+    what lets one page kind be a feed, a mention, a headline and a follower count, in
+    whatever mixture somebody puts in it.
+    """
+    items, counters = [], []
+    for ref in page.get("fields", [])[:6]:
+        value = value_of(frame, ref)
+        if isinstance(value, dict):
+            items.append(value)
+        elif value is not None or not items:
+            # A counter with nothing in it is still a labelled zero-width column, and a page
+            # of nothing but empty counters should still say what it was meant to show.
+            counters.append((name_for(ref), draw.fmt(value, ref.split(".")[-1])))
+    draw.notification(theme, items[:3], counters)
+
+
 def _asked(call, fallback=None):
     """What the badge answers, or a fallback. A firmware that has not got one of these should
     cost the page a row and not the frame."""
@@ -768,6 +788,7 @@ _KINDS = {
     "radar": _radar,
     "trend": _trend,
     "waterfall": _waterfall,
+    "notify": _notify,
     "badge": _badge_page,
 }
 

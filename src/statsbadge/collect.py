@@ -397,8 +397,11 @@ def _merge_declared(described, declared):
                 described["percent_fields"].append(name)
             if field.get("list") and name not in described["list_fields"]:
                 described["list_fields"].append(name)
+            if field.get("item") and name not in described["item_fields"]:
+                described["item_fields"].append(name)
     described["percent_fields"].sort()
     described["list_fields"].sort()
+    described["item_fields"].sort()
 
 
 def _dig(frame, group, field):

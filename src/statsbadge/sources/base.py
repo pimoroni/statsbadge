@@ -73,6 +73,10 @@ class Source:
     #                   whatever spacing the readings are really on
     #       peak        scale a gauge by the busiest this has been seen, as a rate is
     #       list        the value is a list, for the kinds that draw one lane each
+    #       item        the value is a message rather than a number, for a `notify` page:
+    #                   {"title": who or where from, "text": the body, "age_s": how long
+    #                   ago, "note": an optional qualifier}. A post, a mention, a headline
+    #                   and an RSS entry are all the same four things.
     #
     # Read off the source and not off the class, so one that only learns its groups from
     # the network - a domain per site an account holds - can set them on the instance and
