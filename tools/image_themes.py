@@ -19,6 +19,7 @@ Needs `statsbadge[images]` for the decoding, the same as `imaging` itself.
 """
 
 import argparse
+import io
 import pathlib
 import struct
 import sys
@@ -73,6 +74,39 @@ def sheet(indices, width, height, themes, levels, tint):
     return bytes(raster), sheet_w, sheet_h
 
 
+def test_card():
+    """A picture that asks the ramp the questions worth asking, as PNG bytes.
+
+    Default rather than a photograph, so looking at what a theme does to a picture never
+    means helping yourself to somebody's holiday snap off a public timeline. It carries the
+    three things a four-level dither can get wrong: a smooth sweep, which is where banding
+    and the Bayer texture show; flat patches at each level, where a ramp with two shades too
+    close together stops having four; and edges at several angles, which is what the crop
+    scores and what a dither can turn to mush.
+    """
+    from PIL import Image, ImageDraw
+
+    width, height = 640, 480
+    card = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(card)
+    for x in range(width):
+        draw.line([(x, 0), (x, height // 3)], fill=int(x * 255 / (width - 1)))
+    step = width // 8
+    for band in range(8):
+        draw.rectangle([band * step, height // 3, (band + 1) * step - 1, height // 2],
+                       fill=band * 255 // 7)
+    # Something to look at, off centre so the crop has a decision to make.
+    draw.ellipse([360, 250, 600, 460], fill=230, outline=20, width=6)
+    draw.ellipse([410, 300, 550, 410], fill=40)
+    for at in range(0, 340, 26):
+        draw.line([(at, height), (at + 120, height // 2)], fill=200, width=3)
+    draw.rectangle([30, 300, 180, 400], fill=120, outline=255, width=4)
+
+    raw = io.BytesIO()
+    card.save(raw, format="PNG")
+    return raw.getvalue()
+
+
 def write_png(path, raster, width, height):
     rows = b"".join(b"\x00" + raster[y * width * 3:(y + 1) * width * 3]
                     for y in range(height))
@@ -90,7 +124,8 @@ def write_png(path, raster, width, height):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("picture", help="any image Pillow can read")
+    parser.add_argument("picture", nargs="?",
+                        help="any image Pillow can read, or a test card if left out")
     parser.add_argument("--out", default="build/image-themes")
     parser.add_argument("--levels", type=int, choices=sorted(imaging.LEVELS.values()),
                         default=None, help="both, unless one is named")
@@ -100,12 +135,11 @@ def main(argv=None):
 
     if not imaging.available():
         return "install statsbadge[images] - Pillow does the decoding"
-    data = pathlib.Path(args.picture).read_bytes()
+    data = pathlib.Path(args.picture).read_bytes() if args.picture else test_card()
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
     from PIL import Image
-    import io
 
     wanted = [args.levels] if args.levels else sorted(set(imaging.LEVELS.values()))
     themes = list(layout.THEMES)
