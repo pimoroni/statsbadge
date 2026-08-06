@@ -71,7 +71,7 @@ body > header {
   gap: 10px 16px;
   padding: 12px var(--gap) 0;
   background: var(--panel);
-  border-bottom: 2px solid var(--accent);
+  border-bottom: 4px solid var(--accent);
   position: sticky;
   top: 0;
   z-index: 5;
@@ -91,7 +91,7 @@ body > header {
 
   nav button {
     background: none; color: var(--dim); padding: 8px 12px;
-    font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.06em;
+    font-size: var(--text-md); text-transform: uppercase; letter-spacing: 0.06em;
   }
 
   nav button:hover:not(:disabled) { background: var(--panel2); }
