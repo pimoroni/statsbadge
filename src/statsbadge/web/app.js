@@ -1126,15 +1126,34 @@ async function watchPairing(announce) {
 
 const PERCENT = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"];
 
+// Everything on a frame that is not a group of readings. `peaks` is shown, being useful
+// to see, but it is scale rather than a reading and comes and goes with what has been
+// measured, so it is left out of the signature below.
+const FRAME_SCALARS = ["v", "t", "seq", "layout_rev"];
+const FRAME_META = FRAME_SCALARS.concat(["peaks"]);
+
+// Which groups the last frame carried. A source that finds out what it can report only
+// once it is running - the Cloudflare one lists an account's domains after it is given a
+// token - shows up here before the pickers know anything about it, and this is already
+// being fetched every second, so it costs nothing to notice.
+let liveGroups = "";
+
 async function renderLive() {
   let frame;
   try {
     frame = await api("/api/stats");
   } catch (error) { return; }
+
+  const shape = Object.keys(frame).filter((key) => !FRAME_META.includes(key)).join(",");
+  if (shape !== liveGroups && !dirty) {
+    liveGroups = shape;
+    refreshCaps().catch(() => {});
+  }
+
   const node = $("live");
   node.innerHTML = "";
   for (const group of Object.keys(frame)) {
-    if (["v", "t", "seq", "layout_rev"].includes(group)) continue;
+    if (FRAME_SCALARS.includes(group)) continue;
     const items = Array.isArray(frame[group]) ? frame[group] : [frame[group]];
     for (const [i, item] of items.entries()) {
       if (!item || !Object.keys(item).length) continue;
@@ -1203,6 +1222,53 @@ function renderSources() {
   node.appendChild(summary);
 }
 
+// -- keeping up with the host ----------------------------------------------
+
+/** What an extension offers, as one string, so a change in it can be noticed cheaply. */
+function capsSignature() {
+  return JSON.stringify([caps.available, caps.extension_settings, caps.graphed,
+                         caps.group_source, caps.extension_pages]);
+}
+
+/** Refetch capabilities and redraw if what the host offers has changed.
+ *
+ * An extension does not always know what it provides at startup: a token pasted in the
+ * browser is what lets the Cloudflare one list an account's domains, and it lists them on
+ * a thread of its own a moment after the save lands. Until this, the pickers and the
+ * checkboxes were whatever the page was built with and a reload was the only way to see
+ * them.
+ */
+async function refreshCaps() {
+  // Never over unsaved work: these renderers rebuild their inputs from `config`, and a
+  // redraw part way through typing an API key moves the caret out from under it.
+  if (dirty) return false;
+  let fresh;
+  try {
+    fresh = await api("/api/capabilities");
+  } catch (error) { return false; }
+  const before = capsSignature();
+  caps = fresh;
+  if (capsSignature() === before) return false;
+  offerExtensionPages();
+  renderPages();
+  renderSettings();
+  renderSources();
+  return true;
+}
+
+/** Look again for a while, since what a save sets off does not finish inside the reply.
+ *
+ * The Cloudflare source is handed its token synchronously and then goes to the network,
+ * so the domains land seconds later. Backing off rather than polling: this is watching for
+ * one thing to arrive, not keeping a display current.
+ */
+async function refreshCapsSoon(delays = [400, 1200, 3000, 6000]) {
+  for (const delay of delays) {
+    await new Promise((wake) => setTimeout(wake, delay));
+    if (await refreshCaps()) return;
+  }
+}
+
 // -- boot ------------------------------------------------------------------
 
 async function save() {
@@ -1222,6 +1288,9 @@ async function save() {
     $("save").disabled = true;
     toast(`Saved. ${whose ? badgeName(whose) : "A badge on the default"} `
       + `will pick up revision ${result.rev}.`);
+    // Settings reach the sources on the save, and what a source does with them may be to
+    // go and find out what it can offer. Not awaited: the save is done either way.
+    refreshCapsSoon().catch(() => {});
     renderWhose();
     renderPages();
     renderBadges();
