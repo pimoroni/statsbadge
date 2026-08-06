@@ -159,6 +159,8 @@ main > section section:not(:has(> section)) {
   > :last-child { margin-bottom: 0; }
 }
 
+main > section section[hidden] { display: none; }
+
 main section > span[data-tint]:not([hidden]) {
   display: flex; align-items: center; gap: 8px; min-width: 0;
 

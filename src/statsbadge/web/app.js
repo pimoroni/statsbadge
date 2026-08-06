@@ -1228,19 +1228,47 @@ async function renderLive() {
     refreshCaps().catch(() => {})
   }
 
-  const node = $("live")
-  if (node.closest("main > section").hidden) return
+  if ($("live").closest("main > section").hidden) return
 
-  const groups = []
+  const measured = hostGroups()
+  const own = []
+  const theirs = []
   for (const group of Object.keys(frame)) {
-    if (FRAME_SCALARS.includes(group)) continue
+    if (FRAME_SCALARS.includes(group) || group === "peaks") continue
     const items = Array.isArray(frame[group]) ? frame[group] : [frame[group]]
     for (const [index, item] of items.entries()) {
       if (!item || !Object.keys(item).length) continue
-      groups.push(liveGroup(items.length > 1 ? `${group} ${index}` : group, item))
+      const box = liveGroup(items.length > 1 ? `${group} ${index}` : group, item)
+      ;(measured.has(group) ? own : theirs).push(box)
     }
   }
+  fillGroups($("live"), own)
+  fillGroups($("from-extensions"), theirs)
+
+  // The scale a plot is drawn against rather than a reading, so it sits with what this host
+  // is, not with what it is doing.
+  const peaks = $("peaks")
+  const measurements = frame.peaks && Object.keys(frame.peaks).length
+  if (measurements) peaks.replaceChildren(peaks.querySelector("h3"), readingList(frame.peaks))
+  peaks.hidden = !measurements
+}
+
+/** The groups this host measures itself with. Anything else on a frame came from an
+ * extension, including the ones an extension only finds out about once it is running and
+ * so does not declare. */
+function hostGroups() {
+  const extensions = new Set((caps.extensions || []).map((extension) => extension.name))
+  const groups = new Set()
+  for (const source of caps.sources || []) {
+    if (extensions.has(source.name)) continue
+    for (const group of source.provides || []) groups.add(group)
+  }
+  return groups
+}
+
+function fillGroups(node, groups) {
   node.replaceChildren(node.querySelector("h2"), ...groups)
+  node.hidden = !groups.length
 }
 
 // The most of a reading with a shape of its own that goes on a line. The whole of it is on
