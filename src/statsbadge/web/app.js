@@ -162,18 +162,16 @@ function fieldLabel(ref) {
   return labels[field] || title(field);
 }
 
-/** One dropdown, grouped by category, so a field can be found rather than hunted for.
+/** Two dropdowns: which source, then which of its readings.
  *
- * With the group named beside it: a collapsed select shows only the chosen option's own
- * text, so the optgroup that made the list navigable disappears exactly when it is needed,
- * leaving "Used %" with nothing to say what it is used of. Returns both, as a fragment, so
- * the row stays flat and its flex layout still applies to the select.
+ * One list of every reading was navigable while a host measured itself and nothing else.
+ * An extension contributes a group per thing it watches - a domain apiece, for an account
+ * with six of them - so the source is picked first and the metric list is only ever that
+ * source's. Returns both as a fragment, so the row stays flat and its flex layout still
+ * applies to the selects.
  */
 function refSelect(value, refs, onChange) {
   const holder = document.createDocumentFragment();
-  const groupName = document.createElement("span");
-  groupName.className = "group";
-  const select = document.createElement("select");
   // Deduplicated here as well as by the caller: one option per reading is the whole
   // point of a picker, and a repeat is impossible to tell apart once it is on screen.
   const options = [...new Set(refs)];
@@ -185,26 +183,42 @@ function refSelect(value, refs, onChange) {
     if (!byGroup.has(group)) byGroup.set(group, []);
     byGroup.get(group).push(ref);
   }
-  for (const [group, groupRefs] of byGroup) {
-    const holder = document.createElement("optgroup");
-    holder.label = groupLabel(group);
-    for (const ref of groupRefs) {
-      const option = document.createElement("option");
-      option.value = ref;
-      option.textContent = fieldLabel(ref);
-      if (ref === value) option.selected = true;
-      holder.appendChild(option);
-    }
-    select.appendChild(holder);
+
+  const chosen = String(value || options[0] || "").split(".")[0];
+  const source = document.createElement("select");
+  source.className = "group";
+  for (const group of byGroup.keys()) {
+    const option = document.createElement("option");
+    option.value = group;
+    option.textContent = groupLabel(group);
+    if (group === chosen) option.selected = true;
+    source.appendChild(option);
   }
+
+  const select = document.createElement("select");
   // Told which ref rather than reading it back off the select, so the first paint does
   // not depend on `value` already reflecting the option marked selected.
-  const showGroup = (ref) => {
-    groupName.textContent = groupLabel(String(ref || "").split(".")[0]);
+  const fill = (group, ref) => {
+    select.innerHTML = "";
+    for (const each of byGroup.get(group) || []) {
+      const option = document.createElement("option");
+      option.value = each;
+      option.textContent = fieldLabel(each);
+      if (each === ref) option.selected = true;
+      select.appendChild(option);
+    }
   };
-  select.onchange = () => { showGroup(select.value); onChange(select.value); markDirty(); };
-  showGroup(value || options[0]);
-  holder.appendChild(groupName);
+  fill(chosen, value);
+
+  // Changing source picks that source's first reading: the one showing belongs to the
+  // source being left, and leaving it there would read as a choice nobody made.
+  source.onchange = () => {
+    fill(source.value, null);
+    onChange(select.value);
+    markDirty();
+  };
+  select.onchange = () => { onChange(select.value); markDirty(); };
+  holder.appendChild(source);
   holder.appendChild(select);
   return holder;
 }

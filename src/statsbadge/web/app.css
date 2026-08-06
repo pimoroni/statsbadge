@@ -154,10 +154,11 @@ output { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 62px;
                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page .fieldrow { display: flex; gap: 6px; align-items: center; }
 .page .fieldrow select { flex: 1; }
-/* Which group the chosen field is from, since a collapsed select drops its optgroup.
-   Fixed width so the selects below each other line up rather than stepping in and out. */
-.page .fieldrow .group { color: var(--dim); font-size: 12px; width: 62px;
-                         flex: 0 0 62px; text-align: right; }
+/* Which source the reading comes from. Narrower than the metric beside it and capped, so
+   the selects below each other line up rather than stepping in and out with the longest
+   domain name an account holds. */
+.page .fieldrow select.group { flex: 0 1 40%; max-width: 150px; color: var(--dim);
+                               font-size: 12px; }
 
 /* A box under the picker rather than a note under the list, where a long list of pages
    pushes it off the screen. Keeps the left accent bar this sheet uses to mark something
