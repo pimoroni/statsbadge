@@ -308,6 +308,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # This badge's own layout revision: it refetches when the number moves, so a save
             # for one badge must not send the others to fetch a layout that has not changed.
             frame["layout_rev"] = service.config.rev_for(badge_id)
+            # A badge says which slow readings it already holds, so a domain's traffic -
+            # fetched once a minute - is not sent sixty times. Its own state travels in the
+            # query, so the host still has one frame for every badge, and asking is what
+            # says the badge understands the answer: an app old enough not to ask gets
+            # every group inline, exactly as it did.
+            held = self._query().get("have")
+            if held is not None:
+                slow = service.collector.slow_groups()
+                for group in slow:
+                    frame.pop(group, None)
+                if frame.get("peaks"):
+                    # A new dict: the one in the frame is the collector's own, shared with
+                    # every other badge reading it.
+                    frame["peaks"] = {ref: value
+                                      for ref, value in frame["peaks"].items()
+                                      if ref.split(".")[0] not in slow}
+                if held != str(frame.get("slow_rev")):
+                    # Under one key, so the badge keeps what it is handed without having to
+                    # know which of the frame's groups are the slow ones.
+                    frame["slow"] = service.collector.slow_part()
             return self._json(200, frame)
 
         if path == "/v1/layout" and method == "GET":

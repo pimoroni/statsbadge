@@ -206,6 +206,12 @@ class App:
         self._advanced_at = 0
         self.layout_rev = -1
         self.frame = {}
+        # The half of the frame that hardly ever changes - a domain's traffic, fetched by
+        # the host once a minute - kept here and merged into every frame. The host sends it
+        # only when `slow_rev` moves past what we tell it we hold, and -1 is a revision
+        # nothing ever has, so the first poll asks for all of it.
+        self.slow = {}
+        self.slow_rev = -1
         self.history = {}
         self.page_index = 0
         self.status = "starting"
@@ -421,7 +427,10 @@ class App:
             points = (self.layout or {}).get("graph_points", 48)
             self._queued = ("history",
                             f"/v1/history?keys={keys}&points={points}&v=2")
-        self._start("stats", "/v1/stats")
+        # Which slow readings we already hold, so the host can leave them out. Always sent,
+        # because asking is what tells the host this app knows where to find them: without
+        # the parameter it puts every group in the frame, which is what an older app needs.
+        self._start("stats", f"/v1/stats?have={self.slow_rev}")
 
     def hunt(self):
         """Look for a paired host on the network after the current one went quiet.
@@ -455,6 +464,11 @@ class App:
                     self.client.close()
                     self.layout = None
                     self.history = {}
+                    # Another host's slow readings are not this one's, and its revisions
+                    # are its own: held on, they would be drawn under the new host's name
+                    # until it happened to number one the same.
+                    self.slow = {}
+                    self.slow_rev = -1
                     self._queued = None
                     self._series_at = 0
                     draw.clear_cache()
@@ -465,6 +479,24 @@ class App:
             # a flat install that has never learned it.
             if self.config.adopt_id(server_id, beacon.get("name")):
                 return
+
+    def take_slow(self, frame):
+        """Keep the slow half of a frame, and put what we hold into every frame after it.
+
+        The host leaves those groups out once we tell it which revision we hold, so a frame
+        that carries them is the one that changed and every frame after it arrives without.
+        Which is the trick the layout uses, and grafting it back on is what `layout_rev`
+        does two lines away: `self.frame` is replaced outright on every reply.
+        """
+        rev = frame.get("slow_rev")
+        if rev is None:
+            # A host too old to split the frame sends every group inline, every time.
+            return
+        arrived = frame.pop("slow", None)
+        if arrived is not None:
+            self.slow_rev = rev
+            self.slow = arrived
+        pages_module.merge_slow(frame, self.slow)
 
     def _start(self, what, path):
         self._pending = what
@@ -493,6 +525,7 @@ class App:
         self.rejected = False
         if what == "stats":
             self.frame = payload
+            self.take_slow(payload)
             # A plot walks between the host's samples, so the pace is taken from the frame.
             # The series is advanced from the reading it carries only when this badge saw
             # every sample: polling slower than the host samples means several arrived at

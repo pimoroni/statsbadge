@@ -177,6 +177,27 @@ def name_for(ref):
     return field.replace("_", " ").upper()
 
 
+def merge_slow(frame, held):
+    """Put the slow half of a frame back into it.
+
+    A group whose readings change far slower than the badge polls - a domain's traffic,
+    fetched by the host once a minute - is sent only when it changes, so every frame after
+    that one arrives without it. `held` is what came last, grafted back on here.
+
+    `peaks` is the one key merged rather than replaced: a peak scales the reading it belongs
+    to, so the slow ones travel with the slow readings while the rest arrive every frame.
+    """
+    for key, value in held.items():
+        if key == "peaks":
+            if frame.get(key) is None:
+                frame[key] = dict(value)
+            else:
+                frame[key].update(value)
+        else:
+            frame[key] = value
+    return frame
+
+
 def value_of(frame, ref):
     """Look up "group.field", taking the first entry of a list group."""
     if not ref or "." not in ref:

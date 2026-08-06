@@ -135,8 +135,12 @@ def model_groups(sources):
     for source in sources:
         for name, group in (getattr(source, "groups", None) or {}).items():
             into = declared.setdefault(name, {"label": name, "fields": {}})
-            if group.get("label"):
-                into["label"] = group["label"]
+            # Everything the group says about itself, `fields` apart: that one is merged so
+            # two sources can each contribute to a group, and picking the keys out by hand
+            # was how `slow` got as far as being declared, ignored and not missed.
+            for key, value in group.items():
+                if key != "fields" and value is not None:
+                    into[key] = value
             into["fields"].update(group.get("fields") or {})
     return declared
 

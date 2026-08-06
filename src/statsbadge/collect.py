@@ -38,6 +38,10 @@ class Collector:
         # throughput has: nothing states what a full one would be, and the link speed is
         # not reported on every platform.
         self._peaks = {}
+        # The slow half of the frame as it last stood, and how many times it has changed.
+        # A badge sends the number back and is sent the readings only when it is behind.
+        self._slow_last = None
+        self._slow_rev = 0
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -93,6 +97,7 @@ class Collector:
             self.seq += 1
             frame["seq"] = self.seq
             self._push_peaks(frame)
+            self._push_slow_rev(frame)
             self.frame = frame
             self._push_history(frame)
         return frame
@@ -112,6 +117,47 @@ class Collector:
             for field, entry in sorted((declared.get("fields") or {}).items())
             if entry.get(want)
         )
+
+    def slow_groups(self):
+        """The groups whose readings change far slower than a badge polls.
+
+        A domain's traffic is fetched once a minute and sent sixty times, and six of them
+        take a frame from 832 bytes to 4.7KB. So a source says which of its groups are like
+        that, and `/v1/stats` leaves them out of a frame for a badge that already has them.
+        """
+        return {group for group, declared in self._declared().items()
+                if declared.get("slow")}
+
+    def slow_part(self, frame=None):
+        """The slow half of a frame: those groups, and the peaks that belong to them.
+
+        A peak is worked out from the reading, so a slow reading's peak moves only when it
+        does. Splitting it out too is what keeps the fast frame small: a peak is 40 bytes
+        of key and six domains have twelve of them.
+        """
+        frame = self.frame if frame is None else frame
+        slow = self.slow_groups()
+        part = {group: frame[group] for group in slow if group in frame}
+        peaks = {ref: value for ref, value in (frame.get("peaks") or {}).items()
+                 if ref.split(".")[0] in slow}
+        if peaks:
+            part["peaks"] = peaks
+        return part
+
+    def _push_slow_rev(self, frame):
+        """Number the slow half, so a badge can tell whether it already has this one.
+
+        Compared rather than counted off a clock: a source fetching on its own schedule is
+        the only thing that knows when its readings moved, and asking it would be one more
+        thing for it to get wrong. The comparison is a dict of a few dozen numbers.
+        """
+        part = self.slow_part(frame)
+        if part != self._slow_last:
+            self._slow_last = part
+            self._slow_rev += 1
+        # In the frame either way: it is what the badge sends back to say what it holds,
+        # and a badge with no slow groups at all still has to see it hold still.
+        frame["slow_rev"] = self._slow_rev
 
     def _push_peaks(self, frame):
         """Track the high-water mark of each rate, decaying so it follows the machine.

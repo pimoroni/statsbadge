@@ -1070,6 +1070,83 @@ def test_a_declared_group_is_offered_kept_and_recorded(h):
 
 
 @check
+def test_a_slow_group_travels_only_when_it_changes(h):
+    """A reading fetched once a minute should not be sent sixty times.
+
+    Six domains took a frame from 832 bytes to 4.7KB, all of it standing still between the
+    host's own fetches. The badge says which revision it holds and the host leaves those
+    groups out; asking at all is what says it knows where to find them, so an app too old
+    to ask still gets every group inline.
+    """
+    from statsbadge.sources.base import Source
+
+    class Feed(Source):
+        name = "feed"
+        groups = {"feed": {"label": "A feed", "slow": True, "fields": {
+            "hits": {"label": "Hits", "peak": True, "peak_floor": 1.0}}}}
+
+        def __init__(self, config):
+            super().__init__(config)
+            self.hits = 10.0
+
+        def sample(self, frame, _dt):
+            frame["feed"] = {"hits": self.hits}
+
+    feed = Feed({})
+    collector = h.service.collector
+    collector.extensions.append(feed)
+    collector.sample_once()
+    assert collector.slow_groups() == {"feed"}, collector.slow_groups()
+
+    def stats(query=""):
+        status, body = h.signed("GET", f"/v1/stats{query}")
+        assert status == 200, (status, body)
+        return body
+
+    # An app that does not ask gets it inline, exactly as before any of this
+    assert "feed" in stats(), "an app that cannot merge was sent a split frame"
+
+    # Asking, and behind: the group arrives under one key, so the badge keeps what it is
+    # handed without having to know which of the frame's groups are the slow ones
+    first = stats("?have=-1")
+    rev = first["slow_rev"]
+    assert "feed" not in first, sorted(first)
+    assert first["slow"]["feed"] == {"hits": 10.0}, first["slow"]
+    # The peak scales the reading, so it travels with it rather than every second
+    assert first["slow"]["peaks"] == {"feed.hits": 10}, first["slow"]
+
+    # Asking, and up to date: neither the group nor its peak
+    collector.sample_once()
+    lean = stats(f"?have={rev}")
+    assert "slow" not in lean and "feed" not in lean, sorted(lean)
+    assert "feed.hits" not in (lean.get("peaks") or {}), lean.get("peaks")
+    assert lean["slow_rev"] == rev, "a reading that did not move revised itself"
+
+    # And when the reading moves, the revision does, and the next poll carries it
+    feed.hits = 40.0
+    collector.sample_once()
+    moved = stats(f"?have={rev}")
+    assert moved["slow_rev"] == rev + 1, (moved["slow_rev"], rev)
+    assert moved["slow"]["feed"] == {"hits": 40.0}, moved["slow"]
+
+    # The badge's side: what it holds goes back into every frame after the one that
+    # carried it, and `peaks` merges into the fast ones rather than replacing them.
+    sys.path.insert(0, install.app_source_dir())
+    import pages
+
+    held = moved.pop("slow")
+    later = stats(f"?have={moved['slow_rev']}")
+    fast_peaks = dict(later.get("peaks") or {})
+    pages.merge_slow(later, held)
+    assert later["feed"] == {"hits": 40.0}, later.get("feed")
+    assert later["peaks"]["feed.hits"] == 40, later["peaks"]
+    for ref, value in fast_peaks.items():
+        assert later["peaks"][ref] == value, f"{ref} was lost to the merge"
+
+    collector.extensions.remove(feed)
+
+
+@check
 def test_stored_settings_beat_the_command_line(_h):
     merged = layout.merge_settings({"clock": {"latitude": 1.0, "units": "celsius"}},
                                    {"clock": {"latitude": 52.4}})

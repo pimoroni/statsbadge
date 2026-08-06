@@ -61,6 +61,8 @@ class Source:
     # config UI can offer it and `prune` can keep a page drawing it. Keyed by group name:
     #
     #   label     what the UI calls the group
+    #   slow      the readings change far slower than the badge polls, so they travel
+    #             only when they change rather than in every frame
     #   fields    one entry per field, keyed by the name it arrives under:
     #       label       what the UI calls it, unit included
     #       unit        what a badge prints after the reading
