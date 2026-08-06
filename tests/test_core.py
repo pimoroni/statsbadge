@@ -3106,6 +3106,31 @@ def test_the_version_is_written_down_once(_h):
 
 
 @check
+def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs(_h):
+    """Installed against a host too old, `groups` and `series` are read by nothing.
+
+    Nothing raises: an older collector never looks for them, so the readings are absent
+    from the pickers and a slow group goes out sixty times a minute, both silently. A floor
+    in the dependency is what turns that into a resolver error somebody can act on.
+    """
+    marks = ("groups = {", "def series(self)")
+    for directory in sorted(pathlib.Path("extensions").iterdir()):
+        pyproject = directory / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        source = "\n".join(path.read_text()
+                           for path in sorted(directory.rglob("src/**/__init__.py")))
+        if not any(mark in source for mark in marks):
+            continue
+        with open(pyproject, "rb") as handle:
+            requires = tomllib.load(handle)["project"]["dependencies"]
+        pinned = [need for need in requires if need.startswith("statsbadge")]
+        assert pinned and ">=" in pinned[0], (
+            f"{directory.name} declares a group or its own series against an unpinned "
+            f"statsbadge: {requires}")
+
+
+@check
 def test_every_package_here_can_be_published(_h):
     """Four packages share this repository. PyPI's trusted publishing matches on a workflow
     filename, so an extension with no workflow of its own cannot be published at all - and every
