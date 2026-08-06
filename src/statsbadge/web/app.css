@@ -327,10 +327,8 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
                  background: var(--panel2); border-bottom: 2px solid transparent; }
 
   .tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--accent); }
-  .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
-
-  .swatches button { width: 30px; height: 30px; padding: 0;
-                     border: 2px solid transparent; }
+  .swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .swatches button { aspect-ratio: 1; padding: 0; border: 2px solid transparent; }
 
   .swatches button[aria-pressed="true"] { border-color: var(--ink); }
 }
