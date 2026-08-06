@@ -143,7 +143,7 @@ main > section section:not(:has(> section)) {
   gap: 9px 10px;
   align-items: center;
 
-  > :is(h2, h3, p, div, span, figure, button, ol, ul, dl, menu) { grid-column: 1 / -1; }
+  > :is(h2, h3, p, div, figure, footer, button, ol, ul, dl, menu) { grid-column: 1 / -1; }
   > label { grid-column: 1; }
   > label:has(+ input[type="checkbox"]) { grid-column: 1 / 3; }
   > select { grid-column: 2 / -1; justify-self: start; max-width: 100%; }
@@ -159,6 +159,7 @@ main > section section:not(:has(> section)) {
 main > section section[hidden] { display: none; }
 
 main section > span[data-tint]:not([hidden]) {
+  grid-column: 2 / -1;
   display: flex; align-items: center; gap: 8px; min-width: 0;
 
   > select { max-width: 100%; }
