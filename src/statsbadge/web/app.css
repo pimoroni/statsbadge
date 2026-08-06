@@ -20,6 +20,10 @@
   --good: #78e65a;
   --bad: #ff4530;
   --on-accent: #0a1614;
+  --ramp-0: #38e8d1;
+  --ramp-1: #7ed375;
+  --ramp-2: #ec9f07;
+  --ramp-3: #d71908;
 }
 
 /* -- page furniture ------------------------------------------------------ */
@@ -34,8 +38,15 @@ body {
 }
 
 h1 {
+  display: flex; align-items: center; gap: 0.35em; width: fit-content;
   font-size: var(--text-lg); font-weight: 600; margin: 0;
   letter-spacing: 0.06em; text-transform: uppercase;
+  background: linear-gradient(100deg, var(--ramp-0), var(--ramp-1) 45%,
+                              var(--ramp-2) 72%, var(--ramp-3));
+  background-clip: text;
+  color: transparent;
+
+  svg { width: 1.6em; height: 1.6em; flex: none; }
 }
 
 h2, h3 {
@@ -217,12 +228,19 @@ main > section > ol {
   > li[data-over] { box-shadow: inset 3px 0 0 var(--accent); }
 
   header { display: flex; align-items: center; gap: 8px; }
+
+  header::before {
+    content: counter(list-item);
+    color: var(--dim); font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums; min-width: 1.5em; text-align: right;
+  }
+
   header small { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
   header input { flex: 1; }
   header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
   header .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
 
-  > li > p { margin: 0; padding: 0 4px 0 26px;
+  > li > p { margin: 0; padding: 0 4px 0 52px;
              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
