@@ -1,0 +1,21 @@
+{
+  "name": "statsbadge-web",
+  "private": true,
+  "description": "Linting for the config UI in src/statsbadge/web. Nothing is built or bundled: the server ships those three files as they are.",
+  "type": "module",
+  "scripts": {
+    "lint": "npm run lint:js && npm run lint:css && npm run lint:html",
+    "lint:js": "eslint",
+    "lint:css": "stylelint 'src/statsbadge/web/**/*.css'",
+    "lint:html": "html-validate src/statsbadge/web",
+    "fix": "eslint --fix && stylelint --fix 'src/statsbadge/web/**/*.css'"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.9.0",
+    "html-validate": "^11.6.2",
+    "stylelint": "^17.14.1",
+    "stylelint-config-standard": "^40.0.0"
+  }
+}

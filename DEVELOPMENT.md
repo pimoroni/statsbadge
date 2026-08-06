@@ -336,6 +336,7 @@ uv run statsbadge probe                             # what this host can measure
 uv run python tests/test_core.py                    # server, auth, framing
 uv run python tools/check_app.py                    # the app parses and is whole
 uv run ruff check --config ci/ruff.toml src tools tests extensions
+npm ci && npm run lint                              # the config UI: js, css, html
 uv build                                            # sdist + wheel
 ci/build-mpy.sh                                     # precompile the badge app
 
@@ -350,6 +351,8 @@ uv run python tools/callgraph.py --open                     # the call graph, dr
 uv run python tools/callgraph_trace.py --out build/trace-tests.json -- tests/test_core.py
 uv run python tools/callgraph.py --trace build/trace-tests.json --open   # with real counts
 ```
+
+The config UI in [`src/statsbadge/web`](src/statsbadge/web) is three files the server hands over as they are, so its linting is separate from everything above: eslint, stylelint and html-validate, driven by `npm run lint`. The settings they carry are the house ones - no semicolons, double quotes, a continuation lined up under whatever it continues, and no line length, the same as ruff. Two are worth knowing about because they shape the markup. html-validate refuses an inline `style`, so anything a colour or a width has to be worked out for is set from `app.js`. And stylelint refuses an id selector, so `app.css` reaches everything by element or by class and the ids are only there for `getElementById` and for `label for`.
 
 [`tools/callgraph.py`](tools/callgraph.py) reads both sides into one graph and writes a self-contained page that draws it, which is a way of finding the parts of this that are not obvious from any one file. Nothing is executed: the badge modules cannot be imported here, so the graph is what the source says and every edge carries a `via` naming the rule that found it - `static` for a call written down, `table` for one through a dispatch dict, `hint` for the two that had to be asserted by hand and carry their reason with them. What that buys is the indirect half: the twelve page renderers behind `pages._KINDS`, the three extension renderers registered into `pages.EXTRA` from other packages, the seven subcommands hung off argparse, and `look.DIAL_C`'s arithmetic reaching two extensions across a package boundary. Colour is a measure you pick, ranked by percentile rather than scaled - fan-in here is power-law enough that one node otherwise renders everything else cold - and two of those measures have a threshold each, so "hot and complex" is a thing you can ask for.
 

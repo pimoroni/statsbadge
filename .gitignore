@@ -14,3 +14,6 @@ dist/
 dist/
 .venv/
 src/statsbadge/badge_app/mpy/
+
+# Lint tooling for the config UI. Nothing here is shipped.
+node_modules/
