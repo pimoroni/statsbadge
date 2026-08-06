@@ -1243,26 +1243,48 @@ async function renderLive() {
   node.replaceChildren(node.querySelector("h2"), ...groups)
 }
 
+// The most of a reading with a shape of its own that goes on a line. The whole of it is on
+// the row's tooltip.
+const SHOWN = 48
+
+/** A reading as one line.
+ *
+ * Not everything a source reports is a number or a list of them: the ISS carries where it is
+ * as an object and its ground track as a list of points, and the quakes source a list of
+ * quakes. Those read as `[object Object]` and a row of `NaN`. */
+function reading(value) {
+  if (value === null || value === undefined) return "unknown"
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : value.toFixed(1)
+  }
+  if (typeof value !== "object") return String(value)
+  if (Array.isArray(value)) {
+    if (value.every((each) => typeof each === "number")) {
+      return value.map((each) => Math.round(each)).join(" ")
+    }
+    return `${value.length} item${value.length === 1 ? "" : "s"}`
+  }
+  const text = JSON.stringify(value)
+  return text.length > SHOWN ? `${text.slice(0, SHOWN)}…` : text
+}
+
 function liveGroup(name, item) {
+  return el("section", null, el("h3", { textContent: name }), readingList(item))
+}
+
+function readingList(item) {
   const rows = []
   for (const key of Object.keys(item)) {
     const value = item[key]
-    const shown = el("dd")
-    if (value === null || value === undefined) {
-      shown.textContent = "unknown"
-    } else if (Array.isArray(value)) {
-      shown.textContent = value.map((each) => Math.round(each)).join(" ")
-    } else if (typeof value === "number") {
-      shown.textContent = Number.isInteger(value) ? value : value.toFixed(1)
-    } else {
-      shown.textContent = String(value)
-    }
+    const shown = el("dd", { textContent: reading(value) })
+    // What did not fit, for anyone who wants to see what a source is actually sending.
+    if (value && typeof value === "object") shown.title = JSON.stringify(value)
     if (PERCENT.includes(key) && typeof value === "number") {
       shown.style.setProperty("--at", `${Math.max(0, Math.min(100, value))}%`)
     }
     rows.push(el("dt", { textContent: key }), shown)
   }
-  return el("section", null, el("h3", { textContent: name }), el("dl", null, rows))
+  return el("dl", null, rows)
 }
 
 function renderSources() {
