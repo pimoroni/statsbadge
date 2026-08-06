@@ -124,6 +124,23 @@ def badge_modules(sources):
     return files
 
 
+def model_groups(sources):
+    """Every frame group the loaded extensions declare, keyed by group name.
+
+    Read off each source rather than its class, so one that discovers its groups - a
+    domain per site an account holds - is offered them as soon as it knows them. A later
+    source declaring a group an earlier one already has adds its fields to it.
+    """
+    declared = {}
+    for source in sources:
+        for name, group in (getattr(source, "groups", None) or {}).items():
+            into = declared.setdefault(name, {"label": name, "fields": {}})
+            if group.get("label"):
+                into["label"] = group["label"]
+            into["fields"].update(group.get("fields") or {})
+    return declared
+
+
 def settings_schema(sources):
     """What each loaded extension can be told, keyed by extension name.
 

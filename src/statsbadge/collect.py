@@ -97,6 +97,22 @@ class Collector:
             self._push_history(frame)
         return frame
 
+    # -- what there is to keep --------------------------------------------
+
+    def _declared(self):
+        """The extension groups, as they stand. Recomputed rather than cached: a source
+        that discovers its groups sets them on itself while running."""
+        return extensions.model_groups(self.extensions)
+
+    def _extra(self, want):
+        """Extension fields flagged with `want`, as (group, field) pairs."""
+        return tuple(
+            (group, field)
+            for group, declared in sorted(self._declared().items())
+            for field, entry in sorted((declared.get("fields") or {}).items())
+            if entry.get(want)
+        )
+
     def _push_peaks(self, frame):
         """Track the high-water mark of each rate, decaying so it follows the machine.
 
@@ -104,15 +120,22 @@ class Collector:
         server runs. Without a peak at all a rate has to be scaled by a guess: the 100Mbit
         this used to assume reads as pegged on a gigabit link and as idle on a slow one.
         """
-        for group, field in _GRAPHED:
-            if not field.endswith("_bps"):
-                continue
+        peaked = {f"{group}.{field}": PEAK_FLOOR for group, field in _GRAPHED
+                  if field.endswith("_bps")}
+        for group, declared in self._declared().items():
+            for field, entry in (declared.get("fields") or {}).items():
+                if entry.get("peak"):
+                    # A rate the model does not define has a floor of its own: 64KB/s is
+                    # what stops a trickle filling a link's gauge, and would stop a gauge
+                    # of requests a minute ever moving.
+                    peaked[f"{group}.{field}"] = float(entry.get("peak_floor") or 1.0)
+        for key, floor in peaked.items():
+            group, field = key.split(".", 1)
             value = _dig(frame, group, field)
             if value is None:
                 continue
-            key = f"{group}.{field}"
             decayed = self._peaks.get(key, 0.0) * PEAK_DECAY
-            self._peaks[key] = max(float(value), decayed, PEAK_FLOOR)
+            self._peaks[key] = max(float(value), decayed, floor)
         if self._peaks:
             # Not a model group, so it is never offered as a field; it is scale, not a
             # reading.
@@ -127,7 +150,7 @@ class Collector:
         what a plot needs to draw a gap where there was no reading.
         """
         self._history_at = frame["t"]
-        for group, field in _GRAPHED:
+        for group, field in _GRAPHED + self._extra("graphed"):
             value = _dig(frame, group, field)
             key = f"{group}.{field}"
             ring = self._history.get(key)
@@ -141,7 +164,7 @@ class Collector:
             if len(ring) > self.history_len:
                 del ring[0 : len(ring) - self.history_len]
 
-        for group, field in _GRAPHED_SERIES:
+        for group, field in _GRAPHED_SERIES + self._extra("series"):
             values = _dig(frame, group, field)
             if not isinstance(values, list) or not values:
                 continue
@@ -195,14 +218,17 @@ class Collector:
         no fan header does not offer a fan page.
         """
         frame = self.latest()
+        declared = self._declared()
         available = {}
-        for group in model.GROUPS:
+        for group in list(model.GROUPS) + sorted(declared):
             value = frame.get(group)
             if isinstance(value, list):
                 if value:
                     available[group] = sorted({k for item in value for k in item})
             elif isinstance(value, dict) and value:
                 available[group] = sorted(value)
+        described = model.describe()
+        _merge_declared(described, declared)
         return {
             "available": available,
             "sources": [
@@ -212,13 +238,15 @@ class Collector:
             ],
             # What has a history ring. A graph of anything else can only draw the live
             # value twice, which is a flat line whatever the machine is doing.
-            "graphed": [f"{group}.{field}" for group, field in _GRAPHED],
-            "series_fields": [f"{group}.{field}" for group, field in _GRAPHED_SERIES],
+            "graphed": [f"{group}.{field}"
+                        for group, field in _GRAPHED + self._extra("graphed")],
+            "series_fields": [f"{group}.{field}"
+                              for group, field in _GRAPHED_SERIES + self._extra("series")],
             # Extensions are reported by the server, which describes every discovered one and
             # not only those that loaded. Two lists under one name was one list too many.
             "interval": self.interval,
             "uptime_s": int(time.time() - self.started_at),
-            **model.describe(),
+            **described,
         }
 
 
@@ -245,6 +273,35 @@ SERIES_LEN = 64
 # scaling a trickle up to a full ring.
 PEAK_DECAY = 0.99885
 PEAK_FLOOR = 64 * 1024.0
+
+
+def _merge_declared(described, declared):
+    """Fold the extensions' own groups into the contract the config UI reads.
+
+    The model's tables are the built-in groups and cannot know about a group that arrived
+    with a pip install, so what an extension declares is merged in beside them: a picker
+    then names its fields and units the way it names everything else, and a gauge is
+    offered the ones with a top end.
+    """
+    for group, entry in declared.items():
+        fields = entry.get("fields") or {}
+        described["groups"][group] = sorted(fields)
+        described["group_labels"][group] = entry.get("label") or group
+        described["field_labels"][group] = {
+            name: field.get("label") or name.replace("_", " ").capitalize()
+            for name, field in fields.items()
+        }
+        for name, field in fields.items():
+            if field.get("unit"):
+                described["units"][name] = field["unit"]
+            if field.get("full_scale"):
+                described["full_scale"][name] = float(field["full_scale"])
+            if field.get("percent") and name not in described["percent_fields"]:
+                described["percent_fields"].append(name)
+            if field.get("list") and name not in described["list_fields"]:
+                described["list_fields"].append(name)
+    described["percent_fields"].sort()
+    described["list_fields"].sort()
 
 
 def _dig(frame, group, field):

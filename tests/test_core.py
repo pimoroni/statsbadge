@@ -1028,6 +1028,48 @@ def test_undeclared_settings_are_dropped_but_absent_extensions_are_kept(_h):
 
 
 @check
+def test_a_declared_group_is_offered_kept_and_recorded(h):
+    """What an extension declares has to reach the pickers, the rings and the peaks.
+
+    A group that arrives with a pip install is in none of the model's tables, so without
+    this an extension's readings cannot be chosen in the UI and a page drawing one is
+    pruned before it reaches the badge.
+    """
+    from statsbadge.sources.base import Source
+
+    class Site(Source):
+        name = "site"
+        provides = ("site",)
+        groups = {"site": {"label": "Example.com", "fields": {
+            "hits": {"label": "Hits a minute", "unit": "/min", "graphed": True,
+                     "peak": True, "peak_floor": 10.0},
+            "cached_pct": {"label": "Cached %", "unit": "%", "percent": True},
+        }}}
+
+        def sample(self, frame, dt):
+            frame["site"] = {"hits": 40.0, "cached_pct": 62.0}
+
+    collector = h.service.collector
+    collector.extensions.append(Site({}))
+    collector.sample_once()
+    caps = collector.capabilities()
+
+    assert caps["available"]["site"] == ["cached_pct", "hits"], caps["available"]
+    assert caps["group_labels"]["site"] == "Example.com"
+    assert caps["field_labels"]["site"]["hits"] == "Hits a minute"
+    assert "cached_pct" in caps["percent_fields"], caps["percent_fields"]
+    assert "site.hits" in caps["graphed"], caps["graphed"]
+
+    # A ring, so a graph of it plots something, and a peak, so a gauge has a top end
+    assert collector.history(["site.hits"])["site.hits"][-1] == 40.0
+    assert collector.latest()["peaks"]["site.hits"] == 40, collector.latest()["peaks"]
+
+    # and the page survives pruning, which reads the same list the pickers do
+    page = {"id": "s", "kind": "dial", "field": "site.hits", "readouts": []}
+    assert layout.prune([page], caps) == [page]
+
+
+@check
 def test_stored_settings_beat_the_command_line(_h):
     merged = layout.merge_settings({"clock": {"latitude": 1.0, "units": "celsius"}},
                                    {"clock": {"latitude": 52.4}})

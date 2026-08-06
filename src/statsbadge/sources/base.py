@@ -51,6 +51,24 @@ class Source:
     # not declared here cannot be set from the UI, only from --extension.
     settings = ()
 
+    # What this source puts in the frame that the model does not already define, so the
+    # config UI can offer it and `prune` can keep a page drawing it. Keyed by group name:
+    #
+    #   label     what the UI calls the group
+    #   fields    one entry per field, keyed by the name it arrives under:
+    #       label       what the UI calls it, unit included
+    #       unit        what a badge prints after the reading
+    #       full_scale  where a gauge's ring ends, for a reading with a top end
+    #       percent     the reading is already 0-100
+    #       graphed     keep a history ring, so a graph has something to plot
+    #       peak        scale a gauge by the busiest this has been seen, as a rate is
+    #       list        the value is a list, for the kinds that draw one lane each
+    #
+    # Read off the source and not off the class, so one that only learns its groups from
+    # the network - a domain per site an account holds - can set them on the instance and
+    # have them offered as soon as they are known.
+    groups = {}
+
     # Settings that belong to one page rather than to the source. Same shape as
     # `settings`, and the badge finds them in the page it is handed, so a page can be
     # told which place to show where the source is told which units to show it in.

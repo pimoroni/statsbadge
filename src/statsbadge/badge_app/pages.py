@@ -181,11 +181,12 @@ def fraction_of(ref, value, page=None, frame=None):
     field = ref.split(".")[-1]
     if page and page.get("max"):
         top = float(page["max"])
-    elif field in PERCENT:
+    elif field in PERCENT or field.endswith("_pct"):
         top = 100.0
     else:
-        top = peak_of(ref, frame) if field.endswith("_bps") else None
-        top = top or SCALE.get(field)
+        # A peak wherever the host sent one: it tracks a throughput, and whatever else a
+        # source asked it to, and it is a better scale than a guess in either case.
+        top = peak_of(ref, frame) or SCALE.get(field)
         if top is None:
             return None
     try:
@@ -205,7 +206,7 @@ def peak_of(ref, frame):
 def scale_note(ref, frame):
     """"peak 11.4M/s", for a gauge whose full scale is that and not a round number."""
     peak = peak_of(ref, frame)
-    if peak is None or not ref.split(".")[-1].endswith("_bps"):
+    if peak is None:
         return None
     return "peak " + draw.reading(peak, ref.split(".")[-1])
 
