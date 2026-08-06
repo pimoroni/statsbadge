@@ -1281,8 +1281,25 @@ def notification(theme, items, counters):
             screen.hspan(look.PAD, top + index * height, look.W - look.PAD * 2)
 
 
-# The gap between a picture and the words beside it.
+# The gap between a picture and the words beside it, and the least of one worth drawing: a
+# message three to a page has 52px of block, and a band much thinner than this is a smear
+# rather than a picture.
 PICTURE_GAP = 8
+PICTURE_MIN = 24
+
+
+def fitted(shown, height):
+    """`shown` cropped to `height`, or None where there is not enough room to bother.
+
+    A band from the middle, because the crop that made the picture put what matters in the
+    centre. Cropped and not scaled: the pixels are palette indices, and halfway between two
+    indices is a third colour rather than a blend of the two.
+    """
+    if shown is None or height >= shown.height:
+        return shown
+    if height < PICTURE_MIN:
+        return None
+    return shown.window(rect(0, (shown.height - height) // 2, shown.width, height))
 
 
 def shades_for(theme, entries):
@@ -1335,15 +1352,14 @@ def _item_block(theme, item, top, height):
     """One message: who it is from and how long ago, then what it says."""
     room = look.W - look.PAD * 2
     y = top + 6
-    shown = picture(theme, (item or {}).get("image"))
+    left = look.PAD
+    shown = fitted(picture(theme, (item or {}).get("image")), height - 8)
     if shown is not None:
         # Down the left, with the words taking what is left: a picture beside a message reads
         # as belonging to it where one above reads as a page of its own.
         screen.blit(shown, look.PAD, top + 4)
-        left = look.PAD + shown.width + PICTURE_GAP
+        left += shown.width + PICTURE_GAP
         room -= shown.width + PICTURE_GAP
-    else:
-        left = look.PAD
     title = str((item or {}).get("title") or "")
     aged = ago((item or {}).get("age_s"))
     if aged:

@@ -3280,6 +3280,61 @@ def test_a_notifications_page_sorts_messages_from_counters(_h):
 
 
 @check
+def test_a_picture_is_cropped_to_the_block_it_is_in(_h):
+    """A message three to a page has 52px of block and the large preset is 96 tall.
+
+    Cropped rather than scaled: the pixels are palette indices, so halfway between two of
+    them is a third colour and not a blend of the two.
+    """
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+
+    class FakeRect:
+        """`rect` is the firmware's; the crop only needs somewhere to put four numbers."""
+
+        def __init__(self, x, y, w, h):
+            self.x, self.y, self.w, self.h = x, y, w, h
+
+    class Picture:
+        """Enough of an indexed image to be cropped: a size, and a view of part of it."""
+
+        def __init__(self, width, height):
+            self.width, self.height, self.taken = width, height, None
+
+        def window(self, box):
+            self.taken = box
+            return Picture(box.w, box.h)
+
+    was = getattr(builtins, "rect", None)
+    builtins.rect = FakeRect
+    try:
+        _check_cropping(draw, Picture)
+    finally:
+        if was is None:
+            del builtins.rect
+        else:
+            builtins.rect = was
+
+
+def _check_cropping(draw, Picture):
+    # Room to spare, so it is drawn whole and nothing is taken
+    whole = Picture(128, 96)
+    assert draw.fitted(whole, 96) is whole and whole.taken is None
+    assert draw.fitted(whole, 200) is whole and whole.taken is None
+
+    # Two messages to a page: 78px of block, less its padding
+    tall = Picture(128, 96)
+    band = draw.fitted(tall, 70)
+    assert (band.width, band.height) == (128, 70), (band.width, band.height)
+    # From the middle, the crop that made the picture having put what matters there
+    assert (tall.taken.x, tall.taken.y) == (0, 13), (tall.taken.x, tall.taken.y)
+
+    # And below a band worth looking at, none: a smear is worse than the room it takes
+    assert draw.fitted(Picture(128, 96), 12) is None
+    assert draw.fitted(None, 70) is None
+
+
+@check
 def test_a_message_shortens_the_way_the_firmware_does(_h):
     """A post is whatever length it is and the block has room for two or three lines.
 

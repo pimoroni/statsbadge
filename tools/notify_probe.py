@@ -53,7 +53,10 @@ def frame_with(picture=None):
     return {"feed": {
         "home": item("Maaike", TEXT, 420, "boosted", picture),
         "mention": item("dinkster75", "how did you side load onto the yaber t2? what "
-                                      "cable and what commands?", 34200),
+                                      "cable and what commands?", 34200, None, picture),
+        "third": item("someone else", "a third message, to squeeze the blocks down to "
+                                      "the point a picture has to be cropped", 900,
+                      None, picture),
         "followers": 1350, "following": 663, "posts": 6466, "likes": 21,
     }}
 
@@ -92,6 +95,14 @@ PAGES = [
                                    "feed.posts"]}, "low"),
     ("notify_picture_large", {"id": "n", "kind": "notify", "title": "Mastodon",
                               "fields": ["feed.home", "feed.followers"]}, "high"),
+    # A large picture in a block that cannot hold it: two to a page is 78px against its 96,
+    # three is 52, and it used to spill into the message under it.
+    ("notify_large_two", {"id": "n", "kind": "notify", "title": "Mastodon",
+                          "fields": ["feed.home", "feed.mention", "feed.followers"]},
+     "high"),
+    ("notify_large_three", {"id": "n", "kind": "notify", "title": "Mastodon",
+                            "fields": ["feed.home", "feed.mention", "feed.third",
+                                       "feed.followers"]}, "high"),
 ]
 
 # Built from a palette the host sent rather than `look.get`, which is the one theme the app
