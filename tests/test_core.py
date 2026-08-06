@@ -3969,8 +3969,14 @@ def test_the_mark_is_the_same_one_everywhere(h):
     site = pathlib.Path("index.html").read_text()
 
     # The UI asks for the file, and the server hands it over with the right type: a favicon
-    # served as octet-stream is a favicon the browser ignores.
+    # served as octet-stream is a favicon the browser ignores. Safari reads no SVG favicon at
+    # all, so a raster of the same mark is offered first and it takes that.
     assert '<link rel="icon" href="/icon.svg"' in page
+    assert page.index('href="/icon.png"') < page.index('href="/icon.svg"'), \
+        "the fallback is behind the SVG Safari cannot read"
+    with urllib.request.urlopen(h.url("/icon.png"), timeout=5) as response:
+        assert response.headers.get("content-type") == "image/png", response.headers
+        assert response.read()[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
     with urllib.request.urlopen(h.url("/icon.svg"), timeout=5) as response:
         assert response.status == 200
         assert response.headers.get("content-type") == "image/svg+xml", response.headers

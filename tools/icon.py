@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Draw src/statsbadge/badge_app/icon.png, the 24x24 sprite the launcher shows.
+"""Draw the app's mark as a PNG: the 24x24 sprite the launcher shows, and a larger copy
+for a browser tab, since Safari ignores an SVG favicon.
 
     python3 tools/icon.py
 
@@ -9,6 +10,7 @@ Rendered at 16x and reduced, since there is no anti-aliasing to be had at 24 pix
 otherwise.
 """
 
+import builtins
 import pathlib
 import shutil
 import subprocess
@@ -18,12 +20,54 @@ from PIL import Image, ImageDraw
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / "src" / "statsbadge" / "badge_app"
+WEB = ROOT / "src" / "statsbadge" / "web"
 sys.path.insert(0, str(APP))
+
+
+
+class _Colour(tuple):
+    """Enough of the badge's `color` to build a theme on a host that has none.
+
+    A tuple of channels, which is what PIL wants, carrying the one method `look` calls on
+    one. The same shim the tests install, in the one form this tool needs.
+    """
+
+    def to_oklch(self):
+        return self
+
+    def mix(self, other, part):
+        return _Colour(round(a + (b - a) * part / 255) for a, b in zip(self, other, strict=True))
+
+    def lighten(self, by):
+        return _Colour(max(0, min(255, channel + by)) for channel in self)
+
+    def darken(self, by):
+        return self.lighten(-by)
+
+    def with_alpha(self, _alpha):
+        return self
+
+
+class _Colours:
+    @staticmethod
+    def rgb(*channels):
+        return _Colour(channels[:3])
+
+    @staticmethod
+    def ramp(stops, steps):
+        """The table a theme builds at startup. Only the four flat colours are drawn here,
+        so the stops go through unsampled and nothing reads the result."""
+        del steps
+        return (colour for _position, colour in stops)
+
+
+builtins.color = _Colours
 
 import look  # noqa: E402
 import splash  # noqa: E402  its module-level constants; show() needs a badge
 
 SIZE = 24
+WEB_SIZE = 64                     # a tab asks for 32, and twice that for a dense screen
 SUPERSAMPLE = 16
 CORNER = 5
 COLOURS = 32                      # 16 also reads fine at this size; 32 leaves margin
@@ -80,11 +124,11 @@ def main():
         draw.rectangle([(x, base - height * scale), (x + bar_w, base)],
                        fill=theme.ink + (255,))
 
-    out = APP / "icon.png"
-    small = icon.resize((SIZE, SIZE), Image.LANCZOS)
-    small.save(out, compress_level=9)
-    print(f"wrote {out.relative_to(ROOT)}, {out.stat().st_size} bytes")
-    _shrink(out, small)
+    for out, size in ((APP / "icon.png", SIZE), (WEB / "icon.png", WEB_SIZE)):
+        small = icon.resize((size, size), Image.LANCZOS)
+        small.save(out, compress_level=9)
+        print(f"wrote {out.relative_to(ROOT)}, {out.stat().st_size} bytes")
+        _shrink(out, small)
 
 
 def _shrink(out, unquantised):
