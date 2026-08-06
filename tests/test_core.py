@@ -1029,6 +1029,24 @@ def test_undeclared_settings_are_dropped_but_absent_extensions_are_kept(_h):
 
 
 @check
+def test_an_extension_page_survives_without_fields(_h):
+    """A map page draws from its extension's own group and declares no fields, so there is
+    nothing in the host's field list to confirm it by.
+
+    Pruned on that list alone it never reached the badge, and the UI said the host reported
+    no data for it - while the same page added from the browser, which carries
+    `from_extension`, was sent. An installed extension is what makes its page worth sending.
+    """
+    capabilities = {"available": {"cpu": ["pct"]},
+                    "extension_pages": [{"kind": "quakemap", "from_extension": "quakes"}]}
+    pages = [{"id": "cpu", "kind": "dial", "field": "cpu.pct"},
+             {"id": "quakes", "kind": "quakemap", "fields": []},
+             {"id": "uninstalled", "kind": "othermap", "fields": []}]
+    kept = [page["id"] for page in layout.prune(pages, capabilities)]
+    assert kept == ["cpu", "quakes"], kept
+
+
+@check
 def test_a_declared_group_is_offered_kept_and_recorded(h):
     """What an extension declares has to reach the pickers, the rings and the peaks.
 

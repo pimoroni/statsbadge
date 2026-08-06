@@ -635,6 +635,10 @@ def prune(pages, capabilities):
     user should not have to know that to get a sensible default.
     """
     available = capabilities.get("available", {})
+    # The page kinds an installed extension draws. A map page draws from its own group and
+    # declares no fields, so there is nothing in the host's field list to confirm it by, and
+    # `from_extension` is only on a page the browser added since that field existed.
+    from_extensions = {page.get("kind") for page in capabilities.get("extension_pages", ())}
 
     def has(ref):
         group, field = ref.split(".")
@@ -650,7 +654,8 @@ def prune(pages, capabilities):
             # An extension page: it declares its own group, so the model's field list
             # is not the authority on whether the host produces it.
             fields = [f for f in page.get("fields", []) if has(f)]
-            if fields or page.get("from_extension"):
+            if (fields or page.get("from_extension")
+                    or page.get("kind") in from_extensions):
                 kept.append(page)
             continue
         if page.get("kind") in ("bars", "trend", "waterfall"):
