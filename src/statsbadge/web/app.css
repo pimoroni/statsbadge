@@ -253,7 +253,14 @@ main > section > ol {
     color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums;
   }
 
-  ol .grip { cursor: grab; color: var(--dim); user-select: none; }
+  /* The same box as the button at the other end of the row. */
+  ol .grip {
+    background: var(--panel2); color: var(--ink);
+    padding: 3px 7px; font-size: var(--text-sm);
+    cursor: grab; user-select: none;
+  }
+
+  ol .grip:hover { background: var(--line); }
   ol .grip:active { cursor: grabbing; }
   header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
 
