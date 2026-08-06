@@ -3280,6 +3280,32 @@ def test_a_notifications_page_sorts_messages_from_counters(_h):
 
 
 @check
+def test_a_hidden_row_is_actually_hidden(_h):
+    """`.hidden` is one class, so anything naming an element outranks it.
+
+    `.col > label` sets `display: contents`, which takes the box away and leaves what was
+    inside it in the grid - so a row hidden by class kept its label and its control. Second
+    accent showed for every theme, where only a derived palette works one out.
+    """
+    web = pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
+    css, markup = (web / "app.css").read_text(), (web / "index.html").read_text()
+
+    assert ".col > label.hidden" in css, "a label row cannot be hidden by class"
+    # Every element the UI hides by class, against the rules that could outrank it. A
+    # single class loses to any selector naming an element, so each needs checking.
+    for line in markup.splitlines():
+        if 'class="hidden"' not in line and 'hidden"' not in line:
+            continue
+        tag = line.strip().split()[0].lstrip("<")
+        if tag == "label":
+            assert ".col > label.hidden" in css, tag
+        else:
+            # div and p take `grid-column` from `.col`, which does not fight display.
+            assert f".col > {tag} {{ display" not in css, (
+                f"{tag} has a display rule that would outrank .hidden")
+
+
+@check
 def test_a_picture_is_cropped_to_the_block_it_is_in(_h):
     """A message three to a page has 52px of block and the large preset is 96 tall.
 

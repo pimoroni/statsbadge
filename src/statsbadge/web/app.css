@@ -81,6 +81,11 @@ main {
   gap: 9px 10px; align-items: center;
 }
 .col > label { display: contents; }
+/* And `.hidden` has to beat that, or a row hidden by it keeps its children: `display:
+   contents` takes the box away and leaves what is inside it in the grid, so the label reads
+   as still there. Here rather than in `.hidden` itself, which cannot outrank a selector
+   naming an element. */
+.col > label.hidden { display: none; }
 /* Every name starts a row of its own: with `display: contents` the items all flow into one
    grid, so a row of two items would otherwise leave its last track for the next row's name. */
 .col > label > .name { color: var(--ink); grid-column-start: 1; }
