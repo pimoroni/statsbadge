@@ -341,7 +341,8 @@ function pageCard(page, index) {
 
   if (open) {
     item.append(slotList(page, shape),
-                ...settings.flatMap((setting) => settingRow(page, setting)))
+                ...settings.flatMap((setting) => settingRow(page, setting)),
+                el("footer", null, moveButtons(index), addSlot(page, shape)))
   } else {
     const refs = shape.one ? [page[shape.one]] : (page[shape.many] || [])
     const named = refs.filter(Boolean).map(fieldLabel)
@@ -407,13 +408,14 @@ function reorderable(node, items, index, { tag, along, handle }) {
   }
 }
 
+function poolFor(name) {
+  const refs = (POOLS[name] || POOLS.any)()
+  return refs.length ? refs : availableRefs()
+}
+
 /** The readings a page is made of, one row per slot. */
 function slotList(page, shape) {
   const rows = []
-  const poolFor = (name) => {
-    const refs = (POOLS[name] || POOLS.any)()
-    return refs.length ? refs : availableRefs()
-  }
 
   if (shape.one) {
     rows.push(el("li", null,
@@ -428,24 +430,45 @@ function slotList(page, shape) {
                                 title: "Remove this slot" })
     drop.onclick = () => { current.splice(slot, 1); markDirty(); renderPages() }
     const row = el("li", null,
-                   el("span", { className: "grip", textContent: "⠇" }),
+                   el("span", { className: "grip", textContent: "⋮" }),
                    refSelect(ref, poolFor(shape.manyPool), (value) => { current[slot] = value }),
                    drop)
     reorderable(row, current, slot, { tag: "slot", along: "y" })
     rows.push(row)
   })
 
-  if (shape.many && current.length < shape.max) {
-    const add = el("button", { type: "button", className: "small",
-                               textContent: `Add ${singular(shape.label).toLowerCase()}` })
-    add.onclick = () => {
-      page[shape.many] = current.concat([poolFor(shape.manyPool)[0]])
-      markDirty()
-      renderPages()
-    }
-    rows.push(el("li", null, add))
-  }
   return el("ol", null, rows)
+}
+
+/** Another slot, while the kind has room for one. */
+function addSlot(page, shape) {
+  const current = shape.many ? page[shape.many] || [] : []
+  if (!shape.many || current.length >= shape.max) return null
+  const add = el("button", { type: "button", className: "small add",
+                             textContent: `Add ${singular(shape.label).toLowerCase()}` })
+  add.onclick = () => {
+    page[shape.many] = current.concat([poolFor(shape.manyPool)[0]])
+    markDirty()
+    renderPages()
+  }
+  return add
+}
+
+/** The two ways to move a page that are not dragging it. The list reads across and then
+ * down, so left and right are the whole of it. */
+function moveButtons(index) {
+  return [["←", "Move left", index - 1, index === 0],
+          ["→", "Move right", index + 1, index === config.pages.length - 1]]
+    .map(([glyph, label, to, ends]) => {
+      const button = el("button", { type: "button", className: "small", textContent: glyph,
+                                    title: label, "aria-label": label, disabled: ends })
+      button.onclick = () => {
+        config.pages.splice(to, 0, config.pages.splice(index, 1)[0])
+        markDirty()
+        renderPages()
+      }
+      return button
+    })
 }
 
 function newPage(kind) {
