@@ -426,7 +426,7 @@ class App:
             keys = ",".join(self._graph_keys())
             points = (self.layout or {}).get("graph_points", 48)
             self._queued = ("history",
-                            f"/v1/history?keys={keys}&points={points}&v=2")
+                            f"/v1/history?keys={keys}&points={points}&v=3")
         # Which slow readings we already hold, so the host can leave them out. Always sent,
         # because asking is what tells the host this app knows where to find them: without
         # the parameter it puts every group in the frame, which is what an older app needs.
@@ -541,12 +541,15 @@ class App:
             self.apply_layout()
         elif what == "history":
             # v=2 wraps the series in the two things a plot needs to place it in time: how far
-            # apart the points are, and how old the newest was when the host answered.
+            # apart the points are, and how old the newest was when the host answered. v=3
+            # adds a pair of its own for any ring a source answers for itself, those being on
+            # whatever clock the readings are really on - an hour, for a domain's traffic.
             self.history = payload.get("series", payload)
             self._series_age = int(payload.get("age_ms", 0) or 0)
             self._series_at = time.ticks_ms()
             pages_module.note_spacing(payload.get("every_ms", 1000),
                                       (self.layout or {}).get("interval_ms", 1000))
+            pages_module.note_series_spacing(payload.get("spacing"))
         self.dirty = True
 
     def _graph_keys(self):
@@ -583,6 +586,9 @@ class App:
         draw.GAUGE_FILL = (self.layout or {}).get("gauge_fill", "solid")
         pages_module.PLOT_ANIMATION = bool(
             (self.layout or {}).get("plot_animation", False))
+        # What the host calls the groups an extension declared. Replaced rather than
+        # updated: a group dropped from every page should stop being named.
+        pages_module.LABELS = (self.layout or {}).get("labels") or {}
         animate = bool((self.layout or {}).get("animate", False))
         if animate != pages_module.ANIMATE:
             pages_module.ANIMATE = animate

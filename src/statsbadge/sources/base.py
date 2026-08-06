@@ -69,6 +69,8 @@ class Source:
     #       full_scale  where a gauge's ring ends, for a reading with a top end
     #       percent     the reading is already 0-100
     #       graphed     keep a history ring, so a graph has something to plot
+    #       history     the source answers for its own ring, through `series()`, on
+    #                   whatever spacing the readings are really on
     #       peak        scale a gauge by the busiest this has been seen, as a rate is
     #       list        the value is a list, for the kinds that draw one lane each
     #
@@ -103,6 +105,27 @@ class Source:
         copies values out in `__init__` has to override this and copy them again.
         """
         self.config.update(settings)
+
+    def series(self):
+        """Rings this source keeps itself, keyed "group.field".
+
+        The collector samples a ring at its own interval, which is right for a sensor and
+        wrong for anything fetched: ninety samples of a reading that moves once a minute is
+        a minute and a half of staircase. A source that can answer for its own history -
+        Cloudflare reports by the hour, a day at a time - hands one over here instead, on
+        the spacing it is really on:
+
+            {"cf_pinout_xyz.requests": {"points": [12.0, 9.5, None, ...],
+                                        "every_ms": 3600000, "age_ms": 240000}}
+
+        `points` runs oldest to newest, `None` where there was no reading, `every_ms` is
+        how far apart they are and `age_ms` how old the newest is now. Declare the field
+        with `history` rather than `graphed` so the collector keeps no ring of its own.
+
+        Called on the collector's thread as a reply is composed, so nothing here may wait
+        on a network: hand over what the fetcher last brought back.
+        """
+        return {}
 
     def pages(self, instances):
         """Take the pages configured for this source's kinds, on every config change.

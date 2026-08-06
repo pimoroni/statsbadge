@@ -342,9 +342,39 @@ class Config:
         data.pop("settings", None)
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
+            data["labels"] = group_labels(data["pages"], capabilities)
         data["palette"] = palette_for(data.get("theme"), data["tint"],
                                       data.get("accent_b", "same"))
         return data
+
+
+def group_labels(pages, capabilities):
+    """What to call the groups these pages draw, where the badge cannot work it out.
+
+    A badge names a reading after its field - LOAD, TEMP - and falls back to the group where
+    one page draws the same field from several of them. That is fine for `cpu` and `gpu`, and
+    reads as CF_GADGETOID_COM for a group an extension named after a domain: the badge has
+    only the key, and the dots that made it a domain cannot be put back.
+
+    So the groups an extension declared travel with the layout, which is where a name the
+    reader chose belongs and is refetched only when `rev` moves. The model's own are left
+    out: "Processor" is read at a desk and the badge says CPU at arm's length.
+    """
+    owned = capabilities.get("group_source") or {}
+    known = capabilities.get("group_labels") or {}
+    labels = {}
+    for page in pages or ():
+        refs = list(page.get("fields") or ())
+        for key in ("field", "readouts"):
+            value = page.get(key)
+            refs += value if isinstance(value, list) else ([value] if value else [])
+        for ref in refs:
+            if not isinstance(ref, str) or "." not in ref:
+                continue
+            group = ref.split(".")[0]
+            if group in owned and known.get(group):
+                labels[group] = known[group]
+    return labels
 
 
 def tint_accent(incoming, current):

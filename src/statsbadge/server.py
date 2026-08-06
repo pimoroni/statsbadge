@@ -339,10 +339,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             keys = [k for k in (query.get("keys") or "").split(",") if k]
             points = max(1, min(160, int(query.get("points") or 48)))
             # v=2 carries the spacing of the points and the age of the newest, which is what
-            # lets a plot put them on a time axis. Asked for rather than assumed: an app copy
-            # older than this host would hand the wrapper straight to a graph.
-            if query.get("v") == "2":
-                return self._json(200, service.collector.history_at(keys or None, points))
+            # lets a plot put them on a time axis. v=3 adds `spacing`, a pair of its own for
+            # each ring a source answers for itself, those being on whatever clock the
+            # readings are really on rather than on the collector's. Asked for rather than
+            # assumed: an app copy older than this host would hand the wrapper straight to a
+            # graph, and would animate an hourly series as though it arrived every second.
+            version = query.get("v")
+            if version in ("2", "3"):
+                return self._json(200, service.collector.history_at(
+                    keys or None, points, spacing=version == "3"))
             return self._json(200, service.collector.history(keys or None, points))
 
         if path == "/v1/command" and method == "POST":

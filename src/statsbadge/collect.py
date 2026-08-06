@@ -237,13 +237,46 @@ class Collector:
                 if key in self._history
             }
 
-    def history_at(self, keys=None, points=48):
+    def source_series(self, keys=None, points=48):
+        """The rings the sources keep themselves, on whatever spacing they are really on.
+
+        A source that fetches its own history answers for it: the collector's interval is
+        the rate a sensor is read at, and nothing to do with how often a domain's traffic
+        is reported. One that raises is skipped rather than taking the reply with it.
+        """
+        wanted = set(keys) if keys else None
+        found = {}
+        for source in self.sources + self.extensions:
+            try:
+                offered = source.series() or {}
+            except Exception as exc:
+                source.note_fault(exc)
+                continue
+            for key, entry in offered.items():
+                if wanted is not None and key not in wanted:
+                    continue
+                given = list(entry.get("points") or ())[-points:]
+                found[key] = {
+                    "points": given,
+                    "every_ms": int(entry.get("every_ms") or 0)
+                                or int(self.interval * 1000),
+                    "age_ms": max(0, int(entry.get("age_ms") or 0)),
+                }
+        return found
+
+    def history_at(self, keys=None, points=48, spacing=False):
         """The same rings, plus when they were taken.
 
         `every_ms` is the spacing of the positions and `age_ms` how old the newest is, so a
         plot can place every point on a time axis without knowing anything about this host's
         clock or about how often the badge asked. Ages rather than timestamps: nothing has to
         be aligned between two machines, and the only error left is the trip back.
+
+        Those two are the collector's own and cover every ring it keeps. A source answering
+        for its own history is on a different clock, so with `spacing` its rings come too,
+        each with the pair that belongs to it. Without it they are left out rather than
+        served under a spacing that is not theirs: an app that cannot read the difference
+        would animate an hourly series as though it arrived every second.
         """
         with self._lock:
             wanted = keys or list(self._history)
@@ -255,7 +288,15 @@ class Collector:
             age = 0
             if self._history_at:
                 age = max(0, int(time.monotonic() * 1000) - self._history_at)
-        return {"every_ms": int(self.interval * 1000), "age_ms": age, "series": series}
+        reply = {"every_ms": int(self.interval * 1000), "age_ms": age, "series": series}
+        if spacing:
+            own = self.source_series(keys, points)
+            for key, entry in own.items():
+                series[key] = entry["points"]
+            reply["spacing"] = {key: {"every_ms": entry["every_ms"],
+                                      "age_ms": entry["age_ms"]}
+                                for key, entry in own.items()}
+        return reply
 
     def capabilities(self):
         """Which fields this host actually produced, for the config UI to offer.
@@ -282,13 +323,15 @@ class Collector:
                  "faults": s.faults, "last_fault": s.last_fault}
                 for s in self.sources + self.extensions
             ],
-            # What has a history ring. A graph of anything else can only draw the live
-            # value twice, which is a flat line whatever the machine is doing.
             # Which extension each declared group belongs to, so a picker can head them
             # with it. Only the declared ones: what is not in here is this host.
             "group_source": extensions.group_owners(self.extensions),
-            "graphed": [f"{group}.{field}"
-                        for group, field in _GRAPHED + self._extra("graphed")],
+            # What has a history ring. A graph of anything else can only draw the live
+            # value twice, which is a flat line whatever the machine is doing. Rings the
+            # collector keeps and rings a source answers for itself both count: they are
+            # the same thing to whoever is choosing a field.
+            "graphed": [f"{group}.{field}" for group, field in
+                        _GRAPHED + self._extra("graphed") + self._extra("history")],
             "series_fields": [f"{group}.{field}"
                               for group, field in _GRAPHED_SERIES + self._extra("series")],
             # Extensions are reported by the server, which describes every discovered one and

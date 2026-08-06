@@ -56,6 +56,34 @@ def note_spacing(every_ms, interval_ms):
     EVERY_MS = int(every_ms) or 1000
     covered = -(-int(interval_ms) // EVERY_MS)      # rounded up
     LEAD = 1 if covered < 1 else (12 if covered > 12 else covered)
+
+
+# Rings that are not on the collector's clock, as {"group.field": every_ms}. A source may
+# answer for its own history - Cloudflare reports by the hour - and a plot of one cannot be
+# walked by a number worked out from a spacing it is not on. Set from the history reply.
+SPACING = {}
+
+
+def note_series_spacing(spacing):
+    """Which rings are on a clock of their own, from the history reply's `spacing`."""
+    SPACING.clear()
+    for key, entry in (spacing or {}).items():
+        every = int((entry or {}).get("every_ms") or 0)
+        if every:
+            SPACING[key] = every
+
+
+def walkable(refs):
+    """Whether a plot of these can be animated at all.
+
+    A plot is translated as a whole - one shift, one set of samples wide - so its series
+    have to be on one clock for the movement to mean anything on all of them. They are
+    unless a source answered for one, and an hourly ring shifted by a number worked out
+    from a second is a plot sliding a year an hour.
+    """
+    return not any(ref in SPACING for ref in refs)
+
+
 # The kinds that draw a series, and so want one fetched for them.
 PLOTS = ("graph", "spark", "trend")
 # The ones that move between readings, which is not all of them: a sparkline is 22px tall and
@@ -103,6 +131,11 @@ def _swept(ref, fraction):
     if not sweep.done and abs(sweep.to - sweep.from_) > 0.001:
         moving = True
     return sweep.now
+
+# What the host calls a group an extension declared, from the layout: {"cf_pinout_xyz":
+# "pinout.xyz"}. Only those, since the badge has its own shorter names for the model's own
+# and a key like this one cannot be turned back into what it was named after.
+LABELS = {}
 
 # Nicer names than the raw field, where the raw field reads badly.
 NAMES = {
@@ -315,13 +348,17 @@ def behind_at(age_ms, since_ms):
     return BEHIND_MAX if behind > BEHIND_MAX else behind
 
 
-def _walk():
+def _walk(refs=()):
     """How far back in the series a graph should draw, or None to draw it where it stands.
 
     None rather than 0.0 when nothing is animating: a plot that moves needs room for the
-    samples still coming in, and one that never will should use the whole of its box.
+    samples still coming in, and one that never will should use the whole of its box. And
+    none for a plot whose series are not on the collector's clock, `BEHIND` being counted
+    in its samples.
     """
-    return BEHIND if PLOT_ANIMATION else None
+    if not PLOT_ANIMATION or not walkable(refs):
+        return None
+    return BEHIND
 
 
 def _swept_lanes(ref, values, maximum):
@@ -351,7 +388,7 @@ def _graph(page, frame, history, theme):
     field = refs[0].split(".")[-1] if refs else "pct"
     maximum = float(page["max"]) if page.get("max") else (
         100.0 if is_percent(field) else None)
-    draw.graph(theme, series, labels, maximum, shift=_walk())
+    draw.graph(theme, series, labels, maximum, shift=_walk(refs))
 
 
 def _grid(page, frame, _history, theme):
@@ -558,6 +595,18 @@ def _badge_page(_page, _frame, _history, theme):
     draw.vitals(theme, meters, facts, notes)
 
 
+def group_name(ref):
+    """What to call a reading's group.
+
+    The host's name for it where one travelled with the layout, which is how an extension's
+    group comes to read as gadgetoid.com and not CF_GADGETOID_COM: the key is all the badge
+    has, and the dots that made it a domain cannot be put back. Otherwise the key, in the
+    case the rest of the furniture is in.
+    """
+    group = ref.split(".")[0]
+    return LABELS.get(group) or group.upper()
+
+
 def names_for(refs):
     """Display names that tell these readings apart.
 
@@ -568,7 +617,7 @@ def names_for(refs):
     plain = [name_for(ref) for ref in refs]
     if len(set(plain)) == len(plain):
         return plain
-    groups = [ref.split(".")[0].upper() for ref in refs]
+    groups = [group_name(ref) for ref in refs]
     if len(set(groups)) == len(groups):
         return groups
     return [f"{group} {name}" for group, name in zip(groups, plain)]
@@ -645,7 +694,7 @@ def _trend(page, frame, history, theme):
     fraction = fraction_of(ref, value, page, frame)
     draw.trend(theme, draw.fmt(value, field), draw.short_unit(field), name_for(ref),
                delta, points, peak, fraction, hot=severity_of(ref, fraction),
-               shift=_walk())
+               shift=_walk((ref,)))
 
 
 # How far between polls the waterfall has got, so it can interpolate rather than step.

@@ -1147,6 +1147,39 @@ def test_a_slow_group_travels_only_when_it_changes(h):
 
 
 @check
+def test_a_declared_group_is_named_on_the_badge_too(_h):
+    """A badge names a reading after its field, and after its group where one page draws the
+    same field from several. That reads as CF_GADGETOID_COM for a group named after a domain:
+    the badge has only the key, and the dots cannot be put back. So the host's name for it
+    travels with the layout, which is where a name somebody chose belongs."""
+    sys.path.insert(0, install.app_source_dir())
+    import pages
+
+    caps = {"available": {"cf_a_com": ["requests"], "cf_b_com": ["requests"],
+                          "cpu": ["pct"]},
+            "group_source": {"cf_a_com": "Cloudflare", "cf_b_com": "Cloudflare"},
+            "group_labels": {"cf_a_com": "a.com", "cf_b_com": "b.com",
+                             "cpu": "Processor"}}
+    page = {"id": "s", "kind": "spark",
+            "fields": ["cf_a_com.requests", "cf_b_com.requests"]}
+    labels = layout.group_labels([page], caps)
+    assert labels == {"cf_a_com": "a.com", "cf_b_com": "b.com"}, labels
+
+    # The model's own are left out: "Processor" is read at a desk and the badge says CPU.
+    assert layout.group_labels([{"kind": "dial", "field": "cpu.pct"}], caps) == {}
+
+    was = pages.LABELS
+    try:
+        pages.LABELS = labels
+        # Two readings of the same field, told apart by the group as the reader named it
+        assert pages.names_for(page["fields"]) == ["a.com", "b.com"]
+    finally:
+        pages.LABELS = was
+    # And with nothing sent, the key in the case the rest of the furniture is in
+    assert pages.names_for(page["fields"]) == ["CF_A_COM", "CF_B_COM"]
+
+
+@check
 def test_stored_settings_beat_the_command_line(_h):
     merged = layout.merge_settings({"clock": {"latitude": 1.0, "units": "celsius"}},
                                    {"clock": {"latitude": 52.4}})
@@ -2781,8 +2814,26 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
     keys = app[app.index("    def _graph_keys(self):"):]
     keys = keys[:keys.index("\n    def ", 1)]
     assert "pages_module.PLOTS" in keys, "only the graph pages ask for a series"
-    # And it comes with its age, every poll, rather than on a timer of its own.
-    assert "&v=2" in app, "the series is fetched without the times it needs"
+    # And it comes with its age, every poll, rather than on a timer of its own. v=3, since
+    # a source may answer for a ring of its own and that one is not on the host's clock.
+    assert "&v=3" in app, "the series is fetched without the times it needs"
+
+    # A ring a source answers for itself is on whatever clock its readings are really on -
+    # an hour, for a domain's traffic - and a plot is translated as a whole, so one of those
+    # is drawn still. Walking it by a number counted in the collector's samples would slide
+    # it a year an hour.
+    try:
+        pages.note_series_spacing({"cf_pinout_xyz.requests": {"every_ms": 3600000}})
+        assert pages.walkable(("cpu.pct", "mem.pct"))
+        assert not pages.walkable(("cpu.pct", "cf_pinout_xyz.requests"))
+        pages.PLOT_ANIMATION = True
+        pages.BEHIND = 0.5
+        assert pages._walk(("cpu.pct",)) == 0.5
+        assert pages._walk(("cf_pinout_xyz.requests",)) is None
+    finally:
+        pages.note_series_spacing({})
+        pages.PLOT_ANIMATION = was
+        pages.BEHIND = 0.0
     assert "note_spacing" in app and "behind_at" in app
 
 
