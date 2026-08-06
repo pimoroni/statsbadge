@@ -2588,9 +2588,10 @@ def test_the_settings_are_grouped_by_what_they_do(_h):
     page = pathlib.Path("src/statsbadge/web/index.html").read_text()
     sections = sections_of(page)
     wanted = {
-        "Look": ("theme", "accentb", "slide", "interval"),
-        "Graphs and gauges": ("points", "smooth", "plotanim", "rows", "animate", "gaugefill"),
-        "Auto advance": ("idle", "advance"),
+        "Look": ("theme", "accentb"),
+        "Graphs and gauges": ("points", "interval", "smooth", "plotanim", "rows", "animate",
+                              "gaugefill"),
+        "Paging and auto advance": ("slide", "idle", "advance"),
         "Backlight and case lights": ("brightness", "autobright", "caselights"),
     }
     for heading, controls in wanted.items():
