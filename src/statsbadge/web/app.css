@@ -222,24 +222,34 @@ main > section > ol {
   list-style: none; margin: 0; padding: 0;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
   gap: 10px; align-items: start;
+  counter-reset: page;
 
-  > li { background: var(--panel); padding: var(--pad); }
+  > li {
+    background: var(--panel); padding: var(--pad);
+    counter-increment: page;
+    display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+    gap: 9px 10px; align-items: center;
+  }
+
   > li[data-dragging] { opacity: 0.4; }
   > li[data-over] { box-shadow: inset 3px 0 0 var(--accent); }
+  > li > :is(header, p, ol) { grid-column: 1 / -1; }
+  > li > label { grid-column: 1; }
+  > li > input { grid-column: 2 / -1; }
+  > li > p { margin: 0; }
 
-  > li > h3::before {
-    content: counter(list-item);
+  header { display: flex; align-items: center; gap: 8px; }
+  header h3 { flex: 1; margin: 0; }
+
+  header h3::before {
+    content: counter(page);
     color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums;
   }
 
-  > li > p { margin: 10px 0 0; }
-
-  header { display: flex; align-items: center; gap: 8px; }
-  header input { flex: 1; }
+  header .grip { cursor: grab; color: var(--dim); user-select: none; }
   header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
-  header .grip { cursor: grab; color: var(--dim); user-select: none; padding: 0 2px; }
 
-  ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+  ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   ol li { display: flex; gap: 6px; align-items: center; }
   ol li select { flex: 1; }
 

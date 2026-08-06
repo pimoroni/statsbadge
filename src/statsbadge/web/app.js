@@ -308,8 +308,8 @@ function pageCard(page, index) {
   const open = expanded.has(page.id)
   const settings = (caps.extension_page_settings || {})[page.kind] || []
 
-  const title = el("input", { type: "text", value: page.title || "",
-                              "aria-label": "Page title" })
+  const titleId = `page${++controlSerial}`
+  const title = el("input", { type: "text", id: titleId, value: page.title || "" })
   title.oninput = () => { page.title = title.value; markDirty() }
 
   const toggle = el("button", { type: "button", textContent: open ? "▾" : "▸",
@@ -322,20 +322,23 @@ function pageCard(page, index) {
 
   const remove = el("button", { type: "button", className: "danger small",
                                 textContent: "✕", title: "Remove this page" })
+  // Asked for, the button being next to the one that opens a card.
   remove.onclick = () => {
     if (config.pages.length <= 1) return toast("Keep at least one page", true)
+    if (!window.confirm(`Remove ${page.title || page.kind}?`)) return undefined
     config.pages.splice(index, 1)
     markDirty()
     return renderPages()
   }
 
   const item = el("li", { draggable: true },
-                  el("h3", { textContent: page.kind }),
                   el("header", null,
-                     toggle,
-                     title,
                      el("span", { className: "grip", textContent: "⠇" }),
-                     remove))
+                     el("h3", { textContent: page.kind }),
+                     toggle,
+                     remove),
+                  el("label", { htmlFor: titleId, textContent: "Title" }),
+                  title)
 
   if (open) {
     item.append(slotList(page, shape),
