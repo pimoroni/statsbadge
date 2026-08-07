@@ -86,7 +86,7 @@ LIGHT_BRIGHT = 4000
 # What ambient light is allowed to take away: a curtained room gets this much of the
 # configured brightness and full daylight gets all of it. Not zero, or a dark room reads as a
 # fault rather than as a setting.
-LIGHT_FLOOR = 0.45
+LIGHT_FLOOR = 0.2
 
 
 def ambient_fraction(raw, ceiling=LIGHT_BRIGHT):

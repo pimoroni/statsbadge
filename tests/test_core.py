@@ -4019,7 +4019,7 @@ def test_an_upgrade_that_dropped_the_extensions_is_put_right_by_adding_one(_h):
 
         ran = []
 
-        def rebuild(base, directory, **_kwargs):
+        def rebuild(base, _directory, **_kwargs):
             ran.append(base)
             return True, ""
 

@@ -106,12 +106,16 @@ COLLECT_EVERY_MS = 1000
 # and write it, so page saves go through State.modify, which merges.
 STATE_APP = "stats"
 
-# The lowest display.backlight value that lights the panel. The driver raises its input
-# to the power of 2.8 to get the PWM duty, so 0.5 is 14% duty, 0.25 is 2% and 0.1 is
-# under a fifth of one percent: the bottom half of the range is the difference between
-# off and nearly off. A configured brightness is spread over the half that does
-# something instead. Drop this once display.backlight covers its own range.
-BACKLIGHT_FLOOR = 0.5
+# The lowest display.backlight value worth setting. The driver raises its input to the power
+# of 2.8 for the PWM duty, which is the perceptual curve rather than a waste of the bottom
+# of the range: this is half a percent of duty, and a dark room reads that as around a sixth
+# of full. Below it the byte the binding casts to runs out of steps to give.
+BACKLIGHT_FLOOR = 0.15
+
+# The smallest change worth asking for. display.backlight() is cast to a byte before the
+# driver corrects it, so anything under one step of that byte sets the panel to what it is
+# already showing - and asking is what restarts the ramp.
+BACKLIGHT_STEP = 1.0 / 255 / (1.0 - BACKLIGHT_FLOOR)
 
 # The share of the theme's case light level a reading of zero still gets.
 CASELIGHT_FLOOR = 0.15
@@ -123,6 +127,14 @@ CASELIGHT_FLOOR = 0.15
 # and a half from a curtain being opened.
 LIGHT_FOLLOW = 0.2
 LIGHT_EVERY_MS = 250
+
+# How many reads go into one of those. The phototransistor is read through the 12-bit ADC,
+# which carries a couple of counts of noise either way: measured with the room and the panel
+# both held still, 256 reads spanned 64-80 of the raw u16. That is nothing against the 4500
+# a lit room reads, but a dark one reads 96-176, and ambient_fraction is logarithmic - so the
+# noise is worth the most exactly where the curve is steepest. Sixteen reads is 256us and
+# halves it.
+LIGHT_READS = 16
 
 # Bindings this badge answers itself, and the shares of the configured brightness its button
 # steps through. Paging and the panel are the badge's own business and a round trip to the host
@@ -143,7 +155,11 @@ SLIDE_WAIT_MS = 120
 # How long the panel takes to reach a new brightness. Short enough to answer a button
 # press, long enough that the step is a change of light rather than a click.
 BACKLIGHT_MS = 300
+# Where the panel is, and where it was last told to go. Both, because a ramp in flight has
+# not arrived: comparing a new target against the moving one would let a slow drift restart
+# the ramp every poll.
 _backlight_at = 1.0
+_backlight_want = 1.0
 _backlight_to = None
 
 
@@ -157,23 +173,30 @@ def backlight(fraction):
     display.backlight(BACKLIGHT_FLOOR + (1.0 - BACKLIGHT_FLOOR) * fraction)
 
 
-def backlight_to(fraction, ease=True):
-    """Head for a brightness, easing there over BACKLIGHT_MS unless told not to.
+def backlight_to(fraction, ms=BACKLIGHT_MS, shape=None):
+    """Head for a brightness, easing there over `ms`. Zero sets it outright.
 
     A step is the one thing on this badge that is unmissable however small, because the
     whole panel moves at once: cycling the button or a curtain opening both read as a click
-    where a ramp reads as the light changing. The sensor is already smoothed by
-    LIGHT_FOLLOW, which stops the panel chasing a passing hand; this is about the step
-    itself.
+    where a ramp reads as the light changing.
+
+    `shape` picks how the ramp is walked. The default eases in and out, which suits one
+    change somebody asked for; a follower giving a new target before the last has arrived
+    wants LINEAR, or every one of its steps starts and ends at a standstill and the panel
+    pulses its way to the new level.
     """
-    global _backlight_at, _backlight_to
+    global _backlight_at, _backlight_to, _backlight_want
     fraction = max(0.0, min(1.0, fraction))
-    if not ease or abs(fraction - _backlight_at) < 0.005:
+    if abs(fraction - _backlight_want) < BACKLIGHT_STEP:
+        return
+    _backlight_want = fraction
+    if not ms:
         _backlight_to = None
         _backlight_at = fraction
         backlight(fraction)
         return
-    _backlight_to = tween(_backlight_at, fraction, BACKLIGHT_MS, tween.QUAD_INOUT).start()
+    _backlight_to = tween(_backlight_at, fraction, ms,
+                          shape if shape is not None else tween.QUAD_INOUT).start()
 
 
 def backlight_step():
@@ -579,7 +602,7 @@ class App:
             draw.clear_cache()
         # The first layout to land is the badge coming up, so it takes its brightness
         # rather than ramping to it.
-        self.apply_backlight(self._lit)
+        self.apply_backlight(BACKLIGHT_MS if self._lit else 0)
         self._lit = True
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
         draw.ROWS = (self.layout or {}).get("rows", "zebra")
@@ -597,7 +620,7 @@ class App:
         if self.page_index >= len(self.page_list):
             self.page_index = 0
 
-    def apply_backlight(self, ease=True):
+    def apply_backlight(self, ms=BACKLIGHT_MS, shape=None):
         """The configured brightness, scaled by the room if the setting says so.
 
         The scale is a floor plus what the sensor reads, so `brightness` stays the ceiling
@@ -613,31 +636,34 @@ class App:
             wanted = float((self.layout or {}).get("brightness", 0.8))
         if (self.layout or {}).get("auto_brightness") and self.ambient is not None:
             wanted *= look.LIGHT_FLOOR + (1.0 - look.LIGHT_FLOOR) * self.ambient
-        backlight_to(wanted, ease)
+        backlight_to(wanted, ms, shape)
 
     def read_light(self):
         """Follow the room, slowly. Returns True when the panel wants setting again.
 
         Only while the setting is on: the read is cheap but the point of the setting being
         off is that nothing touches the brightness.
+
+        Meaned over LIGHT_READS rather than taken as one reading. Whether the move is worth
+        making is backlight_to's to answer, since what counts as too small to bother with is
+        a step of the panel and not a step of the sensor.
         """
         if not (self.layout or {}).get("auto_brightness"):
             return False
         try:
-            raw = badge.light_level()
+            total = 0
+            for _ in range(LIGHT_READS):
+                total += badge.light_level()
         except (AttributeError, OSError):
             return False           # not a Tufty, or no sensor on this board
+        raw = total // LIGHT_READS
         if raw > self.light_ceiling:
             self.light_ceiling = raw
         fraction = look.ambient_fraction(raw, self.light_ceiling)
         if self.ambient is None:
             self.ambient = fraction
         else:
-            moved = (fraction - self.ambient) * LIGHT_FOLLOW
-            # Under a step of the sensor's own resolution there is nothing to follow.
-            if abs(moved) < 0.005:
-                return False
-            self.ambient += moved
+            self.ambient += (fraction - self.ambient) * LIGHT_FOLLOW
         return True
 
     def apply_caselights(self):
@@ -794,7 +820,9 @@ class App:
         if time.ticks_diff(now, self._light_at) > LIGHT_EVERY_MS:
             self._light_at = now
             if self.read_light():
-                self.apply_backlight()
+                # Over the gap to the next reading, so the steps of a follower that is
+                # still moving run into one another instead of pulsing.
+                self.apply_backlight(LIGHT_EVERY_MS, tween.LINEAR)
         page = self.current_page()
         if page is not None and page.get("kind") in pages_module.ANIMATED:
             # This page moves on its own, so it gets a frame regardless of polling.
