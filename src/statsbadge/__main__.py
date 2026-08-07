@@ -860,8 +860,8 @@ def main(argv=None):
     verbs = exts.add_subparsers(dest="verb", metavar="add|remove|sync")
     for verb, what in (("add", "install an extension and remember it"),
                        ("remove", "uninstall an extension and forget it"),
-                       ("sync", "reinstall whatever the list names, after an upgrade "
-                                "of statsbadge itself has replaced the environment")):
+                       ("sync", ("reinstall whatever the list names, after an upgrade "
+                                 "of statsbadge itself has replaced the environment"))):
         step = verbs.add_parser(verb, parents=[common], help=what)
         step.set_defaults(func=cmd_extensions, verb=verb, names=[])
         if verb != "sync":
