@@ -2665,20 +2665,23 @@ def test_a_full_battery_is_not_an_alarm(_h):
 
 @check
 def test_the_badge_dims_to_suit_the_room(_h):
-    """Measured on the badge: a curtained room reads 96-176 raw of a u16, stepping in
-    sixteens, so the useful adjustment is in the bottom couple of percent of the range."""
+    """Measured on the badge, as raw u16 stepping in sixteens: darkness 48, a partly daylit
+    room with the curtains closed 320, a lit room 4500. A phone torch pointed straight at it
+    and a sunny window sill both read 61400, which is the sensor railed and not a reading -
+    so the scale tops out well below that and everything past it is the same answer."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
     import look
 
-    assert look.ambient_fraction(look.LIGHT_DIM) == 0.0
-    assert look.ambient_fraction(96) < look.ambient_fraction(176) < look.ambient_fraction(1000)
-    assert look.ambient_fraction(look.LIGHT_BRIGHT) == 1.0
-    # Anything past the ceiling is full, and a ceiling the app has raised rescales the rest.
-    assert look.ambient_fraction(65535) == 1.0
-    assert look.ambient_fraction(2000, 2000) == 1.0
-    assert look.ambient_fraction(2000, 20000) < 1.0
+    dark, curtained, lit, railed = 48, 320, 4500, 61400
+    assert look.ambient_fraction(dark) == 0.0
+    assert look.ambient_fraction(curtained) < look.ambient_fraction(lit)
+    assert look.ambient_fraction(lit) == 1.0
+    assert look.ambient_fraction(railed) == look.ambient_fraction(65535) == 1.0
+    # The three rooms have to be told apart, or the setting is a switch: a curtained room
+    # lands between the two ends rather than near either.
+    assert 0.25 < look.ambient_fraction(curtained) < 0.75, look.ambient_fraction(curtained)
     # Logarithmic: the first doubling is worth as much as the next.
     first = look.ambient_fraction(look.LIGHT_DIM * 2)
     assert 0.4 < first / look.ambient_fraction(look.LIGHT_DIM * 4) < 0.6, first

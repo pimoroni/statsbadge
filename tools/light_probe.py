@@ -8,7 +8,6 @@ shows is what the app would do. Ctrl-C to stop.
 
     raw      what badge.light_level() reads, meaned over a burst
     spread   high minus low across that burst, which is the sensor's noise
-    ceiling  the brightest yet seen, which is what the top of the scale is measured against
     ambient  where the follower has got to on 0-1
     duty     what the panel is actually lit at
     aims     times a second the panel was told to change, which is 0 for a settled room
@@ -70,10 +69,9 @@ print(f"light floor {look.LIGHT_FLOOR:.2f}, {SETTINGS['LIGHT_READS']} reads a sa
       f"{SETTINGS['LIGHT_FOLLOW'] * 100:.0f}% of the gap every "
       f"{SETTINGS['LIGHT_EVERY_MS']}ms, brightness {BRIGHTNESS:.1f}")
 print()
-print(f"{'raw':<8} {'spread':<7} {'ceiling':<8} {'ambient':<8} {'duty%':<7} aims")
+print(f"{'raw':<8} {'spread':<7} {'ambient':<8} {'duty%':<7} aims")
 
 ambient = None
-ceiling = look.LIGHT_BRIGHT
 want = None
 raw = spread = aims = 0
 said = poll = time.ticks_ms()
@@ -90,9 +88,7 @@ while True:
             high = max(high, one)
         raw = total // SETTINGS["LIGHT_READS"]
         spread = high - low
-        if raw > ceiling:
-            ceiling = raw
-        fraction = look.ambient_fraction(raw, ceiling)
+        fraction = look.ambient_fraction(raw)
         if ambient is None:
             ambient = fraction
         else:
@@ -107,7 +103,6 @@ while True:
 
     if time.ticks_diff(now, said) >= 1000:
         said = now
-        print(f"{raw:<8} {spread:<7} {ceiling:<8} {ambient:<8.3f} "
-              f"{duty(want) * 100:<7.2f} {aims}")
+        print(f"{raw:<8} {spread:<7} {ambient:<8.3f} {duty(want) * 100:<7.2f} {aims}")
         aims = 0
     badge.update()

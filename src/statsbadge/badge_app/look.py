@@ -77,11 +77,14 @@ ICON_FILE = "icons.af"
 APP_DIR = "/system/apps/stats"
 
 # Ambient light, as `badge.light_level()` reads it: a raw u16 off the Tufty's phototransistor,
-# 16us a read. Measured in a curtained room it sits at 96-176 and steps in sixteens, which is
-# one count of the 12-bit conversion behind it. DIM is that room; BRIGHT is where the panel
-# wants everything it has, and the app raises it if the sensor ever reads past it, so a badge
-# in daylight calibrates its own top end rather than pegging at whatever was guessed here.
-LIGHT_DIM = 96
+# 16us a read. It steps in sixteens, one count of the 12-bit conversion behind it. Measured in
+# darkness it sits at 46-53, three counts off the bottom of the ADC; a partly daylit room with
+# the curtains closed reads around 320, and a lit one around 4500.
+#
+# BRIGHT is where the panel wants everything it has, and anything past it is the same answer:
+# a phone torch reads 61706, and measuring a room against the brightest thing ever pointed at
+# the badge would leave that room a fraction of the way up a scale it should have topped.
+LIGHT_DIM = 48
 LIGHT_BRIGHT = 4000
 # What ambient light is allowed to take away: a curtained room gets this much of the
 # configured brightness and full daylight gets all of it. Not zero, or a dark room reads as a
@@ -89,7 +92,7 @@ LIGHT_BRIGHT = 4000
 LIGHT_FLOOR = 0.2
 
 
-def ambient_fraction(raw, ceiling=LIGHT_BRIGHT):
+def ambient_fraction(raw):
     """Where a raw light reading sits on 0-1, logarithmically.
 
     Neither the sensor nor the eye is linear, and between a curtained room and an overcast
@@ -98,7 +101,7 @@ def ambient_fraction(raw, ceiling=LIGHT_BRIGHT):
     """
     import math
 
-    span = math.log(max(ceiling, LIGHT_DIM * 2) / LIGHT_DIM)
+    span = math.log(LIGHT_BRIGHT / LIGHT_DIM)
     return max(0.0, min(1.0, math.log(max(raw, LIGHT_DIM) / LIGHT_DIM) / span))
 
 

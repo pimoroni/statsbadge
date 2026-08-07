@@ -130,10 +130,9 @@ LIGHT_EVERY_MS = 250
 
 # How many reads go into one of those. The phototransistor is read through the 12-bit ADC,
 # which carries a couple of counts of noise either way: measured with the room and the panel
-# both held still, 256 reads spanned 64-80 of the raw u16. That is nothing against the 4500
-# a lit room reads, but a dark one reads 96-176, and ambient_fraction is logarithmic - so the
-# noise is worth the most exactly where the curve is steepest. Sixteen reads is 256us and
-# halves it.
+# both held still, 256 reads spanned 64-80 of the raw u16. That is nothing against the 4500 a
+# lit room reads, but darkness reads 48, and ambient_fraction is logarithmic - so the noise is
+# worth the most exactly where the curve is steepest. Sixteen reads is 256us and halves it.
 LIGHT_READS = 16
 
 # Bindings this badge answers itself, and the shares of the configured brightness its button
@@ -216,9 +215,8 @@ class App:
         self.client = net.Client(self.config)
         self.theme = look.get(look.DEFAULT)
         self.layout = None
-        # Where the ambient follower has got to, and the brightest the sensor has read.
+        # Where the ambient follower has got to.
         self.ambient = None
-        self.light_ceiling = look.LIGHT_BRIGHT
         # A local override of the configured brightness, for the button that cycles it.
         self.dimmed = None
         self.dim_step = 0
@@ -657,9 +655,7 @@ class App:
         except (AttributeError, OSError):
             return False           # not a Tufty, or no sensor on this board
         raw = total // LIGHT_READS
-        if raw > self.light_ceiling:
-            self.light_ceiling = raw
-        fraction = look.ambient_fraction(raw, self.light_ceiling)
+        fraction = look.ambient_fraction(raw)
         if self.ambient is None:
             self.ambient = fraction
         else:
