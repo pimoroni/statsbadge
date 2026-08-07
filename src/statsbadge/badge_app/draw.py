@@ -1,20 +1,35 @@
 """Drawing the pages.
 
-Vector shapes throughout, so a theme is a colour table. The costs that shape this
-(measured on this board, in DEVELOPMENT.md): an anti-aliased shape is about 0.08ms
-plus 8us an edge and almost nothing for its fill, a line of live text is about 1ms,
-and the same text blitted from a cache is 0.08ms. So shapes are drawn live and every
-string that is not new every frame is baked into a sprite once.
+Vector shapes throughout, which makes a theme a colour table. The costs that shape this
+are measured on this board and listed in DEVELOPMENT.md. An anti-aliased shape is about
+0.08ms plus 8us an edge, and its fill is near free. A line of live text is about
+1ms, and the same text blitted from a cache is 0.08ms.
 
-The header and footer are drawn where they stand, from raster fills and cached labels.
-Only the pip row is baked, being rounded rectangles.
+So shapes are drawn live, and every string that survives a frame is baked into a sprite
+once. The header and footer are drawn where they stand, from raster fills and
+cached labels. Only the pip row is baked, being rounded rectangles.
+
+**The text cache.** A sprite is blitted at 187ns a pixel, and glyphs rasterise faster than
+that once they are large. At 104pt the blit is 3.01ms against 1.27ms to draw the text, and
+the sprite is 130KB, so CACHE_UNDER holds the line. Below it the cache wins: 0.08ms against
+0.22ms at 11pt, 0.32ms against 0.64ms at 17pt.
+
+A string is only baked the second time it is asked for. Every reading that moves is a new
+key, and baking each one fills the heap. Measured with tools/mem_probe.py, 221 sprites at a
+time, dropped every eighty frames, leaving a largest free run of 70KB out of 7.9MB, where
+the map's 827KB parse has to fit.
+
+Furniture bakes on its second frame, and that is where the saving is. A value that comes
+and goes costs 297B and 1.23ms live against 4695B and 2.54ms to bake.
 
 A page that splits into something round and a column of text beside it - the single dial,
 the ring stack, an extension's clock face - takes its geometry from `look.DIAL_C`,
-`look.DIAL_OUTER` and `look.READOUT_X`, and its rows from `look.readout_rows` and either
-`readout` or `column_lines` here. Nothing in a split page should place text on a number of
-its own: the pages are paged between, and anything choosing its own margin moves under the
-reader when they press a button.
+`look.DIAL_OUTER` and `look.READOUT_X`. Its rows come from `look.readout_rows` and either
+`readout` or `column_lines` here.
+
+A split page should place text on the shared numbers alone. The pages are paged
+between, and anything choosing a margin for itself moves under the reader when they press
+a button.
 """
 
 import binascii
@@ -24,19 +39,21 @@ from array import array
 import look
 
 FONT = None
-# How many decoded pictures to hold. A message travels only when it changes, so the same
-# bytes arrive on every frame in between and decoding them each time would be the whole page
-# budget: a decode is never free, and the set on screen is at most three.
+# How many decoded pictures to hold. A message travels on a change, and the same bytes
+# arrive on every frame between, and decoding them each time costs the page budget. At
+# most three are on screen.
 _pictures = {}
 PICTURE_CACHE = 4
 
 _labels = {}
 _pip_rows = {}
 
-# Fonts by name, so a sprite cache key can say which one drew it. TEXT is the app's own;
-# `icons` is registered by prepare() when the .af is there, and an extension adds its own
-# with add_font. Without the name in the key an icon and a letter of the same string would
-# collide, and one of them would be drawn in the wrong font.
+# Fonts by name, letting a sprite cache key say which one drew it. TEXT is the app's.
+# `icons` is registered by prepare() when the .af is there, and an extension adds one with
+# add_font.
+#
+# Without the name in the key, an icon and a letter of the same string collide and one is
+# drawn in the wrong font.
 TEXT = "text"
 ICONS = "icons"
 _fonts = {}
@@ -50,7 +67,7 @@ def prepare():
             print(f"draw: no {look.FONT_FILE}, falling back to the firmware's font")
             add_font(look.FONT_NAME, look.FALLBACK_FONT_PATH)
         FONT = _fonts.get(look.FONT_NAME)
-    # TEXT is the role; look.FONT_NAME is which font is filling it, so use_font can name
+    # TEXT is the role and look.FONT_NAME is the font filling it, so use_font can name
     # either and a candidate can be tried against the shipped one.
     _fonts[TEXT] = FONT
     _fonts[look.FONT_NAME] = FONT
@@ -63,12 +80,12 @@ def add_font(name, *paths):
 
     A bare filename is looked for in the installed app directory and then beside this
     module. That order matters under `mpremote mount`: the mounted copy is served as text,
-    so a font loaded from it comes back mangled rather than refused. An extension passes
-    full paths, because its own file lives in ext/ and may share a name with the app's.
+    so a font loaded from it comes back mangled and not refused. An extension passes full
+    paths, its file living in ext/ where it may share a name with the app's.
 
-    A missing file is not an error. An install predating the font has none, and a page that
-    wanted an icon falls back to its words. Anything that raises is reported and then
-    treated the same way, because a font is not worth a crash dialog.
+    A missing file is allowed. An install predating the font has none, and a page needing
+    an icon falls back to its words. Anything that raises is reported and treated the same
+    way, a font being no reason for a crash dialog.
     """
     if name in _fonts:
         return True
@@ -91,10 +108,10 @@ def _candidates(path):
     """Where to look for a font. An absolute path is taken as given; anything else is
     relative to the app, which is `fonts/x.af` for what the app ships.
 
-    A path under /remote is never offered. That is a `mpremote mount`, which serves a file
+    A path under /remote is skipped. That is a `mpremote mount`, which serves a file
     as text, so font.load reads it as UTF-8, fails partway and takes the REPL down with it -
-    a wedged badge rather than a caught error. Under mount the device copy is what gets
-    found, or the fallback, which is why /fonts is on the list: it is writable, so the tools
+    a wedged badge and not a caught error. Under mount the device copy is what gets
+    found, or the fallback. /fonts is on the list because it is writable, so the tools
     can put a font somewhere loadable without an install.
     """
     if path.startswith("/"):
@@ -115,9 +132,9 @@ def has_font(name):
 def use_font(name):
     """Draw text with a registered font from here on. True when it is there.
 
-    The sprite cache keys on the name a caller asked for and not on the font behind it, so
-    changing what TEXT points at has to empty the cache or the last font's sprites are
-    handed back for every string already drawn once.
+    The sprite cache keys on the name a caller asked for and not on the font behind it.
+    Changing what TEXT points at has to empty the cache, or the last font's sprites come
+    back for every string already drawn once.
     """
     global FONT
     face = _fonts.get(name)
@@ -132,34 +149,21 @@ def use_font(name):
 
 # -- text cache -------------------------------------------------------------
 
-# Text this size and over is drawn where it stands and never kept. A sprite is blitted at
-# 187ns a pixel and glyphs rasterise faster than that once they are large: at 104pt the blit
-# is 3.01ms against 1.27ms to draw the text, and the sprite is 130KB. Below it the cache is
-# the right way round - 0.08ms against 0.22ms at 11pt, 0.32ms against 0.64ms at 17pt - and a
-# page that redraws at frame rate takes eight hits a frame off it.
+# Text this size and over is drawn where it stands and never kept; see the docstring.
 CACHE_UNDER = 40
 
-# A string is only worth a picture the second time it is asked for. Every reading that moves is
-# a new key, and baking each one fills the heap with several hundred images of assorted sizes:
-# measured with tools/mem_probe.py, that holds 221 sprites at a time, drops the lot every eighty
-# frames, and leaves a largest contiguous free run of 70KB out of 7.9MB free - which the map's own
-# 827KB parse would not fit in.
-#
-# Furniture - a name, a title, a unit - is redrawn every frame and so bakes on the frame after its
-# first, which is where the saving is. A value that comes and goes is drawn where it stands, which
-# is cheaper than baking it anyway: 297B and 1.23ms live against 4695B and 2.54ms to bake.
+# Strings seen once, letting a second sighting bake one; see the docstring.
 _once = set()
-# Enough that a string which comes round again inside a few seconds is still remembered, and so
-# bakes: a sprite is 100B and 0.26ms to blit, so what repeats is worth one. Keys, not pictures:
-# this is about 50KB full.
+# Enough that a string coming round again inside a few seconds still bakes. Keys, not
+# pictures, at about 50KB full.
 ONCE_MAX = 512
 
 
 def label(text_value, size, pen, name=TEXT):
     """A string baked into a sprite, or None if it should be drawn where it stands.
 
-    None for a string too large to be worth keeping, and for one not seen before: see `_once`.
-    A caller that needs the sprite - to place something against its width - should ask
+    None for a string too large to be worth keeping, and for one not seen before; see
+    `_once`. A caller needing the sprite, to place something against its width, should ask
     `text_width` and draw with `blit_label`, which handles both sides of that line.
     """
     if size >= CACHE_UNDER:
@@ -194,7 +198,7 @@ def label(text_value, size, pen, name=TEXT):
         screen.font = was
     if len(_labels) > 220:
         # A ceiling for the furniture of a badge that has been through every page and every
-        # theme. Dropped wholesale rather than aged: only what has been asked for twice is in
+        # theme. Dropped wholesale and not aged, only what has been asked for twice being in
         # here, so there is little to lose.
         _labels.clear()
     _labels[key] = sprite
@@ -204,9 +208,9 @@ def label(text_value, size, pen, name=TEXT):
 def blit_label(text_value, size, pen, x, y, align=0, name=TEXT):
     """Draw a string. align 0 left, 1 centre, 2 right, about x.
 
-    From a sprite where one is worth keeping and live where it is not, which the caller does
-    not have to know about. Returns the width drawn, or 0 for a font that is not loaded -
-    which is what lets a caller offer an icon and fall back to words without asking first.
+    From a sprite where one is worth keeping and live otherwise, which the caller can
+    ignore. Returns the width drawn, or 0 for a font still to load -
+    letting a caller offer an icon and fall back to words without asking first.
     """
     face = _fonts.get(name)
     if face is None:
@@ -242,9 +246,9 @@ def blit_icon(character, size, pen, x, y, align=0):
 def clear_cache():
     """Forget everything held from an earlier draw.
 
-    Called when the theme changes or the host does, so it has to include anything holding
-    colours and not only the sprites: the waterfall's scroll buffer is a second of columns
-    painted in the ramp they were drawn with, and it showed the old theme's for a whole
+    Called when the theme changes or the host does, and it has to include anything holding
+    colours and not only the sprites. The waterfall's scroll buffer is a second of columns
+    painted in the ramp they were drawn with, and it showed the previous theme's for a
     screen's width after a switch.
     """
     _labels.clear()
@@ -252,7 +256,7 @@ def clear_cache():
     _pip_rows.clear()
     _readings.clear()
     _gradients.clear()
-    # A decoded picture holds a table painted in the theme's greys, so it is one of these.
+    # A decoded picture holds a table painted in the theme's greys, and counts as one.
     _pictures.clear()
     waterfall_reset()
 
@@ -264,9 +268,9 @@ COLUMN_GAP = 8
 
 
 def text_width(text_value, size, name=TEXT):
-    """How wide a string will be drawn, so a column can be fitted to it.
+    """How wide a string will be drawn, for a column to be fitted to it.
 
-    Plus the pixel `label` adds, so a measurement and the sprite it describes agree.
+    Plus the pixel `label` adds, keeping a measurement and its sprite in agreement.
     """
     face = _fonts.get(name)
     if face is None:
@@ -280,12 +284,9 @@ def text_width(text_value, size, name=TEXT):
     return int(width) + 2
 
 
-# What the app's fonts are built to: a capital stands 81 units of a 128 unit em, and
-# tools/make_icon_font.py fits an icon to a box of 100 of the same, sat on the baseline. A
-# wide font keeps both ratios, its em being the same em at a finer grid, and the decoder
-# scales whichever em to the size asked for - so these are fractions of any size, in any of
-# the app's fonts. An icon's box is a quarter taller than a capital, with its ink centred
-# half way up it.
+# What the app's fonts are built to: a capital stands 81 units of a 128 unit em, and an
+# icon fits a box of 100 sat on the baseline. A wide font keeps both ratios at a finer
+# grid, so these are fractions of any size in any of the app's fonts.
 CAP_UNITS, ICON_UNITS, EM_UNITS = 81.0, 100.0, 128.0
 CAP = CAP_UNITS / EM_UNITS
 ICON_BOX = ICON_UNITS / EM_UNITS
@@ -294,13 +295,12 @@ ICON_BOX = ICON_UNITS / EM_UNITS
 def icon_baseline(text_y, text_size, icon_size):
     """Where to draw an icon so it centres on the capitals of text drawn at `text_y`.
 
-    Not on a shared baseline: the icon's box stands taller than a capital and its ink sits
-    in the middle of that box, so sharing a baseline leaves the symbol floating above the
-    words - 4.5px at 32 beside 26pt.
+    Held off a shared baseline. The icon's box stands taller than a capital and its ink sits
+    in the middle of that box, so a shared baseline leaves the symbol floating above the
+    words, 4.5px at 32 beside 26pt.
 
-    Against the capitals and not the string's own extent, because a diacritic or a
-    descender would otherwise move the symbol: 16°C would sit lower than 16C for no reason
-    the reader can see.
+    Against the capitals and not the string's extent, since a diacritic or a descender
+    would otherwise move the symbol and 16°C would sit lower than 16C.
     """
     cap_middle = text_y + text_size * (1.0 - CAP / 2.0)
     return int(cap_middle - icon_size * (1.0 - ICON_BOX / 2.0))
@@ -309,24 +309,21 @@ def icon_baseline(text_y, text_size, icon_size):
 def column_width(texts, size, name=TEXT):
     """How wide a column of these strings has to be.
 
-    A page that puts names down one side and readings down the other cannot know either
-    width in advance: the names are whatever the fields are called and a reading is
-    whatever its unit makes it. Measured, a row reflows instead of leaving a gap at one
-    end and running off the other.
+    A page that puts names down one side and readings down the other has neither width in
+    advance. The names are whatever the fields are called, and a reading is whatever its
+    unit makes it. Measured, a row reflows and does not leave a gap at one end while running
+    off the other.
 
-    One measurement, not one per string: `measure_text` breaks on newlines and returns the
-    widest line, so sixteen readings cost 0.2ms where a string at a time was 2.8ms.
+    One measurement, not one per string. `measure_text` breaks on newlines and returns
+    the widest line, so sixteen readings cost 0.2ms against 2.8ms a string at a time.
     """
     if not texts:
         return 0
     return text_width("\n".join(texts), size, name)
 
 
-# A column can also be drawn as one bounded `screen.text` call, the native layout placing
-# each line - `line_height` is `pitch / size`, the font's natural advance being its size.
-# Measured, that loses to the sprite cache: cores 24.2ms against 22.6 and the text page 14.4
-# against 10.3, because a live glyph is ~60us and a whole string blitted is 0.2ms. It only
-# wins with the cache off.
+# A column can also be drawn as one bounded `screen.text` call. Measured, that loses to
+# the sprite cache: cores 24.2ms against 22.6, the text page 14.4 against 10.3.
 
 
 # -- formatting -------------------------------------------------------------
@@ -354,12 +351,9 @@ def fmt(value, field):
     return str(value)
 
 
-# How many figures a slot will show before it gives up and says how many there are. Three
-# is what a load average is: the run queue averaged over one, five and fifteen minutes, and
-# the three of them together are the reading - the short window above the long one is load
-# climbing. Per-core loads are the other list a field can hold, and sixteen of them do not
-# go in a slot at all; three of the sixteen would be a lie, so the slot says what it has
-# and the reader can put the field on a bars page instead.
+# How many figures a slot shows before it gives up and says how many there are. Three is a
+# load average: one, five and fifteen minutes. Sixteen per-core loads belong on a bars
+# page.
 SEVERAL = 3
 
 
@@ -374,7 +368,7 @@ def _several(values, field):
 def _rate(bps):
     """A throughput, scaled to the largest prefix it fills.
 
-    The prefix is part of the number and `short_unit` supplies the B/s after it, so the
+    The prefix is part of the number and `short_unit` supplies the B/s after it, and the
     two together read 512B/s, 800KB/s, 11.4MB/s, 1.2GB/s.
     """
     if bps >= 1024 * 1024 * 1024:
@@ -408,7 +402,7 @@ def _duration(seconds):
 def short_unit(field):
     """What follows the number.
 
-    A byte figure is scaled by `fmt`, which leaves the prefix on the number, so the unit
+    A byte figure is scaled by `fmt`, which leaves the prefix on the number, and the unit
     here is only the base: 11.4M and MB/s make 11.4MB/s, and the same unit serves the
     reading whatever size it has grown to.
     """
@@ -427,10 +421,8 @@ def short_unit(field):
     return ""
 
 
-# What a value came out as, since a page redraws at frame rate from numbers that change
-# once a second. Formatting one is 305us - the float format is 58us of it and each
-# isinstance check 23us - against 21us to look it up. Sixteen bars a frame is 4.9ms of
-# formatting the same sixteen numbers over and over.
+# What a value came out as. Formatting one is 305us against 21us to look it up, and
+# sixteen bars a frame is 4.9ms of formatting the same numbers.
 _readings = {}
 
 
@@ -438,13 +430,11 @@ def reading(value, field):
     """A value with its unit, for a slot that has no room to place one separately.
 
     `fmt` already carries a prefix where the number was scaled - 12.3G, 50.0M - and
-    short_unit adds the base after it, so a rate reads 50.0MB/s and a percentage reads
-    9.2%. A reading that is not there gets no unit: there is no such thing as
-    "-- percent".
+    short_unit adds the base after it, so a rate reads 50.0MB/s and a percentage 9.2%. A
+    reading that never arrived gets no unit, "-- percent" being meaningless.
     """
-    # Only a number is remembered. It is what costs, and it is the only kind of value that
-    # can be a key at all: a field can arrive as a list - core loads, a load average - and a
-    # list has no hash.
+    # Only a number is remembered. It is the expensive kind and the only hashable one; a
+    # field can arrive as a list, core loads or a load average.
     if type(value) is float or type(value) is int:
         key = (value, field)
         text = _readings.get(key)
@@ -452,14 +442,14 @@ def reading(value, field):
             return text
         text = fmt(value, field) + short_unit(field)
         if len(_readings) > 240:
-            # A reading per field per poll, so this fills with history nobody will ask for
-            # again. Dropped wholesale, like the sprites.
+            # A reading per field per poll, so this fills with history nobody asks for
+            # again. Dropped wholesale, as the sprites are.
             _readings.clear()
         _readings[key] = text
         return text
     text = fmt(value, field)
     if value is None or isinstance(value, (str, bool, list, tuple)):
-        # No unit on a list: the figures carry their own sense - a load average is a queue
+        # A list carries its sense in the figures - a load average is a queue
         # length and not a percentage of anything - and "16 values%" is nonsense.
         return text
     return text + short_unit(field)
@@ -483,16 +473,15 @@ def background(theme, title, index, total, subtitle=None):
 def furniture(theme, title, index, total, subtitle=None):
     """The header and footer alone, leaving the body as it stands.
 
-    So a page turn can say where it is going before the body gets there: the title and the
-    pip are the page you are on, and during a slide - or while a burst of presses settles -
-    they should already be the page you pressed for.
+    So a page turn can say where it is going before the body gets there. The title and the
+    pip name the page you are on, and during a slide, or while a burst of presses settles,
+    they should already name the page you pressed for.
     """
     screen.pen = theme.panel
     screen.rectangle(rect(0, 0, look.W, look.HEADER_H))
     screen.rectangle(rect(0, look.H - look.FOOTER_H, look.W, look.FOOTER_H))
-    # The chrome takes the second accent where a palette has one, leaving the first for what a
-    # reading is drawn in. Where it has none the two are the same colour, which is every theme
-    # that was written down before there was a second.
+    # The chrome takes the second accent where a palette has one, leaving the first for
+    # readings. Where it has none the two are the same colour.
     screen.pen = theme.accent_b
     screen.rectangle(rect(0, look.HEADER_H - 2, look.W, 2))
     blit_label(title.upper(), look.SIZE_TITLE, theme.ink, look.PAD, 4)
@@ -505,7 +494,7 @@ def furniture(theme, title, index, total, subtitle=None):
 
 
 # The pips have this much of the width to themselves. A dash shortens as they pack in,
-# down to a dot and no further: a mark thinner than it is tall stops reading as a mark.
+# down to a dot and no further, a mark thinner than it is tall stopping being a mark.
 PIP_ROOM = look.W - look.PAD * 4
 PIP_MAX_W, PIP_GAP, PIP_DOT, PIP_TIGHT = 14, 5, 4, 2
 
@@ -518,8 +507,8 @@ def _pips(theme, index, total):
     nobody is paging through forty screens.
 
     Baked, and no wider than the pips themselves: a rounded rectangle is 0.19ms whatever
-    its size, so a dozen of them every frame is more than the whole footer is worth. The
-    row changes only with the page, so a handful are kept.
+    its size, and a dozen of them every frame is more than the footer is worth. The
+    row changes only with the page, and a handful are kept.
     """
     key = (theme.name, index, total)
     row = _pip_rows.get(key)
@@ -549,9 +538,8 @@ def _pips(theme, index, total):
 
 # -- widgets ----------------------------------------------------------------
 
-# How the big gauge fills, from the layout. "solid" is the ramp's colour for the reading;
-# "ramp" lays the whole ramp round the arc and leaves what the reading has not reached faint,
-# so the scale it is climbing shows behind it.
+# How the big gauge fills, from the layout. "solid" is the ramp's colour for the reading.
+# "ramp" lays the ramp round the arc and leaves the part past the reading faint.
 GAUGE_FILL = "solid"
 # How faint that is. Per stop, because a gradient brush ignores screen.alpha: measured, a solid
 # pen blends at a layer alpha and a gradient does not move.
@@ -562,17 +550,16 @@ _gradients = {}
 def swept_pens(theme, centre, radius, backwards=False):
     """The theme's ramp round a gauge: what fills the sweep, and what sits behind it.
 
-    A conical's stops are fractions of a whole turn, so a 270 degree gauge lays the ramp over
-    three quarters of one, and the brush's second point is the direction it starts in -
-    DIAL_FROM clockwise from straight up, which is the convention arc() uses, so the two line up
-    with no fixup. Unlike a linear gradient it follows the curve, which is what makes the hue
-    track the reading.
+    A conical's stops are fractions of a turn, so a 270 degree gauge lays the ramp over
+    three quarters of one. The brush's second point is the direction it starts in, DIAL_FROM
+    clockwise from straight up, matching arc()'s convention. Unlike a linear gradient it
+    follows the curve, and the hue tracks the reading.
 
-    `backwards` is for a field whose severity runs the other way, a battery not being in trouble
-    at 100%: the colour comes from the angle here and not from a lookup, so the ramp itself has
-    to be reversed for the sweep's end to be the reading's own colour.
+    `backwards` is for a field whose severity runs the other way, a battery at 100% being
+    healthy. The colour comes from the angle here and not from a lookup, so the ramp has to
+    be reversed for the sweep to end on the reading's colour.
 
-    Cached: a pair built from OKLCH stops is 3.4ms, where the arc costs the same to draw either
+    Cached, a pair built from OKLCH stops being 3.4ms where the arc costs the same either
     way.
     """
     key = (theme.name, centre, radius, backwards)
@@ -602,20 +589,20 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
 
     `shape.arc(centre, inner, outer, from, to)` - angles start at the top and run
     clockwise, so look.DIAL_FROM..DIAL_TO is 225..495 and the gap lands at the bottom,
-    which is where `under` goes.
+    where `under` goes.
 
-    `hot` is where this reading sits on the ramp, for a field where that is not where it
-    sits on its own scale: a battery at 100% is not a machine in trouble. It colours the
-    sweep and nothing else, the sweep's length being the reading either way.
+    `hot` is where this reading sits on the ramp, for a field where that differs from
+    where it sits on its scale, a battery at 100% being healthy. It colours the sweep
+    alone, the sweep's length being the reading either way.
 
-    `icon` is drawn there instead where the font has it, and `under` is what it falls back
-    to. `unit` is a small suffix on the reading, for a gauge whose slot below is already
-    spoken for - the single dial puts its unit below instead, having nothing else to put
-    there. It is dropped rather than allowed to spill out of a small ring.
+    `icon` is drawn there instead where the font has it, and `under` is the fallback.
+    `unit` is a small suffix on the reading, for a gauge whose slot below is already spoken
+    for. The single dial puts its unit below, that slot being free. A unit is
+    dropped before it spills out of a small ring.
 
-    `swept` is a (fill, track) pair from `swept_pens`, for a gauge showing the whole ramp round
-    its arc. Without one the sweep is the single ramp colour for the reading and the track is
-    the grid.
+    `swept` is a (fill, track) pair from `swept_pens`, for a gauge showing the full ramp
+    round its arc. Without one the sweep is the single ramp colour for the reading and the
+    track is the grid.
     """
     value_size = value_size or look.SIZE_HUGE
     label_size = label_size or look.SIZE_LABEL
@@ -624,7 +611,7 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
     fraction = 0.0 if fraction is None else max(0.0, min(1.0, fraction))
     fill, track = swept if swept else (None, None)
 
-    # The track is only the part the sweep does not cover. The two abut rather than one
+    # The track is only the part the sweep does not cover. The two abut, and neither
     # being drawn over the other, which halves the arc a full gauge rasterises, and the join
     # is under the tick below in any case.
     lit = not cold and fraction > 0.001
@@ -640,7 +627,7 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
         screen.pen = (theme.at(fraction if hot is None else hot) if fill is None else fill)
         screen.shape(shape.arc(middle, inner, outer, start, sweep))
 
-        # A brighter tick at the sweep's end, so the exact value is readable, and it lands
+        # A brighter tick at the sweep's end, marking the exact value, and it lands
         # on the join between the two arcs.
         screen.pen = theme.ink
         screen.shape(shape.arc(middle, inner - 3, outer + 3, sweep - 1.4, sweep + 1.4))
@@ -651,16 +638,15 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
     reading_w = text_width(value_text, value_size)
     suffix_w = text_width(unit, unit_size) if unit else 0
     if suffix_w and reading_w + suffix_w > inner * 2 - 4:
-        # Kept inside the ring rather than allowed over the arc, so a gauge too small for
-        # its unit shows the reading and the name under it and nothing else. A scaled
-        # figure carries its prefix on the number, so 11.0M still says which 11 it is.
+        # Kept inside the ring and never over the arc, so a gauge too small for its unit
+        # shows the reading with the name under it. A scaled figure carries its prefix on
+        # the number, so 11.0M still says which 11 it is.
         suffix_w = 0
     left = centre[0] - (reading_w + suffix_w) // 2
     blit_label(value_text, value_size, ink, left, top)
     if suffix_w:
-        # Sat on the reading's own baseline, which is where the eye expects a unit. Text
-        # puts its baseline `size` below where it is drawn, so the drop is the difference
-        # in sizes.
+        # Sat on the reading's baseline, where a unit belongs. Text puts its baseline
+        # `size` below where it is drawn, making the drop the difference in sizes.
         blit_label(unit, unit_size, theme.dim, left + reading_w,
                    top + value_size - unit_size)
     below = centre[1] + value_size * 0.42
@@ -673,8 +659,8 @@ def gauge(theme, centre, outer, inner, fraction, value_text, under=None,
 def dial(theme, fraction, value_text, unit_text, cold=False, hot=None, backwards=False):
     """The single gauge of a `dial` page, with its readouts beside it.
 
-    The one gauge with a page to itself, and the only one big enough for a ramp round it to be
-    read, so this is where the swept fill is offered.
+    The one gauge with a page to itself, and the only one large enough to read a ramp off,
+    so this is where the swept fill is offered.
     """
     gauge(theme, look.DIAL_C, look.DIAL_OUTER, look.DIAL_INNER, fraction, value_text,
           unit_text, cold=cold, hot=hot,
@@ -685,8 +671,8 @@ def dial(theme, fraction, value_text, unit_text, cold=False, hot=None, backwards
 def dials(theme, entries):
     """Up to four gauges across the body band, each named under its reading.
 
-    One page kind rather than one per count: how many fields the page carries is the only
-    thing that changes, so it picks the layout and nothing else has to be decided.
+    One page kind and not one per count. The field count is the only thing that changes,
+    so it picks the layout.
     """
     shape_of = look.DIALS.get(len(entries)) or look.DIALS[4]
     for centre, entry in zip(shape_of["centres"], entries):
@@ -700,8 +686,8 @@ def readout(theme, y, name, value_text, fraction=None, note=None, chip=None, hot
     """One row of the column beside a gauge: a name, the reading under it, and then either
     a bar for the level or a line saying what full is.
 
-    Every page that draws a gauge and a column draws this row, so nothing moves when you
-    page between them. `chip` is the colour of the ring a row belongs to, which is what ties
+    Every page that draws a gauge and a column draws this row, so it holds still when you
+    page between them. `chip` is the colour of the ring a row belongs to, and ties
     the two together on a page where the gauge is not the bar.
     """
     x = look.READOUT_X
@@ -725,7 +711,7 @@ def readout(theme, y, name, value_text, fraction=None, note=None, chip=None, hot
             screen.rectangle(rect(x, y + 28, filled, 3))
 
 
-# Between one line of a free-form column and the next, on top of the line's own height.
+# Between one line of a free-form column and the next, on top of the line height.
 COLUMN_LEAD = 3
 
 
@@ -734,7 +720,7 @@ def column_lines(entries, top=None, align=0):
 
     For a page whose rows are not readouts - a clock's time, place and date - so that it
     gets the column's left edge and a consistent rhythm without working either out. Empty
-    strings are skipped, so a caller can offer a line it may not have.
+    strings are skipped, letting a caller offer a line it may not have.
 
     Returns the y after the last line, for a page that has more to place by hand.
     """
@@ -752,11 +738,11 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
     """A stack of horizontal bars. Raster rectangles: no AA needed on an axis-aligned
     bar, and this is the one page that can have 32 of them.
 
-    `field` is what the values are, so a per-core load reads as a percentage. Without it
+    `field` is what the values are, so a per-core load prints as a percentage. Without it
     every bar was a bare number.
 
     `fractions` is where each bar should be drawn to, for a caller sweeping them to their
-    readings; without it each bar is drawn at its own value, which is the same thing once a
+    readings; without it each bar is drawn at its value, which is the same thing once a
     sweep has landed.
     """
     if not values:
@@ -768,8 +754,8 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
     height = max(4, slot - 3)
     names = [f"{i}" for i in range(count)]
     readings = [reading(values[i] or 0.0, field) for i in range(count)]
-    # Both columns are as wide as their own widest entry: the index runs to two digits and
-    # a reading is whatever its unit makes it, so a fixed column either leaves a gap or
+    # Both columns are as wide as their widest entry: the index runs to two digits and
+    # a reading is whatever its unit makes it, and a fixed column either leaves a gap or
     # runs the readings into the bars.
     label_w = column_width(names, look.SIZE_SMALL)
     value_w = column_width(readings, look.SIZE_SMALL)
@@ -786,7 +772,7 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
         blit_label(names[i], look.SIZE_SMALL, theme.dim, look.PAD, y - 1)
         filled = max(1, int(width * fraction)) if fraction > 0 else 0
         screen.pen = theme.grid
-        # From where the fill ends, so the two meet instead of overlapping. Exact: an
+        # From where the fill ends, so the two meet and never overlap. Exact: an
         # axis-aligned raster edge is a pixel boundary, not an anti-aliased one.
         screen.rectangle(rect(x + filled, y, width - filled, height))
         if filled:
@@ -797,14 +783,14 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
 
 
 # Whether a series is drawn as a curve through its samples or as a polyline between them.
-# Set from the layout, so it is one switch for every graph on the badge.
+# Set from the layout, and it is one switch for every graph on the badge.
 SMOOTH = True
-# Points per span between two samples. Two puts a segment about two pixels across on a plot
-# of 48 samples in 250, which is where the corners stop reading; four was indistinguishable
-# from it against deliberately spiky data and cost 6ms a page.
+# Points per span between two samples. Two puts a segment about two pixels across on a
+# plot of 48 samples in 250, where the corners stop showing. Four looked the same against
+# spiky data and cost 6ms a page.
 CURVE_STEPS = 2
 # A curve needs height to show. Interpolating a sparkline 22px tall gives back the same
-# picture for 1.7ms a series, so a plot shorter than this is drawn straight.
+# picture for 1.7ms a series, and a plot shorter than this is drawn straight.
 SMOOTH_MIN_H = 40
 _weights = {}
 
@@ -812,9 +798,9 @@ _weights = {}
 def _basis(steps):
     """The Catmull-Rom weights for each fraction of a span, worked out once.
 
-    The four weights depend only on t, so a curve of any length reuses `steps` sets of them
-    and each output point costs four multiplies an axis. Evaluating the polynomial per point
-    instead cost 265us a point on this board, which is 50ms for one series.
+    The four weights depend only on t, and a curve of any length reuses `steps` sets and
+    each output point costs four multiplies an axis. Evaluating the polynomial per point
+    cost 265us a point on this board, or 50ms for one series.
     """
     table = _weights.get(steps)
     if table is None:
@@ -835,9 +821,9 @@ def _basis(steps):
 def curve_steps(width, height, count):
     """How finely to subdivide `count` samples across a plot this size. 1 means don't.
 
-    A segment shorter than a pixel buys nothing and costs the same as one that shows, so a
-    narrow plot is subdivided less, and a short one not at all: the curve is only visible if
-    there is room for it to bend.
+    A segment shorter than a pixel costs the same as one that shows and buys less. A
+    narrow plot is subdivided less, and a short one not at all, a curve needing room to
+    bend.
     """
     if not SMOOTH or count < 3 or height < SMOOTH_MIN_H:
         return 1
@@ -847,17 +833,17 @@ def curve_steps(width, height, count):
 def curve(values, steps=CURVE_STEPS):
     """`values` resampled to a Catmull-Rom curve through them, evenly spaced as they were.
 
-    A graph is a polyline with a corner at every sample, and the corners are what reads as
-    jagged. Catmull-Rom passes *through* each sample rather than near it, so the shape is
-    smoothed without the reading moving: the peak drawn is still the peak measured.
+    A graph is a polyline with a corner at every sample, and the corners are the jagged
+    part. Catmull-Rom passes *through* each sample and not near it, so the shape smooths
+    without the reading moving and the peak drawn is the peak measured.
 
-    Only the values are interpolated, the samples being evenly spaced along the axis - so a
-    caller lays the output out the same way it laid out the input, over one more point per
-    step. Returned as it came when there is nothing to interpolate or SMOOTH is off.
+    Only the values are interpolated, the samples being evenly spaced along the axis, so a
+    caller lays the output out the way it laid out the input over one more point per step.
+    Returned as it came when there is nothing to interpolate or SMOOTH is off.
 
     A spline overshoots where the data turns sharply, so the output is held within the range
-    of the input: inside that the bulge is what makes a curve read as one, but past the
-    lowest sample an area fill would run under its own baseline.
+    of the input. Inside that the bulge is what makes a curve a curve, but past the lowest
+    sample an area fill would run under its baseline.
     """
     if steps < 2 or len(values) < 3:
         return values
@@ -880,7 +866,7 @@ def curve(values, steps=CURVE_STEPS):
 _points = array("f", b"")
 
 # How many samples of room a moving plot keeps on its right for the ones still coming in. Held
-# still rather than derived from the current offset, which would resize the plot every frame.
+# still, and never from the current offset, which would resize the plot every frame.
 WALK_LEAD = 2
 
 
@@ -889,17 +875,19 @@ def _lay_out(left, top, width, height, values, peak, shift):
 
     Returns how many floats were written, or 0.
 
-    `shift` is how far the plot has walked left since its last update, in samples: 0 is just
-    after one landed. `None` means the plot is not walking at all, which is a different layout
-    and not the same as a shift of zero - a moving plot is laid out `WALK_LEAD` samples wider
-    than its box and clipped to it, so the samples still to come slide in at the right as the
-    oldest leave at the left.
+    `shift` is how far the plot has walked left since its last update, in samples, 0 being
+    just after one landed. `None` means the plot never walks, which is a different layout
+    from a shift of zero.
 
-    The plot is smoothed first if it is tall enough to show a curve, then scaled and laid out
-    in one pass: `shape.custom` takes a float buffer, so no point is boxed as a vec2 - 2.3ms
-    against 3.7 for 191 points, and the same pixels. Scaling here rather than in a list the
-    caller passes saves a pass over every sample, which was 14.7us a point and 4.2ms of the
-    sparkline page.
+    A moving plot is laid out `WALK_LEAD` samples wider than its box and clipped to it, so
+    the samples still to come slide in at the right as the oldest leave at the left.
+
+    The plot is smoothed first if it is tall enough to show a curve, then scaled and laid
+    out in one pass. `shape.custom` takes a float buffer, so no point is boxed as a vec2:
+    2.3ms against 3.7 for 191 points, and the same pixels.
+
+    Scaling here, and not in a list the caller passes, saves a pass over every sample at
+    14.7us a point and 4.2ms of the sparkline page.
     """
     global _points
     count = len(values)
@@ -911,19 +899,15 @@ def _lay_out(left, top, width, height, values, peak, shift):
         count = len(values)
     if len(_points) < (count + 2) * 2:
         _points = array("f", bytes((count + 2) * 8))
-    # A sample of the original data, however many points it was interpolated to, so a shift
-    # of one moves the plot by one reading whether it is smoothed or not.
-    # Points per original sample, so a shift of one moves the plot by one reading whether the
-    # series was interpolated or not.
+    # Points per original sample, so a shift of one moves the plot by one reading whether
+    # the series was interpolated or not.
     per_sample = steps if steps > 1 else 1
-    # Walking, the samples still to come in are laid *past* the right edge and slide in as the
-    # plot moves, so the box stays full. Laid across the width alone the whole plot simply
-    # shifts left, and the gap it leaves at the right grows to a sample's width before
-    # snapping back - which reads as the plot periodically shrinking.
+    # Walking, the samples still to come are laid *past* the right edge and slide in as
+    # the plot moves, keeping the box full. Laid across the width alone the plot shifts
+    # left and leaves a growing gap.
     lead = per_sample * (WALK_LEAD if WALK_LEAD > 1 else 1)
     # A quarter of the plot at most. Headroom is space the samples are not drawn in, so a
-    # badge far enough behind to want more than that gets a shorter walk instead of a plot
-    # squeezed into the corner of its own box.
+    # badge far enough behind gets a shorter walk and not a plot squeezed into a corner.
     if lead > count // 4:
         lead = count // 4
     walking = shift is not None
@@ -931,9 +915,8 @@ def _lay_out(left, top, width, height, values, peak, shift):
     step = width / float(span)
     scale = height / float(peak or 1.0)
     bottom = top + height
-    # Past the headroom the plot really is short of data, and the honest thing is to let it
-    # move and leave the gap: `graph` draws that region as one rather than pretending the
-    # newest reading is now.
+    # Past the headroom the plot really is short of data, so it moves and leaves the gap.
+    # `graph` draws that region as a gap, and does not pass the newest reading off as now.
     away = shift * step * per_sample if walking else 0.0
     start = left - away
     i = 0
@@ -949,7 +932,7 @@ def area(left, top, width, height, values, peak, base=None, shift=None):
     """One filled area from `values` against `peak`, closed along its base. A shape, or None.
 
     Where the base sits is a caller's business, a sparkline's axis being under its plot
-    rather than at the foot of it.
+    and not at the foot of it.
     """
     i = _lay_out(left, top, width, height, values, peak, shift)
     if not i:
@@ -963,10 +946,9 @@ def area(left, top, width, height, values, peak, base=None, shift=None):
     return shape.custom(memoryview(_points)[:i + 4])
 
 
-# A plot drawn as a line rather than as a fill. Anti-aliased, so it costs its edges: the
-# weight is free - 2.0 and 2.5 time the same as 1.5 - but the join is not, a round one being
-# an arc at every one of 48 vertices and 3.5ms a page more than a miter. Centred on the
-# samples, or the band grows to one side of its own data.
+# A plot drawn as a line and not as a fill. Anti-aliased, so it costs its edges, and a
+# round join costs 3.5ms a page more than a miter. Centred on the samples, or the band
+# grows to one side.
 LINE_W = 2.0
 LINE_FLAGS = (shape.PATH_OPEN | shape.ALIGN_CENTER | shape.JOIN_MITER | shape.CAP_BUTT)
 
@@ -981,11 +963,9 @@ def line(left, top, width, height, values, peak, weight=LINE_W, shift=None):
     return trace
 
 
-# What an axis with no full scale of its own tops out at: one of these times a power of the
-# base the reading is formatted in. Stepped rather than fitted to the data, because a scale
-# fitted to the window creeps with every sample that arrives or leaves - the plot rescaling
-# slightly on each poll, which reads as the whole graph twitching. It also settles the
-# gutter, whose width is the label's: a stepped axis shows one of a few strings.
+# What an axis with no full scale tops out at: one of these times a power of the reading's
+# base. Stepped and not fitted, a fitted scale creeping with every sample. It also settles
+# the gutter's width.
 AXIS_STEPS = (1, 2, 5, 10, 20, 50, 100, 200, 500)
 
 
@@ -993,8 +973,7 @@ def axis_top(peak, field):
     """The round number an axis tops out at, at or above `peak`.
 
     In the base the reading is scaled by, so a byte rate steps 1024 at a time and says
-    5.0MB/s rather than 4.8: a label the reader can place a sample against is the point of
-    having one.
+    5.0MB/s and not 4.8. The point of a label is placing a sample against it.
     """
     base = 1024.0 if field.endswith(("_bps", "_mb")) else 10.0
     scale = 1.0
@@ -1014,7 +993,7 @@ def graph(theme, series, labels, maximum=None, shift=None):
     line per sample would be dozens.
 
     A field with a full scale is drawn against it with headroom above; one without - a
-    throughput has none of its own - is drawn against the next round number up from the
+    throughput having none - is drawn against the next round number up from the
     busiest sample on the plot.
     """
     field = labels[0][1] if labels else "pct"
@@ -1037,7 +1016,7 @@ def graph(theme, series, labels, maximum=None, shift=None):
         screen.hspan(left, y, width)
 
     # Where the series has run out: the host has not answered for longer than a plot can cover
-    # with what it holds. Drawn rather than papered over, because a stalled host and an idle
+    # with what it holds. Drawn and not papered over, since a stalled host and an idle
     # machine are otherwise the same flat line.
     if shift is not None and shift > WALK_LEAD:
         stale = min(width, int((shift - WALK_LEAD) * width / float(len(series[0]) or 1)))
@@ -1056,7 +1035,7 @@ def graph(theme, series, labels, maximum=None, shift=None):
         screen.pen = _series_colour(theme, index)
         was = screen.clip
         # The plot is drawn a sample wider than its box while it walks left, so the oldest
-        # reading leaves at the gutter rather than over it.
+        # reading leaves at the gutter and never over it.
         screen.clip = rect(left, look.BODY_TOP, width, look.BODY_H)
         screen.shape(filled)
         screen.clip = was
@@ -1075,13 +1054,11 @@ def graph(theme, series, labels, maximum=None, shift=None):
 
 
 # What the two series are drawn at. The first is nearly solid and the second lets it show
-# through, so two areas that overlap still read as two - except on a pale page, where a
-# translucent area washes out towards it and the second may as well be as solid as the first.
+# through. On a pale page a translucent area washes out, so both go solid.
 SERIES_ALPHA = (200, 150)
-# How far from the page a series has to land, as `difference` measures it, to count as
-# visible: black to white is 100, and about 5 is where a difference becomes obvious. Measured
-# against every theme, only luminescence falls through, at 13.8, and the next nearest is mono
-# at 24.9 - so the threshold sits between them with room either side.
+# How far from the page a series has to land, as `difference` measures it. Black to white
+# is 100. Across the themes only luminescence falls through, at 13.8, where the next
+# nearest is mono at 24.9.
 SERIES_FLOOR = 20
 
 
@@ -1093,21 +1070,21 @@ def _series_colour(theme, index):
     """Colours for the two graph series: the accent, and whichever end of the ramp is
     furthest from it that can actually be seen.
 
-    The two areas overlap and are drawn semi-transparent, so a near miss reads as one
+    The two areas overlap and are drawn semi-transparent, so a near miss shows as one
     series and takes the legend with it. Which end is further depends on the theme:
     the default theme's teal accent takes the hot end, mono's near-white the cold one.
 
     Both ends are tried, furthest first. A theme built out of one hue has the page at one
-    end of its own ramp, and an area drawn in that is not there at all - but the other end
-    usually is, and taking it beats giving up on the ramp. Measured across the themes,
-    trying both leaves none of them needing the fallback, where taking the furthest end
-    and no other left four of them either invisible or grey.
+    end of its ramp, where an area drawn in it disappears, and the other end usually shows.
+
+    Measured across the themes, trying both leaves none needing the fallback. Taking the
+    furthest end alone left four of them either invisible or grey.
     """
     if index == 0:
         return theme.accent
     alpha = _series_alpha(theme, index)
-    # A palette's own second colour, where it has one: the theme said what to use here, so
-    # nothing has to be worked out from the ramp. It is still checked against the page.
+    # A palette's second colour, where it has one. The theme said what to use here, and
+    # the ramp is left out of it. Still checked against the page.
     if theme.accent_b != theme.accent:
         if theme.bg.difference(theme.accent_b.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
             return theme.accent_b
@@ -1118,12 +1095,12 @@ def _series_colour(theme, index):
         if theme.bg.difference(pen.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
             return pen
     # Neither end shows, which takes a palette whose ramp is the page at both ends. The dim
-    # colour does not track a reading, so it is the last resort rather than a choice.
+    # colour does not track a reading, so it is the last resort and not a choice.
     return theme.dim
 
 
 def grid(theme, entries):
-    """Up to six labelled figures in two rows, each in its own panel."""
+    """Up to six labelled figures in two rows, one panel each."""
     if not entries:
         return
     count = min(len(entries), 6)
@@ -1148,7 +1125,7 @@ def grid(theme, entries):
             screen.pen = theme.at(max(0.0, min(1.0, fraction if hot is None else hot)))
             screen.rectangle(rect(x, y + cell_h - 3, int(cell_w * max(0.0, min(1.0, fraction))), 3))
         # Both: a cell has room for the name and for a symbol in the far corner, so the
-        # symbol is another way to find the tile rather than the only one. A gauge has
+        # symbol is another way to find the tile, and not the only one. A gauge has
         # room for one or the other and takes the symbol.
         blit_label(name, look.SIZE_SMALL, theme.dim, x + 7, y + 5)
         if icon:
@@ -1157,12 +1134,12 @@ def grid(theme, entries):
         blit_label(value_text, size, theme.ink, x + 7, y + cell_h // 2 - size // 2 + 2)
 
 
-# The badge's own page: two columns and a plate under them. The columns are the same width so
+# The badge page: two columns and a plate under them. The columns are the same width so
 # the two halves read as one table, and the plate is where anything too long for a column goes.
 VITALS_METERS = 5
 VITALS_FACTS = 5
 VITALS_NOTE_H = 12
-# The bar under a level. Four rather than the readout column's three: this page is a wall of
+# The bar under a level. Four against the readout column's three, this page being a wall of
 # them and they are what it is read by, where a readout's bar sits beside a gauge saying the
 # same thing.
 VITALS_BAR_H = 4
@@ -1171,9 +1148,9 @@ VITALS_BAR_H = 4
 def vitals(theme, meters, facts, notes=()):
     """Levels down the left, figures down the right, and a plate of strings underneath.
 
-    Its own widget because none of the others fit what a badge knows about itself: half of it
-    is levels that want a bar and half is strings that want reading, and a name like "littlefs"
-    is not a field on any host.
+    A widget to itself, none of the others fitting the badge's readings. Half of it is
+    levels needing a bar and half is strings to read, and a name like "littlefs" is a field
+    on no host.
     """
     column = (look.W - look.PAD * 3) // 2
     right = look.PAD * 2 + column
@@ -1207,7 +1184,7 @@ def vitals(theme, meters, facts, notes=()):
         screen.pen = theme.grid
         screen.hspan(right, y + pitch - 6, column)
 
-    # Fitted rather than wrapped: these are one string each and the useful end is the front.
+    # Fitted, and never wrapped: these are one string each and the useful end is the front.
     y = look.BODY_TOP + look.BODY_H - plate_h - 2
     for note in notes:
         blit_label(fit(note, look.SIZE_SMALL, look.W - look.PAD * 2), look.SIZE_SMALL,
@@ -1234,8 +1211,8 @@ def flow(text_value, size, pen, box, name=TEXT):
     here would be a `measure_text` a word to find the breaks and another per character to
     trim the last line, in Python, on every draw.
 
-    Live rather than through the label cache, which keys on a string: a post is long,
-    unique and read once, so a sprite of it is baked, blitted once and dropped.
+    Live, and not through the label cache, which keys on a string. A post is long, unique
+    and read once, so a sprite of it would be baked, blitted once and dropped.
     """
     face = _fonts.get(name)
     if face is None or not text_value:
@@ -1260,10 +1237,12 @@ COUNT_H = 34
 def notification(theme, items, counters):
     """Messages down the page, with a row of counters under them.
 
-    One shape for a post, a mention, a headline and an RSS entry, because they are the same
-    four things: who or where it came from, what it says, how long ago, and sometimes a word
-    about why it is here. Anything numeric on the same page is a counter, drawn small along
-    the bottom - a follower count is context for the message, not the point of the page.
+    One shape for a post, a mention, a headline and an RSS entry, all four being the same
+    four things. Who it came from, what it says, how long ago, and sometimes a word about
+    why it is here.
+
+    Anything numeric on the same page is a counter, drawn small along the bottom. A
+    follower count is context for the message, not the point of the page.
     """
     top, bottom = look.BODY_TOP, look.BODY_TOP + look.BODY_H
     if counters:
@@ -1281,9 +1260,8 @@ def notification(theme, items, counters):
             screen.hspan(look.PAD, top + index * height, look.W - look.PAD * 2)
 
 
-# The gap between a picture and the words beside it, and the least of one worth drawing: a
-# message three to a page has 52px of block, and a band much thinner than this is a smear
-# rather than a picture.
+# The gap between a picture and the words beside it, and the least worth drawing. A
+# message three to a page has 52px of block, and a thinner band is a smear.
 PICTURE_GAP = 8
 PICTURE_MIN = 24
 
@@ -1293,7 +1271,7 @@ def fitted(shown, height):
 
     A band from the middle, because the crop that made the picture put what matters in the
     centre. Cropped and not scaled: the pixels are palette indices, and halfway between two
-    indices is a third colour rather than a blend of the two.
+    indices is a third colour and not a blend of the two.
     """
     if shown is None or height >= shown.height:
         return shown
@@ -1307,7 +1285,7 @@ def shades_for(theme, entries):
 
     A table is sized by the file's bit depth and not by how many colours it carries - 1/2/4/8
     bits index 2/4/16/256 entries - so a picture of eight shades at four bits arrives in a
-    table of sixteen. The largest ramp that fits is the picture's own; the entries past it
+    table of sixteen. The largest ramp that fits is the picture's; the entries past it
     are left alone, nothing indexing them.
     """
     if entries in theme.image:
@@ -1319,7 +1297,7 @@ def shades_for(theme, entries):
 def picture(theme, data):
     """An indexed image off the wire, in this theme's greys. None if it will not decode.
 
-    The bytes carry indices and a grey ramp; the theme's own ramp is assigned over the top,
+    The bytes carry indices and a grey ramp; the theme's is assigned over the top,
     which recolours every pixel indexing it in one write. So one picture suits every badge
     and arrives in the colours of the page around it.
 
@@ -1333,7 +1311,7 @@ def picture(theme, data):
         return held
     try:
         # base64, because the frame is JSON and a PNG is not text. Keyed on the encoded
-        # string, which is what arrives and what changes when the message does.
+        # string, since that is what arrives and what changes when the message does.
         img = image.load(binascii.a2b_base64(data))
     except (OSError, ValueError, TypeError):
         return None
@@ -1356,7 +1334,7 @@ def _item_block(theme, item, top, height):
     shown = fitted(picture(theme, (item or {}).get("image")), height - 8)
     if shown is not None:
         # Down the left, with the words taking what is left: a picture beside a message reads
-        # as belonging to it where one above reads as a page of its own.
+        # as belonging to it, where one above starts a page.
         screen.blit(shown, look.PAD, top + 4)
         left += shown.width + PICTURE_GAP
         room -= shown.width + PICTURE_GAP
@@ -1370,7 +1348,7 @@ def _item_block(theme, item, top, height):
         used = blit_label(fit(title, ITEM_TITLE, room), ITEM_TITLE, theme.accent, left, y)
         if note:
             # Why this message is here - boosted, a reply, a section - beside the name and
-            # in the dim, since it qualifies the line rather than being part of it.
+            # in the dim, since it qualifies the line and is not part of it.
             blit_label(fit(note, ITEM_TITLE, room - used - 6), ITEM_TITLE, theme.dim,
                        left + used + 6, y)
         y += int(ITEM_TITLE * 1.45)
@@ -1412,7 +1390,7 @@ def ago(seconds):
 def banner(theme, title, message, detail=None):
     """A full-screen notice: connecting, no host, an error.
 
-    The box is sized to its lines rather than fixed, because these strings carry
+    The box is sized to its lines and not fixed, since these strings carry
     whatever the network had to say and a fixed box clips the useful part.
     """
     lines = [(title, look.SIZE_BIG, theme.ink)]
@@ -1428,7 +1406,7 @@ def banner(theme, title, message, detail=None):
     box_w = look.W - 40
     room = box_w - pad_x * 2
 
-    # Trim anything that will not fit, so a long error reads as truncated instead of
+    # Trim anything that will not fit, so a long error shows as truncated and not
     # running off the edge of the box.
     trimmed = [(fit(text, size, room), size, pen) for text, size, pen in lines]
     widest = max(screen.measure_text(text, font_size=size)[0]
@@ -1453,10 +1431,11 @@ def banner(theme, title, message, detail=None):
 def readable(pen, over, toward):
     """`pen` if it can be seen on `over`, else the same hue stepped toward `toward`.
 
-    For anything written in the colour of a reading. A ramp is built to be seen against the
-    page, and a pale palette's cold end lands within 5 counts of its own panel - measured
-    across the themes - so a low reading would be written in a colour that is not there. The
-    hue is kept where it can be: half way to the ink usually clears it.
+    For anything written in the colour of a reading. A ramp is built to be seen against
+    the page, and a pale palette's cold end lands within 5 counts of its panel, measured
+    across the themes, so a low reading would be written in a colour that disappears.
+
+    The hue is kept where it can be, half way to the ink usually clearing it.
     """
     for alpha in (255, 128):
         candidate = pen if alpha == 255 else pen.with_alpha(alpha).over(toward)
@@ -1473,9 +1452,9 @@ def fit(text, size, room):
     """
     if screen.measure_text(text, font_size=size)[0] <= room:
         return text
-    # Halving rather than a character at a time: a string is only ever wider the longer it
+    # Halving, and not a character at a time: a string is only ever wider the longer it
     # gets, so the longest prefix that fits can be found in a handful of measurements
-    # instead of one per character trimmed. A post cut from 160 characters to 35 is eight
+    # and not one per character trimmed. A post cut from 160 characters to 35 is eight
     # measurements against a hundred and twenty five.
     low, high = 0, len(text)
     while low < high:
@@ -1487,9 +1466,8 @@ def fit(text, size, room):
     return (text[:low] + "...") if low else text
 
 
-# How long a toast takes to go, and how much of that is left when the fade starts. It holds
-# at full strength while it is being read and then leaves; fading the whole time would make
-# it look like it was never quite there.
+# How long a toast takes to go, and how much of that is left when the fade starts. It
+# holds at full strength while it is read and then leaves.
 TOAST_FADE_MS = 400
 
 
@@ -1497,9 +1475,10 @@ def toast(theme, message, fade=1.0):
     """A short-lived note over the footer, for a command that was sent.
 
     `fade` is how much of it to draw, 1 solid and 0 gone. The page under it is redrawn on
-    every frame of the fade, so the note thins out over the page rather than over a copy of
-    itself; the label is drawn from the sprite cache either way, `alpha` being a property of
-    the blend and not of the string.
+    every frame of the fade, so the note thins out over the page and not over a copy of it.
+
+    The label comes from the sprite cache either way, `alpha` being a property of the blend
+    and not of the string.
     """
     if fade <= 0.0:
         return
@@ -1516,7 +1495,7 @@ def toast(theme, message, fade=1.0):
 
 # -- rings ------------------------------------------------------------------
 
-# Thin enough that four rings fit the dial's own radius, which is what keeps this page on
+# Thin enough that four rings fit the dial's radius, which keeps this page on
 # the same bounds as a single gauge.
 RING_BAND = 14
 RING_GAP = 4
@@ -1527,7 +1506,7 @@ def rings(theme, entries):
 
     One arc per reading, so four readings cost four shapes: the same trick the single
     gauge uses, at a quarter of the screen each. The stack sits where the single dial does
-    and the legend is that page's own column of readouts.
+    and the legend is that page's column of readouts.
     """
     rows = entries[:4]
     height = look.READOUT_NOTE_H if any(entry[4] for entry in rows) else look.READOUT_H
@@ -1537,7 +1516,7 @@ def rings(theme, entries):
         ring_inner = ring_outer - RING_BAND
         if ring_inner < 8:
             break
-        # Track and fill abut, as they do on a single gauge: four rings drawn over their own
+        # Track and fill abut, as they do on a single gauge: four rings drawn over their
         # tracks is twice the arc for the same picture.
         sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * (fraction or 0.0)
         screen.pen = theme.grid
@@ -1548,18 +1527,16 @@ def rings(theme, entries):
             screen.pen = pen
             screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
                                    look.DIAL_FROM, sweep))
-        # The legend doubles as the reading, so the rings need no labels on them. The chip
-        # is only for a row whose scale note has taken the bar's place: where there is a
-        # bar, it is already drawn in this ring's colour.
+        # The legend doubles as the reading, so the rings carry no labels. The chip is
+        # only for a row whose scale note took the bar's place.
         readout(theme, y, name, value_text, fraction, note, chip=pen if note else None)
 
 
 # -- sparklines -------------------------------------------------------------
 
 # How one row is told from the next: a band behind every other row, a hairline between
-# them, or nothing but the plots. Set from the layout. Banded by default - six lines on one
-# page read as one plot with six traces otherwise. The colours are the theme's own
-# `stripe`, which is a step from the page rather than a colour of its own, and `grid`.
+# them, or the plots alone. Banded by default, six lines otherwise looking like one plot
+# with six traces.
 ROWS = "zebra"
 ROW_NONE = "none"
 
@@ -1570,17 +1547,16 @@ def sparklines(theme, entries):
     Six of these fit the body band, which is the point - one page that says what every
     other page says, at the cost of the detail a full graph gives.
 
-    A line rather than a filled area, at 1.2ms a page more: a plot 22px tall filled to its
-    axis is a slab of colour on any reading that holds steady, which says the level over
-    again where the reading beside it already does, and says nothing about the shape.
+    A line, and not a filled area, at 1.2ms a page more. A plot 22px tall filled to its
+    axis is a slab of colour on any steady reading, repeating the level the figure beside
+    it already gives while hiding the shape.
 
     Still between readings, whatever the animation setting says. Six plots this small have
-    nowhere to scroll - a sample is 5px - and interpolating them at fixed x is a horizontal
-    translation whatever it is called, which reads as a jump rather than as points settling.
+    nowhere to scroll, a sample being 5px, and interpolating them at fixed x is a
+    horizontal translation that shows as a jump.
 
-    The axis rule under each plot is drawn only when nothing else separates the rows: with a
-    band or a hairline there it is a second line saying the same thing, and the row it
-    belongs to is no longer in doubt.
+    The axis rule under each plot is drawn only where the rows are otherwise unseparated. With
+    a band or a hairline there it is a second line saying the same thing.
     """
     rows = entries[:6]
     if not rows:
@@ -1599,8 +1575,8 @@ def sparklines(theme, entries):
         for index in range(1, len(rows), 2):
             screen.rectangle(rect(0, look.BODY_TOP + 2 + index * height, look.W, height))
     elif ROWS == "rules":
-        # What a rule is drawn in everywhere else, this being one: the palette's `grid` is
-        # the unfilled part of a gauge and a graph's rules.
+        # What a rule is drawn in everywhere else. The palette's `grid` is the unfilled
+        # part of a gauge and a graph's rules.
         screen.pen = theme.grid
         for index in range(1, len(rows)):
             screen.hspan(look.PAD, look.BODY_TOP + 2 + index * height,
@@ -1641,10 +1617,9 @@ def radar(theme, entries):
                    look.W // 2, look.BODY_MID, align=1)
         return
     centre = (look.W // 2, look.BODY_MID)
-    # An ellipse, not a circle: the body band is 300 wide and 190 tall, and a label is two
-    # lines that reach 15px below its anchor. Four readings put an axis straight down, so a
-    # circle wide enough to use the width spills that label into the page indicator. 56 is
-    # what keeps the block inside the band; the width is free to stay larger.
+    # An ellipse, not a circle. A label is two lines reaching 15px below its anchor, and
+    # four readings put an axis straight down, so a circle wide enough for the 300px band
+    # spills that label into the page indicator.
     radius_x, radius_y = 70, 56
     count = len(rows)
 
@@ -1690,7 +1665,7 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
           hot=None, shift=None):
     """One big reading, which way it is going, and where it has been.
 
-    The arrow and the change are the point: a number on its own does not say whether
+    The arrow and the change are the point, a bare number saying nothing about whether
     something is climbing.
     """
     blit_label(name, look.SIZE_LABEL, theme.dim, look.PAD + 2, look.BODY_TOP + 8)
@@ -1705,7 +1680,7 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
         blit_label(f"{abs(delta):.1f}", look.SIZE_VALUE, theme.ink, x, look.BODY_TOP + 30,
                    align=2)
         # Drawn, not written: the text font carries no arrows, and a missing glyph is a
-        # gap rather than an error.
+        # gap, and not an error.
         _arrow(theme, x - 46, look.BODY_TOP + 34, delta,
                fraction if hot is None else hot)
 
@@ -1768,7 +1743,7 @@ def waterfall_reset():
 def waterfall(theme, lanes, labels=None):
     """One column per call, scrolling left: a lane per value, coloured by the ramp.
 
-    Time is measured in frames rather than samples, which is what makes it move: the
+    Time is measured in frames and not samples, and that is what makes it move: the
     caller interpolates between polls and this draws wherever that got to. Precision is
     the thing being traded away, and the ramp carries the reading instead.
     """
