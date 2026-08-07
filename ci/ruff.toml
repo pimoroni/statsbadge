@@ -80,20 +80,20 @@ builtins = [
     "BUTTON_HOME"
 ]
 
-# Include:
-# F = Pyflakes
-# Q = Quotes
-# E/W = pycodestyle (Whitespace, Line lengths etc)
-# B - flake8-bugbear = Unused loop variables, sloppy code
-# COM - flake8-commas
-# BLE - flake8-blind-except
-# C4  - flake8-comprehensions
-# ISC - flake8-implicit-str-concat = Implicit string concat, eg: `"hello" "world"` on one line
-# ICN - flake8-import-conventions = Import conventions
-# PIE - flake8-pie = Misc silliness, catches range with a 0 start argument
-# RET - flake8-return = Enforces straight-forward code around return statements
-# SLF - flake8-self
-# ARG - flake8-unused-arguments
+# Included rule families:
+#   F      Pyflakes
+#   Q      Quotes
+#   E/W    pycodestyle: whitespace, line lengths
+#   B      flake8-bugbear: unused loop variables, sloppy code
+#   COM    flake8-commas
+#   BLE    flake8-blind-except
+#   C4     flake8-comprehensions
+#   ISC    flake8-implicit-str-concat: `"hello" "world"` on one line
+#   ICN    flake8-import-conventions
+#   PIE    flake8-pie: misc silliness, catches range with a 0 start argument
+#   RET    flake8-return: straightforward code around return statements
+#   SLF    flake8-self
+#   ARG    flake8-unused-arguments
 
 lint.select = [
     "F",
@@ -113,11 +113,11 @@ lint.select = [
     "ARG"
 ]
 
-# Ignore:
-# E501 - "line too long". How narrow is your screen!?
-# E402 - "module level import not at top of file". Needs must!
-# COM812 - "Add trailing comma". These are a little obnoxious and weird.
-# ICN001 - "numpy should be imported as np". No. No it should not.
+# Ignored rules:
+#   E501     line too long. How narrow is your screen!?
+#   E402     module level import not at top of file. Needs must!
+#   COM812   add trailing comma. Obnoxious and weird
+#   ICN001   numpy should be imported as np. No. No it should not
 
 lint.ignore = [
     "E501",
@@ -131,8 +131,8 @@ lint.extend-select = ["UP"]
 
 [lint.per-file-ignores]
 # The badge app and any extension's badge module are MicroPython, not CPython, so rules
-# that assume a modern CPython do not hold. B905 wants zip(strict=...), and MicroPython's
-# zip takes no keyword arguments at all. Checked on the board, not assumed.
+# that assume a modern CPython do not hold. B905 asks for zip(strict=...), where
+# MicroPython's zip takes no keyword arguments. Checked on the board.
 "src/statsbadge/badge_app/*.py" = ["B905"]
 "extensions/*/src/statsbadge_*/badge/*.py" = ["B905"]
 # A source wraps every sensor read, because a flaky sensor has to degrade to a missing
@@ -149,5 +149,5 @@ lint.extend-select = ["UP"]
 # The CLI reports the addresses a badge should use, which the server module works out.
 "src/statsbadge/__main__.py" = ["SLF001"]
 
-# The test harness prints its own results and pokes at internals on purpose.
+# The test harness prints its results itself, and reaches into internals to do it.
 "tests/*.py" = ["BLE001", "SLF001"]

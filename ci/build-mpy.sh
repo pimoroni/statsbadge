@@ -2,40 +2,28 @@
 # Build a precompiled .mpy copy of a Badgeware app.
 #
 #   ci/build-mpy.sh [APP_DIR] [OUT_DIR]
-#
-# With no arguments it builds into the package, where the installer looks for it.
-#
-# The badge compiles from source at every launch, which for this app is 763ms off its own
-# flash. Precompiling takes that to 126ms - an 84% saving - at the cost of the app no
-# longer being readable on the badge, so it ships alongside the source zip rather than
-# replacing it.
-#
-# A .mpy is only loadable by a firmware whose bytecode version matches, so mpy-cross has
-# to be built from the same MicroPython the board ships. That version is not restated
-# here: it is read out of the board repo's ci/micropython.sh, which is where the firmware
-# build gets it, so the two cannot drift apart.
-#
-# Nothing here belongs at runtime. The user's `statsbadge install` must never fetch a
-# toolchain; CI builds this and the install pushes the result.
-#
+
+# With no arguments it builds into the package, where the installer looks for it. What
+# precompiling buys is under Precompiling in DEVELOPMENT.md. mpy-cross comes from the
+# MicroPython the board repo's ci/micropython.sh pins, keeping bytecode and firmware
+# versions together.
+
 # Overridable:
 #   BOARD_REPO   default pimoroni/tufty2350
-#   BOARD_REF    default main. Note that at the time of writing main pins bw-1.27.0 and
-#                feature/align-v3 pins bw-1.28.0-3, so a board running the newer firmware
-#                needs BOARD_REF=feature/align-v3 until that lands on main
+#   BOARD_REF    default main, which pins bw-1.27.0. A board on bw-1.28.0-3 needs
+#                BOARD_REF=feature/align-v3 until that lands on main
 #   EXPECT_MPY   assert the emitted bytecode matches this sys.implementation._mpy
-#   ENTRY_MPY    compile __init__.py too. Off by default: the launcher looks for
-#                __init__.py when deciding a directory is an app, so a bytecode-only
-#                entry point is invisible to it until that is fixed. Leaving the entry as
-#                source costs about 40ms of the saving and keeps the app launchable now
+#   ENTRY_MPY    compile __init__.py too. Off by default: the launcher reads __init__.py
+#                to decide a directory is an app, so a bytecode-only entry point is
+#                invisible to it. Source costs about 40ms of the saving
 #   MPY_CROSS    a prebuilt mpy-cross, skips the clone and build entirely
 #   WORK_DIR     where to clone and build, default build/micropython
 set -euo pipefail
 
 APP_DIR=${1:-src/statsbadge/badge_app}
-# Defaults to the copy inside the package, which is what `statsbadge install`
-# reads and what the wheel ships. build/mpy is for a release artefact, and CI
-# passes that explicitly.
+# Defaults to the copy inside the package, which `statsbadge install` reads and
+# the wheel ships. build/mpy is for a release artefact, and CI passes that
+# explicitly.
 OUT_DIR=${2:-src/statsbadge/badge_app/mpy}
 BOARD_REPO=${BOARD_REPO:-pimoroni/tufty2350}
 BOARD_REF=${BOARD_REF:-main}
@@ -49,8 +37,8 @@ fi
 # -- which MicroPython -------------------------------------------------------
 
 read_pin() {
-    # Grep rather than source: that script sets a terminal up and defines functions,
-    # and all that is wanted from it is two assignments.
+    # Grepped, not sourced: that script sets up a terminal and defines functions, where
+    # all this needs from it is two assignments.
     local url="https://raw.githubusercontent.com/$BOARD_REPO/$BOARD_REF/ci/micropython.sh"
     local script
     script=$(curl -fsSL "$url") || {
@@ -93,7 +81,7 @@ compiled=0
 for source in "$APP_DIR"/*.py; do
     name=$(basename "$source" .py)
     if [ "$name" = "__init__" ] && [ -z "${ENTRY_MPY:-}" ]; then
-        # The entry point stays source so the launcher still sees an app here.
+        # The entry point stays source for the launcher to recognise an app here.
         cp "$source" "$OUT_DIR/__init__.py"
         continue
     fi
@@ -102,9 +90,9 @@ for source in "$APP_DIR"/*.py; do
     compiled=$((compiled + 1))
 done
 
-# Everything that is not Python goes across untouched - the launcher wants icon.png, and
-# draw wants icons.af and fonts/. Subdirectories included, and with their paths: the app's
-# text font lives in fonts/, so a depth of one silently shipped a build with no type in it.
+# Everything that is not Python goes across untouched: the launcher reads icon.png, draw
+# reads icons.af and fonts/. Subdirectories included, and with their paths. The app's text
+# font lives in fonts/, and a depth of one silently shipped a build with no type in it.
 # A loop rather than `install -D`, which BSD install has not got: this script is run by
 # hand on a Mac as well as by CI on Linux, and one code path is the point of it.
 (cd "$APP_DIR" && find . -type f ! -name '*.py' ! -path './mpy/*' \
@@ -120,11 +108,11 @@ fi
 
 # -- verify ------------------------------------------------------------------
 
-# A .mpy the firmware does not recognise fails at import, on the badge, after the app has
-# launched - so it is worth catching here. The header is 'M', version, reserved, flags,
-# and (flags << 8) | version is exactly what the badge reports as
-# sys.implementation._mpy, so the number written out is directly comparable and the
-# installer checks it against the board it is talking to.
+# An .mpy the firmware does not recognise fails at import, on the badge, after the app
+# has launched, which is why it is caught here. The header is 'M', version, reserved,
+# flags. `(flags << 8) | version` is the number the badge reports as
+# sys.implementation._mpy, so the value written out compares directly against the board
+# the installer is talking to.
 python3 - "$OUT_DIR" "${EXPECT_MPY:-}" <<'PY'
 import pathlib
 import sys
@@ -143,7 +131,7 @@ if not seen:
 if len(seen) > 1:
     sys.exit(f"mixed bytecode versions in one build: {sorted(seen)}")
 
-# A .py alongside a .mpy takes precedence, so leaving one behind silently undoes the
+# A .py alongside an .mpy takes precedence, so leaving one behind silently undoes the
 # precompile and the app quietly costs full compile time again. Checked, not assumed.
 shadowed = [p.name for p in out.glob("*.mpy") if (out / f"{p.stem}.py").exists()]
 if shadowed:
@@ -159,8 +147,8 @@ if expect and int(expect) != mpy:
 (out / "MPY_VERSION").write_text(f"{mpy}\n")
 PY
 
-# What was compiled, by content hash, so the installer can tell a stale build from a
-# current one without relying on mtimes.
+# What was compiled, by content hash. Distinguishes a stale build from a current one
+# without relying on mtimes.
 python3 - "$APP_DIR" "$OUT_DIR" <<'PY'
 import hashlib
 import json
