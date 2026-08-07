@@ -132,8 +132,8 @@ so that side needed nothing.
 
 **A fault a source has recovered from is not what a source is.** `note_fault` counts one and records why; `note_ok` clears the why and keeps the count. The source says both, because only it knows: one that fetches on a separate thread fails and recovers to a schedule of its choosing, and `sample` handing over the last good reading is no evidence that the next fetch landed. So a `note_ok` goes where the work a fault was noted for succeeded - and nowhere in a fault that is not transient, like a missing sudoers rule, since nothing there ever succeeds and the fault should stand. A fault the *collector* records instead is a source letting something out of `sample` that it does not handle, so that one stays. The UI shows what a source provides either way, the reason underneath while it is failing, and the count once it is not.
 
-**On macOS "/" is not the disk anyone means.** It is a sealed, read-only system volume
-sharing an APFS container with the data volume, so it reports the system figure of 12G against
+**On macOS "/" measures the sealed system volume.** It is read-only, and shares an APFS
+container with the data volume, so it reports the system figure of 12G against
 the container's size: 9% on a disk that is 86% full. Both volumes report the container's
 free space, so the data volume is the one whose `used` is the answer, and
 `sources/portable.py` defaults there.
