@@ -106,6 +106,17 @@ def read_wanted(config_dir):
             if line.strip() and not line.strip().startswith("#")]
 
 
+def adrift(config_dir, installed):
+    """The extensions asked for in `extensions.txt` that are not in the environment.
+
+    `uv tool install` and `uv tool upgrade` replace the environment whole, extensions and all,
+    and leave this list alone: what is asked for and what is there part company without either
+    side being edited. `ext sync` rebuilds the environment from the list.
+    """
+    present = set(installed)
+    return [r for r in read_wanted(config_dir) if short_name(r) not in present]
+
+
 def write_wanted(config_dir, requirements):
     os.makedirs(config_dir, exist_ok=True)
     with open(wanted_path(config_dir), "w") as handle:

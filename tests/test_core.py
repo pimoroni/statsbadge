@@ -5,6 +5,7 @@ plain run with no pytest installed.
 """
 
 import builtins
+import contextlib
 import html.parser
 import io
 import json
@@ -3963,6 +3964,81 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
         # Nothing wanted, nothing to point at: uv would refuse an empty requirements file.
         tooling.write_wanted(work, [])
         assert "--with-requirements" not in tooling.install_argv("statsbadge", work)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@check
+def test_an_upgrade_that_dropped_the_extensions_is_put_right_by_adding_one(_h):
+    """`uv tool install` replaces the environment whole, so upgrading statsbadge takes the
+    extensions with it and leaves `extensions.txt` naming things that are no longer there.
+
+    `ext add` answered "already installed" to that, which was true of the list and of nothing
+    else, and left the reader with the one command that cannot help: the fix is `ext sync`,
+    which is what asking for an extension already on the list now runs.
+    """
+    from statsbadge import __main__ as cli
+    from statsbadge import tooling
+
+    # The list holds requirements and the environment reports entry point names, so telling one
+    # from the other rests on an extension calling its entry point what its package is called.
+    for directory in sorted(pathlib.Path("extensions").iterdir()):
+        pyproject = directory / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        with open(pyproject, "rb") as handle:
+            project = tomllib.load(handle)["project"]
+        entries = list(project["entry-points"]["statsbadge.sources"])
+        assert entries == [tooling.short_name(project["name"])], (project["name"], entries)
+
+    work = tempfile.mkdtemp(prefix="statsbadge-sync-")
+    try:
+        tooling.write_wanted(work, ["statsbadge-clock", "/src/statsbadge-cloudflare"])
+        # Both there, whichever way the list spells them.
+        assert tooling.adrift(work, ["clock", "cloudflare"]) == []
+        # And what the upgrade leaves: named on the list, absent from the environment.
+        assert tooling.adrift(work, ["clock"]) == ["/src/statsbadge-cloudflare"]
+        assert tooling.adrift(work, []) == ["statsbadge-clock", "/src/statsbadge-cloudflare"]
+
+        class Args:
+            names = ["cloudflare"]
+            config_dir = work
+            verbose = False
+
+        ran = []
+
+        def rebuild(base, directory, **_kwargs):
+            ran.append(base)
+            return True, ""
+
+        was = (cli.tooling.as_uv_tool, cli.tooling.run_install, cli.extensions.describe)
+        try:
+            cli.tooling.as_uv_tool = lambda *_a, **_k: {
+                "tool": {"requirements": [{"name": "statsbadge"}]}}
+            cli.tooling.run_install = rebuild
+            # The environment after an upgrade: clock is back, cloudflare is not.
+            cli.extensions.describe = lambda: [{"name": "clock"}]
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
+            # It rebuilt rather than reporting an install nothing can see.
+            assert ran == ["statsbadge"], ran
+            assert "not installed" in said.getvalue(), said.getvalue()
+            # And the list is untouched: it already asked for exactly this.
+            assert tooling.read_wanted(work) == ["statsbadge-clock",
+                                                 "/src/statsbadge-cloudflare"]
+
+            # With the extension actually there, adding it again still does nothing.
+            ran.clear()
+            cli.extensions.describe = lambda: [{"name": "clock"}, {"name": "cloudflare"}]
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
+            assert ran == [], ran
+            assert "already installed" in said.getvalue(), said.getvalue()
+        finally:
+            (cli.tooling.as_uv_tool, cli.tooling.run_install,
+             cli.extensions.describe) = was
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

@@ -151,6 +151,11 @@ def cmd_serve(args):
     if caps["extensions"]:
         print("  extensions:        {}".format(", ".join(
             _extension_line(record) for record in caps["extensions"])))
+    missing = tooling.adrift(config_dir(args.config_dir),
+                             (record["name"] for record in caps["extensions"]))
+    if missing:
+        print("  not installed:     {} - run `statsbadge ext sync`".format(
+            ", ".join(missing)))
     paired = service.badges.list_badges()
     print("  paired badges:     %s" % (", ".join(paired) if paired else
                                        "none yet, run 'statsbadge pair'"))
@@ -427,8 +432,13 @@ def cmd_status(args):
         print(f"  badges:     cannot be read: {unreadable}")
     else:
         print("  badges:     {}".format(", ".join(paired) if paired else "none paired"))
-    loaded = [e["name"] for e in extensions.describe() if e["available"]]
+    found = extensions.describe()
+    loaded = [e["name"] for e in found if e["available"]]
     print("  extensions: {}".format(", ".join(loaded) if loaded else "none"))
+    missing = tooling.adrift(directory, (e["name"] for e in found))
+    if missing:
+        print("              not installed: {} - run `statsbadge ext sync`".format(
+            ", ".join(missing)))
 
     print()
     ports = [args.port_dev] if args.port_dev else install.find_ports()
@@ -513,10 +523,9 @@ def cmd_extensions(args):
         print(f"asked for in {tooling.wanted_path(directory)}:")
         for requirement in wanted:
             print(f"  {requirement}")
-        loaded = {record["name"] for record in found}
-        adrift = [r for r in wanted if tooling.short_name(r) not in loaded]
-        if adrift:
-            print("  not installed yet: {}".format(", ".join(adrift)))
+        missing = tooling.adrift(directory, (record["name"] for record in found))
+        if missing:
+            print("  not installed: {}".format(", ".join(missing)))
             print("  run: statsbadge ext sync")
     elif tooling.as_uv_tool():
         # Installed with --with rather than from the list, so say where the list would be: the
@@ -550,10 +559,19 @@ def _change_extensions(args, verb):
 
     changed = []
     if verb == "add":
+        present = {record["name"] for record in extensions.describe()}
         for name in args.names:
             requirement = tooling.as_requirement(name)
-            if tooling.short_name(requirement) in tooling.names(wanted):
-                print(f"already installed: {tooling.short_name(requirement)}")
+            short = tooling.short_name(requirement)
+            if short in tooling.names(wanted):
+                if short in present:
+                    print(f"already installed: {short}")
+                    continue
+                # On the list but not in the environment, which is what a `uv tool install` of
+                # statsbadge itself leaves behind. Asking for it is asking for it back, so
+                # rebuild instead of reporting an install nothing can see.
+                print(f"{short} is asked for but not installed: putting it back.")
+                changed.append(requirement)
                 continue
             # Asked of the index before anything is written or rebuilt: the rebuild installs the
             # whole list, so a name that is not a package would come back as a failure naming
@@ -828,7 +846,8 @@ def main(argv=None):
     verbs = exts.add_subparsers(dest="verb", metavar="add|remove|sync")
     for verb, what in (("add", "install an extension and remember it"),
                        ("remove", "uninstall an extension and forget it"),
-                       ("sync", "install whatever the list names")):
+                       ("sync", "reinstall whatever the list names, after an upgrade "
+                                "of statsbadge itself has replaced the environment")):
         step = verbs.add_parser(verb, parents=[common], help=what)
         step.set_defaults(func=cmd_extensions, verb=verb, names=[])
         if verb != "sync":
