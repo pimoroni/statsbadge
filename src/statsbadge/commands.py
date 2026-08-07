@@ -80,28 +80,62 @@ def mute():
 
 # -- media ------------------------------------------------------------------
 
-def play_pause():
+# MediaRemote's command number and playerctl's name, for each thing a button can ask of
+# whatever is playing.
+_MEDIA = {
+    "play": (0, "play"),
+    "pause": (1, "pause"),
+    "play_pause": (2, "play-pause"),
+    "previous_track": (5, "previous"),
+    "next_track": (4, "next"),
+}
+
+
+def _media_remote(command):
+    """Send a MediaRemote command to whatever holds the now playing route.
+
+    MediaRemote is a private framework with no scripting dictionary, so it is loaded
+    through Foundation.
+    """
+    _osascript(f"""use framework "Foundation"
+set mediaRemote to current application's NSBundle's bundleWithPath:"/System/Library/PrivateFrameworks/MediaRemote.framework/"
+mediaRemote's load()
+set controller to current application's NSClassFromString("MRNowPlayingController")'s localRouteController()
+set options to current application's NSDictionary's alloc()'s init()
+controller's sendCommand:{command} options:options completion:(missing value)""")
+
+
+def _media(action):
+    command, playerctl = _MEDIA[action]
     if _SYSTEM == "Darwin":
-        # Key code 16 is F13-space on the media row; targeting the frontmost player
-        # is more predictable than a system-wide key event.
-        _osascript('tell application "System Events" to key code 49 using {}')
+        _media_remote(command)
         return {"ok": True}
     if _SYSTEM == "Linux":
         if shutil.which("playerctl"):
-            _run(["playerctl", "play-pause"])
+            _run(["playerctl", playerctl])
             return {"ok": True}
         raise CommandError("no playerctl")
     raise CommandError("unsupported platform")
 
 
+def play():
+    return _media("play")
+
+
+def pause():
+    return _media("pause")
+
+
+def play_pause():
+    return _media("play_pause")
+
+
+def previous_track():
+    return _media("previous_track")
+
+
 def next_track():
-    if _SYSTEM == "Linux" and shutil.which("playerctl"):
-        _run(["playerctl", "next"])
-        return {"ok": True}
-    if _SYSTEM == "Darwin":
-        _osascript('tell application "Music" to next track')
-        return {"ok": True}
-    raise CommandError("unsupported platform")
+    return _media("next_track")
 
 
 # -- session ----------------------------------------------------------------
@@ -152,20 +186,31 @@ def screenshot():
     raise CommandError("unsupported platform")
 
 
+# In the order the button picker offers them.
 REGISTRY = {
     "volume_up": volume_up,
     "volume_down": volume_down,
     "mute": mute,
+    "play": play,
+    "pause": pause,
     "play_pause": play_pause,
+    "previous_track": previous_track,
     "next_track": next_track,
     "lock": lock,
     "sleep": sleep_host,
     "screenshot": screenshot,
 }
 
+# Where title casing the name would read wrong.
+_LABELS = {"play_pause": "Play/Pause"}
 
-def names():
-    return sorted(REGISTRY)
+
+def records():
+    """Every command, with the heading and label the button picker shows it under."""
+    return [{"name": name,
+             "group": "Media" if name in _MEDIA else "Local",
+             "label": _LABELS.get(name, name)}
+            for name in REGISTRY]
 
 
 def run(name):

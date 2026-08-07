@@ -771,18 +771,25 @@ function renderCaseLights() {
 }
 
 function renderButtons() {
-  // What the badge answers itself, then what it asks this host to run. An empty group would
-  // draw its own heading over nothing.
-  const groups = [
-    ["Badge", (caps.local_actions || []).map(
-      (local) => el("option", { value: local.action, textContent: titleCase(local.label) }))],
-    ["Local", caps.commands.map(
-      (name) => el("option", { value: name, textContent: titleCase(name) }))],
-  ].filter(([, options]) => options.length)
+  // What the badge answers itself, then what it asks this host to run, under the heading
+  // the host asks for. A group exists only once something is in it, so no heading is drawn
+  // over nothing.
+  const groups = new Map()
+  const offer = (heading, option) => {
+    if (!groups.has(heading)) groups.set(heading, [])
+    groups.get(heading).push(option)
+  }
+  for (const local of caps.local_actions || []) {
+    offer("Badge", el("option", { value: local.action, textContent: titleCase(local.label) }))
+  }
+  for (const command of caps.commands || []) {
+    const option = el("option", { value: command.name, textContent: titleCase(command.label) })
+    offer(command.group, option)
+  }
 
   const offered = [
     el("option", { value: "", textContent: "Nothing" }),
-    ...groups.map(([label, options]) => el("optgroup", { label }, options)),
+    ...[...groups].map(([label, options]) => el("optgroup", { label }, options)),
   ]
   for (const which of ["a", "b", "c"]) {
     const select = $(`btn-${which}`)

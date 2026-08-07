@@ -97,7 +97,9 @@ class Service:
 
     def capabilities(self):
         caps = self.collector.capabilities()
-        caps["commands"] = commands.names()
+        # With the heading and label each wants in the button picker, so the UI groups
+        # the media ones together without knowing which is which.
+        caps["commands"] = commands.records()
         # With the label and the mode each wants in a picker, so the UI groups the dark ones
         # with the dark ones and does not have to know which is which.
         caps["themes"] = layout.theme_records()
