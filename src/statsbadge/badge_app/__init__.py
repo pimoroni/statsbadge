@@ -142,6 +142,13 @@ LIGHT_READS = 16
 LOCAL_PREFIX = "badge."
 BRIGHTNESS_STEPS = (1.0, 0.6, 0.3)
 
+# How many presses can be waiting for the connection, and how long one waits before it is
+# dropped. The badge polls constantly, so a press usually lands while a request is in flight
+# and has to wait for it: that is a fraction of a second. Longer than this is a host that has
+# stopped answering, where a command arriving late is worse than one that never arrives.
+COMMAND_QUEUE = 4
+COMMAND_WAIT_MS = 3000
+
 
 # How long a page takes to slide on, when the layout asks for that. Short: it is a quarter
 # of a second between pressing for the next page and being able to read it.
@@ -266,6 +273,8 @@ class App:
         # A request to make on the very next pass rather than at the next interval, so the
         # series can be refetched *as well as* the stats and not instead of them.
         self._queued = None
+        # Presses waiting for the connection, oldest first, each with the tick it happened on.
+        self._commands = []
         # How old the newest point in the series was when the host answered, and when that
         # answer landed here: between them, how far back in the series `now` is.
         self._series_age = 0
@@ -407,6 +416,12 @@ class App:
             self._pending = None
             return
 
+        # Ahead of anything the badge asks for itself: somebody is standing there waiting
+        # for this, and a poll can wait a frame.
+        if self._commands:
+            self._send_command()
+            return
+
         if self._queued is not None:
             what, path = self._queued
             self._queued = None
@@ -492,6 +507,8 @@ class App:
                     self.slow = {}
                     self.slow_rev = -1
                     self._queued = None
+                    # A press meant for the host we just left.
+                    self._commands = []
                     self._series_at = 0
                     draw.clear_cache()
                     self.note(self.config.name or "switched host")
@@ -519,6 +536,20 @@ class App:
             self.slow_rev = rev
             self.slow = arrived
         pages_module.merge_slow(frame, self.slow)
+
+    def _send_command(self):
+        """Post the oldest press, having dropped any that waited past the point of use."""
+        now = time.ticks_ms()
+        waiting = [held for held in self._commands
+                   if time.ticks_diff(now, held[1]) <= COMMAND_WAIT_MS]
+        if len(waiting) != len(self._commands):
+            self.note("dropped")
+        self._commands = waiting
+        if not self._commands:
+            return
+        command, _at = self._commands.pop(0)
+        self._pending = "command"
+        self.client.post("/v1/command", {"cmd": command})
 
     def _start(self, what, path):
         self._pending = what
@@ -738,15 +769,17 @@ class App:
         self.note(f"brightness {round(share * 100)}%")
 
     def send_command(self, command):
+        """Hold a press for the host, to go out as soon as the connection is free.
+
+        One request is in flight at a time and the badge polls every interval, so a press
+        that had to find the connection idle would mostly find it busy instead.
+        """
         if not command:
             return
-        if self._pending is not None:
-            # One request at a time; a button press while polling is dropped rather
-            # than queued, because a stale command is worse than a missed one.
+        if len(self._commands) >= COMMAND_QUEUE:
             self.note("busy")
             return
-        self._pending = "command"
-        self.client.post("/v1/command", {"cmd": command})
+        self._commands.append((command, time.ticks_ms()))
         self.note(command.replace("_", " "))
 
     def needs_setup(self):
@@ -771,6 +804,7 @@ class App:
         self.client.failures = 0
         self._pending = None
         self._queued = None
+        self._commands = []
         self._next_poll = time.ticks_ms()
         self.detail = None
         self.status = "retrying"

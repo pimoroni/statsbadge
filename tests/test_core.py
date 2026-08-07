@@ -2754,6 +2754,24 @@ def test_a_button_can_do_something_without_the_host(_h):
 
 
 @check
+def test_a_press_waits_for_the_poll_rather_than_losing_to_it(_h):
+    """One request is in flight at a time and the badge polls every interval, so a press
+    that had to find the connection idle mostly found it busy and did nothing."""
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    send = app[app.index("    def send_command(self"):]
+    send = send[:send.index("\n    def ", 1)]
+    # Held rather than dropped: a request in flight is not a reason to lose the press.
+    assert "self._commands.append" in send, send
+    assert "_pending" not in send, send
+
+    poll = app[app.index("    def poll(self"):]
+    poll = poll[:poll.index("\n    def ", 1)]
+    # And sent ahead of what the badge asks for itself, or the press waits out the interval.
+    assert poll.index("if self._commands:") < poll.index("if self._queued is not None:"), poll
+    assert poll.index("if self._commands:") < poll.index("self._next_poll"), poll
+
+
+@check
 def test_a_smoothed_graph_still_reads_as_the_data(_h):
     """A curve through the samples, not near them: it is a graph of a machine, so a peak
     drawn where there was none, or short of the one there was, is a lie about the machine."""
