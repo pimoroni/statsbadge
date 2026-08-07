@@ -4,10 +4,9 @@ for a browser tab, since Safari ignores an SVG favicon.
 
     python3 tools/icon.py
 
-The splash scaled down: the angles and colours come from look.py, the proportions from
-splash.py times one scale factor, so the two keep agreeing.
-Rendered at 16x and reduced, since there is no anti-aliasing to be had at 24 pixels
-otherwise.
+The splash scaled down. Angles and colours come from look.py, proportions from splash.py
+times one scale factor, which keeps the two agreeing. Rendered at 16x and reduced, since
+there is no anti-aliasing to be had at 24 pixels otherwise.
 """
 
 import builtins
@@ -28,7 +27,7 @@ sys.path.insert(0, str(APP))
 class _Colour(tuple):
     """Enough of the badge's `color` to build a theme on a host that has none.
 
-    A tuple of channels, which is what PIL wants, carrying the one method `look` calls on
+    A tuple of channels, the form PIL takes, carrying the one method `look` calls on
     one. The same shim the tests install, in the one form this tool needs.
     """
 
@@ -76,7 +75,7 @@ OUTER = 11.5                      # leaves a pixel of margin inside the icon
 SCALE = OUTER / splash.OUTER
 
 # PicoVector's arc angles and PIL's both run clockwise on screen, but PIL starts at 3
-# o'clock where PicoVector starts at 6, so the dial's angles shift by a quarter turn.
+# o'clock where PicoVector starts at 6, putting a quarter turn between the two.
 PIL_OFFSET = -90
 
 

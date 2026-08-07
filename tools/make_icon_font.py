@@ -54,22 +54,22 @@ def require_font_tools():
                 f"{exc}. Install the tools with: uv sync --group fonts") from None
         freetype, shapely = freetype_module, shapely_module
 
-# The .af container, as alright-fonts writes it: magic, flags, then counts of glyphs,
-# contours and points, each big-endian u16.
+# The .af container, as alright-fonts writes it. A four-byte marker, flags, then counts
+# of glyphs, contours and points, each big-endian u16.
 AF_MAGIC = b"af!?"
 AF_FLAG_16BIT_POINT_COUNT = 0b0000001
 # A wide font stores its bbox, advance and points as 16-bit, and carries a u16
 # units-per-em after the counts. A narrow one gets the whole em in a signed byte,
 # which is what shows as stepped outlines on a glyph drawn a hundred pixels tall.
 AF_FLAG_WIDE = 0b0000010
-GLYPH_STRUCT = ">HbbBBBB"          # codepoint, bbox x, y, w, h, advance, contour count
+GLYPH_STRUCT = ">HbbBBBB"          # codepoint, then bbox x y w h, advance, contour count
 GLYPH_STRUCT_WIDE = ">HhhHHHB"
-# What a narrow font's 128-unit em is, so a wide font's own grid can be recorded.
+# A narrow font's em, against which a wide font records its grid.
 NARROW_UNITS_PER_EM = 128
 
-# Coordinates and the advance are signed bytes. The reference font keeps every advance
-# under 128, and one over that is read as negative: glyphs then draw on top of each
-# other. So the box an icon fills is limited too. A wide font gets 16 bits for both.
+# Coordinates and the advance are signed bytes. An advance over 127 reads as negative
+# and the glyphs draw on top of each other, which limits the box an icon fills. A wide
+# font gets 16 bits for both.
 COORD_MIN, COORD_MAX = -128, 127
 WIDE_COORD_MIN, WIDE_COORD_MAX = -32768, 32767
 # A capital in MonaSans-Medium.af stands 81 units, so this is an icon a little taller
@@ -130,10 +130,10 @@ def outline_contours(face, scale):
     FreeType hands back lines and curves; the .af format only has points, so curves are
     flattened here and the redundant points are taken back out by shapely later.
 
-    `scale` is font units per output unit, and only sets how finely curves are cut: a
-    step per output unit is already finer than a signed byte can express, and stepping
-    per *font* unit costs hundreds of points per glyph that all quantise to the same
-    handful of coordinates.
+    `scale` is font units per output unit, and only sets how finely curves are cut. A
+    step per output unit is already finer than a signed byte can express. Stepping per
+    *font* unit costs hundreds of points a glyph that all quantise to the same handful
+    of coordinates.
     """
     contours = []
 

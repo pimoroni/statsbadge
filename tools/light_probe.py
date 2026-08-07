@@ -2,9 +2,9 @@
 
     mpremote connect PORT mount . run tools/light_probe.py
 
-A line a second. Hold it under a pillow, in the room, at a window, under a torch, and give it
-a few seconds in each: the panel is driven from the reading the whole time, so what the log
-shows is what the app would do. Ctrl-C to stop.
+A line a second. Hold it under a pillow, in the room, at a window and under a torch, a
+few seconds in each. The panel is driven from the reading throughout, so the log shows
+what the app would do. Ctrl-C to stop.
 
     raw      what badge.light_level() reads, meaned over a burst
     spread   high minus low across that burst, which is the sensor's noise

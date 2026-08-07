@@ -44,7 +44,7 @@ check("flat counter jumps forward", config.seq == 100 + net.Config.SEQ_FLUSH,
 check("flat file lands under a placeholder id", list(config.hosts) == ["unknown"],
       str(list(config.hosts)))
 
-# ...and the real id replaces the placeholder once a beacon reveals it.
+# ...and the real id replaces the stand-in once a beacon reveals it.
 check("adopt_id moves it", config.adopt_id("srv-aaa", "workshop"))
 check("keyed on the real id", "srv-aaa" in config.hosts and "unknown" not in config.hosts,
       str(list(config.hosts)))
@@ -81,7 +81,7 @@ State.modify(STATE_APP, {"page": 3})
 check("pairing survives a page save", len(net.Config().hosts) == before_hosts,
       f"{len(net.Config().hosts)} of {before_hosts} hosts left")
 
-# And the other way round: writing the pairing must not drop the page.
+# The other way round: writing the pairing must not drop the page.
 net.Config().save()
 page = {"page": 0}
 State.load(STATE_APP, page)

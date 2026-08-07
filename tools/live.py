@@ -116,7 +116,7 @@ try:
 except OSError as exc:
     print(f"  socket error: {exc}")
 
-# And a bad signature must not get in either.
+# A bad signature must not get in either.
 print("\nchecking the host rejects a bad signature:")
 try:
     info = socket.getaddrinfo(config.host, config.port, 0, socket.SOCK_STREAM)[0]

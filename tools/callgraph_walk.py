@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Walk the graph from a named starting point, so the calls can be stepped through.
 
-    (imported by tools/callgraph.py, not run on its own)
+    (imported by tools/callgraph.py, not run directly)
 
-A timeline is a named scenario rather than one recording of everything, and that is what
-stops the dispatch tables ruining it: `choose` pins a lookup to one key, so instead of a
-single unreadable walk that fires all fifteen page renderers you get one per page, each of
-which is a picture of a real frame.
+A timeline is a named scenario and not one recording of everything, which is what stops
+the dispatch tables ruining it. `choose` pins a lookup to one key. A single walk would
+fire all fifteen page renderers; this gives one per page, each a picture of a real
+frame.
 
 The events are the same five fields a recording from tools/callgraph_trace.py produces, so
 the viewer plays either without knowing which it has. What differs is the meaning, and the

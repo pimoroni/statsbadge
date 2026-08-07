@@ -13,8 +13,10 @@ Reads tools/callgraph.toml for the targets. Pointed at a bare directory instead 
 CPython and package-relative imports, which is enough to draw any Python project.
 
 The viewer opens flat. Tilting it stands the graph up, and height means depth in the
-machine: entry points at the top, shape.arc and screen.blit on the floor. Any measure can
-drive the axis, but the default is a level assigned so every edge descends - see
+machine: entry points at the top, shape.arc and screen.blit on the floor.
+
+Any measure can drive the axis, but the default is a level assigned so every edge
+descends - see
 `assign_flow` in callgraph_resolve.py for why that is not the obvious breadth-first
 answer. The payoff is the timeline, where a call chain that only ever goes down is a
 picture of a stack that looks like a stack.

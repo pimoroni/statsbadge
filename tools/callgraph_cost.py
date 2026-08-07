@@ -15,10 +15,11 @@ that figure is comparable with a stopwatch. This is the one to trust.
 
 `cost` is every priced call reachable from here, which is an **upper bound and not a time**.
 A static reading has to count both arms of every branch, and five levels of that compounds:
-the dial page comes out at 674ms against a measured 18.2ms. That gap is structural, not a
-mis-set weight, and no amount of tuning the table closes it - so the measure is labelled as
-a bound rather than dressed up as a prediction. Ranking by how much expensive drawing a
-call tree can touch is still worth having; reading it as microseconds is not.
+the dial page comes out at 674ms against a measured 18.2ms.
+
+That gap is structural, not a mis-set weight, and no amount of tuning the table closes
+it, hence the label. Ranking by how much expensive drawing a call tree can touch is still
+worth having; reading it as microseconds is not.
 
 One call site does run one callee, though, so the alternatives at a dispatch site are taken
 at their worst rather than summed. Without that, `pages.render` counted all fifteen page

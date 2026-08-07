@@ -1,8 +1,8 @@
 # shurrup settings for stats-badgeware.
 
-# The markdown defaults come from a percentile over ordinary prose, where this repo's docs
-# are far denser: at 55 words a sentence, ninety sentences in DEVELOPMENT.md sat under the
-# limit and still took a breath to read. Held to the same limit as a code comment.
+# The markdown defaults suit ordinary prose, where this repo's docs are denser. At 55 words
+# a sentence, ninety of DEVELOPMENT.md's sat under the limit and still took a breath to
+# read. Held to the code comment limit instead.
 [rules.SHL009.markdown]
 max_words = 40
 

@@ -20,8 +20,8 @@ import struct
 AF_MAGIC = b"af!?"
 AF_FLAG_16BIT_POINT_COUNT = 0b0000001
 AF_FLAG_WIDE = 0b0000010           # 16-bit bbox, advance and points, plus a u16 em
-HEADER = ">HHHH"                   # flags, glyphs, contours, points, after the magic
-GLYPH_STRUCT = ">HbbBBBB"          # codepoint, bbox x, y, w, h, advance, contour count
+HEADER = ">HHHH"                   # flags, glyphs, contours, points, after the marker
+GLYPH_STRUCT = ">HbbBBBB"          # codepoint, then bbox x y w h, advance, contour count
 GLYPH_STRUCT_WIDE = ">HhhHHHB"
 NARROW_UNITS_PER_EM = 128          # what a narrow font's em is by convention
 

@@ -7,11 +7,11 @@
 `sys.setprofile`, not `sys.monitoring`: .python-version pins 3.11. It is the better
 instrument here anyway, firing on call and return only rather than on every line.
 
-`tests/test_core.py` is the run worth having. It exercises nearly every host path, runs as
-a plain script with no pytest, and already installs the badge fakes on builtins before
-importing draw, look, pages and worldmap - so one command gives real counts for the whole
-host tree and for the badge's drawing layer, which is the part where cost matters. It needs
-no shims of its own.
+`tests/test_core.py` is the run worth having. It exercises nearly every host path and
+runs as a plain script with no pytest. It also installs the badge fakes on builtins before
+importing draw, look, pages and worldmap, so one command gives real counts for the whole
+host tree and for the badge's drawing layer, the part where cost matters. No shims are
+needed.
 
 Counts for the whole run, but only the first `--window` seconds of ordered events: a run
 this size produces millions, and forty megabytes will not inline into a viewer. What was

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Give every node a place, the same place every time.
 
-    (imported by tools/callgraph.py, not run on its own)
+    (imported by tools/callgraph.py, not run directly)
 
-Laid out here rather than in the browser because a picture that settles differently on
-every load never becomes a map of anything: the point is to be able to look twice and
-recognise where you are, and to diff two revisions and see what moved. So the seed is
-fixed, the iteration count is fixed, and the same graph gives the same coordinates.
+Laid out here and not in the browser: a picture that settles differently on every load
+never becomes a map of anything. The point is to look twice and recognise where you are,
+and to diff two revisions and see what moved. The seed is fixed, the iteration count is
+fixed, and the same graph gives the same coordinates.
 
 Two levels, because the module is the unit the code is thought about in. Modules are
-layered by what imports what, then each one's members are relaxed inside its own box.
+layered by what imports what, then each one's members are relaxed inside its box.
 """
 
 import math
@@ -93,10 +93,9 @@ def lay_out_target(graph, modules, members, intra, inter, offset_y):
     layers = layer_modules(ids, inter)
     columns = order_layers(layers, inter)
 
-    # A layer with a dozen modules in one column makes the whole picture far taller than
-    # it is wide, and a graph that has to be fitted at 7% is a graph nobody can read. So a
-    # column wraps once it passes a budget taken from the total area, which keeps the
-    # block near square while leaving the left-to-right read of what imports what intact.
+    # A dozen modules in one column makes the picture too tall to fit and read. A column
+    # wraps past a budget taken from the total area, keeping the block near square without
+    # disturbing the left-to-right read.
     area = sum(side * side for side in sizes.values())
     budget = max(MIN_BOX * 3, math.sqrt(area) * 1.6)
 
@@ -138,7 +137,7 @@ def wrap(row, sizes, budget):
 def layer_modules(ids, inter):
     """Each module's depth, by the longest import path that reaches it.
 
-    Import cycles are collapsed first so a cycle cannot make the longest path infinite,
+    Import cycles are collapsed first; otherwise a cycle makes the longest path infinite,
     and every member of one shares a depth.
     """
     forward = {module: set() for module in ids}
@@ -180,7 +179,7 @@ def layer_modules(ids, inter):
 
 
 def strong_components(ids, forward):
-    """Tarjan, iterative so a deep import chain cannot exhaust the stack."""
+    """Tarjan, iterative: a deep import chain would exhaust the recursion stack."""
     index_of = {}
     low = {}
     on_stack = set()
@@ -225,7 +224,7 @@ def strong_components(ids, forward):
 
 
 def order_layers(layers, inter):
-    """Order each column so the ties between columns cross as little as possible."""
+    """Order each column to minimise the crossings between columns."""
     columns = {}
     for module, depth in sorted(layers.items()):
         columns.setdefault(depth, []).append(module)
@@ -273,12 +272,12 @@ def lay_out_members(graph, held, edges, box_x, box_y, side):
 
     at = {}
     for index, node in enumerate(held):
-        angle = index * 2.399963  # the golden angle, so a spiral never lines up
+        angle = index * 2.399963  # the golden angle; a spiral never lines up
         radius = (side / 2 - BOX_PAD) * math.sqrt((index + 0.5) / len(held))
         at[node] = [radius * math.cos(angle), radius * math.sin(angle)]
 
     ideal = (side - 2 * BOX_PAD) / math.sqrt(len(held)) or 1.0
-    # Sorted so the order edges were found in cannot change where anything lands.
+    # Sorted, since the order edges were found in must not change where anything lands.
     pairs = sorted((source, sink) for source, sink in edges
                    if source in at and sink in at)
 
@@ -314,7 +313,7 @@ def lay_out_members(graph, held, edges, box_x, box_y, side):
             step_y = dy / distance * min(distance, cooling)
             at[node][0] += step_x
             at[node][1] += step_y
-            # Kept inside its own box, so a module never overlaps its neighbour.
+            # Kept inside the box, and no module overlaps its neighbour.
             limit = side / 2 - BOX_PAD
             reach = math.hypot(at[node][0], at[node][1])
             if reach > limit:

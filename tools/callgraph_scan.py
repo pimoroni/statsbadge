@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Read a tree of Python into modules, scopes and unresolved references.
 
-    (imported by tools/callgraph.py, not run on its own)
+    (imported by tools/callgraph.py, not run directly)
 
-Nothing here knows about any other file. A reference is recorded as the shape of the
-expression that made it and resolved later, once every module is known - which is what
-lets the badge app be read at all, since `import draw` there means the sibling file and
-no per-file pass can tell that. Nothing is imported or executed either: these modules
-expect the badge's builtins, so the source is all there is to go on.
+Nothing here reads any other file. A reference is recorded as the shape of the
+expression that made it, and resolved later once every module is known. That is what lets
+the badge app be read at all: `import draw` there means the sibling file, and no per-file
+pass can tell. Nothing is imported or executed either, these modules expecting the badge's
+builtins, so the source is all there is to go on.
 """
 
 import ast
@@ -34,8 +34,8 @@ MUTATORS = frozenset({
 })
 
 # Firmware calls that allocate, from DEVELOPMENT.md: a shape.circle is 416 bytes, a
-# rectangle 192, a mat3 32. Counted so a construction inside a loop can be flagged, that
-# being the badge's one recurring performance story.
+# rectangle 192, a mat3 32. Counted to flag a construction inside a loop, which is the
+# badge's one recurring performance fault.
 ALLOCATORS = frozenset({
     "vec2", "mat3", "rect", "color", "image", "array", "bytearray", "memoryview",
 })

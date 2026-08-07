@@ -5,15 +5,14 @@
     python3 tools/image_themes.py photo.jpg --levels 4
     python3 tools/image_themes.py photo.jpg --out /tmp/look
 
-What the badge does with a picture is: take the indices the host dithered, and write the
-theme's own shades into the image's colour table. This does the second half here, so whether
-a ramp is any good is a thing you can look at instead of a set of numbers - across every
-theme at once, which is the only way to see that one of them has gone muddy or that a
-picture has stopped belonging to its page.
+The badge takes the indices the host dithered and writes the theme's shades into the
+image's colour table. This does that second half on the host, so whether a ramp is any
+good becomes something to look at and not a set of numbers. Every theme at once is the
+only way to see that one has gone muddy.
 
-Each tile is drawn on that theme's own background with its ink beside it, because a picture
-is only ever seen on a page: shades that look fine on white can disappear on the page they
-are actually going on.
+Each tile is drawn on that theme's background with its ink beside it. A picture is only
+ever seen on a page, and shades that look fine on white can disappear on the page they
+are going on.
 
 """
 
@@ -56,8 +55,8 @@ def sheet(indices, width, height, themes, levels, tint):
             for x in range(width):
                 at_pixel = ((top + PAD + y) * sheet_w + left + PAD + x) * 3
                 raster[at_pixel:at_pixel + 3] = bytes(shades[indices[y * width + x]])
-        # The shades themselves under the picture, as a strip: what the eye reads off a
-        # photograph and what the ramp actually is are different questions.
+        # The shades themselves under the picture, as a strip. What a photograph looks
+        # like and what the ramp actually is are different questions.
         strip = top + PAD + height + 3
         for step, shade in enumerate(shades):
             wide = width // len(shades)
@@ -76,12 +75,13 @@ def sheet(indices, width, height, themes, levels, tint):
 def test_card():
     """A picture that asks the ramp the questions worth asking, as PNG bytes.
 
-    Default rather than a photograph, so looking at what a theme does to a picture never
-    means helping yourself to somebody's holiday snap off a public timeline. It carries the
-    three things a four-level dither can get wrong: a smooth sweep, which is where banding
-    and the Bayer texture show; flat patches at each level, where a ramp with two shades too
-    close together stops having four; and edges at several angles, which is what the crop
-    scores and what a dither can turn to mush.
+    The default, so looking at what a theme does to a picture never means helping
+    yourself to somebody's holiday snap off a public timeline.
+
+    It carries the three things a four-level dither can get wrong. A smooth sweep is where
+    banding and the Bayer texture show. Flat patches at each level are where a ramp with
+    two shades too close together stops having four. Edges at several angles are what the
+    crop scores and what a dither can turn to mush.
     """
     from PIL import Image, ImageDraw
 

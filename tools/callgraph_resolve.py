@@ -1152,17 +1152,20 @@ class Resolver:
     def assign_flow(self):
         """How deep in the machine each node sits: 0 is an entry point, the most is a leaf.
 
-        Not breadth-first depth. Measured on this codebase, that leaves 1492 of 4102 edges
-        pointing back up the way, because it gives the *minimum* distance from an entry
-        point and so a node with a shorter route from somewhere else sits above things that
-        call it. A third of the edges climbing is a hairball, not a flow.
+        Not breadth-first depth. That gives the *minimum* distance from an entry point,
+        so a node with a shorter route from somewhere else sits above things that call it.
+
+        Measured on this codebase, it leaves 1492 of 4102 edges pointing back up the way.
+        A third of the edges climbing is a hairball, not a flow.
 
         What matters is that the level rises along every edge, and any layering with that
-        property has no back edges at all. The earliest legal level for a node is the
-        longest path down to it; the latest is as far down as the longest chain allows.
-        Either works, and both are lopsided: earliest crowds everything against the top,
-        latest leaves 478 of 1008 nodes on the floor. The midpoint of the two is balanced
-        and still rises along every edge, since both bounds shift by at least one.
+        property has no back edges at all.
+
+        The earliest legal level for a node is the longest path down to it; the latest is
+        as far down as the longest chain allows. Either works, and both are lopsided.
+        Earliest crowds everything against the top, and latest leaves 478 of 1008 nodes on
+        the floor. The midpoint is balanced and still rises along every edge, since both
+        bounds shift by at least one.
         """
         FLOWING = ("call", "instantiate", "read", "register", "tag")
         forward = {}

@@ -6,8 +6,8 @@
 
 The badge writes frames into build/shots, which is ignored: a render of every page and
 every theme is a review artefact, and committing all of it means a drawing change shows up
-as forty modified images. Only what the README and the project page link is checked in, and --publish reads both to
-decide which those are, so the set maintains itself.
+as forty modified images. Only what the README and the project page link is checked in,
+and --publish reads both to decide which those are, so the set maintains itself.
 
 The dumps are 320x240 straight from `screen.raw`: R G B A per pixel and
 premultiplied, so alpha is divided back out here. Measured, not assumed - a pure red
@@ -75,9 +75,9 @@ def main(directory):
 def shrink(path):
     """Halve a shot with pngquant, where it is installed.
 
-    A palette is plenty for a flat vector render: 256 colours against the thousand or so
+    A palette is plenty for a flat vector render. 256 colours against the thousand or so
     of antialiasing takes these from about 13KB to 7KB with nothing visible to tell them
-    apart, checked at 2x on the gauges, which are the worst of them.
+    apart, checked at 2x on the gauges.
 
     Indexed PNGs are fine here, unlike the app's icon: nothing on the badge loads these,
     and its image.load mis-decodes a palette.

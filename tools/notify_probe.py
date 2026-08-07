@@ -8,8 +8,8 @@ Mount the repo root: frames go to /remote/build/shots. The pictures come from
 build/probe_pictures.py, which is generated - a thumbnail is bytes, and bytes do not belong
 in a source file.
 
-What this is for is the half that cannot be checked on the host: an indexed PNG has to decode
-on the firmware, its table has to come back the size the bit depth says, and writing the
+This covers the half that cannot be checked on the host. An indexed PNG has to decode on
+the firmware, its table has to come back the size the bit depth says, and writing the
 theme's shades into it has to recolour the picture. Each of those is a print here.
 """
 
@@ -95,8 +95,8 @@ PAGES = [
                                    "feed.posts"]}, "low"),
     ("notify_picture_large", {"id": "n", "kind": "notify", "title": "Mastodon",
                               "fields": ["feed.home", "feed.followers"]}, "high"),
-    # A large picture in a block that cannot hold it: two to a page is 78px against its 96,
-    # three is 52, and it used to spill into the message under it.
+    # A large picture in a block that cannot hold it: two to a page is 78px against its
+    # 96, and three is 52.
     ("notify_large_two", {"id": "n", "kind": "notify", "title": "Mastodon",
                           "fields": ["feed.home", "feed.mention", "feed.followers"]},
      "high"),
@@ -114,9 +114,9 @@ for name in THEMES:
     report(theme)
     for label, page, preset in PAGES:
         frame = frame_with(PICTURES.get(preset) if preset else None)
-        # Three, because a label is drawn live on its first sighting, baked into a sprite
-        # on its second and blitted from then on: the middle one is the most expensive
-        # frame this page ever has, and the third is what a poll actually costs.
+        # Three, because a label is drawn live on its first sighting, baked into a
+        # sprite on its second and blitted from then on. The middle one is the most
+        # expensive frame this page has. The third is what a poll costs.
         draw.clear_cache()
         taken = []
         for _ in range(3):

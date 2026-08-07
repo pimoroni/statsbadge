@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Check the badge app is whole and parses, before it is packed.
 
-The badge compiles these from source when the app is launched, where a syntax error
-is a crash dialog and nothing else. Imports nothing: every module here expects the
-badge's builtins.
+The badge compiles these from source when the app is launched, where a syntax error is
+a crash dialog. Imports nothing: every module here expects the badge's builtins.
 
     python3 tools/check_app.py src/statsbadge/badge_app
 """
@@ -25,10 +24,9 @@ WANTED = (
     "worldmap.py",
 )
 
-# The names the badge injects into builtins are written down in the ruff config, so ruff
-# does not flag them, grouped there by the firmware module each comes from. That list is
-# the one this reads: a second copy is a second thing to remember when the firmware gains
-# a builtin, and the failure it hides is a NameError on the badge months later.
+# The names the badge injects into builtins are written down in the ruff config, and
+# that list is the one this reads. A second copy drifts when the firmware gains a
+# builtin, hiding a NameError until the badge runs.
 RUFF_CONFIG = pathlib.Path(__file__).resolve().parent.parent / "ci" / "ruff.toml"
 
 

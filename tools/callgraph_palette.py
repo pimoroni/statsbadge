@@ -8,10 +8,10 @@ what index.html copies, and the interpolation from src/statsbadge/derive.py, whi
 the firmware's own OKLCH transform. So a hot node in the viewer is the colour the badge
 would fill a gauge with at that reading, and there is no second copy of either.
 
-Sampled here rather than in the browser for three reasons: no colour maths in the
-JavaScript, no CSS to read back at runtime - `getPropertyValue` hands back the unresolved
-`light-dark(...)` token, not a colour - and the 32 steps are the quantisation the viewer's
-sprite cache wants in any case.
+Sampled here and not in the browser, for three reasons. No colour maths in the
+JavaScript. No CSS to read back at runtime, since `getPropertyValue` hands back the
+unresolved `light-dark(...)` token and not a colour. And the 32 steps are the
+quantisation the viewer's sprite cache indexes at in any case.
 """
 
 import pathlib

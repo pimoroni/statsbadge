@@ -8,11 +8,13 @@ render. This one cannot: it puts down one column a frame and the plot is 278 col
 seeded with 24 off the host's history ring, so a single render shows a sliver of data and a
 screen of background.
 
-So this drives it the way a badge does - a poll's worth of frames between samples, with the
-page interpolating across them - until the plot is full. The load is a model rather than a
-reading: the plot holds ten polls, so what it shows has to happen inside ten seconds, and a
-real machine obliges rarely and never on request. Twelve threads, idle, then joining a few at
-a time, then a plateau that breathes, with two pegged and one waiting on something.
+So this drives it the way a badge does, a poll's worth of frames between samples with
+the page interpolating across them, until the plot is full.
+
+The load is a model and not a reading. The plot holds ten polls, so what it shows has to
+happen inside ten seconds, which a real machine obliges rarely and never on request.
+Twelve threads: idle, then joining a few at a time, then a shifting plateau, with two
+pegged and one waiting on something.
 """
 
 import math

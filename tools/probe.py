@@ -3,7 +3,7 @@
     mpremote connect PORT mount . run tools/probe.py
 
 Mount the repo root, not the app directory: frames go to /remote/build/shots, which is
-ignored - `tools/shots.py --publish` is what copies the README's own out of there. Draws
+ignored - `tools/shots.py --publish` copies the README's out of there. Draws
 every
 page kind against a canned frame, so it needs no server, then times a real poll if
 the badge happens to be paired.
@@ -48,8 +48,8 @@ FRAME = {
     "disk": {"pct": 74.2, "read_bps": 52428800, "write_bps": 8388608,
              "used_mb": 703840, "total_mb": 948584},
     "power": {"battery_pct": 91, "charging": True, "package_w": 44.2},
-    # A feed, for the notifications page. Four things - who, what, when, why - which is a
-    # post, a mention, a headline and an RSS entry alike.
+    # A feed, for the notifications page. Four things - who, what, when and why - which
+    # is a post, a mention, a headline and an RSS entry alike.
     "feed": {
         "home": {"title": "Maaike", "text": "All of the above! I inherited my dad's old "
                                             "cameras, my mum taught me how to see and knit",
@@ -196,9 +196,9 @@ for index, page in enumerate(PAGES):
     shot(page["id"])
     print(f"{page['id']:<8} {page['kind']:<6} {per_frame:6.2f} ms/frame")
 
-# The single dial again with the whole ramp swept round it. A second pass over the same page
-# rather than another entry above, because the fill is a layout setting and not a page one - and
-# the setting is worth a shot of its own, being the one thing no other page can show.
+# The single dial again with the whole ramp swept round it. A second pass over the same
+# page, since the fill is a layout setting and not a page one, and it is worth a shot
+# because no other page can show it.
 draw.GAUGE_FILL = "ramp"
 draw.clear_cache()
 ramped = time_page(PAGES[0], theme)
