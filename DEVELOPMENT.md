@@ -1,6 +1,6 @@
 # How it is put together
 
-Two halves sharing one small contract: the host decides *what* to show, the badge decides *how*, and the only things crossing the wire are a flat JSON frame and a page list.
+Two halves sharing one small contract. The host picks *what* to show and the badge picks *how*. The only things crossing the wire are a flat JSON frame and a page list.
 
 | File | What is in it |
 | ---- | ------------- |
