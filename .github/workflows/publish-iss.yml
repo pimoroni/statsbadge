@@ -1,16 +1,8 @@
 name: Publish iss
 
-# Publishes statsbadge-iss to PyPI, using trusted publishing: PyPI trusts this workflow via
-# OIDC, so there is no long-lived API token to store or leak. Configure it once at
-# pypi.org/manage/project/statsbadge-iss/settings/publishing/ with this repository, this
-# workflow filename, and the `pypi` environment.
-#
-# One workflow per package rather than one reusable one called three times: PyPI matches on the
-# filename of the workflow that runs, and a publisher that will not authenticate is a thing you
-# find out at the moment of publishing.
-#
-# Four packages share this repository, so a release says which one it is for by its tag:
-# iss-v0.1.0 publishes the space station page and nothing else. The plain vN.N.N tags are statsbadge's own.
+# Publishes statsbadge-iss to PyPI from an iss-vN.N.N release tag. The release scheme,
+# the trusted-publishing setup and why each package has a workflow file to itself are under
+# Packaging in DEVELOPMENT.md.
 on:
   release:
     types: [published]
@@ -27,7 +19,6 @@ env:
 jobs:
   publish:
     name: Build and publish to PyPI
-    # A release for another package in this repository is not this workflow's business.
     if: >
       github.event_name == 'workflow_dispatch'
       || startsWith(github.event.release.tag_name, 'iss-v')
@@ -39,8 +30,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # The tag is the version, so the build has to be able to see it. A checkout of a tag
-          # has it at HEAD either way; this keeps a run from a branch honest too.
           fetch-depth: 0
 
       # setup-uv publishes no v9 tag, only exact versions

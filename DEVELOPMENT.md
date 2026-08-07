@@ -82,7 +82,7 @@ So the app's own text font is **narrow at `--quality 2`** - 22KB, 32 points a gl
 
 **A capital stands 81 units of a 128 unit em**, so `draw.CAP` is 0.633 of the size asked for, and an icon's box - 100 of the same - is 0.781. Both hold for a wide font, whose em is the same em at a finer grid, because the decoder scales whichever em to the size. `draw.icon_baseline` centres a symbol's ink on the cap band from those two numbers, which is what stops it floating: an icon's box is a quarter taller than a capital and its ink sits in the middle of the box, so sharing a baseline puts the symbol 4.5px high at 32pt beside 26pt. Measured off the framebuffer, all three symbols tried centre 13.0px above the baseline at 32pt against 9.0px for a capital at 26pt.
 
-**A .af advance over 127 is read as negative.** It is a signed byte, so an icon font that
+**An .af advance over 127 is read as negative.** It is a signed byte, so an icon font that
 fills the -128..127 coordinate range draws every glyph of a run on the same spot, and
 `measure_text` returns a width of zero. Nothing in the badge's own font exceeds 120, and a
 capital stands 81 units, so `tools/make_icon_font.py` fits icons to a box of 100 and they
@@ -325,7 +325,11 @@ A badge module draws with the same `draw` and `look` the app uses, and should ta
 
 **The tag is the only place a version is written.** `uv_build` takes static metadata only - [astral-sh/uv#11718](https://github.com/astral-sh/uv/issues/11718), open and undecided - so the backend is `hatchling` with `uv-dynamic-versioning`; `uv build`, `uv publish` and `uv tool install` are the frontend and are unaffected by which backend fills the metadata. Each extension sets `pattern-prefix` so it reads its own tags and not another package's, which has to match the prefix its workflow fires on: a test holds the two together. Two things to know about it. The precompiled app is gitignored, being a build artefact, and hatchling leaves out what the VCS ignores - so `artifacts` names it explicitly or the wheel quietly ships sources alone. And a build that cannot see the tag produces `0.0.0.postN.devN+hash` rather than failing, which is why the publish workflows check what came out of the build and why `uv publish` refusing a local version is the backstop.
 
-CI installs the built wheel into a throwaway environment and asserts the app and the web UI are in it, because "the wheel builds" and "the wheel works" are different claims. Publishing is trusted publishing over OIDC, and refuses if the tag and the version disagree. Every release fires every publish workflow, so each one is guarded by the tag prefix that is its own - `clock-v` and the rest, with the plain `v` tags reserved for statsbadge. One workflow per package rather than one reusable one called three times: PyPI matches on the filename of the workflow that runs, and a publisher that will not authenticate is something you find out at the moment of publishing.
+CI installs the built wheel into a throwaway environment and asserts the app and the web UI are in it, because "the wheel builds" and "the wheel works" are different claims.
+
+**Publishing is trusted publishing over OIDC.** PyPI trusts a named workflow in this repository through the `pypi` environment, so there is no long-lived API token to store or leak. Set it up per project at `pypi.org/manage/project/<name>/settings/publishing/`, giving this repository, the workflow filename and that environment. PyPI rejects an upload whose tag and version disagree.
+
+Several packages share this repository, and the release tag picks the one a release is for. A plain `vN.N.N` tag is statsbadge; a prefixed tag such as `clock-vN.N.N` is that extension. Every release fires every publish workflow, so each workflow tests the tag prefix for its package before doing any work. Each package needs a workflow file to itself, because PyPI matches a publisher on the filename that runs. One reusable workflow called for all of them would authenticate as the wrong publisher, which you find out at the moment of publishing. Every checkout takes `fetch-depth: 0`, since the version comes from the tag and a shallow clone cannot see it.
 
 ## Working on it
 

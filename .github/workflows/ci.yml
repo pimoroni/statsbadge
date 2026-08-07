@@ -34,7 +34,7 @@ jobs:
           uv pip install --no-deps ./extensions/statsbadge-clock
 
       # The badge compiles these from source when the app is launched, where a syntax
-      # error is a crash dialog and nothing else.
+      # error surfaces as a crash dialog.
       - name: Check the app is whole and parses
         run: uv run python tools/check_app.py
 
@@ -105,8 +105,6 @@ jobs:
           mkdir -p mpy-cross
           cp micropython/mpy-cross/build/mpy-cross mpy-cross/
 
-      # Into the package, so `statsbadge install` uses bytecode without being asked. The
-      # .py sources ship too and are the fallback on different firmware.
       - name: Compile the app into the package
         run: MPY_CROSS=mpy-cross/mpy-cross ENTRY_MPY=1
              ci/build-mpy.sh src/statsbadge/badge_app src/statsbadge/badge_app/mpy
@@ -150,8 +148,8 @@ jobs:
     env:
       NAME: stats-${{ github.event.release.tag_name || github.sha }}-mpy
       # Where the badge's MicroPython is pinned. TUFTY_REF becomes main once
-      # feature/align-v3 has landed. Deliberately the same shape as the job in
-      # ../dots-badgeware, so the two stay recognisably one approach.
+      # feature/align-v3 has landed. Shaped like the job in ../dots-badgeware, to keep
+      # the two recognisably one approach.
       TUFTY_REPO: pimoroni/tufty2350
       TUFTY_REF: feature/align-v3
 
@@ -186,13 +184,12 @@ jobs:
           mkdir -p mpy-cross
           cp micropython/mpy-cross/build/mpy-cross mpy-cross/
 
-      # The same script a developer runs locally, so there is one code path. It compiles
-      # with -s, refuses a mixed bytecode build, and refuses a .py left beside a .mpy -
-      # which would win the import and silently undo the whole thing.
+      # The same script a developer runs locally, so there is one code path. It rejects
+      # a .py left beside an .mpy, which would win the import and undo the build.
       - name: Compile it
         run: MPY_CROSS=mpy-cross/mpy-cross ci/build-mpy.sh src/statsbadge/badge_app build/mpy
 
-      # The launcher wants the directory called `stats`.
+      # The launcher looks for a directory called `stats`.
       - name: Zip it
         run: |
           mkdir -p stage
@@ -229,7 +226,7 @@ jobs:
       - name: Check the app is whole and parses
         run: python3 tools/check_app.py
 
-      # The launcher wants the directory called `stats`, so stage it under that name.
+      # The launcher looks for a directory called `stats`, so stage it under that name.
       - name: Zip it
         run: |
           mkdir -p stage
