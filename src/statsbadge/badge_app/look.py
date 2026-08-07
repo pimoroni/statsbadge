@@ -1,9 +1,25 @@
 """Themes and the 320x240 layout.
 
-Everything drawn is a vector shape taking its colours from here, so a theme is a
-table of colours and one gradient rule rather than a set of pictures. That is the
-whole reason the pages are shapes and not sprites: swapping `THEME` restyles the
-badge with no assets to rebuild.
+Everything drawn is a vector shape taking its colours from here, which makes a theme a
+table of colours and one gradient rule. Pages are shapes and not sprites for that reason:
+swapping `THEME` restyles the badge with no assets to rebuild.
+
+Measured on the board, since several of the settings below are otherwise arbitrary:
+
+`badge.light_level()` is a raw u16 off the phototransistor, 16us a read, stepping in
+sixteens off a 12-bit conversion. Darkness sits at 46-53, three counts off the bottom of
+the ADC. A curtained room reads around 320 and a lit one around 4500. A phone torch reads
+61706, so LIGHT_BRIGHT tops the scale well below the maximum; measuring a room against a
+torch leaves the room a fraction of the way up.
+
+A `color` built per pen set costs 36.5us against 18.4 for one already made, and a ramp
+lookup 54.6 against 11.9, so a Theme holds objects and not tuples.
+
+Ramp stops are interpolated in OKLCH. sRGB drags blue along the green-to-amber leg and
+turns it olive, 39 counts adrift at 0.64 of the ramp, where a gauge spends its time.
+
+Four gauges cost the same frame as one, an arc being charged for by its edges, so the
+radii in DIALS are as large as the band allows.
 """
 
 W = 320
@@ -18,17 +34,16 @@ BODY_MID = BODY_TOP + BODY_H // 2
 
 PAD = 10
 
-# Dial geometry, in the body band, and with it the whole of the left half of any page that
-# splits into a gauge and a column: the single dial, the ring stack and an extension's clock
-# face all draw here. The gauge, the gap to the column and the right margin are all DIAL_GAP,
-# so the positions are worked out from it rather than picked one at a time, and the radius is
-# as large as that leaves room for - a clock face is a picture of an object and wants the
-# space, and a gauge that filled less of it made the layout jump between pages.
+# Dial geometry in the body band: the left half of any page that splits into a gauge and
+# a column. The single dial, the ring stack and a clock face all draw here.
+#
+# The gauge, the gap and the right margin are all DIAL_GAP. The radius is as large as
+# that leaves room for.
 DIAL_GAP = 16
 DIAL_OUTER = 82
 DIAL_INNER = 62
-# Nudged down, because a gauge with its gap at the bottom carries its weight high and reads
-# as sitting above centre when it is on it.
+# Nudged down, since a gauge with its gap at the bottom carries its weight high and looks
+# as though it sits above centre when it is on it.
 DIAL_C = (DIAL_GAP + DIAL_OUTER, BODY_TOP + BODY_H // 2 + 2)
 # A 270 degree sweep with the gap centred on the bottom, so it looks like a gauge.
 # Angles start at the top and run clockwise: 225 is lower-left, and 495 is 135 once
@@ -49,7 +64,7 @@ READOUT_NOTE_H = 46
 def readout_rows(count, height=READOUT_H):
     """Where each of `count` readout rows starts.
 
-    Level with the top of the dial, which is what makes the gauge and the column read as
+    Level with the top of the dial, which sets the gauge and the column reading as
     one block, and lifted only if that many rows would otherwise run past the band. Every
     page that draws a gauge and a column uses this, so nothing moves when you page between
     them.
@@ -59,45 +74,38 @@ def readout_rows(count, height=READOUT_H):
     return [top + index * height for index in range(count)]
 
 
-# The app carries its own text font rather than borrowing one off the badge: what is in
-# /system/assets belongs to the firmware and can change under us, and a display this small
-# lives or dies on its type. Built from Lexend by tools/make_text_font.py.
+# The app carries a text font of its own, and does not borrow one off the badge. What is
+# in /system/assets belongs to the firmware and can change underneath. Built from Lexend
+# by tools/make_text_font.py.
 FONT_FILE = "fonts/lexend-regular.af"
 FONT_NAME = "lexend"
 
-# Only if the app's own font did not arrive - an install that predates it, or a partial
-# copy. Text is the one thing the app cannot draw a page without, so it borrows rather than
-# gives up.
+# Only if the app's font did not arrive: an install that predates it, or a partial copy.
+# Text is the one thing the app cannot draw a page without, so it borrows one.
 FALLBACK_FONT_PATH = "/system/assets/fonts/MonaSans-Medium.af"
 
 # The app's Material Symbols, built from ci/badge-icons.txt by tools/make_icon_font.py.
-# A name rather than a path: an install puts it in the app directory, and where that is
-# depends on how the app was started, so draw.add_font looks for it.
+# A name and not a path. An install puts it in the app directory, and where that is
+# depends on how the app was started, so draw.add_font searches.
 ICON_FILE = "icons.af"
 APP_DIR = "/system/apps/stats"
 
-# Ambient light, as `badge.light_level()` reads it: a raw u16 off the Tufty's phototransistor,
-# 16us a read. It steps in sixteens, one count of the 12-bit conversion behind it. Measured in
-# darkness it sits at 46-53, three counts off the bottom of the ADC; a partly daylit room with
-# the curtains closed reads around 320, and a lit one around 4500.
-#
-# BRIGHT is where the panel wants everything it has, and anything past it is the same answer:
-# a phone torch reads 61706, and measuring a room against the brightest thing ever pointed at
-# the badge would leave that room a fraction of the way up a scale it should have topped.
+# The ends of the ambient scale, in raw `badge.light_level()` counts. Past BRIGHT the
+# panel is already at full and the answer stops changing.
 LIGHT_DIM = 48
 LIGHT_BRIGHT = 4000
-# What ambient light is allowed to take away: a curtained room gets this much of the
-# configured brightness and full daylight gets all of it. Not zero, or a dark room reads as a
-# fault rather than as a setting.
+# What ambient light is allowed to take away. A curtained room gets this much of the
+# configured brightness and full daylight gets all of it. Held off zero, since a dark room
+# at zero looks like a fault.
 LIGHT_FLOOR = 0.2
 
 
 def ambient_fraction(raw):
     """Where a raw light reading sits on 0-1, logarithmically.
 
-    Neither the sensor nor the eye is linear, and between a curtained room and an overcast
-    window is most of the adjustment worth making - a small fraction of the way up the
-    sensor's own scale.
+    Neither the sensor nor human vision is linear, and most of the adjustment worth
+    making lies between a curtained room and an overcast window, a small fraction of the
+    way up the sensor's scale.
     """
     import math
 
@@ -105,8 +113,8 @@ def ambient_fraction(raw):
     return max(0.0, min(1.0, math.log(max(raw, LIGHT_DIM) / LIGHT_DIM) / span))
 
 
-# Sizes are point sizes for the .af font: the size is what the font's em is scaled to, so a
-# capital stands draw.CAP of it, and text(x, y) puts the baseline at y + size.
+# Sizes are point sizes for the .af font. The size is the font's em scaled, a capital
+# stands draw.CAP of it, and text(x, y) puts the baseline at y + size.
 SIZE_TITLE = 19
 SIZE_HUGE = 44
 SIZE_BIG = 26
@@ -114,11 +122,8 @@ SIZE_LABEL = 12
 SIZE_VALUE = 17
 SIZE_SMALL = 11
 
-# Several gauges in the body band, keyed by how many there are: where their centres go,
-# the ring radii, and the type sizes that fit inside one. Measured on the board rather
-# than derived - four gauges cost the same frame as one, because an arc is charged for by
-# its area, so the radii are as large as the band allows and not as small as it takes to
-# be quick.
+# Several gauges in the body band, keyed by how many there are. Where their centres go,
+# the ring radii, and the type sizes that fit inside one.
 DIALS = {
     1: {"centres": ((160, 125),), "outer": 74, "inner": 56,
         "value": SIZE_HUGE, "label": SIZE_VALUE},
@@ -131,37 +136,34 @@ DIALS = {
 }
 
 
-# Colours a theme's ramp is resolved to when it is built, so a gauge fills from a table.
+# Colours a theme's ramp is resolved to when it is built, letting a gauge fill by lookup.
 # Sixty-five is a quarter of a percent of 100, and steps of one or two in a channel.
 RAMP_STEPS = 65
 
 # A background this bright or brighter counts as a pale page, as the sum of its channels.
 PALE_SUM = 384
 
-# How far a banded row sits from the page, in counts of lightness. Not the panel colour,
-# though that is the other surface a theme names: a panel may be a different hue as well as a
-# different level - the default theme's is 15 counts bluer than its background and 8 lighter -
-# and on a near-black page that reads as a stripe of colour rather than as a quieter row. A
-# lift moves all three channels together, so a band is only ever the page a step away.
+# How far a banded row sits from the page, in counts of lightness. All three channels move
+# together, so a band is the page a step away. The panel colour may differ in hue, which
+# stripes a near-black page.
 STRIPE = 10
 
 
 class Theme:
     """A palette plus the two decisions that make it look like one thing.
 
-    `ramp` is what a gauge fills with as it climbs, so a theme decides whether 90%
-    CPU is alarming or just bright. `track` is the unfilled part of any gauge.
+    `ramp` is the colours a gauge fills with as it climbs, and sets whether 90% CPU
+    looks alarming or bright. `track` is the unfilled part of any gauge.
 
-    `accent_b` is a second colour used sparingly, for a page that needs somewhere else to go:
-    a graph's second series takes it where a palette names one, and works one out of the ramp
-    where it does not.
+    `accent_b` is a second colour used sparingly, for a page that needs somewhere else to
+    go. A graph's second series takes it where a palette names one, and works one out of
+    the ramp otherwise.
 
-    `stripe` is worked out from the rest rather than named in a palette: it is a step from
-    the page, and a palette that had to state it could state it wrong.
+    `stripe` is worked out from the rest and not named in a palette. It is a step from the
+    page, and a palette that had to state it could state it wrong.
 
-    Built from palette data, which is what arrives in a layout, and held as `color`
-    objects, which is what a pen takes: building one per pen set was 36.5us against 18.4
-    for one already made, and a ramp lookup 54.6 against 11.9.
+    Built from the palette data a layout carries, and held as `color` objects for a pen
+    to take.
     """
 
     def __init__(self, name, bg, panel, ink, dim, accent, ramp, grid=None,
@@ -172,27 +174,25 @@ class Theme:
         self.ink = color.rgb(*ink)
         self.dim = color.rgb(*dim)
         self.accent = color.rgb(*accent)
-        # One more colour, used sparingly - a graph's second series is the whole of it. The
-        # accent again where a palette names none, which is what every theme had before.
+        # One more colour, used sparingly, a graph's second series being all of it. The
+        # accent again where a palette names none.
         self.accent_b = color.rgb(*accent_b) if accent_b else self.accent
-        # Stops in OKLCH, so the table interpolates through it rather than through sRGB,
-        # which drags blue along the green-to-amber leg and turns it olive: 39 counts adrift
-        # at 0.64 of the ramp, which is where a gauge spends its time. The palette still
-        # arrives as sRGB and is converted here, the round trip being within a count.
+        # Stops in OKLCH, so the table interpolates there. The palette arrives as sRGB
+        # and is converted here, the round trip being within a count.
         self.ramp = tuple((pos, color.rgb(*rgb).to_oklch()) for pos, rgb in ramp)
         self.grid = color.rgb(*grid) if grid else self.dim
-        # The four case lights are single-channel PWM, not RGB: one brightness
-        # fraction each. badge.caselights takes one value for all four or four values.
+        # The four case lights are single-channel PWM, one brightness fraction each.
+        # badge.caselights takes one value for all four or four values.
         self.case = case
         self.pale = sum(bg) >= PALE_SUM
         # A banded row: toward the ink on a dark page and away from it on a pale one,
         # `lighten` having nowhere to go on a background that is already near white.
         self.stripe = self.bg.darken(STRIPE) if self.pale else self.bg.lighten(STRIPE)
         self.steps = tuple(color.ramp(self.ramp, RAMP_STEPS))
-        # The greys a picture is drawn in, keyed by how many shades it has. Assigned straight
-        # into an indexed image's own table, which recolours every pixel indexing it in one
-        # write - so a photograph arrives as positions on a ramp and comes out in the theme.
-        # Not `ramp`, which travels calm to alarming: a picture drawn in that is a heat map.
+        # The greys a picture is drawn in, keyed by how many shades it has. Assigned
+        # straight into an indexed image's table, which recolours it in one write.
+        #
+        # Held apart from `ramp`, which would draw a photograph as a heat map.
         self.image = {count: tuple(color.rgb(*rgb) for rgb in greys)
                       for count, greys in (image or {}).items()}
 
@@ -200,8 +200,8 @@ class Theme:
         """The ramp colour for a 0-1 value, off a table built with the theme.
 
         Interpolating per call is 30us against 12 for a lookup, and a page with sixteen
-        bars asks sixteen times a frame. RAMP_STEPS across the ramp is finer than the eye
-        reads a gauge fill and finer than most of the ramps have stops.
+        bars asks sixteen times a frame. RAMP_STEPS is finer than a gauge fill resolves,
+        and finer than most of the ramps have stops.
 
         `color.ramp` samples the stops in one call: 850us for the whole table, against
         4.9ms to interpolate the same 65 steps here.
@@ -256,9 +256,8 @@ def from_palette(name, palette):
                      for pos, rgb in palette["ramp"])
         if not ramp:
             return None
-        # Keyed by the number of shades, which is what an indexed image's own table length
-        # says: a host too old to send these leaves a theme that draws no pictures rather
-        # than one that will not build.
+        # Keyed by the number of shades, matching an indexed image's table length. A host
+        # too old to send these leaves a theme that draws no pictures, and still builds.
         image = {len(greys): [tuple(int(v) for v in rgb[:3]) for rgb in greys]
                  for greys in (palette.get("image") or {}).values()}
         return Theme(name, ramp=ramp, case=float(palette.get("case", 0.1)),
