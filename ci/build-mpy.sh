@@ -4,7 +4,7 @@
 #   ci/build-mpy.sh [APP_DIR] [OUT_DIR]
 
 # With no arguments it builds into the package, where the installer looks for it. What
-# precompiling buys is under Precompiling in DEVELOPMENT.md. mpy-cross comes from the
+# precompiling buys is under "Launch, and .mpy" in DEVELOPMENT.md. mpy-cross comes from the
 # MicroPython the board repo's ci/micropython.sh pins, keeping bytecode and firmware
 # versions together.
 

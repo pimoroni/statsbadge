@@ -216,7 +216,7 @@ The badge draws with two typefaces, both under the SIL Open Font License, packed
 
 The repository, the package, the module and the command are all `statsbadge`. Keeping them identical is deliberate: name the distribution and the module differently and uv_build needs its `module-name` setting, which older uv treats as a fatal parse error rather than a warning. Extensions follow it - `statsbadge-clock` on PyPI, `statsbadge_clock` to import, `clock` to `statsbadge ext add`.
 
-## Layout
+## Contributing
 
 ```
 src/statsbadge/            the host server, a normal Python package
@@ -227,31 +227,10 @@ tools/                     host and on-badge development tools
 tests/                     server, auth and framing tests
 ```
 
-The badge app lives inside the package so that an installed wheel carries it and `statsbadge install` can put it on a badge with no network. It is MicroPython and is never imported on the host.
+Releases are cut by tagging: `vX.Y.Z` for statsbadge itself, `clock-vX.Y.Z` and the like for
+a vendored extension. The tag *is* the version, so a release cannot disagree with what it
+publishes.
 
-## Working on it
-
-```bash
-uv sync                                             # dev environment
-uv run statsbadge probe                             # what this host can measure
-uv run python tests/test_core.py                    # server, auth, framing
-uv run python tools/check_app.py                    # the app parses and is whole
-uv run ruff check --config ci/ruff.toml src tools tests extensions
-uv build                                            # sdist + wheel into dist/
-ci/build-mpy.sh                                     # precompile the badge app
-
-mpremote connect PORT mount . run tools/probe.py    # draw every page, time it
-mpremote connect PORT mount . run tools/live.py     # talk to a real server
-mpremote connect PORT mount . run tools/run.py      # the whole app, uninstalled
-mpremote connect PORT mount . run tools/multihost_test.py   # pairing config
-mpremote connect PORT mount . run tools/failover_test.py    # a changed host IP
-uv run python tools/shots.py shots                  # framebuffer dumps to PNGs
-```
-
-`statsbadge install` uses precompiled bytecode by default: CI compiles it into the package before the wheel is built, so a pip install carries both that and the `.py` sources. It loads in 66ms where the sources take 763ms, because the badge compiles at every launch. Bytecode only loads on the firmware it was built for, so if a badge runs different firmware the install falls back to the sources and says so. `--mpy DIR` installs a build of your own, `--source` forces the sources.
-
-Releases: tag `vX.Y.Z` and publish a GitHub release. The tag *is* the version - nothing in the repository states one - so a release cannot disagree with what it publishes. CI builds the wheel, checks it carries the badge app, attaches both the source and precompiled app zips, and publishes to PyPI over trusted publishing, with no API token to store.
-
-Several packages come out of this repository, so the release tag carries both the package and the version: `v0.2.0` is statsbadge itself at 0.2.0, and `clock-v0.1.0`, `iss-v0.1.0` and `quakes-v0.1.0` are the extensions at 0.1.0. Each package has a workflow file to itself, because PyPI matches a publisher on the workflow's filename. Between tags a build reports what git says - `0.2.1.dev4+g1234abc` - which is a version PyPI will not accept, so only a tag can publish.
-
-[DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMENT.md) covers how it is put together and what each frame costs. It also explains why the server writes every response in a single `write()`, which is worth 30x on this hardware.
+[DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMENT.md) is the
+onboarding document: the wire contract, the constraints the badge imposes, how to write an
+extension, and the commands for working on any of it.
