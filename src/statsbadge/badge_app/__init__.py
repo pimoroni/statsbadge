@@ -106,11 +106,11 @@ COLLECT_EVERY_MS = 1000
 # and write it, so page saves go through State.modify, which merges.
 STATE_APP = "stats"
 
-# The lowest display.backlight value worth setting. The driver raises its input to the power
-# of 2.8 for the PWM duty, which is the perceptual curve rather than a waste of the bottom
-# of the range: this is half a percent of duty, and a dark room reads that as around a sixth
-# of full. Below it the byte the binding casts to runs out of steps to give.
-BACKLIGHT_FLOOR = 0.15
+# The lowest display.backlight value that lights the panel, which every brightness is
+# measured up from. The driver raises its input to the power of 2.8 for the PWM duty, so this
+# is 3.4% of duty: less than that and the panel is off however the arithmetic reads, which is
+# measured and not a curve anybody can argue from. tools/backlight_floor.py is how.
+BACKLIGHT_FLOOR = 0.3
 
 # The smallest change worth asking for. display.backlight() is cast to a byte before the
 # driver corrects it, so anything under one step of that byte sets the panel to what it is
@@ -123,10 +123,11 @@ CASELIGHT_FLOOR = 0.15
 
 # How much of a step to take towards a new ambient reading each poll, and how often to take
 # one. The sensor is a phototransistor a hand can shadow, so following it directly makes the
-# panel flicker at every passing movement: a fifth of the gap every 250ms is about a second
-# and a half from a curtain being opened.
-LIGHT_FOLLOW = 0.2
-LIGHT_EVERY_MS = 250
+# panel flicker at every passing movement. A tenth of the gap ten times a second is a second
+# to most of the way and a couple to all of it, which nothing about a room getting darker
+# needs to beat - and no single step is big enough to read as one.
+LIGHT_FOLLOW = 0.1
+LIGHT_EVERY_MS = 100
 
 # How many reads go into one of those. The phototransistor is read through the 12-bit ADC,
 # which carries a couple of counts of noise either way: measured with the room and the panel
