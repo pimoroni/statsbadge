@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Turn scanned modules into nodes and edges, following the indirect calls too.
 
-    (imported by tools/callgraph.py, not run on its own)
+    (imported by tools/callgraph.py, never run directly)
 
-The direct edges are the easy half. The half that decides whether the graph is worth
-looking at is the indirect one: twelve page renderers reached only through a dict, three
-extension renderers registered into it from other packages, and seven CLI subcommands
-hung off argparse. Left unresolved those all read as dead code and `main()` reads as
-trivial, so each has a rule here, and every edge carries `via` saying which rule found it.
+The direct edges are the easy half. The indirect half is where the value is: twelve page
+renderers reached only through a dict, three extension renderers registered into it from
+other packages, and seven CLI subcommands hung off argparse. Left unresolved those all
+look like dead code, and `main()` becomes trivial. Each has a rule here, and every edge
+carries a `via` for the rule that found it.
 """
 
 import fnmatch
@@ -206,11 +206,11 @@ class Resolver:
                     self.binding_node[(target.index, name, binding)] = node
 
     def infer_attributes(self):
-        """What class each `self.x` holds, from the constructor call that set it.
+        """The class held by each `self.x`, from the constructor call that set it.
 
-        Done as its own pass because it needs every class registered first, and it is
-        what stops a method reached through an instance - `self.auth.begin_pairing()` -
-        looking like nothing calls it.
+        A separate pass, because it needs every class registered first. It stops a
+        method reached through an instance - `self.auth.begin_pairing()` - looking like
+        nothing calls it.
         """
         for target in self.targets:
             for name in sorted(target.modules):
@@ -238,7 +238,7 @@ class Resolver:
     # -- name lookup --------------------------------------------------------
 
     def scope_imports(self, scope):
-        """What a function imported for itself, which shadows the module's own imports.
+        """What a function imported for itself, shadowing the imports at module level.
 
         There are fourteen of these and every one is deliberate - `from . import portable`
         inside `sources.discover`, `import setup` inside `pairing_ui` - so a resolver that
@@ -285,9 +285,9 @@ class Resolver:
         """An absolute dotted module in whichever target has it.
 
         An extension's host module does `from statsbadge.sources.base import Source`,
-        which crosses from its own tree into the app's. Only absolute specs are looked
-        for across targets: a flat target's bare `import draw` means its own sibling and
-        must not reach into another tree.
+        which crosses from the extension tree into the app's. Only absolute specs are
+        looked for across targets: a flat target's bare `import draw` means the sibling
+        beside it and must not reach into another tree.
         """
         if not spec or spec.startswith(".") or "." not in spec:
             return (None, None)
@@ -356,7 +356,7 @@ class Resolver:
     def resolve(self, shape, target, module_name, scope):
         """A node id for what an expression shape names, or None.
 
-        Returns `(node_id, via)` so a caller can tell a plain name from something found
+        Returns `(node_id, via)`, separating a plain name from something found
         by following a function that hands back a module.
         """
         if shape is None or shape[0] == OPAQUE:
@@ -395,7 +395,7 @@ class Resolver:
             found = self.attribute_on(holder, shape[1], target)
             if found is not None:
                 return (found, "static")
-            # Or an attribute whose type __init__ gave away.
+            # Failing that, an attribute whose type __init__ gave away.
             held = self.attribute_types.get((holder, shape[1]))
             return (held, "static") if held is not None else (None, None)
 
@@ -445,9 +445,9 @@ class Resolver:
         return (None, None)
 
     def local_types(self, target, module_name, scope):
-        """What class each local name holds, where a constructor call gave it away.
+        """The class held by each local name, where a constructor call gave it away.
 
-        Built on first use and cached on the scope. The sentinel is there because
+        Built on first use and cached on the scope. The sentinel exists because
         resolving one local's constructor can ask about another, and a class is looked
         up by name like anything else.
         """
@@ -504,7 +504,7 @@ class Resolver:
     def classify(self):
         """Split every module-level binding three ways, before any edge is drawn.
 
-        Bound once and never touched is a constant, and reading one is not coupling.
+        Bound once and never touched is a constant; reading one is not coupling.
         Anything declared `global`, assigned twice, or changed in place is state - which
         is where the interesting half is, because most of this app's caches are never
         `global`-declared at all, only mutated.
@@ -556,8 +556,8 @@ class Resolver:
     def is_registry(self, writes):
         """Whether an empty container is filled with things to dispatch on, or is a cache.
 
-        Both start as `{}` at module scope and are written to by key, so the shape cannot
-        tell them apart - what can is what goes in. `pages.EXTRA["quakemap"] = render`
+        Both start as `{}` at module scope and are written to by key, so the shape does
+        not separate them. What goes in does. `pages.EXTRA["quakemap"] = render`
         puts a function in, and `pages.ANIMATED.add("waterfall")` puts a name in from
         three different modules. `draw._labels[key] = <a sprite>` puts in a value only
         this module ever computes, which is a cache and not a registry.
@@ -611,7 +611,7 @@ class Resolver:
 
         A flat target's `import draw` is a sibling file, and the whole badge app hangs
         off that reading correctly - get it wrong and the graph is eleven disconnected
-        modules with no error to say so. The standard library is not counted, since
+        modules, with no error raised anywhere. The standard library is not counted, since
         `import time` resolving to nothing is the right answer.
         """
         if record["is_from"] or "." in record["module"]:
@@ -714,7 +714,7 @@ class Resolver:
     # -- pass 4: the tables ------------------------------------------------
 
     def fill_tables(self):
-        """Give every table its members, from its own literal and from elsewhere.
+        """Give every table its members, from the literal and from elsewhere.
 
         A closed table names its members where it is written. An open one is empty there
         and filled by whoever imports it, which is how each extension's renderer reaches
@@ -921,7 +921,7 @@ class Resolver:
                             self.graph.node(node)["flags"].add("dispatch-target")
 
     def entry_points(self):
-        """The classes an installed package advertises, from its own pyproject.
+        """The classes an installed package advertises, from the pyproject beside it.
 
         Three lines of TOML per extension close the one dynamic edge on the host side
         that is cheap to close: `entry.load()` cannot be followed, but what it would
@@ -999,8 +999,8 @@ class Resolver:
     def vtable(self):
         """A call on a name we cannot resolve, where the method belongs to one hierarchy.
 
-        Restricted to method names defined nowhere else, which is what stops `get` or
-        `run` joining everything to everything. `Source`'s own vtable - `available`,
+        Restricted to method names defined nowhere else, which stops `get` or
+        `run` joining everything to everything. The `Source` vtable - `available`,
         `sample`, `configure`, `pages`, `note_fault` - passes that test.
         """
         owners = {}
@@ -1144,7 +1144,7 @@ class Resolver:
         self.flag_caches(writers)
         self.score_globals(outgoing)
         self.assign_layers(outgoing)
-        # Its own adjacency on purpose: `outgoing` also feeds fan_out and the global-state
+        # A separate adjacency: `outgoing` also feeds fan_out and the global-state
         # scores, so widening it would silently move every one of those numbers and with
         # them every colour in the viewer.
         self.assign_flow()
@@ -1159,7 +1159,7 @@ class Resolver:
 
         What matters is that the level rises along every edge, and any layering with that
         property has no back edges at all. The earliest legal level for a node is the
-        longest path down to it; the latest is as far down as its own longest chain allows.
+        longest path down to it; the latest is as far down as the longest chain allows.
         Either works, and both are lopsided: earliest crowds everything against the top,
         latest leaves 478 of 1008 nodes on the floor. The midpoint of the two is balanced
         and still rises along every edge, since both bounds shift by at least one.
@@ -1194,8 +1194,8 @@ class Resolver:
             latest = deepest - to_leaf[group]
             node["flow"] = (earliest[group] + latest) // 2
 
-        # A firmware primitive is the floor of the machine whatever the arithmetic says,
-        # and it is safe to say so: an external has no outgoing edges, so nothing sits
+        # A firmware primitive is the floor of the machine whatever the arithmetic gives,
+        # and that is safe: an external has no outgoing edges, so nothing sits
         # below it to be climbed back up to.
         for node in self.graph.nodes:
             if node["kind"] == "external":
@@ -1248,8 +1248,8 @@ class Resolver:
                 continue
             node["reset_by"] = sorted(resets.get(node["id"], ()))
             count = len(writers.get(node["id"], ()))
-            # Only a container that is added to can grow without bound, so a name merely
-            # rebound by two functions is not a leak candidate however often it changes.
+            # Only a container that is added to can grow without bound, so a name that
+            # two functions rebind is no leak candidate however often it changes.
             grows = "mutated-in-place" in node["flags"]
             if grows and not node["reset_by"] and count > 1:
                 node["flags"].add("unreset")
@@ -1306,7 +1306,7 @@ class Resolver:
         return order
 
     def assign_layers(self, outgoing):
-        """How far each node is from something that starts running on its own."""
+        """How far each node is from something that starts running unprompted."""
         roots = []
         for target in self.targets:
             for spec in target.config.get("entrypoints", ()):
@@ -1368,7 +1368,7 @@ class Resolver:
                     scope.type_map = None
 
     def dedupe(self):
-        """One edge a (source, target, kind, via, line), keeping the first seen."""
+        """One edge per (source, target, kind, via, line). The first seen wins."""
         seen = {}
         for edge in self.graph.edges:
             key = (edge["from"], edge["to"], edge["type"], edge["via"], edge["line"])

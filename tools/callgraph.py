@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Read the host and badge code into a graph, and write the viewer that draws it.
+"""Read the host and badge code into a graph. Writes the viewer that draws it.
 
     python3 tools/callgraph.py --open
 
-Nothing is executed. The badge modules cannot be imported on this host and the ones that
-can would need a rasteriser to draw a frame, so the graph is what the source says and
-every edge carries `via` naming the rule that found it - `static` for a plain call,
-`table` for one through a dispatch dict, `hint` for one written down by hand. Real call
-counts arrive separately, from tools/callgraph_trace.py, and merge into the same fields.
+Nothing is executed. The badge modules cannot be imported on this host, and the ones
+that can would need a rasteriser to draw a frame. The graph is read from the source, and
+every edge carries a `via` for the rule that found it: `static` for a plain call, `table`
+for one through a dispatch dict, `hint` for one written down by hand. Real call counts
+arrive separately from tools/callgraph_trace.py, merging into the same fields.
 
 Reads tools/callgraph.toml for the targets. Pointed at a bare directory instead it assumes
 CPython and package-relative imports, which is enough to draw any Python project.
@@ -49,9 +49,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 DEFAULT_CONFIG = HERE / "callgraph.toml"
 VIEWER = HERE / "callgraph_web"
 
-# What the graph would have to be missing for the output to be misleading rather than
-# merely incomplete. A flat target that resolves fewer than this many of its bare imports
-# has almost certainly been pointed at the wrong directory.
+# How much the graph can be missing before the output misleads instead of falling short.
+# A flat target that resolves fewer than this many of its bare imports has almost
+# certainly been pointed at the wrong directory.
 MIN_BARE_RESOLVED = 0.9
 
 
@@ -172,9 +172,9 @@ def build_targets(config):
 def roots_of(declared):
     """Every directory a target's roots name, globs expanded.
 
-    Each root names its own modules, which is what makes an extension's host module
+    Each root names the modules beneath it, making an extension's host module
     `statsbadge_clock` and not `extensions.statsbadge-clock.src.statsbadge_clock` - the
-    name its own entry point advertises it under.
+    name its entry point advertises it under.
     """
     found = []
     for pattern in declared.get("roots", ()):
@@ -331,10 +331,10 @@ def self_check(graph):
 def load_traces(paths, graph):
     """Merge each recording onto the graph, and hand back the timelines.
 
-    Matched on (file, first line), which is exactly what the static pass already recorded
-    per node, so there is no name-mangling to get wrong. An edge the run took that no rule
-    found is kept and marked: those are the dispatches and the callbacks, and seeing one
-    appear is the best reason to record anything at all.
+    Matched on (file, first line), the pair the static pass already recorded per node,
+    leaving no name-mangling to get wrong. An edge the run took that no rule found is kept
+    and marked. Those are the dispatches and the callbacks. Seeing one appear is the
+    best reason to record anything at all.
     """
     where = {}
     for node in graph.nodes:
@@ -479,9 +479,10 @@ def assemble(graph, targets, config):
 
 
 # Fields where nothing is a real answer, and zero would be a wrong one. An external node
-# belongs to no target and no module, and a node no run touched has no count - filling any
-# of those with 0 put every firmware builtin in the host target and made the rail say the
-# host held 705 nodes when it holds 458.
+# belongs to no target and no module, while a node no run touched has no count.
+
+# Filling any of those with 0 put every firmware builtin in the host target, and the rail
+# reported 705 nodes for a host holding 458.
 NULLABLE = frozenset({"target", "module", "traced"})
 
 

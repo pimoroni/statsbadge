@@ -2,15 +2,15 @@
 
     mpremote connect PORT mount . run tools/mem_probe.py
 
-Not instrumentation in the app: the harness makes the churn itself. Every frame here is drawn
-with values that have changed, which is what the badge sees once a second, so a few seconds of
-this covers what it does in an hour of sitting on one page.
+Not instrumentation in the app: the harness makes the churn itself. Every frame here is
+drawn with values that have changed, matching what the badge sees once a second. A few
+seconds of this covers an hour of sitting on one page.
 
 Three things come out of it, per page kind:
 
-  bytes/frame   `gc.mem_alloc` only grows between collects, so a delta across an interval with
-                no collect in it is gross allocation. Sampled, and the intervals a collect landed
-                in are dropped.
+  bytes/frame   `gc.mem_alloc` only grows between collects, so a delta across an
+                interval with no collect in it is total allocation. Sampled, and the
+                intervals a collect landed in are dropped.
   sprites       how many strings got baked into an image, and how often the cache was dumped.
   max free sz   the largest contiguous free run, off `micropython.mem_info()`. This is the
                 fragmentation figure: free memory can be plentiful and still not have a 6KB
@@ -69,7 +69,7 @@ micropython.mem_info()
 # -- the frames, with something different in them every time ----------------
 
 def frame_at(tick):
-    """A frame whose readings have all moved, which is what a poll landing looks like."""
+    """A frame whose readings have all moved, as they have when a poll lands."""
     return {
         "v": 1, "seq": tick,
         "cpu": {"pct": 20.0 + (tick % 700) / 10.0, "temp": 40.0 + (tick % 400) / 10.0,
@@ -86,10 +86,10 @@ def frame_at(tick):
         "power": {"battery_pct": 50 + tick % 50, "package_w": 20.0 + tick % 60},
         "sys": {"host": "workshop-pc", "os": "Windows 11", "cpu_name": "Ryzen 7 7800X3D",
                 "uptime_s": 100000 + tick},
-        # The two map pages. A frame here is a second of the badge's time - the harness is
-        # faster only because it does not wait for the poll - so each of these moves at the
-        # rate the host really moves it: the station every five seconds, its track every two
-        # minutes, and the sub-solar point a quarter of a degree a minute.
+        # The two map pages. A frame here is a second of the badge's time, the harness
+        # being faster only for skipping the poll wait. Each of these moves at the rate the
+        # host moves it: the station every five seconds, its track every two minutes, the
+        # sub-solar point a quarter of a degree a minute.
         "iss": {
             "where": {"lat": ((tick // 5) % 103) - 51.0, "lon": (((tick // 5) * 3) % 360) - 180.0,
                       "altitude": 410.0 + ((tick // 5) % 90) / 10.0,
@@ -103,8 +103,8 @@ def frame_at(tick):
             "aboard": 7,
         },
         "quakes": {
-            # A new set every five minutes, which is what the host fetches; the page's own
-            # six second cycle moves the camera between them meanwhile.
+            # A new set every five minutes, matching the host's fetch. The page's six
+            # second cycle moves the camera between them meanwhile.
             "events": [{"mag": 4.0 + (((tick // 300) + i) % 30) / 10.0,
                         "place": f"{10 + i * 7} km SSE of Somewhere {i}",
                         "lon": (((tick // 300) * 5 + i * 37) % 360) - 180.0,
@@ -144,21 +144,22 @@ PAGES = (
 )
 
 
-# How often `gc.mem_alloc` is read during a run. It only grows between collects, so a delta is
-# gross allocation - but a run this size trips an automatic collect, and then it falls. Sampled
-# rather than taken once, so a collect ends one interval instead of hiding a run's worth of
-# allocation: 44ms a read, so twenty of them is a second.
+# How often `gc.mem_alloc` is read during a run. It only grows between collects, so a
+# delta is total allocation, and a run this size trips a collect that drops it.
+
+# Sampled, not taken once, so a collect ends one interval instead of hiding a run's worth
+# of allocation. 44ms a read, and twenty of them is a second.
 SAMPLE_EVERY = 20
-# The same figure badge_app sets at launch, so the last section measures the app's own policy.
+# The figure badge_app sets at launch, for the last section to measure the shipped policy.
 THRESHOLD = 256 * 1024
 
 
 def drive(name, page, rounds):
     """Render one page kind `rounds` times, each with a frame that has moved.
 
-    Reports gross allocation a frame, the frame time, what the sprite cache did, and what the
-    heap looks like once this page's own garbage has been collected - which is the figure the
-    whole exercise is about, since free memory in runs too small to use is not free.
+    Reports total allocation a frame, the frame time, the sprite cache activity, and the
+    heap once this page's garbage has been collected. That last figure is the point of the
+    exercise: free memory in runs too small to use is not free.
     """
     gc.collect()
     dumps = 0
@@ -188,9 +189,9 @@ def drive(name, page, rounds):
     took = time.ticks_diff(time.ticks_ms(), t0) - (rounds // SAMPLE_EVERY) * 44
     intervals = rounds // SAMPLE_EVERY
     counted = (intervals - collects) * SAMPLE_EVERY
-    # An interval a collect landed in shows a fall, not a rise, so it is not counted. With a
-    # threshold set that is most of them, and what is left says nothing useful - so the figure is
-    # only reported when it was taken over most of the run.
+    # An interval a collect landed in shows a fall, not a rise, and goes uncounted. With a
+    # threshold set that is most of them, leaving too little to draw on. The figure is
+    # reported only when it was taken over most of the run.
     figure = f"{allocated // counted:>7}B/frame" if counted * 2 > rounds else "      --      "
     gc.collect()
     print(f"  {name:<10} {figure} {took / rounds:6.1f}ms/frame  "
@@ -210,9 +211,9 @@ gc.collect()
 print("and after a collect")
 micropython.mem_info()
 
-# What the app's own policy does to the same run. Left to itself the collector only runs when an
-# allocation fails, so garbage piles up to whatever is free - which is what leaves the free list
-# in pieces. The app sets this at launch; the harness has to set it for itself to measure it.
+# What the shipped policy does to the same run. Left alone the collector only runs when an
+# allocation fails, so garbage piles up to whatever is free, leaving the free list in
+# pieces. The app sets this at launch; the harness sets it here to measure it.
 print(f"\nthe worst two again, with the app's gc.threshold({THRESHOLD // 1024}KB) set")
 gc.threshold(THRESHOLD)
 for name, page, rounds in PAGES:

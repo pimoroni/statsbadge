@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Price the drawing work each function does, from figures that were actually measured.
+"""Price the drawing work each function does, from measured figures.
 
-    (imported by tools/callgraph.py, not run on its own)
+    (imported by tools/callgraph.py, never run directly)
 
-What separates this from an invented complexity score is the price table: the badge's
+The price table is what separates this from an invented complexity score: the badge's
 primitives were timed on the board and written down in DEVELOPMENT.md, so they go in the
 config and get read from there. An arc is 1.82ms, a line of live text 1ms, `import machine`
 40ms.
@@ -43,7 +43,7 @@ DEFAULTS = {
 
 
 def price_graph(graph, targets, config):
-    """Fill in cost_self, cost and cost_conf on every node, and return the calibration."""
+    """Fill in cost_self, cost and cost_conf on every node. Returns the calibration."""
     weights = {}
     prices = {}
     for target in targets:
@@ -84,8 +84,8 @@ def own_cost(graph, weights):
     """What a body costs before anything it calls is counted.
 
     A call inside a loop is counted for as many turns as the loop is estimated to take,
-    which is where the loop factor earns its place: the badge's recurring performance
-    story is work done per item rather than once.
+    which is where the loop factor earns its place: the badge's recurring cost is work
+    done per item, not once.
     """
     calls = {}
     for edge in graph.edges:
@@ -134,7 +134,7 @@ def spread(graph):
     """Add each callee's cost to its callers, over the graph with its cycles collapsed.
 
     Condensed first so recursion terminates: everything in a cycle shares one figure and
-    is flagged, since there is no honest way to say how many times round it goes.
+    is flagged, no number of turns being derivable from the source.
     """
     calls = {}
     for edge in graph.edges:
@@ -283,10 +283,10 @@ def topological(groups, group_of, calls):
 def flag_allocations(graph):
     """Name the functions that build something inside a loop.
 
-    DEVELOPMENT.md is emphatic about this being the badge's one recurring cost: a pen
-    assignment is 64 bytes and a shape 416, and the world map draws 288 polygons with 24
-    pens for exactly that reason. A list of the construction sites inside loops is the
-    most directly actionable thing the cost model produces.
+    DEVELOPMENT.md names this as the badge's one recurring cost. A pen assignment is 64
+    bytes against a shape's 416, which is why the world map draws 288 polygons with 24
+    pens. A list of the construction sites inside loops is the most directly actionable
+    thing the cost model produces.
     """
     for node in graph.nodes:
         inside = [site for site in node.get("alloc_sites", ()) if site[1] >= 1]
@@ -318,9 +318,9 @@ def calibrate(graph, targets, config):
 def report_calibration(lines):
     """Print the bound against what was measured, and say which way a miss would matter.
 
-    Over is expected and says nothing: both arms of every branch are counted. Under is a
-    real finding, because a bound that a real frame exceeds means the price table is
-    missing something the page actually does.
+    Over is expected and carries no signal: both arms of every branch are counted. Under
+    is a real finding, because a bound that a real frame exceeds means the price table is
+    missing something the page does.
     """
     if not lines:
         return None

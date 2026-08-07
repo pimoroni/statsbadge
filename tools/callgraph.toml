@@ -1,10 +1,10 @@
 # What tools/callgraph.py reads. Everything project-specific lives here, so pointing the
 # tool at another codebase is an edit to this file and not to the code.
-#
+
 # A target is one tree plus how names resolve inside it. `flat` is the important one: the
-# badge app inserts its own directory on sys.path and imports its siblings by bare name,
-# so every file in a flat target shares one namespace. Without it the badge side comes
-# out as eleven disconnected modules and nothing says so.
+# badge app inserts its directory on sys.path and imports its siblings by bare name, so
+# every file in a flat target shares one namespace. Without it the badge side comes out
+# as eleven disconnected modules, with no error raised.
 
 out = "build/callgraph"
 
@@ -91,8 +91,8 @@ alloc = 2.0
 statement = 0.3
 loop_factor = 8.0
 
-# Measured frame times, printed against the prediction on every run so a wrong model says
-# so straight away rather than looking convincing.
+# Measured frame times, printed against the prediction on every run. A wrong model shows
+# up straight away instead of looking convincing.
 [calibration.badge]
 "pages:_dial" = 18200         # the dial page, :191
 "pages:_dials" = 22100        # four gauges, :191

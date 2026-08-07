@@ -2,17 +2,16 @@
 
     mpremote connect PORT run tools/bench_clockface.py
 
-The dial used to be built from trigonometry: sixty four-point contours collected into
-two shape.custom calls under NON_ZERO, so the rasteriser saw two render() calls for the
-whole set. It is now a rectangle per mark placed by a mat3, which reinvents nothing and
-measures faster, despite costing a render() per mark.
+The dial is a rectangle per mark placed by a mat3, costing a render() per mark. The
+alternative is sixty four-point contours collected into two shape.custom calls under
+NON_ZERO, which the rasteriser takes as two render() calls for the whole set.
 
-Two things this exists to keep honest:
+Two things this exists to check:
 
 - The face image is allocated once, outside every timed region. Allocating a 168x168
   image per iteration measures garbage collection, not drawing.
 - Whether re-aiming one cached shape beats building a fresh one depends on the firmware,
-  which is what the last section measures. MicroPython only advances its free-block hint
+  and the last section measures that. MicroPython only advances its free-block hint
   for single-block allocations (py/gc.c, n_free == 1), so a loop that allocates nothing
   but multi-block objects rescans the allocation table from a stale index every time, and
   the per-draw cost climbs without bound. With 32-byte GC blocks and a six-float mat3 the

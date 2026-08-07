@@ -1,11 +1,10 @@
-// The call-graph viewer. Reads the JSON the generator inlined above and draws it on a 2D
-// canvas: coordinates come precomputed, so there is no layout here and no dependency on
-// anything. Colour is the selected hot measure, shape is what a node is, size is how much
-// of the codebase points at it.
-//
-// Every edge carries a `via` saying which rule found it. Anything but `static` is drawn
-// dashed and named in the panel, because a graph that quietly invents edges is worse than
-// one that draws none.
+// The call-graph viewer. Reads the JSON the generator inlined above onto a 2D canvas.
+// Coordinates come precomputed, leaving no layout here and no dependencies. Colour is
+// the selected hot measure, shape marks what a node is, size is fan-in.
+
+// Every edge carries a `via` for the rule that found it. Anything but `static` is drawn
+// dashed and named in the panel, because a graph that quietly invents edges is worse
+// than one that draws none.
 
 const DATA = JSON.parse(document.getElementById("graph").textContent);
 const N = DATA.nodes;
@@ -35,20 +34,20 @@ const MEASURES = [
     hint: "every priced call reachable from here - an upper bound, not a time: "
         + "both arms of every branch are counted" },
   { key: "lines", label: "lines", hint: "how big it is" },
-  // Ordinal, so it is used raw rather than ranked: ranking would fatten the crowded
+  // Ordinal, so it goes in raw. Ranking would fatten the crowded
   // middle levels into a band and squash the sparse ends into nothing, which is exactly
   // what the axis is for.
   { key: "flow", label: "depth in the machine", strata: true,
     hint: "0 is an entry point, the most is a firmware primitive; every edge descends" },
 ];
 
-// A cost that came mostly from defaults rather than from priced calls is not worth
+// A cost that came mostly from defaults, with few priced calls behind it, is not worth
 // showing at full strength, whatever its rank.
 const CONFIDENT = 0.5;
 
-// Shape says what a node is, because colour is spent on the measure. A constant and a
-// piece of state are the same outline filled or not, since the whole point of splitting
-// them is that one is coupling and the other is not.
+// Shape marks what a node is, because colour is spent on the measure. A constant and a
+// piece of state share an outline, filled or not: the split is there to separate coupling
+// from state.
 const SHAPES = {
   module: "ring",
   class: "square",
@@ -67,29 +66,28 @@ const KIND_ORDER = ["module", "class", "function", "method", "property",
 const EDGE_ORDER = ["call", "instantiate", "read", "write", "import",
                     "inherit", "override", "register", "tag", "resume"];
 
-// Which vias are a rule's inference rather than a call written in the source.
+// Which vias are a rule's inference, as against a call written in the source.
 const INFERRED = new Set(["table", "vtable", "argparse", "entrypoint", "framework",
                           "dynamic", "hint", "handed", "trace"]);
 
 // -- the third axis ---------------------------------------------------------
 
-// Axonometric, not perspective, for two reasons. Size already encodes fan-in, and under
-// perspective a near node is bigger for two reasons the eye cannot separate. And the
-// sprite cache keys on a rounded radius, so per-node depth scaling would take it from
-// ~200 tiles to thousands, with a visible pop every time a radius ticks over.
-//
-// It also makes tilt zero *exactly* the old picture rather than approximately: at tilt 0
-// and azimuth 0 the two projection lines reduce to the affine transform this used before,
-// and there is an explicit fast path saying so.
+// Axonometric, not perspective. Size already encodes fan-in, so under perspective a near
+// node would be bigger for two indistinguishable reasons. The sprite cache keys on a
+// rounded radius, which per-node depth scaling would blow out to thousands of tiles.
+
+// Tilt zero then lands *exactly* on the flat picture. At tilt 0 with azimuth 0 the two
+// projection lines reduce to a plain affine transform, and an explicit fast path takes
+// that case.
 const TILT_MAX = 70;           // past this, occlusion doubles as the view nears horizontal
 const TILT_DEFAULT = 52;
 const AZIMUTH_DEFAULT = 25;    // off-axis, so the module columns do not hide each other
-// How tall the axis stands, against the footprint it stands on. This has to be generous:
-// screen height mixes the plan position with the height, so if one level is worth less
-// than a typical move across the layout then the plan swamps the depth and the strata
-// stop reading. At 1400 against this footprint a level was 78 units against displacements
-// of 500 and more, and a call chain came out visibly climbing. Taken from the layout so
-// it holds for any codebase rather than for this one.
+// How tall the axis stands, against the footprint it stands on. Generous by necessity:
+// screen height mixes plan position with height, and a level worth less than a typical
+// move across the layout leaves the plan swamping the depth.
+
+// At 1400 a level was 78 units against displacements of 500 and more. Taken from the
+// layout, for any codebase.
 const RISE = (() => {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (let i = 0; i < COUNT; i++) {
@@ -106,10 +104,9 @@ const FOG_FAR = 0.3;
 const RAMP_STEPS = 32;
 const MIN_RADIUS = 3;
 const MAX_RADIUS = 17;
-// Below this, modules only. Low, because the axis stands tall against the footprint and
-// fitting the whole graph tilted lands around 13% - a threshold of 0.15 meant opening in
-// 3D showed boxes and nothing in them. At this zoom the nodes are specks, but a
-// constellation of coloured specks inside labelled territories is still a picture.
+// Below this, modules only. Low, because the axis stands tall and fitting the graph
+// tilted lands around 13%: at 0.15, opening in 3D showed empty boxes. The nodes are
+// specks at this zoom, and a constellation of them still reads.
 const MODULE_ZOOM = 0.07;
 const MODULE_LABEL_ZOOM = 1.1;  // below this, modules are named
 const LABEL_ZOOM = 1.15;       // above this, every node label that fits
@@ -121,8 +118,8 @@ let sprites = new Map();
 const camera = { x: 0, y: 0, z: 0, scale: 1, az: 0, tilt: 0 };
 
 // Which measure gives height, and how much of it is showing. Kept apart from `filters`
-// on purpose: the slab must never touch `shown`, because that re-ranks every measure and
-// would make every colour in the picture jump as you scrub.
+// because the slab must never touch `shown`: that re-ranks every measure, and every
+// colour in the picture would jump as you scrub.
 const view = {
   axis: "flow",
   slabLow: 0,
@@ -165,7 +162,7 @@ const filters = {
   minFanIn: 0,
   minRank: 0,
   // A second measure with its own floor, so "hot and complex" - the pair worth looking at
-  // for somewhere to optimise - is a thing you can ask for rather than eyeball.
+  // for somewhere to optimise - is a thing you can ask for outright.
   also: "complexity",
   alsoRank: 0,
   only: null,          // "unreferenced" | "unreset" | "inferred" | null
@@ -187,7 +184,7 @@ for (let i = 0; i < E.from.length; i++) {
 const moduleById = new Map(DATA.modules.map((m) => [m.id, m]));
 const targetById = new Map(DATA.targets.map((t) => [t.id, t]));
 
-// The one that runs on the badge, found by what it declares rather than by its index.
+// The one that runs on the badge, found by what it declares and not by its index.
 const BADGE_TARGET = (DATA.targets.find((t) => t.lang === "micropython") || {}).id;
 
 // The deepest level the flow axis reaches, for the panel to read a level against.
@@ -237,8 +234,8 @@ function untraced(i) {
 
 /** Percentile rank over what is currently on screen.
  *
- * Not min-max and not log: fan-in here is heavily power-law, and one node with ten times
- * everything else's value renders the whole rest of the graph cold. Rank spreads the
+ * Not min-max and not log. Fan-in here is heavily power-law, where one node with ten
+ * times everything else's value renders the rest of the graph cold. Rank spreads the
  * visible set across the ramp, and the legend carries the real numbers so a colour can
  * still be read back to one.
  */
@@ -333,7 +330,7 @@ function flat() { return camera.tilt === 0 && camera.az === 0; }
  *
  * An ordinal axis goes in raw so its levels stay evenly spaced; a power-law one goes in
  * as a percentile, because these span 0-26 to 1-20,163,210 and nothing linear survives
- * that. `strata` on the measure says which.
+ * that. `strata` on the measure picks between them.
  */
 function reheight() {
   const spec = MEASURES.find((m) => m.key === view.axis);
@@ -351,8 +348,8 @@ function reheight() {
   }
 }
 
-// The two screen axes and the depth axis, as unit vectors. At tilt 0 and azimuth 0 these
-// are (1,0,0) and (0,1,0), which is what makes the fast path exact.
+// The two screen axes and the depth axis, as unit vectors. At tilt 0 with azimuth 0 they
+// reduce to (1,0,0) and (0,1,0). That exactness is what the fast path relies on.
 function basis() {
   const a = camera.az * Math.PI / 180;
   const t = camera.tilt * Math.PI / 180;
@@ -422,7 +419,7 @@ function inSlab(i) {
 
 /** Frame a set at the current angle, by projecting it and solving for the scale.
  *
- * Projected rather than measured in world x/y, because once the view is tilted the
+ * Projected, not measured in world x/y: once the view is tilted the
  * bounding box on screen is not the footprint: the height contributes to it.
  */
 function fit(only) {
@@ -471,7 +468,7 @@ function scaledRadius(i) {
 /** One pre-rendered image per appearance, blitted rather than drawn as a path.
  *
  * A thousand `arc()` submissions a frame is several milliseconds; a thousand `drawImage`
- * calls is well under one. The 32 ramp steps are exactly the quantisation this wants, so
+ * calls is well under one. The 32 ramp steps are the quantisation already needed here, so
  * discretising the colour costs nothing.
  */
 function spriteFor(kind, step, radius, state) {
@@ -527,7 +524,7 @@ function spriteFor(kind, step, radius, state) {
     pen.lineWidth = 2.4;
     pen.stroke();
   } else if (state === "badge") {
-    // The badge target takes a heavier stroke rather than a different hue, so it survives
+    // The badge target takes a heavier stroke and no hue of its own, so it survives
     // being a four-pixel dot and leaves the ramp to mean one thing.
     pen.globalAlpha = 0.45;
     pen.strokeStyle = theme.ink;
@@ -606,7 +603,7 @@ function focusSet() {
 
 /** Module footprints, flat on the ground plane.
  *
- * Drawn first and kept flat rather than extruded into prisms: the median module spans a
+ * Drawn first and kept flat, never extruded into prisms: the median module spans a
  * third of the levels, so thirty-nine translucent boxes would become the scene's main
  * occluder. Flat, they give the view a floor, which is the strongest depth reference an
  * axonometric projection has - the nodes float above their own territory.
@@ -671,8 +668,8 @@ function paintModuleLabels(wide) {
 
 /** Every edge in one path per bucket, and each edge as two halves so direction reads.
  *
- * A caller half in the dim colour and a callee half in the brighter one says which way an
- * edge points at any zoom, for two `stroke()` calls in total. Arrowheads on thousands of
+ * A caller half in the dim colour and a callee half in the brighter one gives direction
+ * at any zoom, for two `stroke()` calls in total. Arrowheads on thousands of
  * one-pixel lines are invisible on their own and noise in aggregate.
  */
 function paintEdges(focus, live) {
@@ -834,9 +831,9 @@ function paintNodes(focus, live) {
       if (!inSlab(i)) ctx.globalAlpha *= 0.08;
     }
 
-    // Firing shows three ways at once: the node swells, the stack draws as a chain, and
-    // the frames are listed. Anything that has returned recently keeps a fading tint, so
-    // the path the walk took reads as a trail rather than a single moving dot.
+    // Firing shows three ways at once: the node swells, the stack draws as a chain, the
+    // frames are listed. Anything that returned recently keeps a fading tint, so the walk
+    // draws a trail behind it.
     let trailAt = 0;
     if (live) {
       const onStack = live.live.has(i);
@@ -1043,7 +1040,7 @@ function showDetail(i) {
   if (N.globals_read[i].length || N.globals_written[i].length) {
     panel.appendChild(element("h2", null, "module state it touches"));
     panel.appendChild(element("p", "note",
-      "Named rather than counted: which state a function is tied to says more than how "
+      "Named, not counted: which state a function is tied to carries more than how "
       + "much of it. Reading a constant is not coupling and is not listed."));
     for (const other of N.globals_written[i]) panel.appendChild(jump(other, "writes"));
     for (const other of N.globals_read[i]) panel.appendChild(jump(other, "reads"));
@@ -1344,7 +1341,7 @@ function scene() {
 
 /** Replay to a point, keeping the call stack and a short memory of what just returned.
  *
- * Replayed from the start each time rather than stepped, which is both simpler and fast
+ * Replayed from the start each time, never stepped, which is both simpler and fast
  * enough: even the longest recording here is tens of thousands of events, and scrubbing
  * has to land anywhere anyway.
  */
@@ -1379,11 +1376,11 @@ function seek(at) {
   draw();
 }
 
-/** Ease the shown band toward the innermost frame, while the eye stays put.
+/** Ease the shown band toward the innermost frame, with the camera held still.
  *
  * Not a camera follow. At sixteen to two hundred and fifty-six calls a second that is
- * nauseating, and it throws away the mental map the fixed layout exists to give you. This
- * moves the working depth into view instead of moving the world.
+ * nauseating, discarding the mental map the fixed layout exists to give you. This moves
+ * the working depth into view, leaving the world where it is.
  */
 function followDepth() {
   if (!play.follow || flat() || !play.stack.length) return;
@@ -1550,7 +1547,7 @@ function turn(az, tilt) {
   syncView();
 }
 
-/** Ease to an angle, so the eye sees the mapping change rather than being teleported. */
+/** Ease to an angle, showing the mapping change instead of teleporting to it. */
 function glideTo(az, tilt, then) {
   const fromAz = camera.az, fromTilt = camera.tilt;
   // The short way round the circle.

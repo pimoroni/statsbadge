@@ -21,7 +21,7 @@ MonaSans-Medium.af, by tools/read_af.py:
     p       bbox x 8  y -18  w 56  h 78  advance 69
     space   bbox 0 0 0 0                 advance 25   no contours
 
-So: a capital stands 81 units, which is what look.py's sizes are in terms of. Points are
+So: a capital stands 81 units, the unit look.py's sizes are given in. Points are
 y-down from the baseline, so ink above it is negative. bbox_y is y-up and goes negative
 only for a descender. bbox_x is the left side bearing, and x is measured from the pen.
 
@@ -30,10 +30,10 @@ Coordinates and the advance are signed and unsigned bytes, so nothing may exceed
 leaves room; a font whose ascenders or advances are unusually long is reported rather than
 wrapped, because a wrapped advance draws every glyph on the spot.
 
---wide lifts that to 16 bits and records the em in the header, so the cap can stand in a
-much finer grid. That is what a font drawn at a large point size wants: at a cap of 81 a
-glyph filling a 240px screen quantises to steps of nearly two pixels. The default wide cap
-keeps the same cap-to-em ratio, so a given font_size draws the same height either way.
+--wide lifts that to 16 bits and records the em in the header, putting the cap in a much
+finer grid. A font drawn at a large point size needs that: at a cap of 81 a glyph filling
+a 240px screen quantises to steps of nearly two pixels. The default wide cap keeps the
+cap-to-em ratio, so a given font_size draws the same height either way.
 """
 
 import argparse
@@ -48,8 +48,8 @@ from make_icon_font import (  # noqa: E402
     outline_contours, pack, require_font_tools,
 )
 
-# What the badge actually draws: printable ASCII, the degree sign for a temperature, and
-# the Latin-1 letters a hostname or an OS string can arrive with. Not the whole of Latin-1:
+# What the badge draws: printable ASCII, the degree sign for a temperature, and the
+# Latin-1 letters a hostname or an OS string can arrive with. Not the whole of Latin-1:
 # every glyph is bytes on a badge, and the reference font's 310 of them cost 66KB.
 def default_codepoints():
     wanted = list(range(0x20, 0x7F))
@@ -71,21 +71,24 @@ MAX_COORD = 127
 # Eight times the reference, which keeps the cap-to-em ratio exact (648/1024 ==
 # 81/128) so a given font_size draws the same height either way.
 WIDE_CAP_HEIGHT = CAP_HEIGHT * 8
-# Half a unit, so the simplifier gives up no more than the grid the points are
-# rounded to already costs. Scaled with --cap: a tolerance means nothing except
-# against the size of the glyph it is thinning, and at a high cap a fixed one
-# leaves contours over the firmware's 512-point buffer, which drops them.
+# Half a unit, keeping what the simplifier gives up inside the rounding the point grid
+# already costs.
+
+# Scaled with --cap: a tolerance means nothing except against the size of the glyph it is
+# thinning, and at a high cap a fixed one leaves contours over the 512-point buffer.
 QUALITY = 0.5
 MAX_ADVANCE = 254
-# The glyph renderer converts one contour at a time into a fixed buffer and skips any that
-# does not fit, without a word: the glyph loses a piece, or draws nothing at all where it
-# had one contour. Per contour rather than per glyph - four contours of 200 in one glyph are
-# fine - and measured with synthetic glyphs rather than read off the constant: on a firmware
-# whose buffer is 256, 256 points draws and 257 draws zero pixels.
-#
-# picovector 39a44c3 raises the buffer to 512, so that is the ceiling here. A badge running
-# an older build stops at 256, which is why the longest contour is reported on every build:
-# a font over that limit draws with glyphs missing and nothing says so.
+# The glyph renderer converts one contour at a time into a fixed buffer and silently
+# skips any that does not fit: the glyph loses a piece, or draws nothing where it had
+# one contour.
+
+# The limit is per contour, so four contours of 200 in one glyph are fine.
+
+# Measured with synthetic glyphs, not read off the constant: on a firmware whose buffer
+# is 256, 256 points draws and 257 draws zero pixels.
+
+# picovector 39a44c3 raises the buffer to 512, the ceiling here. A badge on an older build
+# stops at 256, which is why the longest contour is reported on every build.
 MAX_CONTOUR = 512
 SAFE_CONTOUR = 256        # what an unraised firmware manages
 
@@ -112,9 +115,9 @@ def text_glyph(face, codepoint, scale, tolerance):
     face.load_char(codepoint, freetype.FT_LOAD_PEDANTIC)
 
     glyph = Glyph(codepoint)
-    # advance.x is in the units the outline is in, not 26.6: after set_char_size they are
-    # the same, and dividing by 64 as well gives every glyph an advance of about one, which
-    # draws a line of text in a single stack.
+    # advance.x is in the outline's units, not 26.6. After set_char_size the two agree,
+    # and dividing by 64 as well gives every glyph an advance of about one, stacking a
+    # line of text in one place.
     glyph.advance = round(face.glyph.advance.x / scale)
 
     source = Bounds(face.glyph.outline.get_bbox())
@@ -140,9 +143,9 @@ def text_glyph(face, codepoint, scale, tolerance):
 def check(glyphs, wide=False):
     """Anything the container cannot hold or the badge cannot draw with.
 
-    The lower bound on an advance matters as much as the upper one. A glyph with ink and
-    no advance is what a units mix-up produces, and it packs and loads perfectly happily -
-    it just draws every letter of a word in the same place.
+    The lower bound on an advance matters as much as the upper one. A units mix-up
+    produces a glyph with ink and no advance, which packs and loads perfectly happily,
+    then draws every letter of a word in the same place.
     """
     max_coord = WIDE_COORD_MAX if wide else MAX_COORD
     max_advance = 0xFFFF if wide else MAX_ADVANCE
