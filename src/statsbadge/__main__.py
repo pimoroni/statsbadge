@@ -129,6 +129,19 @@ def _extension_line(record):
     return record["name"]
 
 
+def _badge_names(paired):
+    """Each paired badge as the name it was given, with its id where that is not the name.
+
+    A badge nobody has renamed is recorded under its own id, so one name is all there is to
+    print for it.
+    """
+    shown = []
+    for badge_id, record in (paired or {}).items():
+        name = record.get("name") or badge_id
+        shown.append(name if name == badge_id else f"{name} ({badge_id})")
+    return shown
+
+
 def cmd_serve(args):
     service = build_service(args)
     service.start()
@@ -156,7 +169,7 @@ def cmd_serve(args):
     if missing:
         print("  not installed:     {} - run `statsbadge ext sync`".format(
             ", ".join(missing)))
-    paired = service.badges.list_badges()
+    paired = _badge_names(service.badges.list_badges())
     print("  paired badges:     %s" % (", ".join(paired) if paired else
                                        "none yet, run 'statsbadge pair'"))
     if announcer:
@@ -431,7 +444,8 @@ def cmd_status(args):
     if unreadable:
         print(f"  badges:     cannot be read: {unreadable}")
     else:
-        print("  badges:     {}".format(", ".join(paired) if paired else "none paired"))
+        named = _badge_names(paired)
+        print("  badges:     {}".format(", ".join(named) if named else "none paired"))
     found = extensions.describe()
     loaded = [e["name"] for e in found if e["available"]]
     print("  extensions: {}".format(", ".join(loaded) if loaded else "none"))
