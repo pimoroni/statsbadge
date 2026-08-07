@@ -2,14 +2,14 @@
 // its next poll.
 //
 // Everything on the page belongs to one badge, chosen in the header: `whose` is its id, or
-// null for the layout a badge draws before it has been given one of its own.
+// null for the layout a badge draws before anything is saved for it.
 
 const $ = (id) => document.getElementById(id)
 const pick = (selector) => document.querySelector(selector)
 const all = (selector) => [...document.querySelectorAll(selector)]
 
 /** An element, its properties, and whatever goes inside it. A key with a dash is set as an
- * attribute, since `aria-` and `data-` have no property of their own. */
+ * attribute, `aria-` and `data-` having no matching property. */
 function el(tag, props, ...children) {
   const node = document.createElement(tag)
   for (const [key, value] of Object.entries(props || {})) {
@@ -44,7 +44,7 @@ const SHAPE = {
   // One slot list holding two sorts of thing: the renderer tells a message from a counter by
   // looking at the reading, so a feed, a mention and a follower count go in one page.
   notify: { one: null, many: "fields", max: 6, label: "Lines", manyPool: "notify" },
-  // The badge's own vitals: no fields at all, since none of it comes from the host.
+  // The badge's vitals, with no fields, all of it coming from the badge itself.
   badge: { one: null, many: null, max: 0, label: "" },
 }
 
@@ -55,12 +55,12 @@ async function api(path, options) {
   return body
 }
 
-// Words that stay lowercase inside a title, the first one never being one of them.
+// Words that stay lowercase inside a title. The first word is always capitalised.
 const MINOR = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on",
                        "or", "the", "to", "with"])
 
 /** Title case for a name that arrives as a word or a slug. What an extension declared is left
- * as it declared it: those are its own strings, and "kmh" is not "Kmh". */
+ * as it declared them, "kmh" not being "Kmh". */
 function titleCase(text) {
   return String(text).replace(/[-_]+/g, " ").trim().split(/\s+/)
     .map((word, index) => (index && MINOR.has(word.toLowerCase())
@@ -83,7 +83,7 @@ function markDirty() {
 // -- tabs ------------------------------------------------------------------
 //
 // One sheet at a time, so a phone gets a page it can read and a wide screen gets boxes that
-// flow across it. The nav and the sheets are in the same order; nothing else pairs them.
+// flow across it. The nav and the sheets are in the same order, which is what pairs them.
 
 const REMEMBERED_TAB = "statsbadge.tab"
 
@@ -95,15 +95,21 @@ function showSheet(wanted) {
     else tab.removeAttribute("aria-current")
     sheets[index].hidden = index !== wanted
   })
-  try { window.localStorage.setItem(REMEMBERED_TAB, wanted) } catch (error) { /* private */ }
+  try {
+    window.localStorage.setItem(REMEMBERED_TAB, wanted)
+  } catch (error) {
+    // private mode
+  }
 }
 
 function bindTabs() {
   const tabs = all("header nav button")
   tabs.forEach((tab, index) => { tab.onclick = () => showSheet(index) })
   let opening = 0
-  try { opening = Number(window.localStorage.getItem(REMEMBERED_TAB)) } catch (error) {
-    /* private mode */
+  try {
+    opening = Number(window.localStorage.getItem(REMEMBERED_TAB))
+  } catch (error) {
+    // private mode
   }
   showSheet(tabs[opening] ? opening : 0)
 }
@@ -122,8 +128,8 @@ function availableRefs() {
 /** Numbers first, then everything else, each of them once. The numeric refs are a subset of
  * all of them, so without the Set every number appears twice. */
 function preferredRefs() {
-  // Lists are left out of even this: fmt has nothing to do with one but print it, so a grid
-  // cell handed cpu.cores shows a row of Python. A message likewise.
+  // Lists are left out of even this. fmt prints one verbatim, so a grid cell handed
+  // cpu.cores shows a row of Python. A message likewise.
   const printable = availableRefs().filter(
     (ref) => !listFields().includes(ref.split(".")[1])
              && !itemFields().includes(ref.split(".")[1]))
@@ -148,7 +154,7 @@ function itemFields() {
   return caps.item_fields || []
 }
 
-/** Refs that are a message rather than a reading: a post, a mention, a headline. */
+/** Refs holding a message and not a reading: a post, a mention, a headline. */
 function itemRefs() {
   return availableRefs().filter((ref) => itemFields().includes(ref.split(".")[1]))
 }
@@ -160,8 +166,8 @@ function notifyRefs() {
 
 /** Refs a gauge can place a needle on: a percentage, or something with a top end.
  *
- * Being a number is not enough. Uptime is a number and a ring drawn from it is empty whatever
- * the machine has been doing, because nothing says what a full one would be. */
+ * Being a number is not enough. Uptime is a number, and a ring drawn from it stays empty
+ * whatever the machine has been doing, there being no full scale to fill against. */
 function gaugeRefs() {
   const percent = caps.percent_fields || []
   const scaled = Object.keys(caps.full_scale || {})
@@ -174,7 +180,7 @@ function gaugeRefs() {
 /** Refs the host keeps a history ring for, which is what a graph needs to say anything.
  *
  * Without one the page plots the live value twice and draws a flat line, which looks like a
- * reading that never changes rather than one nobody is recording. */
+ * reading that holds still, as against one nobody is recording. */
 function seriesRefs() {
   const kept = caps.graphed || []
   const withHistory = numericRefs().filter((ref) => kept.includes(ref))
@@ -186,9 +192,9 @@ function listRefs() {
   return availableRefs().filter((ref) => listFields().includes(ref.split(".")[1]))
 }
 
-// Which pool each slot draws from. "gauge" needs a top end, "series" only needs to be a number
-// since it scales itself from the data, "list" wants one value per element, "notify" takes a
-// message or a number, and "any" prints whatever it is given.
+// Which pool each slot draws from. "gauge" needs a top end, "series" only a number since it
+// scales itself from the data, "list" one value per element, "notify" a message or a number,
+// and "any" prints whatever it is given.
 const POOLS = {
   gauge: gaugeRefs,
   series: seriesRefs,
@@ -201,8 +207,8 @@ function groupLabel(group) {
   return (caps.group_labels || {})[group] || group
 }
 
-// What the sources this host measures itself with are listed under. Not "System", which is
-// what the `sys` group is already called: that would head a list with its own last entry.
+// What the sources this host measures itself with are listed under. Held apart from
+// "System", the `sys` group's name, which would head a list with its last entry.
 const HOST_SOURCE = "This host"
 
 function sourceLabel(group) {
@@ -217,9 +223,9 @@ function fieldLabel(ref) {
 
 /** Two dropdowns: which source, then which of its readings.
  *
- * One list of every reading was navigable while a host measured itself and nothing else. An
- * extension contributes a group per thing it watches - a domain apiece, for an account with
- * six of them - so the source is picked first and the metric list is only ever that source's.
+ * One list of every reading was navigable while a host only measured itself. An extension
+ * contributes a group per thing it watches, a domain apiece for an account with six of
+ * them, so the source is picked first and the metric list is only ever that source's.
  * Returned as a fragment, so the row's flex layout still reaches the selects. */
 function refSelect(value, refs, onChange) {
   // Deduplicated here as well as by the caller: a repeated option is impossible to tell apart
@@ -234,9 +240,8 @@ function refSelect(value, refs, onChange) {
     byGroup.get(group).push(ref)
   }
 
-  // Grouped under whoever provides them, since an extension watching six domains would
-  // otherwise bury this host's own readings in a list of names with nothing saying what
-  // they are.
+  // Grouped under whoever provides them. An extension watching six domains would
+  // otherwise bury this host's readings in a list of unexplained names.
   const byOwner = new Map()
   for (const group of byGroup.keys()) {
     const owner = sourceLabel(group)
@@ -254,7 +259,7 @@ function refSelect(value, refs, onChange) {
                                 selected: group === chosen })))))
 
   const select = el("select", { "aria-label": "Reading" })
-  // Told which ref rather than reading it back off the select, so the first paint does not
+  // Told which ref, and not reading it back off the select, so the first paint does not
   // depend on `value` already reflecting the option marked selected.
   const fill = (group, ref) => {
     select.replaceChildren(...(byGroup.get(group) || []).map(
@@ -285,9 +290,9 @@ function renderPages() {
   refreshPruned()
 }
 
-/** The field slots a kind has. An extension's page declares its own, because only its renderer
- * knows whether it reads `fields` at all - the clock face draws from its groups and ignores
- * them, so offering seven pickers was offering seven controls that did nothing. */
+/** The field slots a kind has. An extension's page declares them, since only its renderer
+ * reads `fields` at all. The clock face draws from its groups and ignores them, so offering
+ * seven pickers offered seven controls that did nothing. */
 function shapeFor(kind) {
   if (SHAPE[kind]) return SHAPE[kind]
   const declared = (caps.extension_pages || []).find((page) => page.kind === kind)
@@ -308,8 +313,8 @@ function pageCard(page, index) {
   const open = expanded.has(page.id)
   const settings = (caps.extension_page_settings || {})[page.kind] || []
 
-  // A page starts out titled after its kind, and an extension's ships titled after itself, so
-  // the name is only worth a second reading of once somebody has changed it.
+  // A page starts out titled after its kind, and an extension's ships titled after itself,
+  // so the name is only worth a second look once somebody has edited it.
   const titled = el("span", { className: "given" })
   const showTitle = () => {
     const given = (page.title || "").trim()
@@ -368,10 +373,11 @@ function pageCard(page, index) {
 /** Drag one of `items` to another place in it.
  *
  * The tag names the list a drag came from. A page card is draggable and so are the rows
- * inside it, so without one a row dropped on its own card would reorder the pages; the
- * events are stopped on the way up for the same reason. `along` is the axis the list runs,
- * which decides both which half of an item counts as before it and which edge is marked,
- * and a `handle` is what has to be held for the drag to start at all.
+ * inside it, and without one a row dropped on its card would reorder the pages. The events
+ * are stopped on the way up for the same reason.
+ *
+ * `along` is the axis the list runs, setting which half of an item counts as before it and
+ * which edge is marked. A `handle` has to be held for the drag to start.
  */
 function reorderable(node, items, index, { tag, along, handle }) {
   node.draggable = !handle
@@ -397,7 +403,7 @@ function reorderable(node, items, index, { tag, along, handle }) {
       ? event.clientX < box.left + box.width / 2
       : event.clientY < box.top + box.height / 2) ? "before" : "after"
   }
-  // Only on the way out of the whole item: moving over a select inside it is a leave too.
+  // Only on the way out of the item. Moving over a select inside it is a leave too.
   node.ondragleave = (event) => {
     if (!node.contains(event.relatedTarget)) delete node.dataset.over
   }
@@ -466,7 +472,7 @@ function addSlot(page, shape) {
 }
 
 /** The two ways to move a page that are not dragging it. The list reads across and then
- * down, so left and right are the whole of it. */
+ * down, so left and right cover it. */
 function moveButtons(index) {
   return [["←", "Move left", index - 1, index === 0],
           ["→", "Move right", index + 1, index === config.pages.length - 1]]
@@ -486,8 +492,8 @@ function newPage(kind) {
   const suffix = Date.now().toString(36).slice(-4)
   const offered = (caps.extension_pages || []).find((page) => page.kind === kind)
   if (offered) {
-    // An extension knows its own page: take the fields and title it shipped with, since only
-    // its badge module knows what shape they go in.
+    // An extension declares its page: take the fields and title it shipped with, the
+    // shape being its badge module's business.
     return { ...offered, id: `${offered.id || kind}${suffix}` }
   }
   const shape = SHAPE[kind]
@@ -503,7 +509,7 @@ function newPage(kind) {
 }
 
 /** Add the installed extensions' pages to the kind picker, which lists the built-ins in
- * groups of its own. */
+ * groups it declares. */
 function offerExtensionPages() {
   const picker = pick("main form select")
   const offered = (caps.extension_pages || []).filter(
@@ -525,16 +531,18 @@ async function refreshPruned() {
     node.textContent = "Not shown on the badge, because this host reports no data for "
       + `them: ${dropped.join(", ")}`
     node.hidden = !dropped.length
-  } catch (error) { /* advisory */ }
+  } catch (error) {
+    // advisory
+  }
 }
 
 // -- extension settings ----------------------------------------------------
 
 /** A box per installed extension, titled with its name, holding whatever it can be told.
  *
- * Every discovered one, not only those with settings: an extension that asks to be told
- * nothing had nothing in the UI at all, and one that failed to import was invisible until a
- * page it was meant to draw did not appear. */
+ * Every discovered one, and not only those with settings. An extension that asks to be
+ * told nothing still gets a box, and one that failed to import is reported here instead of
+ * showing up as a page that never draws. */
 function renderSettings() {
   const schema = caps.extension_settings || {}
   const installed = caps.extensions || []
@@ -559,7 +567,7 @@ function extensionBox(extension, settings) {
     const parts = []
     if (extension.version) parts.push(extension.version)
     if (extension.provides.length) parts.push(extension.provides.join(", "))
-    if (extension.badge_module) parts.push("draws its own page")
+    if (extension.badge_module) parts.push("draws a page of its own")
     state.textContent = parts.join(" · ")
   }
 
@@ -598,7 +606,7 @@ const editingSecrets = new Set()
 
 /** The API keys, masked behind a button.
  *
- * Masked rather than hidden, because "not set" and "set to the wrong one" have to be told
+ * Masked and not hidden, since "not set" and "set to the wrong one" have to be told
  * apart, and the first few characters are what somebody checking would recognise. */
 function secretsBlock(name, stored, secrets) {
   const open = editingSecrets.has(name)
@@ -660,7 +668,7 @@ function settingRow(stored, setting, options) {
     input = el("input", { type: "text", id,
                           value: current === null || current === undefined ? "" : current })
     if (setting.secret) {
-      // Shown in full, since the whole of asking to edit these is to read one back and replace
+      // Shown in full, editing these being about reading one back and replacing
       // it. Kept out of autofill and the spellchecker, neither of which has any business with
       // a token.
       input.autocomplete = "off"
@@ -696,7 +704,7 @@ function renderLook() {
   bindRange("interval", "interval_ms", (value) => `${value} ms`)
   bindRange("brightness", "brightness", (value) => `${value}%`, 100)
   bindRange("points", "graph_points", (value) => `${value}`)
-  // Zero is off, so the readout says so rather than showing a time nothing happens at.
+  // Zero is off, and the readout says so instead of showing a time nothing happens at.
   bindRange("idle", "idle_advance_s", (value) => (value === "0" ? "off" : `${value}s idle`))
   bindRange("advance", "advance_every_s", (value) => `${value}s`)
 
@@ -748,7 +756,7 @@ function bindCheck(id, key) {
   input.onchange = () => { config[key] = input.checked; markDirty() }
 }
 
-/** Off, the theme's own level, or a reading for the lights to follow. The stored value is
+/** Off, the theme's level, or a reading for the lights to follow. The stored value is
  * false, true, or a field ref, so the option values carry it directly. */
 function renderCaseLights() {
   const options = [["off", "Off"], ["theme", "Follow the Theme"]]
@@ -772,8 +780,8 @@ function renderCaseLights() {
 
 function renderButtons() {
   // What the badge answers itself, then what it asks this host to run, under the heading
-  // the host asks for. A group exists only once something is in it, so no heading is drawn
-  // over nothing.
+  // the host asks for. A group exists once something is in it, so every heading has rows
+  // under it.
   const groups = new Map()
   const offer = (heading, option) => {
     if (!groups.has(heading)) groups.set(heading, [])
@@ -805,12 +813,12 @@ function renderButtons() {
 
 // -- the theme preview ----------------------------------------------------
 //
-// The palette comes from the host, for every theme and not only the tinted ones: it is derived
-// there for those, so what the preview shows and what reaches the badge cannot drift apart,
-// and the browser needs no colour arithmetic of its own.
+// The palette comes from the host, for every theme and not only the tinted ones. Deriving
+// there keeps the preview and what reaches the badge from drifting apart, and the browser
+// needs no colour arithmetic.
 
 // Which preview request is the current one. Clicking along the swatches starts several, and
-// they can come back in any order: without this the last reply wins rather than the last
+// they can come back in any order. Without this the last reply wins, not the last
 // click, and the panel ends up showing a colour nobody chose.
 let previewWanted = 0
 
@@ -829,7 +837,7 @@ function familyOf(accent) {
 function renderTint() {
   const tinted = !!(caps.tinted || {})[config.theme]
   // How the second accent is picked, which only a derived palette works out: a written-down
-  // one either names its own or has none.
+  // one either names a second accent or has none.
   for (const node of all("[data-tint]")) node.hidden = !tinted
 
   const second = $("accentb")
@@ -913,8 +921,8 @@ async function preview() {
 const PV_SWEEP = 0.75                   // of a whole turn, the gap centred on the bottom
 const PV_READING = 0.635                // the reading printed inside it
 
-// How faint the part past the reading is when the whole ramp is shown, matching
-// draw.TRACK_ALPHA on the badge. A gradient there is drawn over the page rather than
+// How faint the part past the reading is when the full ramp is shown, matching
+// draw.TRACK_ALPHA on the badge. A gradient there is drawn over the page and not
 // composited, so the colours are mixed towards it here.
 const PV_TRACK_ALPHA = 32 / 255
 
@@ -929,8 +937,8 @@ function paintDial(dial, palette, fill) {
 
   const stops = []
   if (fill === "ramp") {
-    // The whole ramp laid round the arc, as the conical gradient does it: a colour's place is
-    // its place on the ramp, so the sweep ends at the reading's own colour and the rest of the
+    // The full ramp laid round the arc, as the conical gradient does it. A colour sits at
+    // its place on the ramp, so the sweep ends at the reading's colour and the rest of the
     // ramp shows faintly beyond it.
     for (const [position, parts] of palette.ramp) {
       if (position < PV_READING) stops.push(`${rgb(parts)} ${at(position * PV_SWEEP)}`)
@@ -948,8 +956,8 @@ function paintDial(dial, palette, fill) {
   }
   stops.push(`${rgb(palette.grid)} ${at(PV_SWEEP)}`, `${bg} ${at(PV_SWEEP)}`)
   // Built here and not in the sheet: a stop list cannot be handed to a gradient through a
-  // custom property and then given positions of its own - the declaration parses as invalid
-  // and the whole gauge disappears.
+  // custom property and then given positions: the declaration parses as invalid and the
+  // gauge disappears entirely.
   dial.style.background = `radial-gradient(closest-side, ${bg} 74%, transparent 75%), `
     + `conic-gradient(from 225deg, ${stops.join(", ")})`
 }
@@ -969,7 +977,7 @@ function rampAt(stops, at) {
 
 // -- which badge -----------------------------------------------------------
 //
-// One layout per badge, and a default for a badge that has not been given its own. The picker
+// One layout per badge, and a default for a badge with nothing saved. The picker
 // in the header says which of them the page is editing; `null` is the default.
 
 const REMEMBERED = "statsbadge.whose"
@@ -986,7 +994,11 @@ function badgeName(id) {
 /** Which badge to open on: the one last edited if it is still paired, else the first. */
 function pickBadge() {
   let last = null
-  try { last = window.localStorage.getItem(REMEMBERED) } catch (error) { /* private mode */ }
+  try {
+    last = window.localStorage.getItem(REMEMBERED)
+  } catch (error) {
+    // private mode
+  }
   if (last && badges[last]) return last
   return Object.keys(badges)[0] || null
 }
@@ -995,7 +1007,9 @@ function remember(id) {
   try {
     if (id) window.localStorage.setItem(REMEMBERED, id)
     else window.localStorage.removeItem(REMEMBERED)
-  } catch (error) { /* nothing to remember it in */ }
+  } catch (error) {
+    // nowhere to remember it
+  }
 }
 
 function renderWhose() {
@@ -1047,7 +1061,7 @@ async function forgetBadge(id) {
  *
  * An extension keys what it does per page by page id - which city a clock page shows - so two
  * badges must not carry the same one. Done where a badge stops drawing the default and gets a
- * layout of its own, and derived from the badge id so switching back and forth is stable. */
+ * layout stored, and derived from the badge id so switching back and forth is stable. */
 function ownIds(pages, badgeId) {
   const tag = badgeId.slice(0, 4)
   return pages.map((page) => (String(page.id).endsWith(`-${tag}`)
@@ -1069,7 +1083,7 @@ function renderBadges() {
  * done to it. The one the rest of the page is configuring is marked. */
 function badgeBox(id) {
   // A badge nobody has named announces itself by its id, so there is no name to show and
-  // the field is left empty rather than filled with the id under the id.
+  // the field is left empty, and not filled with the id under the id.
   const named = badges[id].name && badges[id].name !== id ? badges[id].name : ""
   const nameId = `badge${++controlSerial}`
   const name = el("input", { type: "text", id: nameId, value: named,
@@ -1118,9 +1132,9 @@ function badgeBox(id) {
   return box
 }
 
-/** Saved on its own and not with the layout: what a badge is called is not something the
- * badge draws, so there is no revision to wait for. The list of badges is deliberately not
- * redrawn - the field being typed in is inside it. */
+/** Saved apart from the layout, since what a badge is called is nothing the badge draws,
+ * so there is no revision to wait for. The list of badges is left alone, the field being
+ * typed in being inside it. */
 async function rename(id, wanted) {
   const result = await api(`/api/badges/${id}`, {
     method: "PUT",
@@ -1235,16 +1249,15 @@ async function watchPairing(announce) {
 const PERCENT = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"]
 
 // Everything on a frame that is not a group of readings, which is collect.FRAME_SCALARS and
-// held to it by a test. `peaks` is shown, being useful to see, but it is scale rather than a
+// held to it by a test. `peaks` is shown, being useful to see, but it is scale and not a
 // reading and comes and goes with what has been measured, so it is left out of the signature
 // below.
 const FRAME_SCALARS = ["v", "t", "seq", "slow_rev"]
 const FRAME_META = FRAME_SCALARS.concat(["peaks"])
 
-// Which groups the last frame carried. A source that finds out what it can report only once it
-// is running - the Cloudflare one lists an account's domains after it is given a token - shows
-// up here before the pickers know anything about it, and this is already being fetched every
-// second, so it costs nothing to notice.
+// Which groups the last frame carried. A source that finds out what it can report only
+// once it is running, the Cloudflare one listing an account's domains after it is given a
+// token, shows up here first. This is already fetched every second, so noticing is free.
 let liveGroups = ""
 
 async function renderLive() {
@@ -1276,7 +1289,7 @@ async function renderLive() {
   fillGroups($("live"), own)
   fillGroups($("from-extensions"), theirs)
 
-  // The scale a plot is drawn against rather than a reading, so it sits with what this host
+  // The scale a plot is drawn against, and not a reading, so it sits with what this host
   // is, not with what it is doing.
   const peaks = $("peaks")
   const measurements = frame.peaks && Object.keys(frame.peaks).length
@@ -1302,7 +1315,7 @@ function fillGroups(node, groups) {
   node.hidden = !groups.length
 }
 
-// The most of a reading with a shape of its own that goes on a line. The whole of it is on
+// The most of a shaped reading that goes on a line. All of it is on
 // the row's tooltip.
 const SHOWN = 48
 
@@ -1348,7 +1361,7 @@ function readingList(item) {
 
 function renderSources() {
   $("sources").querySelector("ul").replaceChildren(...caps.sources.map((source) => {
-    // A fault goes underneath what a source provides rather than in place of it, and one it
+    // A fault goes underneath what a source provides and not in place of it, and one it
     // has recovered from is a footnote: an upstream 503 an hour ago should not still be a
     // source's whole description.
     const row = el("li", { className: source.last_fault ? "faulty" : null,
@@ -1367,9 +1380,9 @@ function renderSources() {
 
 /** What an extension offers, as one string, so a change in it can be noticed cheaply. */
 function capsSignature() {
-  // What each source is complaining about, and not how many times: a source failing every poll
-  // counts one a second, and a signature that moved with it would redraw the whole page -
-  // `/api/preview` and all - once a second for as long as it was broken.
+  // Each source's current fault, and not how many it has had. One failing every poll
+  // counts one a second, and a signature that moved with it would redraw every field,
+  // `/api/preview` and all, once a second for as long as it was broken.
   const faults = (caps.sources || []).map((source) => [source.name, source.last_fault])
   return JSON.stringify([caps.available, caps.extension_settings, caps.graphed,
                          caps.group_source, caps.extension_pages, faults])
@@ -1377,9 +1390,9 @@ function capsSignature() {
 
 /** Refetch capabilities and redraw if what the host offers has changed.
  *
- * An extension does not always know what it provides at startup: a token pasted in the browser
- * is what lets the Cloudflare one list an account's domains, and it lists them on a thread of
- * its own a moment after the save lands. */
+ * An extension may not have its groups at startup. A token pasted in the browser is what
+ * lets the Cloudflare one list an account's domains, and it lists them on a thread a moment
+ * after the save lands. */
 async function refreshCaps() {
   // Never over unsaved work: these renderers rebuild their inputs from `config`, and a redraw
   // part way through typing an API key moves the caret out from under it.
@@ -1401,8 +1414,8 @@ async function refreshCaps() {
 /** Look again for a while, since what a save sets off does not finish inside the reply.
  *
  * The Cloudflare source is handed its token synchronously and then goes to the network, so the
- * domains land seconds later. Backing off rather than polling: this is watching for one thing
- * to arrive, not keeping a display current. */
+ * domains land seconds later. Backing off and not polling, since this watches for one
+ * thing to arrive and does not keep a display current. */
 async function refreshCapsSoon(delays = [400, 1200, 3000, 6000]) {
   for (const delay of delays) {
     await new Promise((wake) => setTimeout(wake, delay))
@@ -1414,7 +1427,7 @@ async function refreshCapsSoon(delays = [400, 1200, 3000, 6000]) {
 
 async function save() {
   try {
-    // A badge saving for the first time stops drawing the default and gets pages of its own.
+    // A badge saving for the first time stops drawing the default and gets its own pages.
     if (whose && badges[whose] && !badges[whose].configured) {
       config.pages = ownIds(config.pages, whose)
     }

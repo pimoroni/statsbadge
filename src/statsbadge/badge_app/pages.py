@@ -3,7 +3,7 @@
 A page is data: `{"kind": "dial", "field": "cpu.pct", "readouts": [...]}`. The kinds
 here are the vocabulary, so rearranging a display is a config change the badge picks
 up on its next poll with nothing installed. An extension that needs to draw something
-these cannot ships a module of its own and registers it in `EXTRA`.
+these cannot ships a module and registers it in `EXTRA`.
 """
 
 import time
@@ -16,7 +16,7 @@ import look
 EXTRA = {}
 
 # Kinds that need a frame even when no new data arrived, because something on them
-# moves on its own - a sweeping clock hand, an animation. Everything else is redrawn
+# moves unprompted - a sweeping clock hand, an animation. Everything else is redrawn
 # only when a poll lands, which is once a second.
 ANIMATED = set()
 
@@ -29,16 +29,13 @@ ANIMATE = False
 # Whether a plot moves between readings, which is a separate choice from a gauge sweeping: a
 # graph scrolls and a sparkline slides its points along y. Off by default, as sweeping is.
 PLOT_ANIMATION = False
-# How far back in the series "now" is, in samples, for the frame being drawn: 0 when a reading
-# has just landed, 1 when the next is due, and more when the badge polls slower than the host
-# samples and several arrive at once. From the age the host sent with the series plus the time
-# since it arrived, so it owes nothing to how often this badge polls, when a reply happened to
-# arrive, or whether one was missed. A graph turns it into an x offset and a sparkline into a y
-# one; both read the same number.
+# How far back in the series "now" is, in samples. 0 on a fresh reading, 1 when the next
+# is due, more when several arrive at once. From the host's age plus the time since, never
+# this badge's poll rate.
 BEHIND = 0.0
-# How far apart the points are, as the host reports it; how many of them one poll of this badge
-# covers, which is both numbers divided and nothing estimated; and how far behind a plot will
-# draw before it gives up and shows the gap instead.
+# How far apart the points are, as the host reports it. How many of them one poll of this
+# badge covers, being the two numbers divided. How far behind a plot draws before it gives
+# up and shows the gap.
 EVERY_MS = 1000
 LEAD = 1
 BEHIND_MAX = 12.0
@@ -49,7 +46,7 @@ def note_spacing(every_ms, interval_ms):
     """How far apart the host's points are, and how many of them a poll of ours covers.
 
     A badge polling slower than the host samples is handed several at a time, and a plot has to
-    keep room on its right for them: exactly `interval / every` of them, both known rather than
+    keep room on its right for them: exactly `interval / every` of them, both known and not
     measured. Getting this from observed gaps is what made a plot walk at the wrong pace.
     """
     global EVERY_MS, LEAD
@@ -58,14 +55,14 @@ def note_spacing(every_ms, interval_ms):
     LEAD = 1 if covered < 1 else (12 if covered > 12 else covered)
 
 
-# Rings that are not on the collector's clock, as {"group.field": every_ms}. A source may
-# answer for its own history - Cloudflare reports by the hour - and a plot of one cannot be
-# walked by a number worked out from a spacing it is not on. Set from the history reply.
+# Rings off the collector's clock, as {"group.field": every_ms}. A source may answer for
+# its own history, Cloudflare reporting by the hour, and a plot of one cannot be walked at
+# the collector's spacing. Set from the history reply.
 SPACING = {}
 
 
 def note_series_spacing(spacing):
-    """Which rings are on a clock of their own, from the history reply's `spacing`."""
+    """Which rings are on a separate clock, from the history reply's `spacing`."""
     SPACING.clear()
     for key, entry in (spacing or {}).items():
         every = int((entry or {}).get("every_ms") or 0)
@@ -84,18 +81,17 @@ def walkable(refs):
     return not any(ref in SPACING for ref in refs)
 
 
-# The kinds that draw a series, and so want one fetched for them.
+# The kinds that draw a series, and so have one fetched for them.
 PLOTS = ("graph", "spark", "trend")
-# The ones that move between readings, which is not all of them: a sparkline is 22px tall and
-# a sample of it is 5px, so it is drawn still and only the value beside it changes.
+# The ones that move between readings. A sparkline is 22px tall and a sample of it 5px, so
+# it is drawn still and only the value beside it changes.
 SCROLLS = ("graph", "trend")
-# How long a sweep takes. A reading lands once a second, so this is the fraction of that
-# second the needle is moving for; long enough to read as motion, short enough that the
-# gauge is standing at the measurement most of the time.
+# How long a sweep takes, as a fraction of the second between readings. Long enough to
+# show as motion, short enough that the gauge stands at the measurement most of the time.
 SWEEP_MS = 350
 _sweeps = {}
-# Whether the frame just drawn had a sweep in it, which is how the loop knows to ask for
-# another. Set by `_swept` while drawing and cleared by `render`.
+# Whether the frame just drawn had a sweep in it, which is what asks for another. Set by
+# `_swept` while drawing and cleared by `render`.
 moving = False
 
 
@@ -112,8 +108,8 @@ def _swept(ref, fraction):
     """`fraction`, eased from wherever this gauge already stood.
 
     Keyed on the field, or on the field and a position where a page draws a row of them.
-    One page is drawn at a time and a turn forgets the table, so a gauge only ever meets its
-    own history.
+    One page is drawn at a time and a turn clears the table, so a gauge only ever meets
+    the history behind it.
     """
     global moving
     if not ANIMATE or fraction is None:
@@ -133,8 +129,7 @@ def _swept(ref, fraction):
     return sweep.now
 
 # What the host calls a group an extension declared, from the layout: {"cf_pinout_xyz":
-# "pinout.xyz"}. Only those, since the badge has its own shorter names for the model's own
-# and a key like this one cannot be turned back into what it was named after.
+# "pinout.xyz"}. Only those, the badge having shorter names for the model's groups.
 LABELS = {}
 
 # Nicer names than the raw field, where the raw field reads badly.
@@ -156,7 +151,7 @@ NAMES = {
     "sys.uptime_s": "UPTIME", "sys.arch": "ARCH",
 }
 
-# Full-scale for a field that is not a percentage, so a bar knows where the end is.
+# Full-scale for a field that is not a percentage, which is where a bar ends.
 SCALE = {
     "temp": 100.0, "power": 250.0, "package_w": 150.0, "rpm": 6000.0,
     "freq": 6000.0, "clock": 3000.0,
@@ -171,31 +166,29 @@ PERCENT = ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores")
 def is_percent(field):
     """Whether a reading is already 0-100, so nothing has to say where full is.
 
-    By suffix as well as by name: the model's own percentages carry `_pct` and it is the
-    convention a source adding a group of its own is asked to follow, there being nothing
+    By suffix as well as by name. The model's percentages carry `_pct`, and a source
+    adding a group is asked to follow the convention, there being nothing
     else the badge could read it off.
     """
     return field in PERCENT or field.endswith("_pct")
 
-# Fields where a high reading is the good one, so the ramp is read backwards to colour them.
-# The ramp runs calm to alarming and almost everything here is a load or a temperature, but a
-# battery at 100% is not a machine in trouble.
+# Fields where a high reading is the good one, and the ramp is walked backwards. It runs
+# calm to alarming, which suits a load or a temperature but inverts a battery.
 GOOD_HIGH = ("battery_pct",)
 
 
 def severity_of(ref, fraction):
-    """Where a reading sits on the ramp, which is not always where it sits on its own scale.
+    """Where a reading sits on the ramp, which can differ from where it sits on its scale.
 
-    Only the colour: a gauge's sweep and a bar's length are the reading itself.
+    Only the colour. A gauge's sweep and a bar's length are the reading itself.
     """
     if fraction is None:
         return None
     return 1.0 - fraction if ref.split(".")[-1] in GOOD_HIGH else fraction
 
 
-# A unit on the end of a field name is not part of what the field is called. Every built-in
-# carrying one is named in NAMES, so this is for a group that arrived with an extension:
-# the reading is drawn with its unit after it, and "BYTES BPS 22KB/s" says it twice.
+# A unit on the end of a field name is stripped for the label. Every built-in carrying one
+# is in NAMES, so this covers an extension's group. "BYTES BPS 22KB/s" says it twice.
 UNIT_SUFFIXES = ("_bps", "_mb", "_pct")
 
 
@@ -217,7 +210,7 @@ def merge_slow(frame, held):
     fetched by the host once a minute - is sent only when it changes, so every frame after
     that one arrives without it. `held` is what came last, grafted back on here.
 
-    `peaks` is the one key merged rather than replaced: a peak scales the reading it belongs
+    `peaks` is the one key merged and not replaced. A peak scales the reading it belongs
     to, so the slow ones travel with the slow readings while the rest arrive every frame.
     """
     for key, value in held.items():
@@ -247,9 +240,9 @@ def value_of(frame, ref):
 def fraction_of(ref, value, page=None, frame=None):
     """Where a value sits on 0-1, for a gauge.
 
-    A rate is scaled by the busiest the host has seen it, which it sends with the frame:
-    throughput has no full scale of its own, and the fixed one this used to use reads as
-    pegged on a fast link and as idle on a slow one.
+    A rate is scaled by the busiest the host has seen it, which travels with the frame.
+    Throughput has no full scale, and a fixed one shows as pegged on a fast link and idle
+    on a slow one.
     """
     if value is None or isinstance(value, (str, bool)):
         return None
@@ -340,7 +333,7 @@ def behind_at(age_ms, since_ms):
 
     The host says how old the newest point was when it composed the reply, so nothing has to be
     aligned between two clocks and the only error is the trip back. Capped, so a host that has
-    stopped answering leaves a plot at the edge of what it can honestly draw.
+    stopped answering leaves a plot at the edge of what the readings support.
     """
     behind = (age_ms + since_ms) / float(EVERY_MS or 1000)
     if behind < 0.0:
@@ -351,7 +344,7 @@ def behind_at(age_ms, since_ms):
 def _walk(refs=()):
     """How far back in the series a graph should draw, or None to draw it where it stands.
 
-    None rather than 0.0 when nothing is animating: a plot that moves needs room for the
+    None and not 0.0 when nothing is animating. A plot that moves needs room for the
     samples still coming in, and one that never will should use the whole of its box. And
     none for a plot whose series are not on the collector's clock, `BEHIND` being counted
     in its samples.
@@ -364,7 +357,7 @@ def _walk(refs=()):
 def _swept_lanes(ref, values, maximum):
     """Where each bar of a row should be drawn to, or None to draw them at their readings.
 
-    A lane is a gauge of its own, keyed by its position: sixteen cores are sixteen needles
+    A lane is a gauge in itself, keyed by its position. Sixteen cores are sixteen needles
     that happen to share a field, and one core going quiet says nothing about the next.
     """
     if not ANIMATE or not maximum:
@@ -412,10 +405,9 @@ GROUP_ICONS = {"cpu": "c", "gpu": "g", "mem": "m", "disk": "d", "net": "n",
                "power": "p", "fans": "f", "sys": "y"}
 FIELD_ICONS = {
     "pct": "l", "temp": "t", "freq": "s", "clock": "s", "procs": "r",
-    # The same two arrows point opposite ways for a link and for a disk, because what they
-    # are drawn going into is not the same thing: the machine, for a network, so up leaves
-    # it - and the disk itself, for storage, so a write goes down into it and a read comes
-    # back up out.
+    # The same two arrows point opposite ways for a link and for a disk. A network is
+    # drawn against the machine, so up leaves it. Storage is drawn against the disk, so a
+    # write goes down into it and a read comes back up.
     "up_bps": "u", "down_bps": "o", "write_bps": "o", "read_bps": "u",
     "battery_pct": "b", "package_w": "p", "power": "p", "rpm": "f",
     "mem_pct": "m", "swap_pct": "e", "fan_pct": "f",
@@ -435,8 +427,8 @@ def _dials(page, frame, _history, theme):
     refs = page.get("fields", [])[:4]
     groups = [ref.split(".")[0] for ref in refs]
     # Name each gauge by whatever tells it apart from the others. A page of one reading
-    # per subsystem wants CPU and GPU, where NAMES would call both of them LOAD; a page
-    # of several readings from one subsystem wants LOAD and TEMP.
+    # per subsystem needs CPU and GPU, where NAMES would call both LOAD. A page of several
+    # readings from one subsystem needs LOAD and TEMP.
     by_group = len(set(groups)) == len(groups)
     entries = []
     for ref, group in zip(refs, groups):
@@ -462,7 +454,7 @@ def _text(page, frame, _history, theme):
 def _notify(page, frame, _history, theme):
     """Messages and counters, sorted out by what the reading turned out to be.
 
-    One slot list rather than two, because the kinds of thing on this page are told apart by
+    One slot list and not two, the kinds of thing on this page being told apart by
     looking: a message is a dict carrying `text`, and everything else is a number. That is
     what lets one page kind be a feed, a mention, a headline and a follower count, in
     whatever mixture somebody puts in it.
@@ -489,7 +481,7 @@ def _asked(call, fallback=None):
 
 
 def _size(value):
-    """Bytes as the badge's own scale: MB past a megabyte, KB under it."""
+    """Bytes on the badge's scale: MB past a megabyte, KB under it."""
     if value is None:
         return "--"
     if value >= 1024 * 1024:
@@ -516,10 +508,11 @@ def _used_of(volume):
     return f"{_size(used)} of {_size(total)}", used / total
 
 
-# What the badge is, as against how it is doing: the board, the firmware, the clock and the
-# uid, none of which can move. Read once, because `import os` and `import machine` are ~40ms a
-# call on this firmware and are not cached the way `math` and `gc` are - every one walks
-# sys.path again - so they belong nowhere near a frame.
+# What the badge is, as against how it is doing. The board, the firmware, the clock and
+# the uid, none of which can move.
+#
+# Read once: `import os` and `import machine` are ~40ms a call here, walking sys.path
+# every time.
 _fixed = None
 
 
@@ -539,11 +532,9 @@ def _fixed_readings():
     return _fixed
 
 
-# Two of the badge's own readings are dear. Measured on the board: gc.mem_free walks the
-# allocation table of 8MB of PSRAM and takes 44ms, and littlefs walks its own metadata to say
-# how full it is, 3.7ms; the rest are under half a millisecond each. So the dear ones are taken
-# on a timer and the cheap ones every frame. Three seconds, because none of them is something
-# you watch move - a page of them redrawn on the poll is already 1Hz.
+# Two of the badge's readings are dear, measured on the board. gc.mem_free walks 8MB of
+# PSRAM at 44ms and littlefs walks its metadata at 3.7ms; the rest are under half a
+# millisecond. So those two are taken on a timer, none of them being something you watch.
 SLOW_EVERY_MS = 3000
 _slow = None
 _slow_at = 0
@@ -575,12 +566,12 @@ def _slow_readings():
 
 
 def _badge_page(_page, _frame, _history, theme):
-    """What the badge knows about itself, which is nothing the host has an opinion on.
+    """The badge's own readings, which the host has no part in.
 
     The only page whose readings do not come from the frame. It is still redrawn on a poll
-    like every other page, because these are numbers rather than motion: a bar creeping as
-    memory is used reads the same at one frame a second as at forty-five, and this page would
-    otherwise be the app's most expensive one for the sake of a digit.
+    like every other page, these being numbers and not motion. A bar creeping as memory is
+    used looks the same at one frame a second as at forty-five, and this page would
+    otherwise be the app's most expensive for the sake of a digit.
     """
     battery = _asked(badge.battery_level)
     volts = _asked(badge.battery_voltage)
@@ -622,10 +613,11 @@ def _badge_page(_page, _frame, _history, theme):
 def group_name(ref):
     """What to call a reading's group.
 
-    The host's name for it where one travelled with the layout, which is how an extension's
-    group comes to read as gadgetoid.com and not CF_GADGETOID_COM: the key is all the badge
-    has, and the dots that made it a domain cannot be put back. Otherwise the key, in the
-    case the rest of the furniture is in.
+    The host's name for it where one travelled with the layout, which gets an extension's
+    group drawn as gadgetoid.com and not CF_GADGETOID_COM. The key is all the badge has,
+    and the dots that made it a domain cannot be put back.
+
+    Otherwise the key, in the case the rest of the furniture is in.
     """
     group = ref.split(".")[0]
     return LABELS.get(group) or group.upper()
@@ -672,7 +664,7 @@ def _rings(page, frame, _history, theme):
         value = value_of(frame, ref)
         field = ref.split(".")[-1]
         fraction = fraction_of(ref, value, page, frame)
-        # Coloured by its own reading, the way every gauge here is: by position in the
+        # Coloured by the reading it carries, the way every gauge here is: by position in the
         # stack the outermost ring would always look calm and the innermost alarming.
         pen = (theme.at(severity_of(ref, fraction)) if fraction is not None
                else theme.grid)
@@ -721,8 +713,8 @@ def _trend(page, frame, history, theme):
                shift=_walk((ref,)))
 
 
-# How far between polls the waterfall has got, so it can interpolate rather than step.
-# Held here because only this side knows when a poll landed.
+# How far between polls the waterfall has got, letting it interpolate and not step.
+# Held here, the poll landing on this side.
 _wf_from = ()
 _wf_to = ()
 _wf_seq = None
