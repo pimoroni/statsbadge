@@ -228,8 +228,8 @@ def draw_hosts(theme, hosts, index, known):
 def _already_paired(app, chosen):
     """Whether this badge already holds credentials for this server that it can use.
 
-    Not merely whether it holds any: a host that has forgotten the badge sets `rejected`,
-    and pairing again is then exactly the point.
+    Not whether it holds any. A host that has dropped the badge sets `rejected`, and
+    pairing again is then exactly the point.
     """
     server_id = chosen.get("id")
     if not server_id or not (app.config.hosts.get(server_id) or {}).get("secret"):
@@ -243,8 +243,10 @@ def _ask_to_join(app, chosen):
 
     A server this badge is already paired with is waved through instead. Setup is offered
     after a few failed polls as well as when unpaired, so this screen is easy to reach with
-    nothing wrong with the pairing at all - and asking again would need the host to be in
-    pairing mode and would mint a second secret for one machine.
+    nothing wrong with the pairing.
+
+    Asking again would need the host in pairing mode, and would mint a second secret for
+    one machine.
     """
     host, port = chosen["host"], chosen["port"]
     label = chosen.get("name") or host

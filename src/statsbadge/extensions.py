@@ -14,8 +14,8 @@ The class is a `sources.base.Source` with two extras:
     badge_assets     paths to further files the badge side needs, an .af icon font say
     badge_page       the page descriptor the config UI should offer
 
-Anything under the frame's own group names is merged; an extension may also add its
-own top-level group, which the badge draws by name.
+Anything under a group the frame already names is merged. An extension may also add a
+top-level group, which the badge draws by name.
 """
 
 import os
@@ -31,8 +31,8 @@ def load(config=None, state_dir=None):
     """Every installed extension that loads cleanly.
 
     `state_dir` is where each one's store is kept, one file per extension named after it.
-    Without one they get a store that keeps what they learn in memory, which is what a
-    one-shot load wants: `install` builds these only to ask what badge modules they ship.
+    Without one they get a store that keeps what they learn in memory, which suits a
+    one-shot load: `install` builds these only to ask what badge modules they ship.
     """
     config = config or {}
     disabled = set(config.get("disabled_extensions", ()))
@@ -127,8 +127,8 @@ def badge_modules(sources):
 def model_groups(sources):
     """Every frame group the loaded extensions declare, keyed by group name.
 
-    Read off each source rather than its class, so one that discovers its groups - a
-    domain per site an account holds - is offered them as soon as it knows them. A later
+    Read off each source and not its class, so one that discovers its groups - a domain
+    per site an account holds - has them offered as soon as they are set. A later
     source declaring a group an earlier one already has adds its fields to it.
     """
     declared = {}
@@ -175,10 +175,10 @@ def settings_schema(sources):
 
 
 def page_settings_schema(sources):
-    """What each extension's own pages can be told, keyed by page kind.
+    """What an extension's pages can be told, keyed by page kind.
 
-    Keyed by kind and not by extension: the config UI is editing a page, and the page
-    knows its kind. An extension contributing two kinds can declare settings once and
+    Keyed by kind and not by extension, since the config UI is editing a page and a page
+    carries its kind. An extension contributing two kinds can declare settings once and
     have both carry them.
     """
     schema = {}

@@ -1,10 +1,11 @@
 """Talk to the badge over its serial REPL.
 
-Two things are ever asked of a badge over the cable: run a short script and read what it
-printed, and hard reset so `main.py` starts again. Both are the raw REPL - four control
-characters and two end markers - so they are here rather than behind a dependency on
-mpremote, whose console script is not on PATH when statsbadge is installed as a uv tool
-and which spawns an interpreter for every command.
+Two things are ever asked of a badge over the cable. Run a short script and read what it
+printed, and hard reset so `main.py` starts again.
+
+Both are the raw REPL, four control characters and two end markers, so they are here and
+not behind a dependency on mpremote. Its console script is not on PATH when statsbadge is
+installed as a uv tool, and it spawns an interpreter for every command.
 
 Standard raw REPL, not raw-paste: the longest script sent from here is about 600 bytes, so
 the flow control raw-paste negotiates buys nothing over writing in paced chunks. Nothing
@@ -16,7 +17,7 @@ which is MIT licensed - see licences/MIT-MicroPython.txt.
 
 import time
 
-# A USB CDC port ignores the line speed, but pyserial wants a number.
+# A USB CDC port ignores the line speed, but pyserial takes a number.
 BAUD = 115200
 # A script is written in chunks with a pause between them, which is what keeps it inside
 # the board's USB buffer without raw-paste's flow control.
@@ -164,9 +165,9 @@ class Repl:
     def _until(self, ending, deadline, what):
         """Read up to `ending` and return what came before it.
 
-        What follows the marker is kept: a read is whatever the port had ready, so the
-        board's next prompt usually arrives in the same breath as the output before it, and
-        throwing that away would leave the next command waiting for a prompt already sent.
+        What follows the marker is kept. A read is whatever the port had ready, and the
+        board's next prompt usually arrives in the same breath as the output before it.
+        Throwing that away leaves the next command waiting for a prompt already sent.
         """
         while True:
             found = self.buffer.find(ending)

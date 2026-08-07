@@ -72,9 +72,9 @@ PERCENT_FIELDS = frozenset(
 # use. A gauge handed one has nothing to point at.
 LIST_FIELDS = frozenset(("cores", "load"))
 
-# Fields whose value is a message - a post, a mention, a headline, an RSS entry - rather
-# than a reading. Only a `notify` page draws one; anything else would print a dict. None of
-# the model's own groups has one, since a host measuring itself has nothing to say.
+# Fields holding a message and not a reading: a post, a mention, a headline, an RSS
+# entry. Only a `notify` page draws one. No group in the model has one, a host measuring
+# itself having nothing to report.
 ITEM_FIELDS = frozenset()
 
 # Sensible full-scale values for the rest, used when a page does not override it.
@@ -118,7 +118,7 @@ def empty_frame():
 
 
 def full_scale(group, field, gpu_hint=None):
-    """Full-scale value for a field, so a gauge knows where 100% is."""
+    """Full-scale value for a field, which is where a gauge puts 100%."""
     if field in PERCENT_FIELDS:
         return 100.0
     if group == "gpu" and field == "temp":
@@ -135,7 +135,7 @@ def unit(field):
 def describe():
     """What this host can actually answer, for the config UI to offer.
 
-    Filled at runtime by the collector, which knows which sources loaded; this is
+    Filled at runtime by the collector, which has the list of loaded sources. This is
     only the static half of the contract.
     """
     return {

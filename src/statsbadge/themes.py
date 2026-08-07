@@ -1,9 +1,9 @@
 """The themes, as data.
 
-A theme is a table of colours and one gradient rule, so it is config and not code: the
-selected one travels to the badge in its layout, which means a palette can be changed or
-invented with nothing installed. The badge carries one of these to boot with and takes the
-rest from here.
+A theme is a table of colours and one gradient rule, which makes it config and not code.
+The selected one travels to the badge in its layout, and a palette can be changed or
+invented with nothing installed. The badge carries one of these to boot with, and takes
+the rest from here.
 
   bg / panel      the page, and the header, footer and tiles on it
   ink / dim       text, and text that is only labelling something
@@ -52,9 +52,9 @@ PALETTES = {
         "ramp": ((0.0, (110, 110, 110)),
                  (1.0, (255, 255, 255))),
     },
-    # Mono the other way up. Nothing is inverted channel by channel - that lands ink on white at
-    # the wrong lightness - so the levels are placed against the page the way every other light
-    # theme's are, and the ramp darkens because that is the direction away from a pale page.
+    # Mono the other way up. Nothing is inverted channel by channel, which lands ink on
+    # white at the wrong lightness. The levels are placed against the page the way every
+    # other light theme's are, and the ramp darkens away from a pale page.
     "mono-light": {
         "bg": (250, 250, 250), "panel": (238, 238, 238),
         "ink": (16, 16, 16), "dim": (108, 108, 108),
@@ -72,9 +72,9 @@ PALETTES = {
                  (0.5, (190, 130, 255)),
                  (1.0, (255, 80, 190))),
     },
-    # From a photograph of a kanzan cherry in flower: the pale sky as the page, the branch
-    # as its ink, and the ramp running sky, blossom, stamen, to the deep cerise at a
-    # flower's throat.
+    # From a photograph of a kanzan cherry in flower. The pale sky is the page and the
+    # branch its ink. The ramp runs sky, blossom, stamen, to the cerise at a flower's
+    # throat.
     "sakura": {
         "bg": (247, 241, 244), "panel": (240, 226, 234),
         "ink": (58, 40, 50), "dim": (139, 110, 124),
@@ -85,8 +85,8 @@ PALETTES = {
                  (0.75, (214, 146, 60)),
                  (1.0, (176, 30, 78))),
     },
-    # The five colours of the palette it is named after, rind to flesh: #83AF9B, #C8C8A9,
-    # #F9CDAD, #FC9D9A, #FE4365. The page is the seed, so the fruit is what shows.
+    # The five colours of the palette it is named after, rind to flesh. #83AF9B #C8C8A9
+    # #F9CDAD #FC9D9A #FE4365. The page is the seed, so the fruit is what shows.
     "watermelon": {
         "bg": (16, 26, 22), "panel": (25, 40, 34),
         "ink": (249, 205, 173), "dim": (150, 152, 129),
@@ -97,15 +97,15 @@ PALETTES = {
                  (0.72, (252, 157, 154)),
                  (1.0, (254, 67, 101))),
     },
-    # The same five colours on paper: the palest pink as the page, the deeper flesh as the one
-    # colour that shows, and the rind green as its ink - which is the only thing dark enough to
-    # read on a page that pale. The ramp is still rind to flesh, so a full gauge is cerise.
+    # The same five colours on paper. The palest pink is the page and the deeper flesh
+    # the one colour that shows. The rind green is its ink, being the only thing dark
+    # enough to read on a page that pale. The ramp is still rind to flesh.
     "watermelon-light": {
         "bg": (247, 222, 232), "panel": (242, 201, 210),
         "ink": (26, 58, 45), "dim": (120, 90, 94),
-        # The rind, as the second colour: on a page this pink the mint only appears at the cold
-        # end of the ramp, which a steady reading never reaches, so a graph's second series
-        # takes it instead of another pink nobody can tell from the first.
+        # The rind, as the second colour. On a page this pink the mint only appears at
+        # the cold end of the ramp, which a steady reading never reaches. A graph's
+        # second series takes it, and not another indistinguishable pink.
         "accent": (203, 59, 84), "accent_b": (74, 158, 124), "grid": (230, 192, 204),
         "case": 0.3,
         "ramp": ((0.0, (133, 192, 163)),
@@ -124,8 +124,8 @@ PALETTES = {
                  (0.5, (240, 146, 42)),
                  (1.0, (214, 42, 42))),
     },
-    # Unit-01: violet armour, the acid green of its chest plate, and the ramp going where
-    # that unit goes - green, through the orange of the horn, to berserk.
+    # Unit-01. Violet armour and the acid green of its chest plate. The ramp goes where
+    # that unit goes: green, through the orange of the horn, to berserk.
     "eva01": {
         "bg": (22, 14, 34), "panel": (34, 22, 52),
         "ink": (236, 232, 245), "dim": (146, 130, 172),
@@ -135,8 +135,8 @@ PALETTES = {
                  (0.55, (238, 170, 40)),
                  (1.0, (255, 60, 30))),
     },
-    # Unit-02: red armour over orange, which is a theme that is hot before it starts, so the
-    # ramp finishes pale the way the other single-hue ones do.
+    # Unit-02. Red armour over orange, a theme that is hot before it starts, and the ramp
+    # finishes pale the way the other single-hue ones do.
     "eva02": {
         "bg": (28, 12, 12), "panel": (44, 18, 18),
         "ink": (255, 238, 232), "dim": (176, 132, 126),
@@ -147,7 +147,8 @@ PALETTES = {
                  (1.0, (255, 214, 120))),
     },
     # Gold, night navy, slate, mint and pale green, off a palette of the 1995 film. Green on
-    # navy is the terminal; the gold is the only warm thing in it, so the ramp ends there.
+    # navy is the terminal. The gold is the only warm thing in it, and the ramp ends
+    # there.
     "shell": {
         "bg": (14, 24, 52), "panel": (22, 36, 72),
         "ink": (182, 222, 181), "dim": (120, 156, 176),
@@ -171,10 +172,10 @@ PALETTES = {
                  (0.7, (64, 105, 64)),
                  (1.0, (114, 77, 7))),
     },
-    # A Casio electroluminescent watch face: the panel glows one colour and everything on it
-    # is that colour's ink at different weights, so the ramp darkens instead of changing hue,
-    # the way mono's does. The ink is a dark slate green and not the black of a segment, which
-    # on a lit panel reads as harsh.
+    # A Casio electroluminescent watch face. The panel glows one colour and everything on
+    # it is that colour's ink at different weights, and the ramp darkens without changing
+    # hue, the way mono's does. The ink is a dark slate green and not the black of a
+    # segment, which on a lit panel reads as harsh.
     "luminescence": {
         "bg": (158, 240, 206), "panel": (136, 226, 192),
         "ink": (34, 60, 52), "dim": (86, 146, 126),
@@ -185,9 +186,9 @@ PALETTES = {
                  (0.75, (34, 82, 70)),
                  (1.0, (20, 46, 40))),
     },
-    # The same watch in the dark, with the backlight on: the glow is the ink now, so the ramp
-    # brightens where the lit one darkens. One hue throughout either way - that is what makes
-    # it read as a panel and not as a page with things on it.
+    # The same watch in the dark with the backlight on. The glow is the ink now, and the
+    # ramp brightens where the lit one darkens. One hue throughout either way, which makes
+    # it a panel and not a page with things on it.
     "luminescence-dark": {
         "bg": (4, 24, 18), "panel": (9, 37, 28),
         "ink": (158, 240, 206), "dim": (89, 148, 128),

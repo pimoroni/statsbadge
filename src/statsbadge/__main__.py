@@ -50,8 +50,8 @@ def _platform_config_base():
 def parse_extension_options(pairs):
     """Turn --extension clock.latitude=52.4 into {"clock": {"latitude": 52.4}}.
 
-    Numbers and booleans are converted, because an extension asking for a latitude
-    wants a float and every value off a command line is a string.
+    Numbers and booleans are converted, an extension asking for a latitude taking a
+    float where every value off a command line is a string.
     """
     options = {}
     for pair in pairs or ():
@@ -130,7 +130,7 @@ def _extension_line(record):
 
 
 def _badge_names(paired):
-    """Each paired badge as the name it was given, with its id where that is not the name.
+    """Each paired badge as the name it was given, with its id alongside where they differ.
 
     A badge nobody has renamed is recorded under its own id, so one name is all there is to
     print for it.
@@ -363,9 +363,9 @@ def _install(args, session):
     host = args.server_host or (server._local_addresses() or ["127.0.0.1"])[0]
 
     # The app goes on first, credentials second. Writing /state over the REPL and then
-    # resetting into mass storage loses the write: the reset discards it and the volume
-    # commits whatever was there before, which with --new-secret would leave the badge
-    # holding a secret the host has already replaced.
+    # resetting into mass storage loses the write. The reset discards it and the volume
+    # commits whatever was there before, which with --new-secret leaves the badge holding
+    # a secret the host has already replaced.
     copying = bool(added or changed or removed) or args.force_app
     if not args.state_only and (copying or args.ssid):
         if not args.yes:
@@ -433,7 +433,7 @@ def _install(args, session):
 # -- status -----------------------------------------------------------------
 
 def cmd_status(args):
-    """What is on the badge and what this host knows, without touching anything."""
+    """What is on the badge and what this host has, without touching anything."""
     directory = config_dir(args.config_dir)
     print(f"host: {directory}")
     service = build_service(args)
@@ -542,8 +542,8 @@ def cmd_extensions(args):
             print("  not installed: {}".format(", ".join(missing)))
             print("  run: statsbadge ext sync")
     elif tooling.as_uv_tool():
-        # Installed with --with rather than from the list, so say where the list would be: the
-        # next `uv tool install` replaces the environment and would drop them.
+        # Installed with --with and not from the list, so say where the list would be.
+        # The next `uv tool install` replaces the environment and drops them.
         print()
         print(f"no {tooling.WANTED} yet. The first `statsbadge ext add` writes one, taking")
         print("what this tool was installed with as its starting point.")
@@ -566,9 +566,9 @@ def _change_extensions(args, verb):
     had_list = os.path.isfile(tooling.wanted_path(directory))
     wanted = list(before)
     if not wanted and receipt:
-        # Nothing written down yet, but uv remembers what the tool was built with. Adopting that
-        # is the whole point: `ext add` on a tool installed with --with would otherwise reinstall
-        # naming only the new one, and drop everything already there.
+        # Nothing written down yet, but uv records what the tool was built with, and
+        # adopting that is the point. `ext add` on a tool installed with --with would
+        # otherwise reinstall naming only the new one, dropping everything already there.
         wanted = tooling.installed_beside(receipt)
 
     changed = []
@@ -581,15 +581,15 @@ def _change_extensions(args, verb):
                 if short in present:
                     print(f"already installed: {short}")
                     continue
-                # On the list but not in the environment, which is what a `uv tool install` of
-                # statsbadge itself leaves behind. Asking for it is asking for it back, so
-                # rebuild instead of reporting an install nothing can see.
+                # On the list but absent from the environment, which is what a `uv tool
+                # install` of statsbadge itself leaves behind. Asking for it is asking for
+                # it back, so rebuild instead of reporting an install nothing can see.
                 print(f"{short} is asked for but not installed: putting it back.")
                 changed.append(requirement)
                 continue
-            # Asked of the index before anything is written or rebuilt: the rebuild installs the
-            # whole list, so a name that is not a package would come back as a failure naming
-            # whichever entry uv tripped over first, which need not be this one.
+            # Asked of the index before anything is written or rebuilt. The rebuild
+            # installs the whole list, so a name that is not a package comes back as a
+            # failure naming whichever entry uv tripped over, which need not be this one.
             if tooling.on_index(requirement) is False:
                 print(f"no such extension: {requirement}", file=sys.stderr)
                 print(f"  nothing on PyPI is called that. {tooling.WANTED} is unchanged.",
@@ -614,8 +614,8 @@ def _change_extensions(args, verb):
 
     base = tooling.base_requirement(receipt) if receipt else None
     if base is None:
-        # Not a uv tool, or a receipt this cannot read: say what to run instead, and leave the
-        # list as it was rather than recording something that has not happened.
+        # Not a uv tool, or a receipt this cannot read. Say what to run instead, and
+        # leave the list as it was, an install having taken place nowhere.
         print("statsbadge is not installed as a uv tool, so there is nothing here to rebuild.")
         for requirement in (changed or wanted):
             print(f"  uv pip install {requirement}")
@@ -637,15 +637,15 @@ def _change_extensions(args, verb):
         print("done. Run `statsbadge install` to push any badge-side code they ship.")
         return 0
 
-    # Put the list back: it records what is installed, and nothing was.
+    # Put the list back: it records what is installed, and the rebuild failed.
     if had_list:
         tooling.write_wanted(directory, before)
     else:
         tooling.forget_wanted(directory)
     print(why, file=sys.stderr)
-    # An extension wanting a statsbadge newer than this tool is pinned to. The fix is not to
-    # take it out, it is to let statsbadge move: the list is back to what it was, so the
-    # command below rebuilds exactly what is there now, unpinned.
+    # An extension wanting a statsbadge newer than this tool is pinned to. The fix is to
+    # let statsbadge move, and the list is back to what it was, so the command below
+    # rebuilds exactly what is there now, unpinned.
     loosened = tooling.unpinned(base) if "needs statsbadge" in why else None
     if loosened:
         print(f"  this tool was installed as {base}, so statsbadge cannot move. Unpin it, "
@@ -656,10 +656,10 @@ def _change_extensions(args, verb):
             print(f"    statsbadge ext add {tooling.short_name(requirement)}",
                   file=sys.stderr)
         return 1
-    # uv names one package, and it need not be one of the ones just asked for: the rebuild
-    # installs the whole list, so an entry that was already there and cannot be installed fails
-    # every add until it is taken out. Saying which is which is the difference between a message
-    # that reads as a bug and one that can be acted on.
+    # uv names one package, and it need not be one just asked for. The rebuild installs
+    # the whole list, so an entry that was already there and cannot be installed fails
+    # every add until it is taken out. Saying which is which is what makes the message
+    # actionable.
     culprit = tooling.blamed(why)
     if culprit and tooling.short_name(culprit) not in tooling.names(changed):
         print(f"  {culprit} was already in {tooling.WANTED}, and nothing was changed. Take it "

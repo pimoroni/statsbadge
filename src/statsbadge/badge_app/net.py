@@ -28,9 +28,9 @@ STEP_BUDGET_US = 2500
 IDLE, BUSY, DONE, FAILED = 0, 1, 2, 3
 
 # errno as this firmware actually reports it, checked on the board. Nothing listening
-# comes back as ECONNRESET rather than ECONNREFUSED, because lwIP surfaces the RST that
-# way; an address with nothing at it gives ECONNABORTED on the non-blocking path and
-# ETIMEDOUT on a blocking one, so both are worded for what they mean.
+# comes back as ECONNRESET and not ECONNREFUSED, lwIP surfacing the RST that way. An
+# address with nothing at it gives ECONNABORTED on the non-blocking path and ETIMEDOUT
+# on a blocking one, so both are worded for what they mean.
 _NET_ERRORS = {
     104: "no server answering",         # ECONNRESET: nothing there, or it went away
     103: "could not reach the host",    # ECONNABORTED
@@ -118,7 +118,7 @@ class Config:
             self.active = data.get("active")
         elif data.get("secret"):
             # One flat host, as older installs and `--state-only` wrote it. Keep it
-            # under a placeholder id until a beacon or /v1/hello tells us the real one.
+            # under a stand-in id until a beacon or /v1/hello carries the real one.
             self.hosts = {
                 "unknown": {
                     "host": data.get("host"),
@@ -250,7 +250,7 @@ class Config:
         return True
 
     def adopt_id(self, server_id, name=None):
-        """Move credentials stored under the placeholder id onto the real one."""
+        """Move credentials stored under the stand-in id onto the real one."""
         if not server_id or server_id in self.hosts or "unknown" not in self.hosts:
             return False
         entry = self.hosts.pop("unknown")
@@ -455,9 +455,8 @@ def discover(timeout_ms=4000):
     """Listen for host beacons, so nobody has to type an IP address.
 
     `statsbadge serve` broadcasts a small JSON beacon; this collects whatever answers
-    within the timeout. Returns a list of dicts with `id`, `host`, `port` and `name` -
-    the id being what credentials are keyed on, so a host that changed address is
-    still recognised.
+    within the timeout. Returns a list of dicts with `id`, `host`, `port` and `name`.
+    Credentials are keyed on the id, so a host that changed address is still recognised.
     """
     found = []
     sock = None
