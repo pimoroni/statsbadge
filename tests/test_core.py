@@ -2994,6 +2994,25 @@ def test_the_notice_screen_offers_a_way_out(_h):
 
 
 @check
+def test_a_press_that_closes_a_modal_screen_stops_there(_h):
+    """B on the hosts menu picked a server and then fired the page binding behind it.
+
+    A modal screen returns the moment its button goes down, so the edge is still standing
+    when the loop reaches `buttons()`. `badge.poll()` rolls it forward first.
+    """
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+
+    assert "def consume_press():" in app, "no helper to clear the edge"
+    assert "badge.poll()" in app[app.index("def consume_press():"):], "the helper polls"
+
+    loop = app[app.index("def main():"):]
+    menu = loop[loop.index("pairing_ui().hosts_menu(app)"):]
+    handled = menu[:menu.index("app.buttons()")]
+    assert "consume_press()" in handled, (
+        "the menu press reaches buttons(): " + handled)
+
+
+@check
 def test_sparkline_rows_can_be_told_apart(_h):
     """Six lines on one page read as one plot with six traces, so the rows are banded.
 

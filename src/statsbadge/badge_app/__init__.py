@@ -1028,6 +1028,16 @@ class App:
         self._saved_page = self.page_index
 
 
+def consume_press():
+    """Take the press that closed a modal screen out of the current frame's edges.
+
+    A screen returns the moment its button goes down, before the loop reaches
+    `badge.update()`. That edge is still standing when `buttons()` runs, so B on the
+    hosts menu chose a server and then fired whatever B was bound to on the page.
+    """
+    badge.poll()
+
+
 def main():
     global _app
     # Before anything is drawn: a collect on allocation volume rather than only on failure.
@@ -1051,6 +1061,7 @@ def main():
     if not app.config.paired:
         if not pairing_ui().run(app):
             return
+        consume_press()
     app.apply_layout()
 
     while True:
@@ -1059,7 +1070,9 @@ def main():
             app.save_page()
             return
         if pressed_home == "menu":
-            if pairing_ui().hosts_menu(app) == "exit":
+            outcome = pairing_ui().hosts_menu(app)
+            consume_press()
+            if outcome == "exit":
                 app.save_page()
                 return
             app.apply_layout()
