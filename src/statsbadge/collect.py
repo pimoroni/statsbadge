@@ -1,7 +1,7 @@
 """Sampling on a timer, so an HTTP request never waits on a sensor.
 
 Several sensors are slow - ioreg is a subprocess, LibreHardwareMonitor is another
-HTTP request - and a badge polling at 1Hz should not pay for that in its own
+HTTP request - and a badge polling at 1Hz should not pay for that in its
 latency. One background thread samples on an interval and requests serve the last
 frame, which also means ten badges cost the same as one.
 """
@@ -12,21 +12,21 @@ import time
 from . import extensions, model
 from .sources import discover
 
-# Everything on a frame that is not a group of readings. Written down once because anything
-# walking a frame has to step over them: `probe` printed one as a group and fell over on it,
-# and app.js keeps its own copy of this list, which a test holds to this one.
+# Everything on a frame besides a group of readings, written down once because anything
+# walking a frame has to step over them. app.js keeps a copy of this list, and a test
+# holds the two together.
 FRAME_SCALARS = ("v", "t", "seq", "slow_rev")
 
 
 class Collector:
     def __init__(self, interval=1.0, config=None, history=90, state_dir=None):
         self.interval = interval
-        # When the newest point in every ring was taken, so a reply can say how old it is.
+        # When the newest point in every ring was taken, for a reply to say its age.
         self._history_at = 0
         self.config = config or {}
         self.sources = discover(self.config)
-        # Each extension gets a store of its own under here, for what it works out as against
-        # what it is told. Nothing is written until one asks for something to be kept.
+        # Each extension gets a store to itself under here, for what it works out as
+        # against what it is told. Nothing is written until one asks to keep something.
         self.extensions = extensions.load(self.config, state_dir)
         self.frame = model.empty_frame()
         self.seq = 0
@@ -35,8 +35,8 @@ class Collector:
         self._thread = None
         self._stop = threading.Event()
         self._last_sample = None
-        # A short ring per graphed field, so a page can draw a sparkline without the
-        # badge having to have been watching.
+        # A short ring per graphed field, letting a page draw a sparkline without the
+        # badge having been watching.
         self.history_len = history
         self._history = {}
         # The busiest each rate has been seen to be, which is the only full scale a
@@ -92,9 +92,8 @@ class Collector:
             try:
                 source.sample(frame, dt)
             except Exception as exc:
-                # A source that lets an exception out of `sample` is not handling something
-                # it knows about, so this one stays until the source clears it itself. What
-                # a source expects to fail - a subprocess, a fetch - it notes and clears.
+                # A source letting an exception out of `sample` has hit something it
+                # does not handle, and the fault stays until the source clears it.
                 source.note_fault(exc)
 
         frame["t"] = int(now * 1000)
@@ -110,7 +109,7 @@ class Collector:
     # -- what there is to keep --------------------------------------------
 
     def _declared(self):
-        """The extension groups, as they stand. Recomputed rather than cached: a source
+        """The extension groups, as they stand. Recomputed and not cached, since a source
         that discovers its groups sets them on itself while running."""
         return extensions.model_groups(self.extensions)
 
@@ -136,9 +135,9 @@ class Collector:
     def slow_part(self, frame=None):
         """The slow half of a frame: those groups, and the peaks that belong to them.
 
-        A peak is worked out from the reading, so a slow reading's peak moves only when it
-        does. Splitting it out too is what keeps the fast frame small: a peak is 40 bytes
-        of key and six domains have twelve of them.
+        A peak is worked out from the reading, and a slow reading's peak moves only when
+        it does. Splitting it out too keeps the fast frame small, a peak being 40 bytes of
+        key where six domains have twelve of them.
         """
         frame = self.frame if frame is None else frame
         slow = self.slow_groups()
@@ -150,35 +149,35 @@ class Collector:
         return part
 
     def _push_slow_rev(self, frame):
-        """Number the slow half, so a badge can tell whether it already has this one.
+        """Number the slow half, letting a badge tell whether it already has this one.
 
-        Compared rather than counted off a clock: a source fetching on its own schedule is
-        the only thing that knows when its readings moved, and asking it would be one more
-        thing for it to get wrong. The comparison is a dict of a few dozen numbers.
+        Compared, and not counted off a clock. A source fetching on its own schedule is
+        the only place the moment its readings moved is known, and asking it would be one
+        more thing to get wrong. The comparison is a dict of a few dozen numbers.
         """
         part = self.slow_part(frame)
         if part != self._slow_last:
             self._slow_last = part
             self._slow_rev += 1
-        # In the frame either way: it is what the badge sends back to say what it holds,
-        # and a badge with no slow groups at all still has to see it hold still.
+        # In the frame either way, since the badge sends it back to say what it holds.
+        # A badge with no slow groups still has to see it hold still.
         frame["slow_rev"] = self._slow_rev
 
     def _push_peaks(self, frame):
         """Track the high-water mark of each rate, decaying so it follows the machine.
 
         Without the decay one overnight transfer flattens the gauge for as long as the
-        server runs. Without a peak at all a rate has to be scaled by a guess: the 100Mbit
-        this used to assume reads as pegged on a gigabit link and as idle on a slow one.
+        server runs. Without a peak at all a rate is scaled by a guess, and a fixed 100Mbit
+        reads as pegged on a gigabit link and as idle on a slow one.
         """
         peaked = {f"{group}.{field}": PEAK_FLOOR for group, field in _GRAPHED
                   if field.endswith("_bps")}
         for group, declared in self._declared().items():
             for field, entry in (declared.get("fields") or {}).items():
                 if entry.get("peak"):
-                    # A rate the model does not define has a floor of its own: 64KB/s is
-                    # what stops a trickle filling a link's gauge, and would stop a gauge
-                    # of requests a minute ever moving.
+                    # A rate the model does not define takes a per-field floor. 64KB/s
+                    # stops a trickle filling a link's gauge, and would stop a gauge of
+                    # requests a minute ever moving.
                     peaked[f"{group}.{field}"] = float(entry.get("peak_floor") or 1.0)
         for key, floor in peaked.items():
             group, field = key.split(".", 1)
@@ -188,17 +187,16 @@ class Collector:
             decayed = self._peaks.get(key, 0.0) * PEAK_DECAY
             self._peaks[key] = max(float(value), decayed, floor)
         if self._peaks:
-            # Not a model group, so it is never offered as a field; it is scale, not a
-            # reading.
+            # Not a model group, and never offered as a field. Scale, not a reading.
             frame["peaks"] = {key: round(value) for key, value in self._peaks.items()}
 
     def _push_history(self, frame):
         """One point per sample per field, aligned to the sample clock.
 
-        A field with nothing in it gets None rather than being skipped: the ring's positions
-        are what a plot reads times off, so leaving a sample out of one ring and not the others
-        would draw an intermittent field's history compressed and mis-timed. A None is also
-        what a plot needs to draw a gap where there was no reading.
+        A field with nothing in it gets None instead of being skipped. A plot reads times
+        off the ring's positions, and leaving a sample out of one ring alone draws an
+        intermittent field's history compressed and mis-timed. A None is also how a plot
+        draws a gap where there was no reading.
         """
         self._history_at = frame["t"]
         for group, field in _GRAPHED + self._extra("graphed"):
@@ -245,9 +243,9 @@ class Collector:
     def source_series(self, keys=None, points=48):
         """The rings the sources keep themselves, on whatever spacing they are really on.
 
-        A source that fetches its own history answers for it: the collector's interval is
+        A source that fetches its own history answers for it. The collector's interval is
         the rate a sensor is read at, and nothing to do with how often a domain's traffic
-        is reported. One that raises is skipped rather than taking the reply with it.
+        is reported. One that raises is skipped, and does not take the reply with it.
         """
         wanted = set(keys) if keys else None
         found = {}
@@ -274,14 +272,16 @@ class Collector:
 
         `every_ms` is the spacing of the positions and `age_ms` how old the newest is, so a
         plot can place every point on a time axis without knowing anything about this host's
-        clock or about how often the badge asked. Ages rather than timestamps: nothing has to
-        be aligned between two machines, and the only error left is the trip back.
+        clock or about how often the badge asked. Ages and not timestamps, so nothing has
+        to be aligned between two machines and the only error left is the trip back.
 
-        Those two are the collector's own and cover every ring it keeps. A source answering
+        Those two are the collector's, and cover every ring it keeps. A source answering
         for its own history is on a different clock, so with `spacing` its rings come too,
-        each with the pair that belongs to it. Without it they are left out rather than
-        served under a spacing that is not theirs: an app that cannot read the difference
-        would animate an hourly series as though it arrived every second.
+        each with the pair that belongs to it.
+
+        Without it they are left out. Served under a spacing not theirs, an app that cannot
+        read the difference would animate an hourly series as though it arrived every
+        second.
         """
         with self._lock:
             wanted = keys or list(self._history)
@@ -306,11 +306,13 @@ class Collector:
     def capabilities(self):
         """Which fields this host actually produced, for the config UI to offer.
 
-        Derived from the live frame, not from what a source claims, so a laptop with
+        Derived from the live frame and not from what a source claims, so a laptop with
         no fan header does not offer a fan page. For a group the model does not define it
-        is both: in the frame, and named in the declaration. A source may put anything in
-        its own group - the quake feed carries the events its page draws from - and only
-        what it declared is a reading somebody can point a dial at.
+        is both: in the frame, and named in the declaration.
+
+        A source may put anything in a group it owns - the quake feed carries the events
+        its page draws from - and only what it declared is a reading somebody can point a
+        dial at.
         """
         frame = self.latest()
         declared = self._declared()
@@ -333,8 +335,8 @@ class Collector:
                  "faults": s.faults, "last_fault": s.last_fault}
                 for s in self.sources + self.extensions
             ],
-            # Which extension each declared group belongs to, so a picker can head them
-            # with it. Only the declared ones: what is not in here is this host.
+            # Which extension each declared group belongs to, for a picker to head them
+            # with. Only the declared ones; what is absent here is this host.
             "group_source": extensions.group_owners(self.extensions),
             # What has a history ring. A graph of anything else can only draw the live
             # value twice, which is a flat line whatever the machine is doing. Rings the
@@ -362,28 +364,28 @@ _GRAPHED = (
     ("power", "package_w"),
 )
 
-# Fields whose value is already a list, kept as a ring of lists so a page can plot one
+# Fields whose value is already a list, kept as a ring of lists for a page to plot one
 # lane per element over time. Rounded to whole numbers and held shorter than the scalar
-# rings: a ring of twelve-core samples is twelve times the wire cost of a scalar one.
+# rings, a ring of twelve-core samples costing twelve times a scalar one on the wire.
 _GRAPHED_SERIES = (
     ("cpu", "cores"),
 )
 SERIES_LEN = 64
 
-# A peak left alone halves in about ten minutes at a sample a second, so the scale follows
-# the machine rather than remembering one busy night. The floor keeps a quiet link from
-# scaling a trickle up to a full ring.
+# A peak left alone halves in about ten minutes at a sample a second, which follows the
+# machine and drops one busy night. The floor keeps a quiet link from scaling a trickle
+# up to a full ring.
 PEAK_DECAY = 0.99885
 PEAK_FLOOR = 64 * 1024.0
 
 
 def _merge_declared(described, declared):
-    """Fold the extensions' own groups into the contract the config UI reads.
+    """Fold the extensions' groups into the contract the config UI reads.
 
-    The model's tables are the built-in groups and cannot know about a group that arrived
-    with a pip install, so what an extension declares is merged in beside them: a picker
-    then names its fields and units the way it names everything else, and a gauge is
-    offered the ones with a top end.
+    The model's tables cover the built-in groups and nothing that arrived with a pip
+    install, so what an extension declares is merged in beside them. A picker then names
+    its fields and units the way it names everything else, and a gauge is offered the ones
+    with a top end.
     """
     for group, entry in declared.items():
         fields = entry.get("fields") or {}

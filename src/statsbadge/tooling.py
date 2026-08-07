@@ -5,11 +5,11 @@ means naming the first one again or losing it. That is a list worth keeping some
 lives in the config directory as `extensions.txt` and every install is made from it.
 
 The base requirement - `statsbadge`, or `statsbadge[nvidia]`, or a path for a checkout - comes
-from uv's own receipt, which sits beside the tool's environment and records what it was built
-from. Reading that rather than guessing is what keeps an extra from being dropped on the next
+from uv's receipt, which sits beside the tool's environment and records what it was built
+from. Reading that instead of guessing keeps an extra from being dropped on the next
 add.
 
-uv has no `pipx inject`, so `uv tool install --with-requirements` is the way in. Its own
+uv has no `pipx inject`, so `uv tool install --with-requirements` is the way in. Its
 progress and its resolver's prose are not this command's output: uv runs quiet, one line is
 printed here, and `--verbose` hands the terminal back to uv for when the reason matters.
 
@@ -30,8 +30,8 @@ import urllib.request
 # uv writes this beside the environment of every tool it installs, so finding one next to the
 # running interpreter is what tells us this is a tool and not a venv or a checkout.
 RECEIPT = "uv-receipt.toml"
-# The extensions wanted on this host, one requirement a line, in the config directory: hand
-# editable, and the thing every reinstall is made from.
+# The extensions listed for this host, one requirement a line, in the config directory.
+# Hand editable, and the thing every reinstall is made from.
 WANTED = "extensions.txt"
 # What a plugin is called if it is named by its short name.
 PREFIX = "statsbadge-"
@@ -58,7 +58,7 @@ def base_requirement(receipt, name="statsbadge"):
     """What to reinstall the tool itself from, extras and all, or None if it cannot be told.
 
     A receipt records a requirement per package: the tool and everything installed beside it.
-    Only the tool's own entry is wanted, and it may be a registry name, a directory or a URL -
+    Only the tool's entry is read, and it may be a registry name, a directory or a URL -
     so anything not recognised returns None and the caller offers the command instead of
     running a guess.
     """
@@ -169,11 +169,13 @@ def install_argv(base, config_dir, fresh=False):
     --force because the tool is already there and this is a replacement, which is the only
     thing uv tool install does: there is no adding to an existing one.
 
-    --fresh, and so --reinstall, for taking something out. Whether --force alone prunes depends
-    on the uv doing the work: measured against a tool holding two extensions, uv 0.9.2 drops the
-    package from site-packages and uv 0.4.28 writes the shorter receipt and leaves it there, with
-    its entry point still registering a page. Nothing here chooses which uv a user has, and a
-    removal that does not remove is worse than a slow one. Adding needs neither.
+    --fresh, and so --reinstall, for taking something out. Whether --force alone prunes
+    depends on the uv doing the work.
+
+    Measured against a tool holding two extensions, uv 0.9.2 drops the package from
+    site-packages. uv 0.4.28 writes the shorter receipt and leaves it there, with its entry
+    point still registering a page. Nothing here chooses which uv a user has, and a removal
+    that leaves the package behind is worse than a slow one. Adding needs neither.
     """
     argv = [shutil.which("uv") or "uv", "tool", "install", "--force"]
     if fresh:
@@ -187,8 +189,8 @@ def install_argv(base, config_dir, fresh=False):
 def unpinned(base):
     """`statsbadge==1.0.0` as `statsbadge`, or None where there is no pin to drop.
 
-    Only a registry requirement: a path install resolves to whatever is in the checkout, so
-    there is nothing to relax, and a URL is already exact on purpose.
+    Only a registry requirement. A path install resolves to whatever is in the checkout,
+    leaving nothing to relax, and a URL is already exact.
     """
     if not base or any(mark in base for mark in "/\\"):
         return None
@@ -199,8 +201,8 @@ def unpinned(base):
 def installed_version(name="statsbadge", prefix=None):
     """What version of `name` is in the environment on disk, or None.
 
-    Read from the environment rather than from this process, because the point of asking is
-    to notice that a rebuild moved it: `uv tool install` resolves the whole environment at
+    Read from the environment and not from this process, the point of asking being to
+    notice that a rebuild moved it. `uv tool install` resolves the whole environment at
     once, so an extension asking for a newer statsbadge takes the tool with it.
     """
     site = importlib.metadata.MetadataPathFinder()
@@ -216,8 +218,8 @@ def quoted(argv):
     return " ".join(f'"{part}"' if " " in part else part for part in argv)
 
 
-# Where a plain name can be checked before anything is installed, so a name that is not a
-# package is answered as one rather than as a failed rebuild.
+# Where a plain name can be checked before anything is installed, so an unknown name is
+# answered as one and not as a failed rebuild.
 SIMPLE_INDEX = "https://pypi.org/simple/{}/"
 
 
@@ -225,7 +227,7 @@ def on_index(requirement, timeout=4.0):
     """Whether a plain name is a project on PyPI, or None when it cannot be told.
 
     Only asked of a bare name: a path, a URL or a version specifier is something uv resolves
-    its own way. An index that cannot be reached is not an answer either, so both come back
+    its way. An index that cannot be reached is no answer either, so both come back
     None and the caller carries on and lets uv decide.
     """
     if requirement.startswith(".") or any(mark in requirement for mark in SPEC_MARKS):
@@ -242,7 +244,7 @@ def on_index(requirement, timeout=4.0):
 
 
 def blamed(said):
-    """The package that could not be installed, out of uv's own words or out of `explain`'s.
+    """The package that could not be installed, out of uv's words or out of `explain`'s.
 
     Both, because the caller has the explained line and not the original: `explain` is what
     turns a resolver's paragraph into something worth printing, and the name survives it.
@@ -268,9 +270,9 @@ def _collapsed(said):
 # useful part is the name.
 MISSING = re.compile(r"Because (\S+) was not found in the package registry")
 
-# And its answer when an extension wants a statsbadge this tool cannot have, which is what
-# a plugin built against a newer host looks like from here. Three things are worth keeping:
-# which extension, what it asks for, and what this tool is pinned to.
+# Its answer when an extension needs a statsbadge this tool cannot have, which is a plugin
+# built against a newer host. Three things are kept: which extension, what it needs, and
+# what this tool is pinned to.
 CONFLICT = re.compile(
     r"Because (?:all versions of )?(\S+) depends? on (\S+) and you require (\S+?)[,\s]")
 
@@ -306,7 +308,7 @@ def explain(said):
     if missing:
         return f"no such package: {missing.group(1)}"
     # An extension built against a newer statsbadge than this tool is pinned to. Worth
-    # translating rather than passing on: uv's own last line is "your requirements are
+    # translating and not passing on, since uv's last line is "your requirements are
     # unsatisfiable", which is true of every resolution failure and says nothing about the
     # versions, and the versions are the whole of it.
     clash = CONFLICT.search(flat)

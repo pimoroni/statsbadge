@@ -1,30 +1,30 @@
 """Turning a picture off the internet into something a badge can hold and a theme can own.
 
 A source with an image - a post's attachment, an article's lead picture - hands the bytes
-here and gets back a small indexed PNG. Opinionated on purpose, because the badge is 320x240
-and every choice a caller could make here is one they would have to make well:
+here and gets back a small indexed PNG. The choices are made here, the badge being 320x240
+and every one of them being easy to get wrong:
 
-    a content weighted crop, so the subject survives being cut to a fixed shape
+    a content weighted crop, keeping the subject through a cut to a fixed shape
     levelled and ordered-dithered, which is what makes four colours read as a picture
     an indexed PNG at 2 or 4 bits a pixel, which is what makes it small enough to send
 
-**What travels is indices, not colours.** The palette written into the file is a grey ramp,
-and the badge assigns its own theme's ramp over the top - `img.palette[0:n] = ramp`
-recolours every pixel indexing it in one write. So one image suits every badge and every
-theme, the host never has to know which theme a badge is on, and a picture arrives in the
-same colours as the page around it. A source that quantised to a theme's colours here would
-be sending the wrong ones to the second badge.
+**What travels is indices, not colours.** The palette written into the file is a grey
+ramp, and the badge assigns its theme's ramp over the top. `img.palette[0:n] = ramp`
+recolours every pixel indexing it in one write.
 
-Pillow does the decoding, which is the one part not worth writing: a JPEG decoder is not a
-weekend.
+One image therefore suits every badge and every theme, the host never has to know which
+theme a badge is on, and a picture arrives in the colours of the page around it. A source
+that quantised to a theme's colours here would send the wrong ones to the second badge.
+
+Pillow does the decoding, which is the one part not worth writing.
 """
 
 import struct
 import zlib
 
-# The two presets, each way up. Low is a thumbnail beside a message, high is a picture with a
-# page to itself; portrait and landscape are the same pixels turned over, so a caller picks
-# by what the space is rather than by what the source image happens to be.
+# The two presets, each way up. Low is a thumbnail beside a message, high is a picture
+# with a page to itself. Portrait and landscape are the same pixels turned over, so a
+# caller picks by the space and not by the source picture.
 SIZES = {
     ("low", "portrait"): (48, 64),
     ("low", "landscape"): (64, 48),
@@ -32,21 +32,19 @@ SIZES = {
     ("high", "landscape"): (128, 96),
 }
 
-# How many greys each preset resolves to, and so how many bits a pixel the PNG needs. Four
-# colours is two bits, a quarter of a byte a pixel; eight has to be four, PNG having no
-# three-bit depth, so high resolution costs twice per pixel as well as four times the pixels.
+# How many greys each preset resolves to, and so the PNG's bit depth. Four colours is two
+# bits. Eight has to be four, PNG having no three-bit depth, which costs twice a pixel.
 LEVELS = {"low": 4, "high": 8}
 DEPTHS = {4: 2, 8: 4}
 
-# The energy map is built at this size on its long edge. The crop it picks moves in steps of
-# the original divided by this, which is finer than anything the eye will judge on a 64px
-# thumbnail, and it keeps the search off a full-size image.
+# The energy map is built at this size on its long edge. The crop moves in steps of the
+# original divided by this, finer than anything visible on a 64px thumbnail, and it keeps
+# the search off a full-size image.
 ENERGY_LONG = 96
 
-# Ordered dithering, 4x4. Ordered rather than diffused because the point is a picture that
-# reads at four colours: error diffusion at that depth is a field of noise that changes
-# completely between two nearly identical frames, where a Bayer pattern is stable, obviously
-# deliberate, and compresses - the repeating texture is what keeps the PNG small.
+# Ordered dithering, 4x4. Error diffusion at four colours is a field of noise that
+# changes completely between two nearly identical frames. A Bayer pattern is stable, and
+# its repeating texture compresses, which keeps the PNG small.
 BAYER = (
     (0, 8, 2, 10),
     (12, 4, 14, 6),
@@ -55,9 +53,8 @@ BAYER = (
 )
 BAYER_N = 16
 
-# How much of the histogram is thrown away at each end before levelling. A photograph off a
-# feed is rarely using its whole range, and at four levels an unlevelled picture is two of
-# them. Enough to ignore a specular highlight, not enough to blow out a face.
+# How much of the histogram is thrown away at each end before levelling. A photograph off
+# a feed rarely uses its full range, and at four levels that draws two of them.
 CLIP_FRACTION = 0.02
 
 
@@ -187,9 +184,9 @@ def _levelled(pixels, count):
 def _dithered(pixels, width, height, levels):
     """0-255 brightnesses as `levels` indices, ordered dithered.
 
-    The threshold moves with the position rather than with the error so far, so the same
-    picture always comes out the same way and two frames of nearly the same picture do not
-    differ everywhere - which matters when the result travels only when it changes.
+    The threshold moves with the position and not with the error so far. The same picture
+    always comes out the same way, and two frames of nearly the same picture differ only
+    where the picture does, which matters when the result travels on a change.
     """
     top = levels - 1
     out = bytearray(width * height)

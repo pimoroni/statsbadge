@@ -1,12 +1,12 @@
-"""The firmware's own world map, for any page that wants to draw on one.
+"""The firmware's world map, for any page that draws on one.
 
 `/system/assets/world.geo.json` ships with badgeware: 177 countries in 288 polygons and
 10,593 points. It is parsed once into a shape per polygon and then only re-aimed, a mat3
-being the whole of placing one, and it is held here rather than in the page that asked so
-two map pages cost one parse. Measured on the badge: 1256ms and 184KB.
+being the whole of placing one. It is held here and not in the page that asked, so two map
+pages cost one parse. Measured on the badge: 1256ms and 184KB.
 
 A page draws through a `View`, which is where the map sits on the screen and where it is
-looking. What goes on top of it, and how the camera moves, stay the page's own business.
+looking. What goes on top of it, and how the camera moves, are the page's business.
 """
 
 import gc
@@ -18,28 +18,27 @@ import look
 FILE = "/system/assets/world.geo.json"
 
 # A degree of latitude is drawn taller than a degree of longitude, which is most of what
-# makes an equirectangular map read as the world rather than as a squashed one.
+# keeps an equirectangular map from looking squashed.
 ASPECT = 1.3
 
-# How much of the ramp colour the land is given: enough to read as land, not enough to
-# compete with whatever a page draws on top of it.
+# How much of the ramp colour the land is given. Enough to read as land, not enough to
+# compete with whatever a page draws on top.
 LAND_ALPHA = 104
-# Where the ramp is anchored, in degrees from the equator. The tropics take the hot end and
-# the ice caps the cold one, so a theme's ramp reads as a climate.
+# Where the ramp is anchored, in degrees from the equator. The tropics take the hot end
+# and the ice caps the cold one, which turns a theme's ramp into a climate.
 LAND_SPAN = 90.0
-# How many steps of the ramp the land is drawn in. `screen.pen = <colour>` allocates 64 bytes a
-# time, so a pen per polygon would be 288 assignments and 18KB a frame; the polygons are held
-# sorted by band, and a frame sets the pen once a band. Twenty four bands is under four degrees of
-# latitude each, finer than the ramp's own 65 steps resolve at the size of a polygon.
+# Steps of the ramp the land is drawn in. A pen assignment is 64 bytes, so one per
+# polygon would be 18KB a frame. The polygons are sorted by band, and the pen is set
+# once a band.
 LAND_BANDS = 24
 
-# How dark the night side goes. Two figures, because the wash goes toward the page on a dark
-# theme and toward the ink on a pale one, and those are nothing like each other: a near-black
-# ink at the dark theme's weight takes a pale map down to flat grey and loses the land with it.
+# How dark the night side goes. Two figures, the wash going toward the page on a dark
+# theme and toward the ink on a pale one. A near-black ink at the dark theme's weight
+# flattens a pale map to grey.
 NIGHT_ALPHA = 150
 NIGHT_PALE_ALPHA = 64
-# How coarsely the edge is drawn. Three degrees is a 3px chord at the zoom a whole-world page
-# uses, and the terminator has no detail finer than that.
+# How coarsely the edge is drawn. Three degrees is a 3px chord at the zoom a whole-world
+# page uses, and the terminator has no detail finer than that.
 NIGHT_STEP = 3
 
 # One entry per polygon: the shape in degrees, the middle of it, and the box it covers. Most
@@ -48,7 +47,7 @@ _shapes = None
 # Where each band of the ramp starts and stops in `_shapes`, which is held sorted by band.
 _bands = ()
 # Whether a frame has already said the map is coming, so the parse lands in the frame after
-# the notice rather than in place of it.
+# the notice and not in place of it.
 _asked = False
 _pens = {}
 
@@ -103,7 +102,7 @@ def shapes():
                 lat_max = max(lat_max, lat)
             built.append((shape.custom(path), (lon_min + lon_max) * 0.5,
                           (lat_min + lat_max) * 0.5, lon_min, lon_max, lat_min, lat_max))
-    # Sorted by which step of the ramp the polygon is drawn in, so a frame can set the pen once
+    # Sorted by which step of the ramp the polygon is drawn in, letting a frame set the pen once
     # a band instead of once a polygon. Order within a band does not matter: these are filled
     # land masses at the same latitude, and they do not overlap.
     built.sort(key=_band_of)
@@ -137,13 +136,13 @@ def _find_bands():
 def pens(theme, alpha=LAND_ALPHA):
     """One pen per band of the ramp, the colour for that latitude over the page.
 
-    Per theme rather than per frame, and per band rather than per polygon: twenty four colours
+    Per theme and not per frame, and per band and not per polygon. Twenty four colours
     instead of 288, which is also twenty four pen assignments in a frame instead of 288.
     """
     key = (theme.name, alpha)
     found = _pens.get(key)
     if found is None:
-        # Dropped rather than grown past the couple of pages that can be on screen: a badge
+        # Dropped instead of grown past the couple of pages that can be on screen. A badge
         # cycling every theme would otherwise keep a set for each.
         if len(_pens) > 2:
             _pens.clear()
@@ -181,10 +180,11 @@ def terminator_at(lon, solar_lon, solar_lat):
 def night_path(solar_lon, solar_lat):
     """The dark half of the world, as a closed path in map degrees.
 
-    The terminator is a curve and the wash is that curve closed off at a pole, so which pole
-    is chosen decides which half gets filled. At a pole the sun's altitude is its own
-    declination, so the lit pole is the one the sun is over and the dark one is the other:
-    closing at the same pole all year fills the day side for half of it.
+    The terminator is a curve and the wash is that curve closed off at a pole, and the
+    pole chosen sets which half gets filled.
+
+    At a pole the sun's altitude is its declination, and the lit pole is the one the sun
+    is over. Closing at the same pole all year fills the day side for half of it.
     """
     dark_pole = -90.0 if solar_lat >= 0 else 90.0
     path = [vec2(-180.0, -dark_pole)]
@@ -225,9 +225,9 @@ class View:
     def look_at(self, lon, lat, scale, elapsed, ease_ms):
         """Move toward a place and a zoom, easing on a time constant.
 
-        Exponential approach against elapsed ms rather than a share of each frame, so the
-        travel takes as long whatever the page costs to draw: a map page is heavier than a
-        gauge and a per-frame share would visibly slow down with it.
+        Exponential approach against elapsed ms, and not a share of each frame, so the
+        travel takes as long whatever the page costs to draw. A map page is heavier than a
+        gauge, and a per-frame share would visibly slow down with it.
         """
         step = max(0.0, min(1.0, elapsed / ease_ms))
         self.lon = shortest(self.lon + shortest(lon - self.lon) * step)
@@ -260,13 +260,13 @@ class View:
         # Looked up once: this runs 288 times a frame and the attribute lookup is not free.
         local_floor = math.floor
         # Every polygon at the same whole turn of longitude shares one transform, and a frame
-        # only ever sees two or three turns, so a frame builds two or three. One apiece would be
+        # only ever sees two or three turns, and a frame builds two or three. One apiece would be
         # 288 allocations of 32 bytes; assigning a transform already built costs nothing.
         placed = self._placed
         placed.clear()
         for band, (first, last) in enumerate(_bands):
-            # The pen is set on the first polygon of the band that is actually in view, so a band
-            # entirely off screen costs nothing: an assignment is 64 bytes.
+            # The pen is set on the first polygon of the band in view, so a band entirely
+            # off screen costs nothing. An assignment is 64 bytes.
             inked = False
             for index in range(first, last):
                 entry = entries[index]
@@ -317,7 +317,7 @@ class View:
         was = screen.clip
         screen.clip = self.box
         screen.pen = wash
-        # Up to three copies, so a view wide enough to see past a date line is covered either
+        # Up to three copies, covering a view wide enough to see past a date line either
         # side of it. Each is a full turn wide, so at the zoom that fits the world one or two
         # of them cover it and the rest are 123 edges of nothing.
         for turn in (nearest - 360.0, nearest, nearest + 360.0):
