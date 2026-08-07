@@ -174,7 +174,7 @@ def label(text_value, size, pen, name=TEXT):
         return cached
     if key not in _once:
         if len(_once) > ONCE_MAX:
-            # Only ever holds keys, so this is a few kilobytes of tuples going, not pictures.
+            # Only ever holds keys, so this is a few kilobytes of tuples going.
             _once.clear()
         _once.add(key)
         return None
@@ -1095,7 +1095,7 @@ def _series_colour(theme, index):
         if theme.bg.difference(pen.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
             return pen
     # Neither end shows, which takes a palette whose ramp is the page at both ends. The dim
-    # colour does not track a reading, so it is the last resort and not a choice.
+    # colour does not track a reading, so it is the last resort.
     return theme.dim
 
 
@@ -1125,8 +1125,8 @@ def grid(theme, entries):
             screen.pen = theme.at(max(0.0, min(1.0, fraction if hot is None else hot)))
             screen.rectangle(rect(x, y + cell_h - 3, int(cell_w * max(0.0, min(1.0, fraction))), 3))
         # Both: a cell has room for the name and for a symbol in the far corner, so the
-        # symbol is another way to find the tile, and not the only one. A gauge has
-        # room for one or the other and takes the symbol.
+        # symbol is another way to find the tile. A gauge has room for one or the
+        # other and takes the symbol.
         blit_label(name, look.SIZE_SMALL, theme.dim, x + 7, y + 5)
         if icon:
             blit_icon(icon, look.SIZE_VALUE, theme.dim, x + cell_w - 7, y + 4, align=2)
@@ -1406,8 +1406,7 @@ def banner(theme, title, message, detail=None):
     box_w = look.W - 40
     room = box_w - pad_x * 2
 
-    # Trim anything that will not fit, so a long error shows as truncated and not
-    # running off the edge of the box.
+    # Trim anything that will not fit, so a long error shows as truncated.
     trimmed = [(fit(text, size, room), size, pen) for text, size, pen in lines]
     widest = max(screen.measure_text(text, font_size=size)[0]
                  for text, size, _ in trimmed)
@@ -1453,9 +1452,8 @@ def fit(text, size, room):
     if screen.measure_text(text, font_size=size)[0] <= room:
         return text
     # Halving, and not a character at a time: a string is only ever wider the longer it
-    # gets, so the longest prefix that fits can be found in a handful of measurements
-    # and not one per character trimmed. A post cut from 160 characters to 35 is eight
-    # measurements against a hundred and twenty five.
+    # gets, so the longest prefix that fits takes a handful of measurements. A post cut
+    # from 160 characters to 35 is eight against a hundred and twenty five.
     low, high = 0, len(text)
     while low < high:
         middle = (low + high + 1) // 2

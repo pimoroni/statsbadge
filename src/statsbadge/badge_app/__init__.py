@@ -669,7 +669,7 @@ class App:
         Only while the setting is on. The read is cheap, and off means the brightness is
         left alone.
 
-        Meaned over LIGHT_READS, and never taken as one reading. Whether the move is worth
+        Meaned over LIGHT_READS. Whether the move is worth
         making is backlight_to's to answer, since what counts as too small to bother with is
         a step of the panel and not a step of the sensor.
         """
@@ -1097,7 +1097,7 @@ def main():
             app.render()
             app.dirty = False
         badge.update()
-        # After the frame is composited, so a sweep lands between frames and never inside one.
+        # After the frame is composited, so a sweep lands between frames.
         app.sweep()
 
 

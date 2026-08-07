@@ -1722,7 +1722,7 @@ def test_every_kind_picks_from_a_pool_that_suits_it(_h):
         entry = shape[start:shape.index("},", start)]
         if 'one: "' not in entry and 'many: "' not in entry:
             # A kind with no slots has an empty pool: the badge page reads the
-            # badge, so there is no field to offer and no pool to offer it from.
+            # badge, so there is no field to offer.
             assert "max: 0" in entry, f"{kind} has no slots but a field maximum"
             continue
         for slot, key in (("one", "pool"), ("many", "manyPool")):
@@ -2677,7 +2677,7 @@ def test_the_badge_dims_to_suit_the_room(_h):
     assert look.ambient_fraction(lit) == 1.0
     assert look.ambient_fraction(railed) == look.ambient_fraction(65535) == 1.0
     # The three rooms have to be told apart, or the setting is a switch: a curtained room
-    # lands between the two ends and not near either.
+    # lands between the two ends.
     assert 0.25 < look.ambient_fraction(curtained) < 0.75, look.ambient_fraction(curtained)
     # Logarithmic: the first doubling is worth as much as the next.
     first = look.ambient_fraction(look.LIGHT_DIM * 2)
@@ -3216,7 +3216,7 @@ def test_the_version_is_written_down_once(_h):
     import statsbadge
 
     source = pathlib.Path("src/statsbadge/__init__.py").read_text()
-    # An assignment, in place of the bare word: the docstring says why.
+    # The assignment, since the word itself appears in the docstring above.
     assert not re.search(r"^__version__\s*=", source, re.M), "a second copy of the version"
     assert statsbadge.version(), "nothing can say what is installed"
 
@@ -3590,7 +3590,8 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained(_h):
     assert tooling.unpinned("/home/someone/statsbadge") is None
     assert tooling.unpinned("statsbadge[nvidia]") is None
 
-    # An unknown name is answered as one, ahead of a version clash.
+    # An unknown name is answered as one. uv reports it as a resolver error, which
+    # otherwise reads as a version clash.
     assert tooling.explain("error: Because nosuchthing was not found in the package "
                            "registry and you require nosuchthing, we can conclude that "
                            "your requirements are unsatisfiable.") == (
@@ -3720,7 +3721,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
     # Anything unrecognised keeps its type, which is the clue to what went wrong.
     assert said["ValueError"] == "ValueError: something we did not expect", said
 
-    # The API reports both, so the UI can say "failing" and "recovered" and not confuse them.
+    # The API reports both, so the UI can say "failing" and "recovered".
     _status, caps = h.raw("GET", "/api/capabilities")
     assert caps["sources"], caps
     for entry in caps["sources"]:
@@ -3841,7 +3842,7 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
         repl.run("/dev/fake", long_one)
         assert board.scripts == [long_one], len(board.scripts)
 
-        # The reset is a hard one, so the badge runs main.py again in place of sitting at
+        # The reset is a hard one, so the badge runs main.py again and does not sit at
         # a prompt. It sleeps first, letting the acknowledgement get out.
         board = FakeBoard()
         repl.reset("/dev/fake")
@@ -4166,9 +4167,9 @@ def test_the_mark_is_the_same_one_everywhere(h):
         assert response.headers.get("content-type") == "image/svg+xml", response.headers
         assert response.read().decode() == icon
 
-    # The site inlines the same geometry, so a change to one shows up here, ahead of two
-    # different marks. Its data URI quotes attributes with apostrophes, so the numbers are
-    # compared and not the markup around them.
+    # The site inlines the same geometry, so a change to one shows up here before the two
+    # marks drift apart. Its data URI quotes attributes with apostrophes, so the numbers
+    # are compared and not the markup around them.
     assert 'rel="icon"' in site, "the site has no mark to be the same as"
     for outline in re.findall(r'd="([^"]+)"', icon):
         assert outline in site, outline
@@ -4209,8 +4210,8 @@ def test_the_badge_can_report_on_itself_with_no_host(_h):
     kept = layout.prune(config["pages"], {"available": {}})
     assert [p["kind"] for p in kept] == ["badge"], kept
 
-    # The kind picker is written out in the page, ahead of the API, and is the one place
-    # a new kind can reach the badge and be forgotten in the browser.
+    # The kind picker is written out in the page and not built from the API, so it is the
+    # one place a new kind can reach the badge and be forgotten in the browser.
     markup = pathlib.Path("src/statsbadge/web/index.html").read_text()
     app = pathlib.Path("src/statsbadge/web/app.js").read_text()
     offered = set(re.findall(r'<option value="([a-z]+)">', markup))

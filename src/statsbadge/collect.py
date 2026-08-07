@@ -187,7 +187,7 @@ class Collector:
             decayed = self._peaks.get(key, 0.0) * PEAK_DECAY
             self._peaks[key] = max(float(value), decayed, floor)
         if self._peaks:
-            # Not a model group, and never offered as a field. Scale, not a reading.
+            # Scale, not a reading, so it is never offered as a field.
             frame["peaks"] = {key: round(value) for key, value in self._peaks.items()}
 
     def _push_history(self, frame):

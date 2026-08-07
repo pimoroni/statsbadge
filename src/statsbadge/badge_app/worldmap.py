@@ -136,8 +136,8 @@ def _find_bands():
 def pens(theme, alpha=LAND_ALPHA):
     """One pen per band of the ramp, the colour for that latitude over the page.
 
-    Per theme and not per frame, and per band and not per polygon. Twenty four colours
-    instead of 288, which is also twenty four pen assignments in a frame instead of 288.
+    Per theme and not per frame, and per band and not per polygon: twenty four colours
+    and twenty four pen assignments a frame, against 288 of each.
     """
     key = (theme.name, alpha)
     found = _pens.get(key)
