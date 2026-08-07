@@ -32,19 +32,19 @@ class InstallError(Exception):
 
 
 class PortBusy(InstallError):
-    """Something else has the port, so nothing here ever reached the badge.
+    """Something else has the port, so the badge was never reached.
 
-    Told apart from the rest because the difference decides what happens on the way out:
-    every command hard resets the badge in a `finally`, since talking to the REPL leaves
-    it on a blank screen, and a port that was never opened has nothing to hand back.
+    Told apart from the rest because it changes what happens on the way out. Every
+    command hard resets the badge in a `finally`, talking to the REPL leaving it on a
+    blank screen, and a port that was never opened has nothing to hand back.
     """
 
 
 # -- finding the badge ------------------------------------------------------
 
 # 0x2E8A is Raspberry Pi's vendor id, and a debug probe shares it with the board it
-# is attached to. Talking MicroPython to a CMSIS-DAP interface just times out, so
-# these are excluded by product id rather than hoping the ordering works out.
+# is attached to. Talking MicroPython to a CMSIS-DAP interface times out, and these are
+# excluded by product id, the ordering being no guarantee.
 NOT_A_BADGE_PIDS = frozenset((
     0x0003,     # RP2 BOOTSEL mass storage
     0x0004,     # picoprobe
@@ -96,10 +96,9 @@ def _exec(port, script, timeout=30):
         raise InstallError(str(exc) or f"the badge on {port} did not answer") from None
 
 
-# What `os.uname()[4]` says on the board this app is for: "Pimoroni Tufty 2350 with RP2350".
-# Checked before `import badgeware`, which is the first thing every script here does and
-# which fails on anything else as a MicroPython traceback naming a module the reader has
-# never heard of. A serial port that answers MicroPython is not necessarily a badge.
+# What `os.uname()[4]` says on the board this app is for. Checked before `import
+# badgeware`, the first thing every script here does, which on anything else fails as a
+# traceback naming a module the reader has never heard of.
 BOARD = "Tufty 2350"
 
 _BOARD_SCRIPT = (
@@ -150,16 +149,16 @@ def badge_info(port):
         "model": lines[-4],
         "uid": lines[-3],
         "app_installed": lines[-2] == "True",
-        # The bytecode version this firmware will load. Only the badge knows it, which
-        # is why a precompiled app is checked here and not only where it was built.
+        # The bytecode version this firmware will load. Only the badge reports it, so a
+        # precompiled app is checked here and not only where it was built.
         "mpy": int(lines[-1] or 0),
     }
 
 
 def check_precompiled(directory, badge_mpy):
-    """Refuse a .mpy build the attached badge cannot load.
+    """Refuse an .mpy build the attached badge cannot load.
 
-    A wrong bytecode version does not fail at install: it fails at import, on the badge,
+    A wrong bytecode version does not fail at install. It fails at import, on the badge,
     after the launcher has already started the app, as a crash dialog with no clue in it.
     The header is 'M', version, reserved, flags, and (flags << 8) | version is exactly
     what the firmware reports as sys.implementation._mpy.
@@ -200,9 +199,9 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
                 name=None):
     """Add this host to the app's config in /state, which MicroPython can write.
 
-    Credentials are keyed on the server's id rather than its address, so the badge can
-    follow a host that changes address, and this *merges* rather than replacing: a
-    badge paired with two machines keeps both. `seq` has to match the counter the
+    Credentials are keyed on the server's id and not its address, so the badge can
+    follow a host that changes address. This *merges* instead of replacing, and a badge
+    paired with two machines keeps both. `seq` has to match the counter the
     server recorded, or the badge's first request lands outside the replay window.
     """
     entry = json.dumps({
@@ -233,9 +232,9 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
         "                            'name': data.get('host'),\n"
         "                            'seq': data.get('seq', 0)}\n"
         f"entry = json.loads({entry!r})\n"
-        # A placeholder entry holding the same secret is this host before it was
-        # identified, so fold it in and keep the higher counter rather than leaving a
-        # duplicate that would look like a second machine.
+        # A stand-in entry holding the same secret is this host before it was
+        # identified, so fold it in and keep the higher counter. A duplicate would look
+        # like a second machine.
         "old = hosts.get('unknown')\n"
         "if old and old.get('secret') == entry['secret']:\n"
         "    entry['seq'] = max(entry.get('seq', 0), old.get('seq', 0))\n"
@@ -255,10 +254,9 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
 
 APP_DIR = f"/system/apps/{APP_NAME}"
 
-# Hashing on the badge rather than reading the files back over the REPL: it does the
-# whole app directory in 45ms and only the digests cross the wire. Marker-prefixed
-# because the reply is many lines and has to be picked out of whatever else the REPL
-# said.
+# Hashing on the badge, and not reading the files back over the REPL. It does the
+# whole app directory in 45ms and only the digests cross the wire. Marker-prefixed,
+# the reply being many lines to pick out of whatever else the REPL said.
 _HASH_SCRIPT = """
 import hashlib, os, binascii
 def walk(base, prefix=''):
@@ -311,8 +309,8 @@ def desired_hashes(source=None, extra_modules=()):
 def app_changes(installed, desired):
     """(added, changed, removed) between what is on the badge and what would be.
 
-    Only prunable names count as removed: a file the installer does not own is not a
-    reason to reset the badge.
+    Only prunable names count as removed. A file somebody else put there is no reason
+    to reset the badge.
     """
     added = sorted(set(desired) - set(installed))
     changed = sorted(name for name in set(desired) & set(installed)
@@ -387,8 +385,8 @@ def write_secrets(volume, ssid, password, region=None, timezone=None):
             comment = (match.group(1) or "").strip()
             return f"{key} = {literal}  {comment}" if comment else f"{key} = {literal}"
 
-        # A function as the replacement, so a backslash in a password is not read as an
-        # escape and written out broken.
+        # A function as the replacement, which keeps a backslash in a password from
+        # being read as an escape and written out broken.
         text, count = re.subn(rf"^[ \t]*{key}[ \t]*=[^\n#]*(\s*#[^\n]*)?$",
                               replace, text, count=1, flags=re.M)
         if not count:
@@ -454,12 +452,12 @@ def choose_app_source(explicit, force_source, badge_mpy):
     """Which directory to install from. Returns (source or None for .py, note).
 
     Bytecode only loads on the firmware it was built for, so a packaged build that does
-    not match the badge is skipped rather than refused - the sources still work.
+    not match the badge is skipped and not refused, the sources still working.
 
     A bundled build whose sources have moved on is skipped for the same reason. It loads
-    perfectly well and is simply the older program, which shows up as an edit that had no
-    effect rather than as an error. An explicitly named directory is still only warned
-    about: naming it is asking for it, and its sources are not expected to be these ones.
+    perfectly well and is the older program, which shows up as an edit that had no effect.
+    An explicitly named directory is only warned about, since naming it is asking for
+    it, and its sources are not expected to be these ones.
     """
     if force_source:
         return None, "installing sources, as asked"
@@ -498,7 +496,7 @@ def enter_mass_storage(port):
     try:
         _exec(port, "import _msc", timeout=10)
     except InstallError:
-        # Expected: the board resets mid-command and the REPL never replies.
+        # Expected. The board resets mid-command and the REPL stops answering.
         pass
 
 
@@ -578,16 +576,16 @@ def _stale_modules(built_dir):
     return stale
 
 
-# MPY_VERSION and BUILD_INFO are notes from the precompile, not something the badge
-# needs. `mpy` is the built copy sitting inside the source directory.
+# MPY_VERSION and BUILD_INFO are notes from the precompile, and stay on the host.
+# `mpy` is the built copy sitting inside the source directory.
 NOT_APP_FILES = ("__pycache__", "MPY_VERSION", "BUILD_INFO", "mpy")
 
 
 def app_files(source=None, extra_modules=()):
     """What an install puts on the badge, as (name relative to the app dir, path).
 
-    The one place that decides which files belong, so the copy, the change check and
-    the prune cannot disagree about it.
+    The one place naming which files belong, so the copy, the change check and the
+    prune cannot disagree.
     """
     source = source or app_source_dir()
     files = []
@@ -608,10 +606,10 @@ def app_files(source=None, extra_modules=()):
 
 
 def copy_app(volume, source=None, extra_modules=()):
-    """Copy the app onto a mounted badge volume, and remove what no longer belongs.
+    """Copy the app onto a mounted badge volume, and remove what does not belong.
 
-    `source` may be a precompiled .mpy directory instead of the package's own, which is
-    how the CI-built bytecode gets installed.
+    `source` may be a precompiled .mpy directory instead of the package's, which is how
+    the CI-built bytecode gets installed.
     """
     apps = os.path.join(volume, "system", "apps")
     if not os.path.isdir(apps):
@@ -631,15 +629,15 @@ def copy_app(volume, source=None, extra_modules=()):
 
 
 # Only these are the installer's to delete. Anything else in the app directory was put
-# there by someone, and a install that eats it is worse than one that leaves litter.
+# there by someone, and an install that removes it is worse than one that leaves litter.
 PRUNABLE = (".py", ".mpy", ".png", ".af")
 
 
 def prune_app(target, keep):
-    """Delete app files that are no longer part of the install. Returns their names.
+    """Delete app files that are not part of the install. Returns their names.
 
-    A .py left beside a .mpy takes precedence over it, so a source install followed by
-    a bytecode one silently undoes the precompile unless the old sources go. Extension
+    A .py left beside an .mpy takes precedence over it, so a source install followed by
+    a bytecode one silently undoes the precompile unless those sources go. Extension
     modules in ext/ have the same problem: one left behind keeps registering its page.
     """
     removed = []
@@ -669,8 +667,8 @@ def _existing_app_files(target):
 def wait_for_port(timeout=40, previous=None):
     """Wait for a badge's REPL to come back after a reset, and return its port.
 
-    Enumeration is not instant and the port may come back under a different name, so
-    this polls rather than assuming the old path still works.
+    Enumeration takes a moment and the port may come back under a different name, so
+    this polls, the previous path being no guide.
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -693,17 +691,18 @@ def hard_reset(port, settle=True):
     there, which leaves it sitting at a bare prompt on a blank screen. A reset runs
     `main.py` again, so the badge starts whatever it is set up to start.
 
-    A port something else holds is the one case where there is nothing to do: nothing
-    here interrupted the badge, so there is nothing to hand back, and waiting for a port
-    that never went away to come back is fifteen seconds of waiting out the timeout
-    before announcing a reset that did not happen.
+    A port something else holds is the one case that skips this. The badge was left
+    running, so it is already where it should be.
+
+    Waiting for a port that stayed put costs fifteen seconds of timeout before announcing
+    a reset that never happened.
     """
     try:
         repl.reset(port, timeout=10)
     except repl.Busy:
         return False
     except (repl.ReplError, OSError):
-        # Expected: the port goes away mid-command, so there is nothing to hear back.
+        # Expected. The port goes away mid-command, and the reply is lost with it.
         pass
     if settle:
         wait_for_enumeration(previous=port)
@@ -718,8 +717,8 @@ def wait_for_enumeration(previous=None, timeout=15):
     interrupt whatever has just started. So this only watches enumeration.
     """
     deadline = time.time() + timeout
-    # Wait for the old path to go first, or a port still present from before the reset
-    # would look like the badge already being back.
+    # Wait for the previous path to disappear. A port that has yet to go reads as the
+    # badge already being back.
     if previous:
         while time.time() < deadline and previous in find_ports():
             time.sleep(0.2)
