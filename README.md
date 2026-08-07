@@ -10,7 +10,7 @@ Build your stats overview from a selection of pages - bar graphs and waterfalls 
 
 ## Install
 
-Uses [uv](https://docs.astral.sh/uv/). As a tool, so it lands on your PATH and keeps its own environment:
+Uses [uv](https://docs.astral.sh/uv/). As a tool, so it lands on your PATH and keeps a separate environment:
 
 ```bash
 uv tool install statsbadge
@@ -25,7 +25,7 @@ uv pip install --no-deps ./extensions/statsbadge-clock   # optional
 uv run statsbadge serve
 ```
 
-Or into whatever environment you already have, with pip or uv:
+Into whatever environment you already have, with pip or uv:
 
 ```bash
 uv pip install statsbadge      # or from a checkout: uv pip install .
@@ -43,15 +43,15 @@ statsbadge install --ssid "My Network"   # and sets up WiFi, from a brand new ba
 
 That writes the pairing secret over the serial REPL and, if the app needs copying, offers to reset the badge into USB mass storage mode to do it. Answer no and you get credentials only.
 
-Run it again whenever you have upgraded the package or installed an extension. It compares what is on the badge with what it would put there, copies only what changed, removes what no longer belongs, and leaves the badge alone entirely when nothing has: about a second, no reset. `statsbadge update` is the same command under the name you probably reached for. Credentials it has already written are left as they are, so a repeat run is purely a code update.
+Run it again whenever you have upgraded the package or installed an extension. It compares what is on the badge with what it would put there, copying only what differs and dropping what does not belong. When the badge already matches, it is left alone: about a second, no reset. `statsbadge update` is the same command under the name you probably reached for. Credentials already written are left as they are, so a repeat run is purely a code update.
 
 `--ssid` sets the WiFi details in the badge's `secrets.py` while that volume is mounted, so a new badge goes from unboxed to showing stats in one command. It prompts for the password, so the password stays out of your shell history; `--pass` takes it directly and an empty string means an open network. `--region` and `--timezone` set those too. Details the badge already has are left alone unless you pass `--force-secrets`.
 
 No cable? Run `statsbadge pair`, or open the config UI and press **Pair a badge**. Launch **Stats** on the badge and press **B** to set up; it finds the host by itself and shows a six-character code. Check that code matches the one the host shows, and approve it there. Nothing is typed on the badge.
 
-A server is not in pairing mode until you put it there, and the window closes on its own after five minutes or when you press **Stop pairing**. Requests are rate limited and capped, and one only pairs a badge when you approve it.
+A server is not in pairing mode until you put it there, and the window closes after five minutes or when you press **Stop pairing**. Requests are rate limited and capped. One only pairs a badge once you approve it.
 
-Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings. A button can run a host command or do something on the badge itself - page back and forth, or cycle the brightness - and the badge can take that brightness down to suit a dim room off its own light sensor, or page through the screens by itself once nobody has touched it for a while.
+Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings. A button can run a host command, or do something on the badge itself: page back and forth, or cycle the brightness. The badge can also set that brightness from its light sensor to suit a dim room, and page through the screens on a timer once nobody has touched it for a while.
 
 ## Everything else you might want
 
@@ -73,7 +73,7 @@ statsbadge install --ssid "Other" --force-secrets    # change the WiFi it uses
 statsbadge --config-dir ./cfg serve    # global options come before the subcommand
 ```
 
-Each badge is configured separately: the picker in the header of the config UI says which one the page belongs to, and pages, theme, buttons and the rest are that badge's own. A badge that has just been paired draws the default until it is saved for the first time, which is what "Default, for any other badge" in the picker edits. Saving for one badge leaves the others where they are - a badge only refetches when its own layout's revision moves. Forgetting a badge takes its layout with it. What an extension is *told* - a place, an API key - stays one answer per host, since that is what it is.
+Each badge is configured separately. The picker in the header of the config UI names the badge a page belongs to, and pages, theme, buttons and the rest belong to that badge. A badge that has just been paired draws the default until it is saved for the first time, the entry "Default, for any other badge" in the picker. Saving for one badge leaves the others where they are - a badge only refetches when its layout's revision moves. Forgetting a badge takes its layout with it. What an extension is *told* - a place, an API key - stays one answer per host, since that is what it is.
 
 Configuration lives in `~/.config/statsbadge` on Linux, `~/Library/Application Support/statsbadge` on macOS and `%LOCALAPPDATA%\statsbadge` on Windows, or `$XDG_CONFIG_HOME/statsbadge` wherever that is set. `statsbadge status` prints the path it is using. Three files: `layout.json`, `server.json` and `badges.json`, the last holding pairing secrets and kept at mode 600.
 
@@ -82,8 +82,8 @@ Configuration lives in `~/.config/statsbadge` on Linux, `~/Library/Application S
 Credentials are keyed on a server id the host mints once, not on its address. So:
 
 - **The host's IP changes.** The badge notices the polls failing, hears the host's beacon, recognises the id it is already paired with and follows it to the new address. Nothing to re-pair.
-- **Two computers.** Pair with both - `statsbadge install` and `statsbadge pair` add a host rather than replacing one, each with its own secret and counter. The badge uses whichever it can reach, and switches by itself when the current one goes quiet.
-- **Same computer, fresh install.** `install` reuses the existing secret unless you pass `--new-secret`, and folds an older single-host config in rather than orphaning it.
+- **Two computers.** Pair with both - `statsbadge install` and `statsbadge pair` add hosts; neither replaces the one already there. Each gets its own secret and counter. The badge uses whichever it can reach, and switches by itself when the current one goes quiet.
+- **Same computer, fresh install.** `install` reuses the existing secret unless you pass `--new-secret`, and folds an older single-host config in, leaving nothing orphaned.
 
 `statsbadge badges` lists what a host has paired; `--forget` drops one.
 
@@ -111,7 +111,7 @@ The hosts menu is how you switch between machines - laptop, desktop, that Linux 
 | `fans`  | RPM                                                        |
 | `sys`   | host, OS, CPU name, uptime                                 |
 
-A field the host cannot measure is `null`, and pages that need it are dropped rather than shown empty. On macOS that means temperatures, fan speed and package power: those need root, so they are opt-in with `--powermetrics`, which allows one command and nothing else:
+A field the host cannot measure is `null`, and pages that need it are dropped, not shown empty. On macOS that means temperatures, fan speed and package power. Those need root, so they are opt-in with `--powermetrics`, which allows exactly one command:
 
 ```bash
 sudo visudo -f /etc/sudoers.d/statsbadge
@@ -119,32 +119,38 @@ sudo visudo -f /etc/sudoers.d/statsbadge
 you ALL=(root) NOPASSWD: /usr/bin/powermetrics --samplers cpu_power,gpu_power,thermal -i 1000 -f plist
 ```
 
-Run with `--powermetrics` and no rule in place and it says so, prints that line with your username already in it, and carries on without those fields. Windows needs [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running with its web server on for temperatures and fans. NVIDIA GPUs need `pip install statsbadge[nvidia]`.
+Run with `--powermetrics` and no rule in place and it prints that line with your username already in it, then carries on without those fields. Windows needs [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) running with its web server on for temperatures and fans. NVIDIA GPUs need `pip install statsbadge[nvidia]`.
 
 ## Page kinds and themes
 
-Twelve kinds and any field can go in any of them. Six show readings as they are: `dial`, `dials`, `bars`, `graph`, `grid`, `text`. Five say something a single number cannot:
+Twelve kinds, and any field can go in any of them. Six show readings as they are. Those are `dial`, `dials`, `bars`, `graph`, `grid` and `text`. The other five go further than a single number:
 
 | Kind | What it is for |
 | ---- | -------------- |
-| `rings` | up to four readings as concentric gauges, each coloured by its own value |
+| `rings` | up to four readings as concentric gauges, each coloured by its value |
 | `spark` | six readings at once, name, current value and recent history a row each |
 | `radar` | three to six readings as a polygon: the shape of the load rather than its size |
 | `trend` | one big reading, which way it is going, and where it has been |
 | `waterfall` | a list field as lanes over time, interpolated between polls |
 | `badge` | the badge's own vitals, which need no field and no host |
 
-`dial` has a page to itself, so it is the one gauge big enough to read a ramp off: set **Dial gauge** to *The Whole Ramp* and it fills with a conical gradient carrying the theme's whole ramp, with the part past the reading drawn from the same stops at alpha 32 so the scale still shows behind it. Costs 0.6ms a frame.
+`dial` has a page to itself, so it is the one gauge big enough to read a ramp off. Set **Dial gauge** to *The Whole Ramp* and it fills with a conical gradient carrying the theme's ramp end to end. Past the reading the same stops are drawn at alpha 32, so the scale still shows behind it. Costs 0.6ms a frame.
 
 ![The whole ramp](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/dial_ramp.png)
 
-`badge` is the odd one out: battery, memory, both filesystems and the ambient light as levels, the clock, voltage, power source, uptime and screen as figures, and the board, firmware and uid underneath. Nothing on it comes from the host, so it is the page to turn to when you are wondering whether the badge or the network is the problem.
+`badge` is the odd one out. Battery, memory, both filesystems and the ambient light show as levels. The clock, voltage, power source, uptime and screen show as figures. The board, firmware and uid are underneath. Nothing on it comes from the host, so it is the page to turn to when you are wondering whether the badge or the network is the problem.
 
 ![Badge](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/badge.png)
 
-`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps - it interpolates between the once-a-second polls rather than stepping, so it reads as motion rather than as data arriving. Precision is what that trades away; the numbers are on the other pages. Sixteen themes, and forty-eight accents. Written down and grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura`, the three Eva units, and four that come as a pair for a lit room and a dark one - Mono, Watermelon, Shell and Luminescence. Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images - and the palette travels to the badge with the layout, so it is config: [`themes.py`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
+`waterfall` is the one that moves. Point it at `cpu.cores` and every core gets a lane, coloured by the theme's ramp and scrolling right to left at about 28fps. It interpolates between the once-a-second polls instead of stepping, so it reads as motion and not as data arriving. Precision is what that trades away; the numbers are on the other pages.
 
-Then four you can tune yourself, derived rather than written. Pick one of forty-eight accents - twelve hues in four families, Pastel, Normal, Saturated and Dark - and the rest of the palette is worked out from it: Tinted Dark and Tinted Light hold every hue at one chroma and send the ramp to red unless the accent is already there, and Tinted Bold Dark and Tinted Bold Light take each hue as far as sRGB allows and keep the ramp in it, sweeping lightness instead. The single-hue themes that used to be written down - red, green, cyan, amber, blueprint - are that second pair with an accent, so those names still resolve to what they always looked like. A palette can also carry a second accent, used sparingly: a graph's second series takes it, which is the one place the badge otherwise has to hunt through the ramp for a colour that will show. A derived theme picks it by rule - Same, Complementary, Triadic or Contrasting, the last being whichever offered hue lands furthest away once lightness and chroma are counted - and Watermelon Light names its own, that page having nowhere else to put its green. The config page previews whichever theme is selected, derived or not.
+Sixteen themes, and forty-eight accents. The written-down ones are grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura` and the three Eva units. Four more come as a pair for a lit room and a dark one: Mono, Watermelon, Shell and Luminescence.
+
+Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images. The palette travels to the badge with the layout, which makes it config: [`themes.py`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
+
+Then four you can tune yourself, derived rather than written. Pick one of forty-eight accents: twelve hues in four families, Pastel, Normal, Saturated and Dark. Tinted Dark and Tinted Light hold every hue at one chroma and send the ramp to red unless the accent is already there. Tinted Bold Dark and Tinted Bold Light take each hue as far as sRGB allows and keep the ramp in it, sweeping lightness. The single-hue names red, green, cyan, amber and blueprint are that second pair with an accent, so they still resolve to what they always looked like.
+
+A palette can also carry a second accent, used sparingly. A graph's second series takes it, and that is the one place the badge otherwise has to hunt through the ramp for a colour that will show. A derived theme picks it by rule: Same, Complementary, Triadic or Contrasting, the last being whichever offered hue lands furthest away once lightness and chroma are counted. Watermelon Light names its own, that page having nowhere else to put its green. The config page previews whichever theme is selected, derived or not.
 
 ![Cores](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/cores.png) ![Network](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/net.png) ![Disk](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/disk.png) ![Processor](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/gauges2.png) ![Host](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/host.png) ![Vapor](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_vapor.png) ![Sakura](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_sakura.png) ![Watermelon](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_watermelon.png) ![Shell](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_shell.png) ![Unit-01](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_eva01.png) ![Luminescence](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/theme_luminescence.png)
 
@@ -161,7 +167,7 @@ statsbadge install
 
 Badge-side modules go on by default, so adding an extension and then running `install` is all of it. `--no-extensions` leaves them off, and `--without NAME` drops one from both the frame and the badge.
 
-`uv tool install` is declarative: every run replaces the last, so naming one extension would drop the others. `ext add` keeps the list in `extensions.txt` beside your config and rebuilds from all of it, taking whatever the tool was already installed with as its starting point - extras like `statsbadge[nvidia]` included, read from uv's own record of how it was installed.
+`uv tool install` is declarative: every run replaces the last, so naming one extension would drop the others. `ext add` keeps the list in `extensions.txt` beside your config and rebuilds from all of it. It starts from whatever the tool was already installed with, extras like `statsbadge[nvidia]` included, read from uv's record of the install.
 
 ```bash
 statsbadge ext                     # what is installed, and what the list asks for
@@ -170,15 +176,17 @@ statsbadge ext remove clock        # take one out, and out of the environment
 statsbadge ext sync                # make the environment match the list
 ```
 
-Installed some other way - a venv, pipx, a checkout - and `ext add` says so and prints the `uv pip install` line to run instead. The list is still the record either way.
+Installed some other way - a venv, pipx, a checkout - and `ext add` prints the `uv pip install` line to run instead. The list is still the record either way.
 
-Three extensions are vendored here: [statsbadge-clock](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's own world map, so running both costs one copy of the coastlines and no geometry crosses the network.
+Three extensions are vendored here: [statsbadge-clock](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's world map, so running both costs one copy of the coastlines and no geometry crosses the network.
 
-An extension can declare settings that belong to *one page* rather than to the extension, so two pages of the same kind can show different things. The clock uses it for a place and a face: point one page at Tokyo and another at home, and each shows that city's weather and its own local time - Open-Meteo returns a location's UTC offset with its forecast, so a place settles the time too and there is no timezone to set. `latitude` and `longitude` are there per page as well, for a spot no name lands on. Settings that describe how the extension works, like units or an API key, stay under Extensions where there is one answer per machine, and the place set there is the default for any page that names none.
+An extension can declare settings that belong to *one page* and not to the extension, so two pages of the same kind can show different things. The clock uses it for a place and a face. Point one page at Tokyo, another at home, and each shows that city's weather and local time. Open-Meteo returns a location's UTC offset with its forecast, so a place settles the time too and there is no timezone to set. `latitude` and `longitude` are there per page as well, for a spot no name lands on. Settings that describe how the extension works, like units or an API key, stay under Extensions where there is one answer per machine, and the place set there is the default for any page that names none.
 
-Settings are what an extension is told. What it works out is `self.store`, a small dict the host keeps between runs: `store.get(key)` and `store.set(key, value)`, namespaced by the extension's entry point name and written under the config directory, so an extension never picks a filename or manages a directory of its own. It is in place by the time `start` runs. The clock keeps the coordinates a place name resolved to, since a town does not move: the geocoder is asked once per name ever rather than once per launch, and a badge coming up with the geocoder rate limited still knows where it is looking.
+Settings are what an extension is told. What it works out goes in `self.store`, a small dict the host keeps between runs: `store.get(key)` and `store.set(key, value)`. It is namespaced by the extension's entry point name and written under the config directory, so an extension never picks a filename or manages a directory. It is in place by the time `start` runs.
 
-An extension can ship more than code. `badge_assets` lists further files to push, and the clock uses it for an icon font: its `icons.txt` names the Material Symbols it wants, and `tools/make_icon_font.py` packs them into an `.af` the badge loads with `font.load()`.
+The clock keeps the coordinates a place name resolved to, since a town does not move. The geocoder is asked once per name ever, not once per launch, so a badge coming up while the geocoder is rate limiting still draws the right place.
+
+An extension can ship more than code. `badge_assets` lists further files to push, and the clock uses it for an icon font: its `icons.txt` names the Material Symbols to pack, and `tools/make_icon_font.py` packs them into an `.af` the badge loads with `font.load()`.
 
 ```bash
 uv sync --group fonts
@@ -191,7 +199,7 @@ That fetches Material Symbols, fits each glyph to the text font's metrics so ico
 
 ![Railway](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/swiss_clock.png) ![Dots](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_dots.png) ![Squircle](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_squircle.png) ![Digital](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_digital.png) ![Digital LCD](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_lcd.png)
 
-[statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) puts recent earthquakes on a world map, cycling through them on its own: the camera closes in on each and pulls back out to cross an ocean, and the rings leaving an epicentre are coloured by magnitude. From USGS, no key needed.
+[statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) puts recent earthquakes on a world map, cycling through them unprompted: the camera closes in on each, then pulls back out to cross an ocean, and the rings leaving an epicentre are coloured by magnitude. From USGS, no key needed.
 
 ![Quakes](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/quakes.png) ![Quakes pulled out](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/quakes_wide.png)
 
@@ -203,7 +211,7 @@ See [DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMEN
 
 ## Security
 
-Plain HTTP on the LAN, with every request signed HMAC-SHA256 against a shared secret from pairing, and a counter the host refuses to accept twice. So a command cannot be forged or replayed, and an unpaired device on the network learns nothing. TLS is affordable on this hardware but buys little without certificate validation - [DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMENT.md) has the measurements. The config API is bound to loopback because it can mint secrets. Host commands only run if you have bound them to a button.
+Plain HTTP on the LAN, with every request signed HMAC-SHA256 against a shared secret from pairing, and a counter the host rejects on a repeat. So a command cannot be forged or replayed, and an unpaired device on the network learns nothing. TLS is affordable on this hardware but buys little without certificate validation - [DEVELOPMENT.md](https://github.com/pimoroni/statsbadge/blob/main/DEVELOPMENT.md) has the measurements. The config API is bound to loopback because it can mint secrets. Host commands only run if you have bound them to a button.
 
 ## Fonts
 
