@@ -21,9 +21,6 @@ Two halves sharing one small contract. The host picks *what* to show and the bad
 | [`server.py`](src/statsbadge/server.py) | the HTTP server, and the framing that makes it fast |
 | [`install.py`](src/statsbadge/install.py) | pushing the app and credentials over USB |
 
-The detail behind every claim here is in the git history of this file, which carried the
-measurements and the reasoning at length. This is the version to read first.
-
 ## The frame
 
 One shape across every platform, with anything the host cannot answer set to `None`. Never
