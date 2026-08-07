@@ -4,12 +4,31 @@ UP/DOWN     page through what the host is configured to show
 A B C       whatever the host has bound them to, if anything
 HOME        open the hosts menu; hold to leave
 
-Where a screen takes A/B/C for its own input rather than passing them to the host, they
-are used in the order they sit in: A back, B select, C next.
+Where a screen takes A/B/C for itself instead of passing them to the host, they are used
+in the order they sit in: A back, B select, C next.
 
-The host decides what the pages are; this fetches them and draws them. Polling is a
-generator advanced from the draw loop, so a slow reply costs latency and never a
-frame.
+The host settles what the pages are; this fetches them and draws them. Polling is a
+generator advanced from the draw loop, and a slow reply costs latency and never a frame.
+
+Measured on the board, since several settings below are otherwise arbitrary.
+
+**The heap.** Left alone the collector runs only when an allocation fails, which on 8MB of
+PSRAM lets megabytes pile up and leaves the free list in pieces: 71KB largest contiguous
+run with 7MB free, from tools/mem_probe.py. A collect is 3.9ms. GC_THRESHOLD covers an
+animated page, where a frame allocates up to 15KB and a collect every seventeen frames
+amortises to 0.23ms; COLLECT_EVERY_MS sweeps a resting page, where the pause costs nothing.
+
+**The panel.** The backlight driver raises its input to the power of 2.8 for the PWM duty,
+so BACKLIGHT_FLOOR is 3.4% of duty and below it the panel is dark whatever the arithmetic
+says; tools/backlight_floor.py measures it. display.backlight() is cast to a byte before
+that correction, so a change under BACKLIGHT_STEP sets the panel to what it already shows
+and only restarts the ramp.
+
+**The light sensor.** A phototransistor a hand can shadow, read through the 12-bit ADC with
+a couple of counts of noise either way. With the room and the panel held still, 256 reads
+spanned 64-80 of the raw u16. That is nothing against the 4500 a lit room reads, but
+darkness reads 48 and ambient_fraction is logarithmic, so the noise costs most where the
+curve is steepest. LIGHT_READS of 16 is 256us and halves it.
 """
 
 import builtins
@@ -22,8 +41,8 @@ APP_DIR = "/system/apps/stats"
 try:
     os.chdir(APP_DIR)
 except OSError:
-    # Not installed: running from a mounted checkout. Locate the app by this file
-    # rather than by cwd, which under `mpremote mount` is the mount root and not the
+    # Running from a mounted checkout. Locate the app by this file
+    # and not by cwd, which under `mpremote mount` is the mount root and not the
     # app directory - so `pages/` would be looked for in the wrong place.
     here = globals().get("__file__")
     APP_DIR = here.rsplit("/", 1)[0] if here and "/" in here else os.getcwd()
@@ -61,12 +80,11 @@ def pairing_ui():
 def load_extensions():
     """Import any badge-side modules an extension had pushed into ext/.
 
-    Each registers its own page kind in `pages.EXTRA` on import. A broken extension
+    Each registers a page kind in `pages.EXTRA` on import. A broken extension
     must not take the app down with it, so each is imported inside a try.
 
-    The directory is `ext`, not `pages`: a directory named `pages` on sys.path shadows
-    the app's own `pages.py`, and an extension importing `pages` would get the empty
-    directory instead of the module it wanted.
+    The directory is `ext`, not `pages`. A directory named `pages` on sys.path shadows
+    the app's `pages.py`, and an extension importing `pages` would get the directory.
     """
     directory = APP_DIR + "/ext"
     try:
@@ -86,81 +104,60 @@ def load_extensions():
             print(f"extension {name} failed: {exc}")
     return loaded
 
-# HOME opens the hosts menu, so the launcher's exit irq is taken off it and it is polled
-# instead - the idiom BADGEWARE.md describes. Holding it still leaves, and the way out has
-# to stay: a press alone must not strand anyone.
+# HOME opens the hosts menu, so the launcher's exit irq comes off it and it is polled, the
+# idiom BADGEWARE.md describes. Holding it still leaves, and that way out has to stay.
 BUTTON_HOME.irq(None)
 HOLD_TO_EXIT_MS = 700
 
-# How much may be allocated between collects, and how often the heap is swept when nothing on
-# screen is moving. Left to itself the collector runs only when an allocation fails, which on 8MB
-# of PSRAM lets megabytes of garbage pile up first and leaves the free list in pieces: measured
-# with tools/mem_probe.py, a largest contiguous free run of 71KB with 7MB of it free. A collect is
-# 3.9ms on this board. The threshold covers an animated page, where a frame allocates up to 15KB
-# and a collect every seventeen frames is 0.23ms a frame amortised; the sweep is for a page that
-# is resting, where the pause goes somewhere nothing is waiting on it.
+# How much may be allocated between collects, and how often the heap is swept while the
+# screen holds still; see the docstring.
 GC_THRESHOLD = 256 * 1024
 COLLECT_EVERY_MS = 1000
 
 # State writes /state/<app>.json, the same file net.Config keeps the pairing in. Both read
-# and write it, so page saves go through State.modify, which merges.
+# and write it, and page saves go through State.modify, which merges.
 STATE_APP = "stats"
 
 # The lowest display.backlight value that lights the panel, which every brightness is
-# measured up from. The driver raises its input to the power of 2.8 for the PWM duty, so this
-# is 3.4% of duty: less than that and the panel is off however the arithmetic reads, which is
-# measured and not a curve anybody can argue from. tools/backlight_floor.py is how.
+# measured up from; see the docstring.
 BACKLIGHT_FLOOR = 0.3
 
-# The smallest change worth asking for. display.backlight() is cast to a byte before the
-# driver corrects it, so anything under one step of that byte sets the panel to what it is
-# already showing - and asking is what restarts the ramp.
+# The smallest change worth asking for; see the docstring.
 BACKLIGHT_STEP = 1.0 / 255 / (1.0 - BACKLIGHT_FLOOR)
 
 # The share of the theme's case light level a reading of zero still gets.
 CASELIGHT_FLOOR = 0.15
 
 
-# How much of a step to take towards a new ambient reading each poll, and how often to take
-# one. The sensor is a phototransistor a hand can shadow, so following it directly makes the
-# panel flicker at every passing movement. A tenth of the gap ten times a second is a second
-# to most of the way and a couple to all of it, which nothing about a room getting darker
-# needs to beat - and no single step is big enough to read as one.
+# How much of a step to take towards a new ambient reading each poll, and how often to
+# take one. Following the sensor directly flickers the panel at every passing hand.
 LIGHT_FOLLOW = 0.1
 LIGHT_EVERY_MS = 100
 
-# How many reads go into one of those. The phototransistor is read through the 12-bit ADC,
-# which carries a couple of counts of noise either way: measured with the room and the panel
-# both held still, 256 reads spanned 64-80 of the raw u16. That is nothing against the 4500 a
-# lit room reads, but darkness reads 48, and ambient_fraction is logarithmic - so the noise is
-# worth the most exactly where the curve is steepest. Sixteen reads is 256us and halves it.
+# How many reads go into one of those, against the ADC's noise; see the docstring.
 LIGHT_READS = 16
 
-# Bindings this badge answers itself, and the shares of the configured brightness its button
-# steps through. Paging and the panel are the badge's own business and a round trip to the host
-# would be slower than the press; the host never sees these.
+# Bindings this badge answers itself, and the shares of the configured brightness its
+# button steps through. Paging and the panel are the badge's business, and a round trip to
+# the host would be slower than the press.
 LOCAL_PREFIX = "badge."
 BRIGHTNESS_STEPS = (1.0, 0.6, 0.3)
 
 # How many presses can be waiting for the connection, and how long one waits before it is
-# dropped. The badge polls constantly, so a press usually lands while a request is in flight
-# and has to wait for it: that is a fraction of a second. Longer than this is a host that has
-# stopped answering, where a command arriving late is worse than one that never arrives.
+# dropped. Longer than this is a host that stopped answering.
 COMMAND_QUEUE = 4
 COMMAND_WAIT_MS = 3000
 
 
-# How long a page takes to slide on, when the layout asks for that. Short: it is a quarter
-# of a second between pressing for the next page and being able to read it.
+# How long a page takes to slide on, when the layout asks for it. A quarter of a second
+# between pressing for the next page and reading it.
 SLIDE_MS = 220
-# How long a press waits for another before the slide starts. Five quick presses should be
-# one slide onto the page they landed on, not five slides fighting over the screen - and the
-# page being slid to is only known once they stop. Short enough that a single press does not
-# feel held up.
+# How long a press waits for another before the slide starts. Five quick presses are one
+# slide onto the page they landed on, and the destination is only settled once they stop.
 SLIDE_WAIT_MS = 120
 
 # How long the panel takes to reach a new brightness. Short enough to answer a button
-# press, long enough that the step is a change of light rather than a click.
+# press, long enough that the step is a change of light and not a click.
 BACKLIGHT_MS = 300
 # Where the panel is, and where it was last told to go. Both, because a ramp in flight has
 # not arrived: comparing a new target against the moving one would let a slow drift restart
@@ -183,14 +180,13 @@ def backlight(fraction):
 def backlight_to(fraction, ms=BACKLIGHT_MS, shape=None):
     """Head for a brightness, easing there over `ms`. Zero sets it outright.
 
-    A step is the one thing on this badge that is unmissable however small, because the
-    whole panel moves at once: cycling the button or a curtain opening both read as a click
-    where a ramp reads as the light changing.
+    A step is unmissable however small, the whole panel moving at once. Cycling the button
+    or a curtain opening both land as a click where a ramp lands as the light changing.
 
     `shape` picks how the ramp is walked. The default eases in and out, which suits one
-    change somebody asked for; a follower giving a new target before the last has arrived
-    wants LINEAR, or every one of its steps starts and ends at a standstill and the panel
-    pulses its way to the new level.
+    change somebody asked for. A follower giving a new target before the last has arrived
+    takes LINEAR, or every step starts and ends at a standstill and the panel pulses its
+    way to the new level.
     """
     global _backlight_at, _backlight_to, _backlight_want
     fraction = max(0.0, min(1.0, fraction))
@@ -270,8 +266,8 @@ class App:
         self._next_poll = 0
         self._pending = None
         self._history_due = 0
-        # A request to make on the very next pass rather than at the next interval, so the
-        # series can be refetched *as well as* the stats and not instead of them.
+        # A request to make on the very next pass and not at the next interval, letting
+        # the series be refetched *as well as* the stats.
         self._queued = None
         # Presses waiting for the connection, oldest first, each with the tick it happened on.
         self._commands = []
@@ -313,15 +309,12 @@ class App:
         pages_module.sweep_reset()
         style = (self.layout or {}).get("slide") or "off"
         if style != "off" and len(pages) > 1:
-            # The movement waits for the presses to stop; until then `render` puts up the
-            # title and the pip for where this is going and leaves the body standing, that
-            # being what the slide travels away from.
+            # The movement waits for the presses to stop. Until then `render` puts up the
+            # title and the pip for where this is going and leaves the body standing.
             #
-            # A press during a slide abandons it where it stands rather than queueing behind
-            # it. Waiting would give a slide per press, each one late, and would leave the
-            # pip stuck for as long as the movement lasted - where the point of the wait is
-            # that paging through five pages is one transition onto the fifth. Whatever is on
-            # the screen when the movement finally starts is what it travels away from.
+            # A press during a slide abandons it where it stands. Queueing would give a
+            # slide per press, each one late, and would stick the pip for as long as the
+            # movement lasted. Paging through five pages is one transition onto the fifth.
             self.sliding = None
             self._slide_at = time.ticks_add(time.ticks_ms(), SLIDE_WAIT_MS)
             self._slide_from = delta < 0
@@ -330,9 +323,9 @@ class App:
     def slide_due(self, now):
         """Start a waiting page turn once the presses have stopped.
 
-        One slide a burst: while the wait keeps being pushed out the body stays where it is,
-        so the movement that eventually runs goes from the page the reader was on to the one
-        they landed on, and never two at once - which is what was drawing over itself.
+        One slide a burst. While the wait keeps being pushed out the body stays where it
+        is, and the movement that eventually runs goes from the page the reader was on to
+        the one they landed on. Two at once drew over each other.
         """
         if not self._slide_at or self.sliding is not None:
             return
@@ -350,15 +343,15 @@ class App:
     def start_slide(self, style, back):
         """Set a page turn moving: the page arriving drawn once, the one leaving kept.
 
-        Both cards are then blits, which is what makes the direction free - a window cannot
-        start at a negative origin, so a page cannot be *drawn* part way off the left of the
-        screen, but a rect out of an image can be put anywhere. It also means the arriving
-        page is rendered once for the turn instead of once a frame.
+        Both cards are then blits, which makes the direction free. A window cannot start
+        at a negative origin, so a page cannot be *drawn* part way off the left of the
+        screen, where a rect out of an image goes anywhere. The arriving page is also
+        rendered once for the turn and not once a frame.
 
-        The setup is the expensive part of a turn: 45ms to draw a page into an image against
-        15 to draw it on the screen, because an image is on the heap in PSRAM where the
-        framebuffer is SRAM, and another 23ms to keep the outgoing page for a deck. Paid once
-        on the press, against 12 to 15ms a frame for the ten frames that follow.
+        The setup is the expensive part: 45ms to draw a page into an image against 15 to
+        draw it on the screen, an image being on the heap in PSRAM where the framebuffer is
+        SRAM. Another 23ms keeps the outgoing page for a deck. Paid once on the press,
+        against 12 to 15ms a frame for the ten frames that follow.
         """
         page = self.current_page()
         if page is None:
@@ -380,7 +373,7 @@ class App:
     def draw_page_into(self, target, page):
         """Render a page somewhere other than the screen.
 
-        `screen` is a builtin, so it is rebound rather than passed: an extension's page
+        `screen` is a builtin, so it is rebound and not passed. An extension's page
         renderer draws through the same name and would otherwise put its clock face on the
         screen while the app drew everything else into the image. Rebound from whatever
         `screen` is *now* - `badge.mode` replaces it, so a copy taken at import time is the
@@ -444,29 +437,30 @@ class App:
 
         # One the badge has never had, or one the host has revised: the rev rides in every
         # stats frame, so a config change is picked up on the next poll. What is on screen
-        # stays there until the new layout lands, which is a page swapping rather than the
+        # stays there until the new layout lands, showing as a page swapping and not as the
         # display dropping out for a second.
         if self.layout is None or self.layout_rev != (
                 self.frame.get("layout_rev", self.layout_rev)):
             self._start("layout", "/v1/layout")
             return
 
-        # The series follows the stats rather than taking their turn: a skipped stats poll is
-        # a sample the badge never sees, so it reads the host as having slowed down and walks
-        # the plots at half pace - and the sync then moves the series a whole sample without
-        # the walk knowing, which is a jump. Queued rather than sent now because one request
-        # is in flight at a time, and it has to be the stats: they are what pairs a new
-        # sample with the walk being restarted.
-        # Every poll, since it is the series a plot draws and the host is the only thing that
-        # knows it: v=2 carries the spacing and the age of the newest point with it.
+        # The series follows the stats and never takes their turn. A skipped stats poll
+        # is a sample the badge never sees, which shows as the host slowing down and walks
+        # the plots at half pace.
+        #
+        # Queued and not sent now, one request being in flight at a time, and it has to be
+        # the stats: they pair a new sample with the walk being restarted.
+        #
+        # Every poll, since a plot draws the series, and v=3 carries the spacing and the
+        # age of the newest point.
         if self._graph_keys():
             keys = ",".join(self._graph_keys())
             points = (self.layout or {}).get("graph_points", 48)
             self._queued = ("history",
                             f"/v1/history?keys={keys}&points={points}&v=3")
-        # Which slow readings we already hold, so the host can leave them out. Always sent,
-        # because asking is what tells the host this app knows where to find them: without
-        # the parameter it puts every group in the frame, which is what an older app needs.
+        # Which slow readings we already hold, for the host to leave out. Always sent,
+        # since asking marks this app as able to read them. Without the parameter the host
+        # puts every group in the frame, as an older app needs.
         self._start("stats", f"/v1/stats?have={self.slow_rev}")
 
     def hunt(self):
@@ -502,7 +496,7 @@ class App:
                     self.layout = None
                     self.history = {}
                     # Another host's slow readings are not this one's, and its revisions
-                    # are its own: held on, they would be drawn under the new host's name
+                    # belong to it. Held on, they would be drawn under the new host's name
                     # until it happened to number one the same.
                     self.slow = {}
                     self.slow_rev = -1
@@ -559,9 +553,8 @@ class App:
         if self.client.status != net.DONE:
             self.status = "offline"
             self.detail = self.client.error
-            # 403 is the host saying it does not know this badge. Nothing the badge can
-            # do about that on its own - it has to be paired again - so say so rather
-            # than sitting on "Connecting" forever.
+            # 403 is the host refusing this badge. It has to be paired again, so say so
+            # instead of sitting on "Connecting" forever.
             if self.client.http_status == 403:
                 self.rejected = True
             self.dirty = True
@@ -579,11 +572,13 @@ class App:
         if what == "stats":
             self.frame = payload
             self.take_slow(payload)
-            # A plot walks between the host's samples, so the pace is taken from the frame.
-            # The series is advanced from the reading it carries only when this badge saw
-            # every sample: polling slower than the host samples means several arrived at
-            # once and this frame holds the last of them, so appending one point would leave
-            # the series behind the host's and the next sync would jump it forward.
+            # A plot walks between the host's samples, and the pace comes off the frame.
+            # The series only advances from the reading it carries when this badge saw
+            # every sample.
+            #
+            # Polling slower than the host samples means several arrived at once and this
+            # frame holds the last, so appending one point leaves the series behind and the
+            # next sync jumps it forward.
 
             # Only meaningful when the lights follow a reading, and cheap once a second.
             self.apply_caselights()
@@ -595,7 +590,7 @@ class App:
         elif what == "history":
             # v=2 wraps the series in the two things a plot needs to place it in time: how far
             # apart the points are, and how old the newest was when the host answered. v=3
-            # adds a pair of its own for any ring a source answers for itself, those being on
+            # adds a pair for any ring a source answers for itself, those being on
             # whatever clock the readings are really on - an hour, for a domain's traffic.
             self.history = payload.get("series", payload)
             self._series_age = int(payload.get("age_ms", 0) or 0)
@@ -624,14 +619,14 @@ class App:
     def apply_layout(self):
         theme_name = (self.layout or {}).get("theme", look.DEFAULT)
         # The host sends the colours, so a theme it has and this app has never heard of
-        # still draws. Only its own name to fall back on, for a host too old to send them.
+        # still draws. Only the key to fall back on, for a host too old to send them.
         theme = (look.from_palette(theme_name, (self.layout or {}).get("palette"))
                  or look.get(theme_name))
         if theme.name != self.theme.name or theme is not self.theme:
             self.theme = theme
             draw.clear_cache()
         # The first layout to land is the badge coming up, so it takes its brightness
-        # rather than ramping to it.
+        # and does not ramp to it.
         self.apply_backlight(BACKLIGHT_MS if self._lit else 0)
         self._lit = True
         draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
@@ -639,7 +634,7 @@ class App:
         draw.GAUGE_FILL = (self.layout or {}).get("gauge_fill", "solid")
         pages_module.PLOT_ANIMATION = bool(
             (self.layout or {}).get("plot_animation", False))
-        # What the host calls the groups an extension declared. Replaced rather than
+        # What the host calls the groups an extension declared. Replaced and not
         # updated: a group dropped from every page should stop being named.
         pages_module.LABELS = (self.layout or {}).get("labels") or {}
         animate = bool((self.layout or {}).get("animate", False))
@@ -658,7 +653,7 @@ class App:
         cycles brightness overrides the configured level until the next press, since
         someone reaching for it wants this badge dimmer now and not a config edit.
 
-        Eased, except at startup: the first level is what the badge should have come up at,
+        Eased, except at startup. The first level is where the badge should have come up,
         and ramping to it from full brightness is a flash in a dark room.
         """
         wanted = self.dimmed
@@ -669,12 +664,12 @@ class App:
         backlight_to(wanted, ms, shape)
 
     def read_light(self):
-        """Follow the room, slowly. Returns True when the panel wants setting again.
+        """Follow the room, slowly. Returns True when the panel needs setting again.
 
-        Only while the setting is on: the read is cheap but the point of the setting being
-        off is that nothing touches the brightness.
+        Only while the setting is on. The read is cheap, and off means the brightness is
+        left alone.
 
-        Meaned over LIGHT_READS rather than taken as one reading. Whether the move is worth
+        Meaned over LIGHT_READS, and never taken as one reading. Whether the move is worth
         making is backlight_to's to answer, since what counts as too small to bother with is
         a step of the panel and not a step of the sensor.
         """
@@ -725,7 +720,7 @@ class App:
         for name, button in (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C)):
             if badge.pressed(button):
                 if name == "c" and self.current_page() is None:
-                    # Nothing is on screen but the notice, so C is not a command: it is the
+                    # Only the notice is on screen, so C is no command. It is the
                     # way to ask again without waiting out the backoff.
                     self.retry()
                 else:
@@ -758,7 +753,7 @@ class App:
     def cycle_brightness(self):
         """Step the panel down and round again, over the configured level.
 
-        A local override rather than a config edit: someone reaching for the button wants
+        A local override and not a config edit. Someone reaching for the button expects
         this badge dimmer now. Back at the top it hands control to the config again.
         """
         self.dim_step = (self.dim_step + 1) % len(BRIGHTNESS_STEPS)
@@ -827,7 +822,7 @@ class App:
         return max(0.0, left / draw.TOAST_FADE_MS)
 
     def tick(self):
-        """Notice the things that change with time rather than with an event.
+        """Notice the things that change with time and not with an event.
 
         Without this a page would keep a toast forever and never admit the host had
         gone away, because nothing would mark it for redraw.
@@ -852,11 +847,11 @@ class App:
             self._light_at = now
             if self.read_light():
                 # Over the gap to the next reading, so the steps of a follower that is
-                # still moving run into one another instead of pulsing.
+                # still moving run into one another and do not pulse.
                 self.apply_backlight(LIGHT_EVERY_MS, tween.LINEAR)
         page = self.current_page()
         if page is not None and page.get("kind") in pages_module.ANIMATED:
-            # This page moves on its own, so it gets a frame regardless of polling.
+            # This page moves unprompted, and gets a frame regardless of polling.
             self.dirty = True
         if pages_module.moving or self.sliding is not None:
             # A gauge is part way to its reading, or a page is part way on. Frames only
@@ -865,8 +860,8 @@ class App:
             self.dirty = True
         if (pages_module.PLOT_ANIMATION and page is not None
                 and page.get("kind") in pages_module.SCROLLS):
-            # A plot walks left the whole time between readings, so unlike a gauge it is
-            # never resting: it wants every frame, the way the waterfall does.
+            # A plot walks left the whole time between readings, and unlike a gauge it
+            # never rests. Every frame, the way the waterfall goes.
             pages_module.BEHIND = pages_module.behind_at(
                 self._series_age, time.ticks_diff(now, self._series_at))
             self.dirty = True
@@ -875,7 +870,7 @@ class App:
         """Page on by itself when nobody has pressed anything for a while.
 
         Off unless a timeout is configured, which is the default: a display that moves on
-        its own is a choice, and one that does it while somebody is reading is a nuisance.
+        unprompted is a choice, and one doing it while somebody reads is a nuisance.
         The first turn comes as soon as the badge counts as idle, since the reader stopped
         that long ago already, and the rest follow at the configured pace.
         """
@@ -918,11 +913,11 @@ class App:
 
         subtitle = self.subtitle()
         if self._slide_at and time.ticks_diff(self._slide_at, time.ticks_ms()) > 0:
-            # A turn is waiting for the presses to stop: the title and the pip say where it
-            # is going, and the body stays put, being what the movement will travel away
-            # from. Nothing is left in flight to strand - a press abandons the slide it lands
-            # in - and the test is on the deadline and not on the flag, so the body cannot be
-            # withheld for longer than the wait however this is arrived at.
+            # A turn is waiting for the presses to stop. The title and the pip say where
+            # it is going, and the body stays put as what the movement travels away from.
+            #
+            # A press abandons the slide it lands in, and the test is on the deadline and
+            # not on the flag, so the body is withheld for at most the wait.
             draw.furniture(theme, page.get("title", page.get("id", "")),
                            self.page_index, len(self.page_list), subtitle)
         elif self.sliding is not None:
@@ -941,7 +936,7 @@ class App:
         page underneath standing; `deck` moves both, the one leaving going the other way.
 
         Only the body band travels: the header and footer were put in place when the turn
-        started, since they belong to the page rather than to the movement.
+        started, since they belong to the page and not to the movement.
 
         A blit costs its pixels, so `over` averages half a band a frame and a deck a whole
         one. Nothing is rasterised - the arriving page was drawn once when the turn happened.
@@ -1002,7 +997,7 @@ class App:
 
         Only while the page is resting: 3.9ms is a frame an animated page would drop, and the
         threshold set at launch is what keeps that case in hand. A page redrawn on the poll
-        produces a poll's worth of garbage a second, which is what this is for.
+        produces a poll's worth of garbage a second, which this covers.
         """
         now = time.ticks_ms()
         if time.ticks_diff(now, self._swept) < COLLECT_EVERY_MS:
@@ -1040,7 +1035,7 @@ def consume_press():
 
 def main():
     global _app
-    # Before anything is drawn: a collect on allocation volume rather than only on failure.
+    # Before anything is drawn: a collect on allocation volume, and not only on failure.
     gc.threshold(GC_THRESHOLD)
     draw.prepare()
     load_extensions()
