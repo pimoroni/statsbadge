@@ -1,4 +1,4 @@
-"""End-to-end checks for the server: framing, auth, replay, config, pruning.
+"""End-to-end checks for the server. Framing, auth, replay, config and pruning.
 
 Run with `python3 -m pytest` from `server/`, or `python3 tests/test_core.py` for a
 plain run with no pytest installed.
@@ -61,9 +61,9 @@ class FakeColour:
         return self.lighten(-n)
 
     def to_oklch(self):
-        # The app converts a palette's stops so the ramp interpolates perceptually. Nothing
-        # here depends on the components, only on a colour coming back, so this stands in
-        # without pretending to be the transform: what it does is measured on the badge.
+        # The app converts a palette's stops so the ramp interpolates perceptually. Only
+        # a colour coming back matters here, so this stands in for the transform, which is
+        # measured on the badge.
         return self
 
     def to_rgb(self):
@@ -97,8 +97,8 @@ class FakeColour:
         """Near enough to order two candidates: sRGB distance scaled so black to white is 100.
 
         The firmware's is perceptual, and what it reports for a given pair is measured on the
-        badge - this only has to put "obviously different" above a threshold and "nearly the
-        same" below it.
+        badge. This only has to put a clear difference above a threshold and a near match
+        below it.
         """
         gap = sum((a - b) ** 2 for a, b in ((self.r, other.r), (self.g, other.g),
                                             (self.b, other.b))) ** 0.5
@@ -537,9 +537,8 @@ def test_badge_provisioned_by_another_process_is_accepted(h):
 def test_rotated_secret_is_picked_up(h):
     """`install --new-secret` replaces the secret of an already-known badge.
 
-    The server holds the old one in memory, so without re-reading on every verify it
-    would reject the badge it had just provisioned as having a bad signature. Uses its
-    badge id of its own so it does not disturb the shared harness counter.
+    The server keeps a copy in memory, so it re-reads on every verify. Uses a badge id of
+    its own, leaving the shared harness counter alone.
     """
     who = "rotator00001"
     other = auth.Store(os.path.join(h.dir, "badges.json"))
@@ -611,7 +610,7 @@ def test_reload_never_lowers_a_counter(h):
 def test_counter_is_persisted(h):
     """The counter must reach disk, or a restart makes old requests replayable.
 
-    Not on every request - a badge polls once a second - so this drives it past the
+    Batched, a badge polling once a second, so this drives it past the
     threshold and checks the file caught up.
     """
     who = "persister0001"
@@ -767,7 +766,7 @@ def test_codes_are_unique_per_request(h):
                       {"Content-Type": "application/json"})[1]
         codes.add(asked["code"])
     assert len(codes) == 3, codes
-    # Not derived from the badge id, which is public.
+    # Minted per request, the badge id being public.
     for i, code in enumerate(codes):
         assert f"unique{i}" not in code.lower()
     _clear_pending(h)
@@ -895,7 +894,7 @@ def test_app_files_and_pruning(_h):
         assert sorted(names) == ["__init__.mpy", "ext/clockface.py", "icon.png",
                                  "net.mpy"], names
 
-        # A stale .py beside a .mpy is the one that matters: it wins the import and
+        # A stale .py beside an .mpy is the one that matters: it wins the import and
         # silently undoes the precompile.
         target = os.path.join(work, "stats")
         os.makedirs(os.path.join(target, "ext"))
@@ -966,7 +965,7 @@ def test_extensions_describe_finds_the_clock(h):
     assert "clock" in clock["provides"], clock
 
     # The UI gets all of them, not only the ones with settings: an extension that asks to be
-    # told nothing had no box on the page, and one that failed to import was invisible.
+    # told nothing had no box on the page, and a failed import went unreported.
     _status, caps = h.raw("GET", "/api/capabilities")
     described = {record["name"] for record in caps["extensions"]}
     assert described == set(found), (described, set(found))
@@ -1283,8 +1282,8 @@ def test_caselights_take_a_field_or_a_flag(_h):
 def test_an_extension_page_can_be_added_and_reaches_the_badge(h):
     """The UI's kind picker is built from this, and the config it PUTs has to validate.
 
-    Without it the page an extension offers is unreachable: the server knows about it,
-    the badge can draw it, and there is no way to ask for one.
+    Without it the page an extension offers is unreachable. The server carries it, the
+    badge can draw it, and nothing offers it to a reader.
     """
     status, caps = h.raw("GET", "/api/capabilities")
     assert status == 200, status
@@ -1370,9 +1369,10 @@ def test_icon_font_corpus_and_packing(_h):
 
 @check
 def test_a_source_keeps_what_it_worked_out(_h):
-    """Settings are what a source is told; a store holds what it found out - a resolved location,
-    a token, a high-water mark. Namespaced by the entry point name and written by the host, so
-    an extension asks for a value, leaving the filename to the host."""
+    """Settings are what a source is told; a store holds what it found out.
+
+    A resolved location, a token, a high-water mark. Namespaced by the entry point name and
+    written by the host, so an extension asks for a value and the filename stays here."""
     from statsbadge import state
 
     directory = tempfile.mkdtemp(prefix="statsbadge-state-")
@@ -1428,10 +1428,12 @@ def test_a_source_keeps_what_it_worked_out(_h):
 
 @check
 def test_a_slow_lookup_does_not_hold_up_a_frame(_h):
-    """Sources share the collector's thread and the first sample is taken while the server is
-    starting, so a weather lookup on that thread stalled the launch for as long as the
-    geocoder took to answer - which on a flaky connection is longer than urlopen's timeout,
-    that not covering name resolution."""
+    """Sources share the collector's thread and the first sample is taken while the server
+    is starting up.
+
+    A weather lookup on that thread stalled the launch for as long as the geocoder took to
+    answer, which on a flaky connection outlasts urlopen's timeout, since that leaves name
+    resolution uncovered."""
     try:
         import statsbadge_clock as clock
     except ImportError:
@@ -1591,14 +1593,11 @@ def test_a_reading_carries_its_unit(_h):
     assert draw.reading(12600, "used_mb") == "12.3GB"
     assert draw.reading(3 * 1024 ** 2, "total_mb") == "3.0TB"
 
-    # A field can arrive as a list - a load average, per-core loads - and a list cannot be a
-    # key, so it stops before the table that remembers what a number formatted to. This
-    # crashed a CPU dial with a LOADAVG readout on it.
-    #
-    # A load average is three figures and prints as the three of them, the way uptime does
-    # it. Bare, being a queue length and not a percentage.
+    # A field can arrive as a list - a load average, per-core loads - and a list has no
+    # hash, so it stops before the table keyed on a value. A load average prints as its
+    # three figures, bare.
     assert draw.reading([1.52, 1.18, 0.94], "load") == "1.5 1.2 0.9"
-    # Sixteen per-core loads do not go in one slot, and three of the sixteen would be a lie.
+    # Sixteen per-core loads overflow a slot, and three of the sixteen misreport it.
     assert draw.reading([31.0] * 16, "cores") == "16 values"
     assert draw.reading([], "load") == "--"
 
@@ -1679,7 +1678,7 @@ def test_the_build_script_defaults_where_the_installer_looks(_h):
     assert default, "no OUT_DIR default in the build script"
     assert "src/statsbadge/badge_app/mpy" in default[0], default[0]
 
-    # The two places CI wants the packaged copy still say so explicitly.
+    # Both CI workflows still name the packaged copy.
     for workflow in ("ci.yml", "publish.yml"):
         text = (pathlib.Path(__file__).parent.parent / ".github" / "workflows"
                 / workflow).read_text()
@@ -1962,7 +1961,8 @@ def test_a_page_can_slide_on_like_a_card(_h):
 
     into = app[app.index("def draw_page_into"):]
     into = into[:into.index("\n    def ", 1)]
-    # Rebound, in place of passing it: an extension's renderer draws through the same builtin, and
+    # Rebound, in place of passing it. An extension's renderer draws through the same
+    # builtin, and
     # would otherwise put its page on the screen while the app drew into the image.
     assert "builtins.screen = target" in into and "builtins.screen = was" in into
     # From whatever screen is now: badge.mode replaces it, and a copy taken at import time is
@@ -2067,12 +2067,11 @@ def test_a_theme_travels_as_its_colours(_h):
     assert look.from_palette(sent["theme"], sent["palette"]).accent == \
         builtins.color.rgb(143, 212, 0)
 
-    # Plus the greys a picture is drawn in, which are derived from the accent's hue rather
-    # than written down - the same reason `stripe` is. Their lightnesses are fixed and the
-    # same on every theme, which is the guarantee: the host dithers a photograph to a
-    # position on this ramp with no say in which theme draws it, so index 2 of
-    # four has to mean the same brightness everywhere or the same picture reads differently
-    # on each palette.
+    # Plus the greys a picture is drawn in, derived from the accent's hue as `stripe` is.
+    #
+    # Their lightnesses are fixed and the same on every theme, which is the guarantee. The
+    # host dithers a photograph to a position on this ramp with no say in which theme draws
+    # it, so index 2 of four has to mean the same brightness everywhere.
     from statsbadge import derive
 
     wanted = None
@@ -2085,19 +2084,16 @@ def test_a_theme_travels_as_its_colours(_h):
         assert lightnesses == sorted(lightnesses), (name, lightnesses)
         if wanted is None:
             wanted = lightnesses
-        # Within a rounding of each other. The levels are placed exactly;
-        # what moves is where a colour lands on whole bytes, and at the chroma a saturated
-        # theme asks for a channel step is worth more lightness - measured across every
-        # theme and both level counts, at most 0.013. Backing the chroma off the gamut edge
-        # only takes it to 0.008 and costs the saturation, so the tolerance is the honest
-        # place for it: a theme drawing at genuinely different levels is out by ten times
-        # this.
+        # Within a rounding of each other. The drift is where a colour lands on whole
+        # bytes: at a saturated theme's chroma a channel step is worth more lightness.
+        #
+        # Measured across every theme and both level counts, at most 0.013.
         adrift = max(abs(one - other) for one, other in zip(lightnesses, wanted, strict=True))
         assert adrift <= 0.015, f"{name} draws a picture {adrift:.3f} off the levels"
 
-    # How colourful it is comes off the theme: the same share of what the hue can
-    # hold that the accent takes of its. A grey accent has to give a grey picture, that being
-    # the convention `mono` exists for, and a fixed tint gave it a coloured one.
+    # How colourful it is comes off the theme: the same share of what the hue can hold
+    # that the accent takes of its. A grey accent gives a grey picture, which is the
+    # convention `mono` exists for, where a fixed tint gave it a coloured one.
     for name, coloured in (("mono", False), ("luminescence", True), ("eva01", True)):
         shades = layout.palette_for(name, layout.DEFAULT_CONFIG["tint"])["image"]["8"]
         chroma = max(derive.oklch(tuple(rgb))[1] for rgb in shades)
@@ -2195,22 +2191,24 @@ def test_a_palette_can_carry_a_second_accent(h):
 
 @check
 def test_the_single_hue_themes_are_the_bold_variant_now(_h):
-    """Red, green, cyan, amber and blueprint were five palettes doing one thing: everything in
-    one hue, the accent as saturated as sRGB allows, and a ramp that sweeps lightness inside
-    that hue, holding off red. Measured, each sat within 0.003 of its hue's
-    chroma limit, and `red` differed from the derived palette at the same hue by 8 counts in
-    the accent alone. So they are the bold variant with an accent, and the names
-    still resolve."""
+    """Red, green, cyan, amber and blueprint were five palettes doing one thing.
+
+    Everything in one hue, the accent as saturated as sRGB allows, and a ramp sweeping
+    lightness inside that hue while holding off red.
+
+    Measured, each sat within 0.003 of its hue's chroma limit, and `red` differed from the
+    derived palette at the same hue by 8 counts in the accent alone. So they are the bold
+    variant with an accent, and the names still resolve."""
     from statsbadge import derive, themes
 
     for retired in layout.THEME_ALIASES:
-        assert retired not in themes.PALETTES, f"{retired} is still a palette of its own"
+        assert retired not in themes.PALETTES, f"{retired} is still a written-down palette"
         name, accent = layout.resolve_theme(retired, None)
         assert name in layout.BOLD, (retired, name)
         assert tuple(accent) in derive.offered(), (retired, accent)
 
-    # A stored name keeps drawing: resolved once when the file is read, leaving everything downstream
-    # has to know it ever existed.
+    # A stored name keeps drawing: resolved once when the file is read, so nothing
+    # downstream has to know it ever existed.
     path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-alias-"), "layout.json")
     with open(path, "w") as handle:
         json.dump({"rev": 3, "theme": "amber", "pages": layout.DEFAULT_PAGES,
@@ -2248,8 +2246,8 @@ def test_the_single_hue_themes_are_the_bold_variant_now(_h):
 @check
 def test_a_theme_with_a_counterpart_has_one_in_the_other_mode(_h):
     """Four of the hand-written themes come as a pair, one for a lit room and one for a dark
-    one. Not inverted channel by channel - that lands ink on a white page at the wrong
-    lightness, so each is placed against the background it goes on and measured here."""
+    one. Each is placed against the background it goes on and measured here; inverting
+    channel by channel lands ink on a white page at the wrong lightness."""
     from statsbadge import derive, themes
 
     modes = {record["name"]: record["mode"] for record in layout.theme_records()}
@@ -2257,7 +2255,7 @@ def test_a_theme_with_a_counterpart_has_one_in_the_other_mode(_h):
                         ("shell", "shell-light"), ("luminescence-dark", "luminescence")):
         assert modes[dark] == "dark" and modes[light] == "light", (dark, light)
 
-    # No palette is allowed to be worse than the worst already shipped: AAA for ink, since it
+    # Every palette clears the bar the shipped ones set: AAA for ink, since it
     # what a reading is drawn in, and a hot end that shows against the page at all.
     for name, palette in themes.PALETTES.items():
         ink = derive.contrast(palette["ink"], palette["bg"])
@@ -2296,10 +2294,9 @@ def test_the_themes_are_offered_light_and_dark(h):
 
 @check
 def test_a_theme_can_be_derived_from_one_accent(h):
-    """The tinted pair are derived: a whole palette from the one
-    accent chosen, so what is stored is the choice and not its result. Restricted on purpose -
-    every accent on offer is checked here, so a pickable one cannot make a page nobody can
-    read."""
+    """The tinted pair are derived: a whole palette from the one accent chosen, so the
+    choice is stored and not its result. Restricted to a measured list, every accent on
+    offer being checked here, so a pickable one cannot make a page nobody can read."""
     import sys
 
     from statsbadge import derive
@@ -2339,7 +2336,7 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     assert derive.ramp_for(derive.accents()[6]) == "signal"
 
     # An unrecognised accent falls back, and the request stands: this arrives from a UI,
-    # and a theme is not worth refusing a whole config over.
+    # and a theme is too small a thing to refuse a whole config over.
     kept = layout.validate({"theme": "tinted-dark", "tint": [7, 7, 7],
                             "pages": layout.DEFAULT_PAGES})
     assert tuple(kept["tint"]) in derive.offered()
@@ -2434,8 +2431,8 @@ def test_each_badge_has_its_own_layout(h):
                              _headers(other, 1, other_secret, path="/v1/layout"))
         assert status == 200, (status, sent)
         assert sent["theme"] == "mono" and sent["interval_ms"] == 2000
-        # The table stays behind: it names every other badge paired with this host, which is nothing
-        # to do with the one asking.
+        # The table stays behind. It names every other badge paired with this host,
+        # which is nothing to do with the one asking.
         assert "badges" not in sent, "a badge is told about every other badge here"
 
         # The first is still on the default, and its revision has not moved - or every badge
@@ -2479,8 +2476,8 @@ def test_each_badge_has_its_own_layout(h):
         h.service.badges.forget(other)
         h.service.config.forget(other)
 
-    # A file written before there was more than one badge is taken as the default, so every badge
-    # carries on showing what it showed.
+    # A single-badge file is taken as the default, so every badge carries on showing
+    # what it showed.
     path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-layout-"), "layout.json")
     with open(path, "w") as handle:
         json.dump({"rev": 7, "theme": "mono", "pages": layout.DEFAULT_PAGES}, handle)
@@ -2520,9 +2517,9 @@ def sections_of(page):
 
 @check
 def test_the_big_gauge_can_show_the_whole_ramp(_h):
-    """A conical gradient follows the arc, so the ramp can be laid round the gauge with what
-    the reading has not reached left faint: the scale shows as well as the reading. Only the
-    dial page's gauge, that being the one with a page to itself."""
+    """A conical gradient follows the arc, so the ramp lays round the gauge with the part
+    past the reading left faint, and the scale shows as well as the reading. Only the dial
+    page's gauge, which is the one with a page to itself."""
     import sys
 
     for fill in layout.GAUGE_FILLS:
@@ -2624,9 +2621,8 @@ def themes_bg(name):
 
 @check
 def test_the_ui_takes_its_colours_from_the_host(_h):
-    """They used to be a table in app.js with a comment asking for it to be kept in step
-    with the badge, which is two places to edit and one to forget. Now the UI asks for the
-    palette of whatever theme is selected, so there is nowhere for a copy to live."""
+    """The UI asks for the palette of whatever theme is selected, so there is nowhere for
+    a copy to live and drift from the badge's tables."""
     web = pathlib.Path("src/statsbadge/web/app.js").read_text()
     assert "THEME_COLOURS" not in web, "the UI still carries a palette table"
     assert "/api/theme?" in web, "the UI does not ask the host for a palette"
@@ -2665,10 +2661,11 @@ def test_a_full_battery_is_not_an_alarm(_h):
 
 @check
 def test_the_badge_dims_to_suit_the_room(_h):
-    """Measured on the badge, as raw u16 stepping in sixteens: darkness 48, a partly daylit
-    room with the curtains closed 320, a lit room 4500. A phone torch pointed straight at it
-    and a sunny window sill both read 61400, which is the sensor railed and not a reading -
-    so the scale tops out well below that and everything past it is the same answer."""
+    """Measured on the badge, as raw u16 stepping in sixteens: darkness 48, a partly
+    daylit room with the curtains closed 320, a lit room 4500.
+
+    A phone torch and a sunny window sill both read 61400, which is the sensor railed. The
+    scale tops out well below that, and everything past it is the same answer."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
@@ -2773,8 +2770,8 @@ def test_a_press_waits_for_the_poll_rather_than_losing_to_it(_h):
 
 @check
 def test_a_smoothed_graph_still_reads_as_the_data(_h):
-    """A curve through the samples, not near them: it is a graph of a machine, so a peak
-    drawn where there was none, or short of the one there was, misreports the machine."""
+    """A curve through the samples, and never near them. This graphs a machine, so a peak
+    drawn where there was none, or short of the one there was, misreports it."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
@@ -2794,8 +2791,8 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
     # Fewer than three points cannot be interpolated.
     assert draw.curve([0.5, 0.6], steps=4) == [0.5, 0.6]
 
-    # Whether to interpolate at all is `curve_steps`, which answers 1 for "draw it straight":
-    # when the switch is off, when the samples are too few to interpolate, and when the plot is too
+    # `curve_steps` settles whether to interpolate, answering 1 for "draw it straight".
+    # With the switch off, with too few samples, and when the plot is too
     # short for a curve to show - a sparkline is 22px tall and reads the same either way.
     assert draw.curve_steps(250, 150, len(values)) > 1
     assert draw.curve_steps(250, 22, len(values)) == 1
@@ -2813,7 +2810,7 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
     body = body[:body.index("\ndef ", 1)]
     assert "_basis(steps)" in body, "the weights are not taken from the table"
 
-    # An axis with no full scale steps to round numbers, holding off a fit to the
+    # An axis with no full scale steps to round numbers, holding off a fit to
     # window, or it creeps on every poll as samples arrive and leave - the plot rescaling
     # slightly each time, which shows as the graph twitching. A byte rate steps in
     # 1024s so the label is a number a reader can place a sample against.
@@ -2850,10 +2847,12 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
 
 @check
 def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
-    """Three clocks are in play - the host samples every `serve --interval`, the badge polls
-    every `interval_ms`, and neither knows the other's rate - so a plot animated off an index
-    axis has to guess, and did: it walked at the wrong pace, paused, and jumped. The host sends
-    how far apart its points are and how old the newest is, and everything follows from that."""
+    """Three clocks are in play. The host samples every `serve --interval`, the badge polls
+    every `interval_ms`, and each is blind to the other's rate.
+
+    A plot animated off an index axis has to guess, and did: it walked at the wrong pace,
+    paused, and jumped. The host sends how far apart its points are and how old the newest
+    is, and everything follows from that."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
@@ -2898,9 +2897,8 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
     assert 'bindCheck("plotanim", "plot_animation")' in (web / "app.js").read_text(), \
         "it is not bound"
 
-    # A graph keeps room on its right for the samples still coming in, so the box stays full
-    # while it moves. Laid across the width alone it would shift left and leave a gap that
-    # grows and snaps back, which looks like the plot shrinking.
+    # A graph keeps room on its right for the samples still coming in. Laid across the
+    # width alone it shifts left and leaves a gap that grows and snaps back.
     flat = [50.0] * 48
 
     def ends(shift, lead=1):
@@ -2918,8 +2916,8 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
             _first, last = ends(lead * tenth / 10.0, lead)
             assert last >= 310 - 0.01, (lead, tenth, last)
 
-    # A sparkline is drawn still whatever the setting says: 22px tall with a sample every 5px,
-    # it has nowhere to scroll, and interpolating it at fixed x is a horizontal translation
+    # A sparkline is drawn still whatever the setting says. 22px tall with a sample every
+    # 5px, it has nowhere to scroll, and interpolating at fixed x is a translation
     # whatever it is called, which shows as a jump and not as points settling.
     assert pages.SCROLLS == ("graph", "trend"), pages.SCROLLS
     assert "spark" in pages.PLOTS, "it still wants a series fetched for it"
@@ -2963,9 +2961,11 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
 
 @check
 def test_the_notice_screen_offers_a_way_out(_h):
-    """It is the screen a badge sits on when it cannot reach anything, so it has to say what
-    can be done, and not only what went wrong, and polls back off to fifteen seconds apart
-    while a host is quiet, which is no use to somebody who has just woken the PC."""
+    """The screen a badge sits on when it can reach nothing, so it has to say what can be
+    done as well as what went wrong.
+
+    Polls back off to fifteen seconds apart while a host is quiet, which is no use to
+    somebody who has just woken the PC."""
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
 
     notice = app[app.index("    def render(self):"):]
@@ -3099,7 +3099,7 @@ def test_a_symbol_centres_on_the_words_beside_it(_h):
     cap_middle = text_y + text_size * (1.0 - draw.CAP / 2.0)
     ink_middle = icon_y + icon_size * (1.0 - draw.ICON_BOX / 2.0)
     assert abs(cap_middle - ink_middle) <= 1, (cap_middle, ink_middle)
-    # Which is lower than a shared baseline puts it, that being the bug.
+    # Lower than a shared baseline puts it, which was the bug.
     assert icon_y > text_y + text_size - icon_size
 
 
@@ -3205,16 +3205,18 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
 
 @check
 def test_the_version_is_written_down_once(_h):
-    """Nowhere, in fact: the tag is the version. A number in pyproject.toml and a `__version__`
-    beside it were two things to bump and one of them silently stale; now neither exists and the
-    build reads the tag, so the only way to release the wrong number is to tag the wrong number.
+    """Nowhere, in fact; the tag is the version.
+
+    A number in pyproject.toml and a `__version__` beside it were two things to bump, with
+    one of them silently stale. The build reads the tag, so releasing the wrong number takes
+    tagging the wrong number.
 
     Two things have to agree for that to work, though, and they are in different files: the tag
     prefix a workflow fires on, and the prefix the build strips to get a version."""
     import statsbadge
 
     source = pathlib.Path("src/statsbadge/__init__.py").read_text()
-    # An assignment, not the word: the docstring says why there is not one.
+    # An assignment, in place of the bare word: the docstring says why.
     assert not re.search(r"^__version__\s*=", source, re.M), "a second copy of the version"
     assert statsbadge.version(), "nothing can say what is installed"
 
@@ -3388,14 +3390,13 @@ def test_a_notifications_page_sorts_messages_from_counters(_h):
         # A page of only one or the other still draws
         assert render(["feed.home"])["counters"] == []
         assert render(["feed.followers"])["items"] == []
-        # A field the host stopped producing is a counter of "--", where a crash was
+        # A field the host stopped producing draws a counter of "--", where it crashed
         assert render(["feed.gone"])["counters"] == [("GONE", "--")], render(["feed.gone"])
     finally:
         draw.notification = was
 
-    # The message shape is four things, and the age is drawn to whatever suits its size.
-    # Minutes up to ninety of them, then hours, then days - the thresholds the quake
-    # page has always used, now that both read them off one function.
+    # The message shape is four things, and the age is drawn to suit its size. Minutes up
+    # to ninety, then hours, then days, off the one function the quake page reads.
     assert [draw.ago(s) for s in (None, 5, 90, 4000, 100000, 400000)] == [
         None, "just now", "1m ago", "66m ago", "27h ago", "4d ago"]
 
@@ -3458,8 +3459,8 @@ def test_a_hidden_row_is_actually_hidden(_h):
     # The sheet each tab shows, and the rows only a derived palette has.
     assert len({depth for _tag, depth, _named in parser.found}) > 1, parser.found
 
-    # A rule that gives one of them a display has to stand aside when it is hidden: the two
-    # selectors are otherwise close enough that source order decides which wins.
+    # A rule that gives one of them a display has to stand aside when it is hidden. The
+    # two selectors are otherwise close enough for source order to settle which wins.
     for selector, declarations in rules_of(css):
         last = re.split(r"[\s>+~]+", selector)[-1]
         if "display:" not in declarations or "[hidden]" in selector:
@@ -3534,8 +3535,8 @@ def _check_cropping(draw, Picture):
 def test_a_message_shortens_the_way_the_firmware_does(_h):
     """A post is whatever length it is and the block has room for two or three lines.
 
-    The firmware flows and truncates - `screen.text` takes a rect and an overflow - so this
-    checks the page asks for that, reimplementing none of it: doing that here is a
+    The firmware flows and truncates, `screen.text` taking a rect and an overflow, so this
+    checks the page asks for that and reimplements none of it. Doing that here is a
     `measure_text` a word to find the breaks and another per character to trim the last
     line, in Python, on every draw. Measured on a Tufty, that was the page at 34.9ms
     settled against 24.8 for the same page drawn by the firmware.
@@ -3654,8 +3655,8 @@ def test_every_package_here_can_be_published(_h):
         text = workflow.read_text()
         assert f"PACKAGE: {name}" in text, workflow
         assert f"DIRECTORY: extensions/{name}" in text, workflow
-        # The prefix is in two places in each workflow - the guard that decides whether to run,
-        # and the strip that checks the version - and they have to be the same prefix.
+        # The prefix appears twice in each workflow: the guard that gates the run, and
+        # the strip that checks the version. Both have to match.
         assert f"TAG_PREFIX: {short}-v" in text, workflow
         assert f"startsWith(github.event.release.tag_name, '{short}-v')" in text, workflow
         # It publishes from the extension directory, not the repository root.
@@ -3663,7 +3664,7 @@ def test_every_package_here_can_be_published(_h):
         assert "uv publish --trusted-publishing always" in text, workflow
 
     assert len(found) >= 3, found
-    # No workflow for a package that is not here: a stale one publishes whatever is at that path.
+    # Every workflow names a package that is here; a stale one publishes whatever it finds.
     for workflow in workflows.glob("publish-*.yml"):
         short = workflow.stem.removeprefix("publish-")
         assert short in found, f"{workflow.name} publishes an extension that is not here"
@@ -3716,7 +3717,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
         said[type(exc).__name__] = base.readable(exc)
     assert said["URLError"] == "the connection timed out", said
     assert said["TimeoutExpired"] == "ioreg did not finish inside 4s", said
-    # Anything unrecognised keeps its type, that being the clue to what went wrong.
+    # Anything unrecognised keeps its type, which is the clue to what went wrong.
     assert said["ValueError"] == "ValueError: something we did not expect", said
 
     # The API reports both, so the UI can say "failing" and "recovered" and not confuse them.
@@ -3743,9 +3744,10 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
 class FakeBoard:
     """The board's half of the raw REPL, enough to answer what repl.py asks of it.
 
-    Stands in for a serial port, so the framing is checked without a badge on the end of a
-    cable: the protocol is four control characters and two end markers, and getting one of
-    them wrong is a hang, which an error would at least surface.
+    Stands in for a serial port, so the framing is checked with no badge on the cable.
+
+    The protocol is four control characters and two end markers, and getting one wrong is
+    a hang, which an error would at least surface.
     """
 
     def __init__(self, printed="ok\r\n", failed=""):
@@ -3798,10 +3800,11 @@ class FakeBoard:
 
 @check
 def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
-    """No mpremote on the PATH and no interpreter spawned per command: `statsbadge install`
-    is how a badge is set up, and a dependency's console script is not on PATH when this is
-    installed as a uv tool, so the two things ever asked of a badge - run a script, hard
-    reset - are spoken here.
+    """Only the raw REPL, with mpremote off the PATH and no interpreter spawned.
+
+    `statsbadge install` is how a badge is set up, and a dependency's console script is
+    off PATH when this is installed as a uv tool. So the two things ever asked of a badge,
+    run a script and hard reset, are spoken here.
 
     The board's side is faked, because the failure this guards against is a protocol that
     hangs, as against one that raises."""
@@ -3820,7 +3823,7 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
         # without that the app is still in memory, holding the screen.
         assert board.written.startswith(b"\r\x03\x03\r\x01\x04"), board.written
         assert board.scripts == ["print(badge.uid)"], board.scripts
-        # The badge is not left in raw mode, which shows as a blank screen.
+        # The badge is handed back out of raw mode, which otherwise blanks the screen.
         assert board.written.endswith(b"\r\x02") and board.closed, board.written
 
         # A script that raised is an exception here, not output the caller has to inspect.
@@ -3877,9 +3880,9 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
         else:
             raise AssertionError("a held port is not reported as busy")
 
-        # A port that failed to open is skipped on the way out: every command hard
-        # resets on the way out, and a reset that could not happen used to spend the
-        # enumeration timeout before announcing that the badge had been reset.
+        # A port that failed to open is skipped on the way out. Every command hard resets
+        # there, and a reset that cannot happen would spend the enumeration timeout before
+        # announcing one.
         started = time.monotonic()
         assert install.hard_reset("/dev/fake") is False
         assert time.monotonic() - started < 2.0, "waited for a reset that never happened"
@@ -3900,10 +3903,13 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
 
 @check
 def test_a_published_readme_links_to_somewhere_that_exists(_h):
-    """A README is the project page on PyPI as well as on GitHub, and PyPI resolves a relative
-    link against pypi.org: `shots/cpu.png` is a broken image and `DEVELOPMENT.md` a 404. So every
-    target is absolute, which makes the repository name part of the text - and this repository has
-    been renamed once, so the names are checked against the URLs the packages declare."""
+    """A README is the project page on PyPI as well as on GitHub, and PyPI resolves a
+    relative link against pypi.org: `shots/cpu.png` is a broken image and `DEVELOPMENT.md`
+    a 404.
+
+    So every target is absolute, which makes the repository name part of the text. This
+    repository has been renamed once, so the names are checked against the URLs the
+    packages declare."""
     for pyproject in [pathlib.Path("pyproject.toml"),
                       *sorted(pathlib.Path("extensions").glob("*/pyproject.toml"))]:
         with open(pyproject, "rb") as handle:
@@ -3923,7 +3929,7 @@ def test_a_published_readme_links_to_somewhere_that_exists(_h):
                 assert target.startswith(raw), where
             # A link naming a path in this tree can be looked at, so it is: a 404 for a reader
             # passes silently otherwise. Anything else - the repository itself, another project -
-            # is not ours to check.
+            # belongs to whoever owns it.
             for prefix in (f"{repository}/blob/main/", f"{repository}/tree/main/", raw):
                 if target.startswith(prefix):
                     assert pathlib.Path(target.removeprefix(prefix)).exists(), where
@@ -3958,7 +3964,7 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
         assert tooling.base_requirement(registry) == "statsbadge"
         pinned = {"tool": {"requirements": [{"name": "statsbadge", "specifier": "==0.2.0"}]}}
         assert tooling.base_requirement(pinned) == "statsbadge==0.2.0"
-        # Something this cannot read is not guessed at: the caller offers the command instead.
+        # Something this cannot read is left alone, and the caller offers the command.
         assert tooling.base_requirement({"tool": {"requirements": []}}) is None
 
         # A short name becomes the package; anything already specific is left alone.
@@ -3983,15 +3989,15 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
         assert tooling.explain("error: no internet") == "no internet"
         assert tooling.explain("") == "uv did not say why"
 
-        # Which package it was, out of either form: the caller holds the explained line, and a
-        # rebuild installs every entry, so the name uv trips over need not be the one just
-        # asked for, and saying which is the difference between a bug report and an instruction.
+        # Which package it was, out of either form. The caller holds the explained line,
+        # and a rebuild installs every entry, so the name uv trips over need not be the one
+        # just asked for. Saying which makes the message actionable.
         assert tooling.blamed(resolver) == "statsbadge-nope"
         assert tooling.blamed(tooling.explain(resolver)) == "statsbadge-nope"
         assert tooling.blamed("no internet") is None
 
-        # An index is only asked about a bare name, a path or a specifier being skipped, and
-        # an unreachable index is no answer, so both are None and uv decides.
+        # An index is only asked about a bare name, a path or a specifier being skipped.
+        # An unreachable index is no answer either, so both come back None and uv settles it.
         assert tooling.on_index("./extensions/statsbadge-iss") is None
         assert tooling.on_index("statsbadge-clock>=2") is None
         assert tooling.on_index("git+https://example.invalid/x.git") is None
@@ -4013,7 +4019,7 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
         for argv in (adding, removing):
             assert argv[1:4] == ["tool", "install", "--force"], argv
             assert argv[-2:] == ["--with-requirements", tooling.wanted_path(work)], argv
-        # An empty list has nothing to point at, and uv refuses an empty requirements file.
+        # An empty list points at nothing, and uv refuses an empty requirements file.
         tooling.write_wanted(work, [])
         assert "--with-requirements" not in tooling.install_argv("statsbadge", work)
     finally:
@@ -4023,11 +4029,11 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
 @check
 def test_an_upgrade_that_dropped_the_extensions_is_put_right_by_adding_one(_h):
     """`uv tool install` replaces the environment whole, so upgrading statsbadge takes the
-    extensions with it and leaves `extensions.txt` naming things that are no longer there.
+    extensions with it and leaves `extensions.txt` naming things that have gone.
 
-    `ext add` answered "already installed" to that, which was true of the list and of nothing
-    else, and left the reader with the one command that cannot help: the fix is `ext sync`,
-    which is now what asking for an extension already on the list runs.
+    `ext add` answered "already installed" to that, true of the list alone, leaving the
+    reader with the one command that cannot help. The fix is `ext sync`, which is now what
+    asking for an extension already on the list runs.
     """
     from statsbadge import __main__ as cli
     from statsbadge import tooling
@@ -4068,12 +4074,12 @@ def test_an_upgrade_that_dropped_the_extensions_is_put_right_by_adding_one(_h):
             cli.tooling.as_uv_tool = lambda *_a, **_k: {
                 "tool": {"requirements": [{"name": "statsbadge"}]}}
             cli.tooling.run_install = rebuild
-            # The environment after an upgrade: clock is back, cloudflare is not.
+            # The environment after an upgrade: clock is back, cloudflare still missing.
             cli.extensions.describe = lambda: [{"name": "clock"}]
             said = io.StringIO()
             with contextlib.redirect_stdout(said):
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
-            # It rebuilt, which is what an invisible install calls for.
+            # It rebuilt, as an invisible install calls for.
             assert ran == ["statsbadge"], ran
             assert "not installed" in said.getvalue(), said.getvalue()
             # The list is untouched: it already asked for exactly this.
@@ -4097,9 +4103,11 @@ def test_an_upgrade_that_dropped_the_extensions_is_put_right_by_adding_one(_h):
 
 @check
 def test_asking_for_powermetrics_without_the_rule_says_so(_h):
-    """--powermetrics needs one sudoers rule. A flag that quietly falls back leaves the
-    reader with no way to find out why, and a rule that does not match the argv sudo is asked
-    for is a rule that matches nothing, so the line printed has to be the command run."""
+    """--powermetrics needs one sudoers rule.
+
+    A flag that quietly falls back leaves the reader guessing, and a rule matching anything
+    other than the argv sudo is handed matches nothing, so the line printed has to be the
+    command run."""
     from statsbadge.sources import macos
 
     argv = macos.powermetrics_argv()
@@ -4201,8 +4209,8 @@ def test_the_badge_can_report_on_itself_with_no_host(_h):
     kept = layout.prune(config["pages"], {"available": {}})
     assert [p["kind"] for p in kept] == ["badge"], kept
 
-    # The kind picker is written out in the page, ahead of the API, so it is the
-    # one place a new kind can be added to the badge and forgotten in the browser.
+    # The kind picker is written out in the page, ahead of the API, and is the one place
+    # a new kind can reach the badge and be forgotten in the browser.
     markup = pathlib.Path("src/statsbadge/web/index.html").read_text()
     app = pathlib.Path("src/statsbadge/web/app.js").read_text()
     offered = set(re.findall(r'<option value="([a-z]+)">', markup))
@@ -4210,7 +4218,7 @@ def test_the_badge_can_report_on_itself_with_no_host(_h):
         assert kind in offered, f"{kind} is not in the kind picker"
         assert f"  {kind}: {{" in app, f"{kind} has no field slots declared in app.js"
 
-    # The badge draws it: the kind is in the app's table, reads no fields, and is not
+    # The badge draws it: the kind is in the app's table, reads no fields, and stays
     # animated, being numbers to read.
     source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text()
     table = source[source.index("_KINDS = {"):]
@@ -4290,9 +4298,11 @@ def test_the_night_side_is_the_one_the_sun_is_not_on(_h):
 
 @check
 def test_a_map_page_stays_inside_its_own_band(_h):
-    """A map is 288 polygons placed by a transform, and a track and a terminator are drawn in
-    degrees too, so nothing about any of them stops at the edge of the page's band: the header,
-    the footer and the reading band are all one clip away from being drawn over."""
+    """A map is 288 polygons placed by a transform, with a track and a terminator drawn in
+    degrees beside them.
+
+    None of that stops at the edge of the page's band, so the header, the footer and the
+    reading band are one clip away from being drawn over."""
     sys.path.insert(0, install.app_source_dir())
     import look
 
@@ -4306,9 +4316,9 @@ def test_a_map_page_stays_inside_its_own_band(_h):
         scope = {"look": look}
         for line in source.splitlines():
             if line.startswith(("BAND_H", "MAP_TOP", "MAP_H", "BAND_TOP")):
-                exec(line, scope)  # noqa: S102  a module in this repo, four constants off the top
-        # The band the map draws in plus the band that names it are the page's band and no
-        # more of the screen.
+                exec(line, scope)  # noqa: S102  a repo module, four constants off the top
+        # The band the map draws in plus the band that names it come to the page's band
+        # exactly.
         assert scope["MAP_H"] + scope["BAND_H"] == look.BODY_H, (module, scope)
         assert scope["MAP_TOP"] == look.BODY_TOP, module
         assert scope["BAND_TOP"] == look.BODY_TOP + scope["MAP_H"], module
@@ -4363,7 +4373,7 @@ def test_the_iss_page_agrees_with_its_source(_h):
 @check
 def test_the_quake_page_agrees_with_its_source(_h):
     """The events are host side and the drawing is badge side, so a name that moved on one
-    is a page that draws blank and says nothing about why."""
+    is a page that draws blank and leaves the reader guessing."""
     source = (pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge")
               / "quakemap.py").read_text()
     try:
