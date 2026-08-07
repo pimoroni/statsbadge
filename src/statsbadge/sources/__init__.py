@@ -1,6 +1,6 @@
 """Stats sources.
 
-A source fills in part of a frame. `available()` decides whether it loads at all, so
+A source fills in part of a frame. `available()` gates whether it loads at all, so
 a machine without an NVIDIA card never imports pynvml. Sources run in registration
 order and later ones may fill gaps the earlier ones left, which is how a
 platform-specific source adds temperatures psutil cannot see.
@@ -40,7 +40,7 @@ def discover(config=None):
             if cls.available():
                 loaded.append(cls(config or {}))
         except Exception:
-            # A source that cannot even answer available() is simply absent.
+            # A source that cannot even answer available() counts as absent.
             continue
     return loaded
 

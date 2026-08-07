@@ -12,8 +12,8 @@ import psutil
 
 from .base import Source
 
-# Labels that mean "the package", best first. A machine offers several and the one
-# a panel wants is the hottest meaningful aggregate, not core 0.
+# Labels that mean "the package", best first. A machine offers several, and the one to
+# report is the hottest meaningful aggregate, not core 0.
 CPU_LABELS = (
     "package id 0", "tctl", "tdie", "cpu", "k10temp", "coretemp",
     "soc_thermal", "cpu_thermal", "acpitz",

@@ -1,10 +1,12 @@
 """A stable name for this server, independent of its address.
 
-A badge stores who it is paired with, and an IP address is the wrong key for that: a
-DHCP lease moves and the badge would be looking for a host that no longer exists at
-that number. So each server mints an id once, keeps it next to its config, and puts it
-in the discovery beacon and in `/v1/hello`. The badge stores credentials against the
-id, recognises the host wherever it turns up, and updates the address it has.
+A badge stores who it is paired with, and an IP address is the wrong key for that. A
+DHCP lease moves, and the badge would be looking for a host at a number nothing answers
+on.
+
+Each server mints an id once, keeps it next to its config, and puts it in the discovery
+beacon and in `/v1/hello`. The badge stores credentials against the id, recognises the
+host wherever it turns up, and updates the address it has.
 
 The id is not a secret and proves nothing on its own - it says which secret to sign
 with, and the signature does the proving.

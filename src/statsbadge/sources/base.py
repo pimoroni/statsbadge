@@ -1,4 +1,13 @@
-"""What a source has to implement."""
+"""What a source has to implement.
+
+The class attributes here are declarations the config UI reads. `provides` and `groups`
+say what lands in the frame, `settings` and `page_settings` say what can be set, and
+`label` names the source in the picker.
+
+All four are read off the instance and not off the class. A source that only learns its
+groups from the network, a domain per site an account holds, can set them in `__init__`
+and have them offered as soon as they are known.
+"""
 
 import subprocess
 import urllib.error
@@ -34,17 +43,16 @@ def readable(exc):
 class Source:
     name = "source"
 
-    # What the config UI heads this source's groups with, where `name` does not read as a
-    # title: "cloudflare" is a package and "Cloudflare" is what it is called. One source
-    # contributing many groups is what makes this worth saying - the picker heads them all
-    # with this and lists the groups under it. Without one the name is titled.
+    # What the config UI heads this source's groups with, where `name` does not read as
+    # a title: "cloudflare" is a package, "Cloudflare" is the name. Without one the name
+    # is titled.
     label = None
 
     # Which groups this source can contribute to, for the config UI's benefit.
     provides = ()
 
-    # What this source can be told, so the config UI can offer it and the server can
-    # store it. Each entry is a dict:
+    # What this source can be told, for the config UI to offer and the server to store.
+    # Each entry is a dict:
     #
     #   key       the name it arrives under in self.config
     #   label     what the UI calls it
@@ -52,60 +60,49 @@ class Source:
     #   options   the allowed values, for "choice"
     #   default   what it is worth when nothing is stored
     #   hint      a line of explanation, optional
-    #   secret    an API key or token: the UI keeps it masked behind a button rather than
-    #             leaving it on a page that is open on a desk all day
+    #   secret    an API key or token, kept masked behind a button in the UI
     #
-    # A source with no settings declares none and gets no section in the UI. Anything
-    # not declared here cannot be set from the UI, only from --extension.
+    # A source with no settings gets no UI section. What is not declared here is only
+    # settable from --extension.
     settings = ()
 
-    # What this source puts in the frame that the model does not already define, so the
-    # config UI can offer it and `prune` can keep a page drawing it. Keyed by group name:
+    # What this source puts in the frame that the model does not define, for the config
+    # UI to offer and `prune` to keep a page drawing. Keyed by group name:
     #
     #   label     what the UI calls the group
     #   slow      the readings change far slower than the badge polls, so they travel
-    #             only when they change rather than in every frame
+    #             only when they change
     #   fields    one entry per field, keyed by the name it arrives under:
     #       label       what the UI calls it, unit included
     #       unit        what a badge prints after the reading
     #       full_scale  where a gauge's ring ends, for a reading with a top end
     #       percent     the reading is already 0-100
     #       graphed     keep a history ring, so a graph has something to plot
-    #       history     the source answers for its own ring, through `series()`, on
+    #       history     the source answers for the ring, through `series()`, on
     #                   whatever spacing the readings are really on
     #       peak        scale a gauge by the busiest this has been seen, as a rate is
     #       list        the value is a list, for the kinds that draw one lane each
-    #       item        the value is a message rather than a number, for a `notify` page:
-    #                   {"title": who or where from, "text": the body, "age_s": how long
-    #                   ago, "note": an optional qualifier}. A post, a mention, a headline
-    #                   and an RSS entry are all the same four things.
-    #
-    # Read off the source and not off the class, so one that only learns its groups from
-    # the network - a domain per site an account holds - can set them on the instance and
-    # have them offered as soon as they are known.
+    #       item        a message and not a number, for a `notify` page: {"title": who
+    #                   from, "text": the body, "age_s": how long ago, "note": an
+    #                   optional qualifier}
     groups = {}
 
-    # Settings that belong to one page rather than to the source. Same shape as
-    # `settings`, and the badge finds them in the page it is handed, so a page can be
-    # told which place to show where the source is told which units to show it in.
-    #
-    # A source wanting to do different work per page - fetching two locations, say -
-    # implements `pages(instances)`, which is handed every page of its own kinds
-    # whenever the config changes.
+    # Settings belonging to one page and not to the source, in the shape of `settings`.
+    # A source doing different work per page implements `pages(instances)`, handed every
+    # page of its kinds whenever the config changes.
     page_settings = ()
 
     def __init__(self, config):
         self.config = config
         self.faults = 0
         self.last_fault = None
-        # What this source worked out, as against what it was told: `store.get`/`store.set`,
-        # namespaced by source name and written by the host, so nothing here has to know
-        # where the config lives. The one made here keeps everything in memory; the
-        # persistent one is in place by the time `start` runs, which is where to read it.
+        # What this source worked out, as against what it was told. Namespaced by source
+        # name and written by the host. This one is in memory; the persistent one is in
+        # place by the time `start` runs.
         self.store = state.Store()
 
     def configure(self, settings):
-        """Take settings while running, on every save rather than only on a change.
+        """Take settings while running, on every save and not only on a change.
 
         The default suits a source that reads `self.config` as it samples. One that
         copies values out in `__init__` has to override this and copy them again.
@@ -152,15 +149,15 @@ class Source:
         """Called on shutdown. Reap helpers here."""
 
     def sample(self, frame, dt):
-        """Fill in what this source knows.
+        """Fill in what this source can measure.
 
         `frame` is a dict from model.empty_frame(); mutate it. `dt` is seconds since
         the previous sample, for anything that needs a rate. Only set a field if the
         value is real - leave it absent so a later source can fill it.
 
-        Be prompt: every source shares the collector's thread and the first sample is taken
-        while the server is starting up, so anything that waits on a network belongs in a
-        thread of its own, started by `start`, with this serving what it last brought back.
+        Be prompt. Every source shares the collector's thread, and the first sample is
+        taken while the server is starting up. Anything that waits on a network belongs
+        on a thread started by `start`, with this serving what it last brought back.
         """
         raise NotImplementedError
 
@@ -172,11 +169,12 @@ class Source:
     def note_ok(self):
         """Record that the work succeeded, which is what clears a fault.
 
-        A source says so itself because nothing outside it can tell: one that fetches on a
-        thread of its own fails and recovers on its own schedule, and `sample` handing over
-        the last good reading is no evidence that the next fetch landed. So this goes at the
-        point the work a fault was noted for worked, and a fault that is not transient - a
-        missing sudoers rule - is never cleared because nothing there ever succeeds.
+        A source has to call this itself, since nothing outside it can tell. One that
+        fetches on a thread fails and recovers on its own schedule, and `sample` handing
+        over the last good reading is no evidence that the next fetch landed.
+
+        So this goes at the point the work a fault was noted for succeeded. A fault that
+        is not transient, a missing sudoers rule, is never cleared.
 
         The count is kept: a source failing every third poll is worth knowing about while it
         is working.

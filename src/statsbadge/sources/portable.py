@@ -1,4 +1,4 @@
-"""Everything psutil can answer on any platform: CPU, memory, disk, network, battery.
+"""Everything psutil can answer on any platform. CPU, memory, disk, network and battery.
 
 Rates are computed here from counter deltas, because the badge should not have to
 remember the previous frame to draw a network graph.
@@ -131,10 +131,12 @@ class Portable(Source):
 def default_disk():
     """The filesystem "how full is my disk" means.
 
-    On macOS that is not "/": the root is a sealed, read-only system volume sharing an
-    APFS container with the data volume, so it reports the system's own 12G against the
-    container's size - 9% on a disk that is 86% full. Both volumes report the container's
-    free space, so the data volume is the one whose `used` is the answer.
+    On macOS that is not "/". The root is a sealed, read-only system volume, and shares
+    an APFS container with the data volume, so it reports the system's 12G against the
+    container's size: 9% on a disk that is 86% full.
+
+    Both volumes report the container's free space, so the data volume is the one whose
+    `used` is the answer.
     """
     if platform.system() == "Darwin":
         for candidate in ("/System/Volumes/Data", "/"):

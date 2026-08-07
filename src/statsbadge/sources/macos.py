@@ -7,7 +7,7 @@ Apple exposes very little without privileges. What is readable as a normal user:
 
 Die temperatures, fan RPM and package power all live behind the SMC or
 powermetrics, which needs root. `MacPowermetrics` covers that and is opt-in, so the
-default install asks for no password and simply reports no temperature.
+default install asks for no password and reports no temperature.
 
 Asked for with `--powermetrics` and not permitted, it prints the sudoers rule to add and
 carries on without those fields: a flag that quietly does nothing is worse than no flag.
@@ -25,20 +25,20 @@ from .base import Source
 
 MB = 1024 * 1024
 
-# The one command this source runs as root, as one list, so the sudoers rule a user is told to
-# paste is the argv that will actually be run. sudoers matches the whole command line, so a rule
-# written for anything else is a rule that does not work.
+# The one command this source runs as root, so the sudoers rule a user pastes is the
+# argv that will be run. sudoers matches the whole command line, and a rule written for
+# anything else does not match.
 POWERMETRICS = "/usr/bin/powermetrics"
 POWERMETRICS_ARGS = ("--samplers", "cpu_power,gpu_power,thermal", "-i", "1000", "-f", "plist")
 
 
 def powermetrics_argv():
-    """The command, with this machine's own path to it."""
+    """The command, with this machine's path to it."""
     return [shutil.which("powermetrics") or POWERMETRICS, *POWERMETRICS_ARGS]
 
 
 def sudoers_line():
-    """The rule that allows that command and nothing else, for this user and this machine."""
+    """The rule that allows exactly that command, for this user and this machine."""
     return "{} ALL=(root) NOPASSWD: {}".format(getpass.getuser(),
                                                " ".join(powermetrics_argv()))
 
@@ -156,8 +156,8 @@ class MacPowermetrics(Source):
         if not self._enabled:
             return
         if not self._permitted():
-            # The advice goes to the terminal the flag was typed at; the fault is one line,
-            # being what the config UI and `probe` show.
+            # The advice goes to the terminal the flag was typed at. The fault is one
+            # line, which is what the config UI and `probe` show.
             print(sudoers_advice(), file=sys.stderr)
             self.note_fault(RuntimeError(
                 "sudo will not run powermetrics without a password: add a rule to "
@@ -184,9 +184,9 @@ class MacPowermetrics(Source):
     def _permitted():
         """Whether sudo will run *this* command without a password.
 
-        Asked of the command itself rather than of sudo in general. A rule that allows
-        powermetrics and nothing else - which is the rule to write - does not allow `sudo -n
-        true`, so testing with that would refuse the very setup worth having.
+        Asked of the command itself and not of sudo in general. A rule that allows
+        powermetrics alone, which is the rule to write, does not allow `sudo -n true`, so
+        testing with that would refuse the very setup worth having.
         """
         try:
             return subprocess.run(["sudo", "-n", "-l", *powermetrics_argv()],
@@ -196,15 +196,15 @@ class MacPowermetrics(Source):
 
     def _pump(self):
         """Read the plist stream. powermetrics emits one plist per sample, back to
-        back, so split on the document header rather than trying to stream-parse."""
+        back, so split on the document header instead of stream-parsing."""
         buf = b""
         head = b"<?xml"
         while not self._stop.is_set() and self._proc and self._proc.stdout:
             chunk = self._proc.stdout.read(8192)
             if not chunk:
-                # Nothing more coming. A rule that is permitted but does not match the argv, or
-                # a powermetrics that refuses for its own reasons, ends up here rather than in
-                # the check above, so what it said on the way out becomes the fault.
+                # Nothing more coming. A rule that is permitted but does not match the
+                # argv, or a powermetrics that exits for reasons of its own, lands here
+                # and not in the check above, so its parting words become the fault.
                 self._note_exit()
                 break
             buf += chunk.replace(b"\x00", b"")
@@ -279,7 +279,7 @@ def _gpu_name(entry):
 
 
 def _merge_gpus(existing, found):
-    """Fill gaps in already-collected GPUs rather than replacing them, so two
+    """Fill gaps in already-collected GPUs without replacing them, so two
     sources describing the same card produce one entry."""
     if not existing:
         return found

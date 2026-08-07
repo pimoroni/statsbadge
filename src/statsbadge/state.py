@@ -15,8 +15,8 @@ import json
 import os
 import threading
 
-# The most keys a store will hold. A cache keyed by something a user types - a place name -
-# grows by one on every typo, and nothing else here is big enough to notice a cap.
+# The most keys a store will hold. A cache keyed by something a user types - a place
+# name - grows by one on every typo, and no other store here is near a cap.
 MAX_KEYS = 64
 
 
@@ -47,7 +47,7 @@ class Store:
             merged = dict(self._data)
             merged.update(values)
             if len(merged) > MAX_KEYS:
-                # The oldest first, insertion order being what a dict keeps.
+                # The oldest first, since a dict keeps insertion order.
                 for key in list(merged)[:len(merged) - MAX_KEYS]:
                     del merged[key]
             payload = json.dumps(merged, indent=2, sort_keys=True)

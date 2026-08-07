@@ -1,8 +1,8 @@
 """Broadcast where the server is, so a badge need not be told an IP address.
 
-Typing a dotted quad on six buttons is miserable. The server shouts a small JSON
-packet on the broadcast address every couple of seconds and the badge listens for it
-during setup. Nothing sensitive is in it, and it stays on the local segment.
+Typing a dotted quad on six buttons is miserable. The server sends a small JSON packet
+to the broadcast address every couple of seconds, and the badge listens for it during
+setup. Nothing sensitive is in it, and it stays on the local segment.
 """
 
 import json

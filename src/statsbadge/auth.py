@@ -8,6 +8,16 @@ transport is not HTTPS.
 
 Reads are signed too. It costs the badge one HMAC per second and means an
 unpaired device on the network learns nothing about the machine.
+
+Pairing is rate limited, not counted out. A hard cap is something an attacker can
+exhaust to stop the owner pairing at all, so wrong guesses back off. The limit is global
+to the window and not per badge, since the badge id is a field in the request and a
+guesser picks a fresh one each time.
+
+Doubling from 1s to a 30s ceiling fits ~13 guesses into a 300s window against 5 for a
+hard cap of five. That is the same order of safety, 1 in 77,000 for a six-digit code,
+while a mistyped code costs a second. The enrol code is never derived from badge.uid, which
+travels as X-Badge-Id over plain HTTP where an attacker could read it.
 """
 
 import base64
@@ -21,27 +31,15 @@ import time
 
 # A badge asks to be let in and shows a short code; a human approves it at the host.
 #
-# The code is minted here per request and returned for the badge to display. Not derived
-# from badge.uid or anything else predictable: uid travels as X-Badge-Id over plain HTTP,
-# so an attacker could show a matching code and be approved by mistake. Six hex digits;
-# it is compared, not entered.
+# Minted per request, returned for the badge to display, and compared and not entered.
 ENROL_CODE_HEX = 6
 # Waiting requests allowed at once, so a flood cannot bury the real one.
 MAX_PENDING = 6
 ENROL_TTL = 180.0
 
-# Wrong guesses are rate limited rather than counted out. A hard cap would be something
-# an attacker could exhaust on purpose to stop the owner pairing at all, and it has to be
-# global to the window rather than per badge, since the badge id is just a field in the
-# request and a guesser picks a fresh one each time.
-#
-# Doubling from 1s to a 30s ceiling fits ~13 guesses into a 300s window against 5 for a
-# hard cap of five - the same order of safety, 1 in 77,000 for a six-digit code - while
-# a user who mistypes once waits a second, which is less than retyping takes.
 PAIRING_BACKOFF_BASE = 1.0
 PAIRING_BACKOFF_CAP = 30.0
-# A strike is forgiven per this many seconds of quiet, so one early slip does not still
-# be costing the user minutes later.
+# A strike is forgiven per this many seconds of quiet.
 PAIRING_FORGIVE_AFTER = 30.0
 
 SIGNED_HEADER_ID = "x-badge-id"
@@ -53,10 +51,8 @@ SIGNED_HEADER_SIG = "x-badge-sig"
 # request cannot be replayed later.
 SEQ_WINDOW = 4096
 
-# Write the counter back to disk once it has advanced this far since the last write.
-# Not every request: a badge polls once a second all day. But it has to be persisted
-# at all, or a restart rewinds the counter and every request captured before it
-# becomes replayable again.
+# Write the counter back once it has advanced this far, and not every request, a badge
+# polling once a second all day. A restart otherwise rewinds the counter.
 SEQ_PERSIST_EVERY = 32
 
 
@@ -110,7 +106,7 @@ class Store:
     def _reload_if_changed(self):
         """Pick up a badge paired by another process.
 
-        `statsbadge install` mints a secret from its own Store while the server is
+        `statsbadge install` mints a secret from a separate Store while the server is
         already running, so without this the server never hears about the badge it
         just provisioned. One stat() per request is cheap; re-reading is not, so it
         only happens when the file has actually moved.
@@ -155,7 +151,7 @@ class Store:
         self._persisted = {
             bid: record.get("seq", 0) for bid, record in self.badges.items()
         }
-        # Remember our own write, so _reload_if_changed does not re-read it.
+        # Remember the write here, so _reload_if_changed does not re-read it.
         try:
             self._mtime = os.path.getmtime(self.path)
         except OSError:
