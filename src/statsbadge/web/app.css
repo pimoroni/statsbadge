@@ -250,12 +250,27 @@ main > section > ol {
   footer { display: flex; gap: 6px; }
   footer .add { margin-left: auto; }
 
-  header h3 { flex: 1; margin: 0; cursor: grab; user-select: none; }
+  header h3 { flex: 1; margin: 0; cursor: grab; user-select: none;
+              display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   header h3:active { cursor: grabbing; }
+
+  header h3 .kind { flex: none; }
+
+  /* The name somebody gave the page, beside the kind of page it is. Read as a name and not
+     as another heading: the kind is uppercase in the accent, this is what was typed. A long
+     one gives way rather than pushing the buttons off the end of the row. */
+  header h3 .given {
+    color: var(--ink); text-transform: none; letter-spacing: normal;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* A page still called after its own kind has nothing to add, and an empty span would
+     still take the gap between the two. */
+  header h3 .given:empty { display: none; }
 
   header h3::before {
     content: counter(page);
-    color: var(--dim); margin-right: 8px; font-variant-numeric: tabular-nums;
+    color: var(--dim); font-variant-numeric: tabular-nums; flex: none;
   }
 
   /* The same box as the button at the other end of the row. */

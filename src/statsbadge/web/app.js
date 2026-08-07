@@ -308,9 +308,21 @@ function pageCard(page, index) {
   const open = expanded.has(page.id)
   const settings = (caps.extension_page_settings || {})[page.kind] || []
 
+  // A page starts out titled after its kind, and an extension's ships titled after itself, so
+  // the name is only worth a second reading of once somebody has changed it.
+  const titled = el("span", { className: "given" })
+  const showTitle = () => {
+    const given = (page.title || "").trim()
+    titled.textContent = given.toLowerCase() === page.kind.toLowerCase()
+      ? ""
+      : titleCase(given)
+  }
+  showTitle()
+
   const titleId = `page${++controlSerial}`
   const title = el("input", { type: "text", id: titleId, value: page.title || "" })
-  title.oninput = () => { page.title = title.value; markDirty() }
+  // The heading is right above the field, so it keeps up with the typing.
+  title.oninput = () => { page.title = title.value; showTitle(); markDirty() }
 
   const toggle = el("button", { type: "button", textContent: open ? "▾" : "▸",
                                 title: open ? "Collapse" : "Configure",
@@ -331,16 +343,15 @@ function pageCard(page, index) {
     return renderPages()
   }
 
-  // The title is the handle: a card holds a text field and two pickers, and dragging it
+  // The heading is the handle: a card holds a text field and two pickers, and dragging it
   // from anywhere meant dragging it out from under whichever one was being used.
-  const kind = el("h3", { textContent: page.kind, title: "Drag to reorder" })
-  const item = el("li", null,
-                  el("header", null, kind, toggle, remove),
-                  el("label", { htmlFor: titleId, textContent: "Title" }),
-                  title)
+  const kind = el("h3", { title: "Drag to reorder" },
+                  el("span", { className: "kind", textContent: page.kind }), titled)
+  const item = el("li", null, el("header", null, kind, toggle, remove))
 
   if (open) {
-    item.append(slotList(page, shape),
+    item.append(el("label", { htmlFor: titleId, textContent: "Title" }), title,
+                slotList(page, shape),
                 ...settings.flatMap((setting) => settingRow(page, setting)),
                 el("footer", null, moveButtons(index), addSlot(page, shape)))
   } else {
