@@ -11,19 +11,19 @@ maintainers = [
 ]
 license = "MIT"
 # The vendored .af fonts are built from OFL originals, and the raw REPL in repl.py follows
-# MicroPython's own implementation, so those licences travel with the wheel that carries
-# them. Not with the badge copy of a font: a licence is for whoever redistributes it, and
-# the badge is where it is used.
+# MicroPython's implementation, so those licences travel with the wheel carrying them.
+#
+# The badge copy of a font goes without: a licence is for whoever redistributes it, and the
+# badge is where it is used.
 license-files = ["LICENSE", "licences/*.txt"]
 requires-python = ">=3.11"
 dependencies = [
     "psutil>=5.9",
-    # Decoding a feed's pictures for `imaging`. A JPEG decoder is the one part of this not
-    # worth writing, and the badge is the display: a host with no screen of its own is the
-    # ordinary case here, not the one that shows no pictures.
+    # Decoding a feed's pictures for `imaging`. A JPEG decoder is the one part of this
+    # not worth writing, and a host with no display is the ordinary case here.
     "pillow>=10",
-    # Finding the badge's port and talking to its REPL. Not an extra: `statsbadge install`
-    # is how a badge is set up, so it has to work from a plain install.
+    # Finding the badge's port and talking to its REPL. Kept out of the extras, since
+    # `statsbadge install` has to work from a plain install.
     "pyserial>=3.5",
 ]
 classifiers = [
@@ -49,18 +49,18 @@ Issues = "https://github.com/pimoroni/statsbadge/issues"
 [project.scripts]
 statsbadge = "statsbadge.__main__:main"
 
-# The tag is the version. uv's own build backend takes only static metadata - astral-sh/uv#11718,
-# open and undecided - so the backend is hatchling, which `uv build` and `uv publish` drive just
-# the same: those are the frontend, and it is only the backend that changes.
+# The tag is the version. uv's build backend takes only static metadata, astral-sh/uv#11718
+# being open, so the backend is hatchling. `uv build` and `uv publish` drive it the same
+# way, those being the frontend.
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/statsbadge"]
 
-# The precompiled app is a build artefact, so it is gitignored - and hatchling leaves out what
-# the VCS ignores unless told. Without this the wheel carries the sources alone and the badge
-# goes back to compiling them at every launch, 763ms against 126.
+# The precompiled app is gitignored as a build artefact, which hatchling leaves out unless
+# told. Without this the wheel ships sources alone and the badge compiles at every launch.
+# DEVELOPMENT.md has the timings.
 [tool.hatch.build]
 artifacts = ["src/statsbadge/badge_app/mpy/**"]
 
@@ -69,13 +69,13 @@ requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-# mpremote for the on-badge tools, which run a script over a mounted checkout - `mpremote
-# mount` is a whole filesystem protocol and not something statsbadge itself needs.
+# mpremote for the on-badge tools, which run a script over a mounted checkout. `mpremote
+# mount` is a filesystem protocol, and nothing statsbadge itself needs.
 dev = ["ruff>=0.6", "mpremote>=1.22"]
-# Building an extension's .af icon font. Not needed to run or install anything, so it
-# is a group rather than an extra: uv sync --group fonts.
+# Building an extension's .af icon font. A group and not an extra, since nothing needs it
+# to run or install: uv sync --group fonts.
 fonts = ["freetype-py>=2.4", "shapely>=2.1"]
 
-# The example extension is deliberately not a workspace member. It declares a real
-# dependency on statsbadge, which is correct once published but circular in a checkout,
-# so it is installed for development with --no-deps instead. See README.
+# The example extension is kept out of the workspace. It declares a real dependency on
+# statsbadge, which is correct once published but circular in a checkout, so it is
+# installed for development with --no-deps. See README.
