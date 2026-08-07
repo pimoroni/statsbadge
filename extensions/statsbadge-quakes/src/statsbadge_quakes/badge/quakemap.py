@@ -1,14 +1,14 @@
 """The badge side of the quakes extension: a world map with the last few on it.
 
 Installed into the app's `ext/` directory by `statsbadge install` and imported by the app,
-which is when it registers itself.
+at which point it registers itself.
 
-The map itself is `worldmap`, which is the app's: the firmware ships the coastlines and two
-pages want them, so the shapes and their pens live there and this draws what goes on top.
+The map itself is the app's `worldmap`. The firmware ships the coastlines and two pages draw
+them, so the shapes and their pens live there and this draws what goes on top.
 
-Why this is code and not a picture over the wire: the map travels. It closes in on the event
-it is naming and pulls back out to cross an ocean, at the badge's own frame rate, off a list
-that arrives once every five minutes.
+Code and not a picture over the wire, because the map travels. It closes in on the event it
+is naming and pulls back out to cross an ocean, at the badge's frame rate, off a list that
+arrives once every five minutes.
 """
 
 import math
@@ -27,8 +27,8 @@ MAP_H = look.BODY_H - BAND_H
 BAND_TOP = MAP_TOP + MAP_H
 
 # Pixels per degree, close in and pulled out. The camera closes in when the next event is
-# nearby and pulls out when it is on the other side of the planet, so the travel between two
-# says how far apart they are.
+# nearby and pulls out when it is across the planet, and the travel between two says how far
+# apart they are.
 SCALE_NEAR = 1.9
 SCALE_FAR = 1.05
 # Degrees of separation the change is centred on, and how sharply it happens there.
@@ -117,7 +117,7 @@ def _reticle(theme, view, event):
         # Squared, so a ring is bright where it leaves and gone well before the edge.
         screen.pen = pen.with_alpha(int((1.0 - progress) ** 2 * 255))
         screen.shape(shape.circle(vec2(x, y), radius).stroke(width))
-    # The epicentre breathes, so it reads as something happening rather than as a printed dot.
+    # The epicentre pulses, which marks it as something happening and not a printed dot.
     pulse = 2.5 + math.sin(now / 1000.0 * math.pi * 2.0)
     screen.pen = pen
     screen.shape(shape.circle(vec2(x, y), max(3.0, pulse * min(view.scale, 2.0))))
@@ -130,7 +130,7 @@ def _band(theme, event, index, total, note="waiting for the feed"):
     """The strip under the map: how big, where, how deep and how long ago."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
-    # The same rule the header draws, in the same colour, so the band reads as furniture.
+    # A hairline in the chrome colour, marking the band off from the map above it.
     screen.pen = theme.accent_b
     screen.rectangle(rect(0, BAND_TOP, look.W, 1))
     if event is None:
@@ -179,8 +179,8 @@ def render(page, frame, _history, theme):
     elapsed = time.ticks_diff(now, state["drawn"])
     state["drawn"] = now
 
-    # No interaction: the point of the page is that it moves on by itself, and a button on a
-    # map wants panning and zooming rather than a step to the next event.
+    # No interaction. The page moves on unprompted, and a button on a map suggests panning
+    # and zooming, not a step to the next event.
     hold = max(1.0, float((page or {}).get("hold") or 6))
     if events and time.ticks_diff(now, state["held"]) > int(hold * 1000.0):
         state["index"] += 1
@@ -202,6 +202,6 @@ def render(page, frame, _history, theme):
 
 
 pages.EXTRA["quakemap"] = render
-# The rings grow and the camera travels between readings, so this page wants every frame it
-# can have rather than one a second.
+# The rings grow and the camera travels between readings, so this page takes every frame
+# it can have.
 pages.ANIMATED.add("quakemap")

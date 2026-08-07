@@ -28,10 +28,10 @@ Then add a **Quakes** page in the config UI. It works with nothing configured.
 
 ## Notes
 
-The map is the badge firmware's own, so nothing is downloaded and no geometry crosses the network: the host sends ten events and the badge knows where they are. Land takes its colour from the theme ramp by latitude, tropics at the hot end and ice caps at the cold one, so the map is themed along with everything else.
+The map is the badge firmware's, so nothing is downloaded and no geometry crosses the network: the host sends ten events with their coordinates. Land takes its colour from the theme ramp by latitude, tropics at the hot end and ice caps at the cold one, so the map is themed along with everything else.
 
-The last set is kept, so a badge switched on before the network is up draws the quakes it knew about rather than an empty world.
+The last set is kept, so a badge switched on before the network is up has something to draw.
 
-**Largest magnitude**, **Latest magnitude** and **How many** are offered as readings too, under Earthquakes in the field pickers, for a `text` or `dial` page that wants a number rather than a map.
+**Largest magnitude**, **Latest magnitude** and **How many** are offered as readings too, under Earthquakes in the field pickers, for a `text` or `dial` page drawing a number and not a map.
 
-The feed is asked for every five minutes and the badge polls every second, so the events are sent only when they change: an age is drawn to the minute and worked out against the minute just gone, which is what lets a set that has not moved be a set that is not sent. Ten events are about 1.1KB, so that is 1.1KB a second saved for a page that changes twelve times an hour.
+The feed is asked for every five minutes and the badge polls every second, so the events travel only on a change. An age is drawn to the minute and worked out against the minute just gone, which is what keeps a set that has not moved from being sent. Ten events are about 1.1KB, so that is 1.1KB a second saved for a page that changes twelve times an hour.

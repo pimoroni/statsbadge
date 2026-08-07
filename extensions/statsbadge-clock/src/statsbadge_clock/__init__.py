@@ -2,14 +2,14 @@
 
 Three things an extension can do, all shown here:
 
-1. Put data in the frame under its own group name. The badge's built-in page kinds can
+1. Put data in the frame under a group name of its own. The badge's built-in page kinds can
    draw it with no badge-side code at all - `clock.time` in a `text` page just works.
 2. Ship badge-side Python for a page the built-in kinds cannot draw. `badge/clockface.py`
    registers a `clockface` kind, and `statsbadge install` pushes it
    into the app's `ext/` directory.
 3. Keep what it worked out. `self.store` is a namespaced dict the host persists, and the
-   coordinates a place name resolved to go in it: a town does not move, so the geocoder is
-   asked once per name rather than once per launch.
+   coordinates a place name resolved to go in it. A town does not move, and the geocoder
+   is asked once per name and not once per launch.
 
 Weather comes from Open-Meteo, which needs no API key and no account. Location is
 whatever the config gives, or a guess from the host's timezone.
@@ -27,10 +27,9 @@ from statsbadge.sources.base import Source
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# How long a failed lookup waits before it is tried again. Open-Meteo's geocoder rate limits
-# and its forecast asks for no more than a request every few minutes per location, so a failure
-# is not worth retrying at the sample rate - and not worth waiting out the whole interval
-# either, a connection dropping on a laptop being over in seconds.
+# How long a failed lookup waits before it is tried again. Open-Meteo rate limits its
+# geocoder, so a failure is not worth retrying at the sample rate, and a connection
+# dropping on a laptop is over in seconds.
 RETRY_AFTER = 60.0
 # How often the fetcher looks for something due.
 FETCH_POLL = 1.0
@@ -58,14 +57,14 @@ CONDITIONS = {
 
 
 # The symbol for each condition, as a character in badge/icons.af. Kept here beside
-# CONDITIONS rather than on the badge, so there is one mapping and icons.txt is the only
+# CONDITIONS and not on the badge, leaving one mapping where icons.txt is the only
 # other place the letters appear.
 ICONS = {
     "clear": "a", "fair": "c", "cloudy": "e", "overcast": "f", "fog": "g",
     "drizzle": "h", "rain": "i", "heavy rain": "j", "downpour": "j", "sleet": "k",
     "showers": "l", "snow": "m", "heavy snow": "n", "thunder": "o",
 }
-# Night has its own symbol where there is one to have.
+# Night takes a separate symbol where there is one to have.
 NIGHT_ICONS = {"clear": "b", "fair": "d"}
 
 
@@ -135,8 +134,8 @@ class Clock(Source):
     )
 
     # Offered in the config UI's page list.
-    # No field slots: the renderer draws from its own groups and never reads `fields`,
-    # so offering pickers for them offered controls that did nothing.
+    # No field slots. `clockface` draws from the `clock` and `weather` groups and
+    # ignores `fields`, so pickers for them offered controls that did nothing.
     badge_page = {
         "kind": "clockface",
         "title": "Clock",
@@ -161,7 +160,7 @@ class Clock(Source):
          "default": "railway",
          "hint": "railway is the station clock, dots is a dotted minute track, squircle "
                  "and digital take the badge's theme, lcd is seven-segment digits over "
-                 "their own unlit segments"},
+                 "their unlit segments"},
     )
 
     @classmethod
@@ -173,7 +172,7 @@ class Clock(Source):
         self._weather = {}
         self._next_weather = 0.0
         self._retry_at = 0.0
-        # Where the pages look, keyed by location, and which page wants which. Read while
+        # Where the pages look, keyed by location, and which page draws which. Read while
         # sampling and replaced when the config changes, so both go through the lock.
         self._targets = {}
         self._page_order = []
@@ -188,11 +187,10 @@ class Clock(Source):
     def start(self):
         """A thread for the fetching, so nothing here waits on the network in `sample`.
 
-        Every source shares the collector's thread and the first sample is taken while the
-        server is starting up, so a lookup that hangs holds up the whole app: a flaky
-        connection stalled startup for as long as the geocoder took to answer. `urlopen`'s
-        timeout is no guard either, since it does not cover name resolution, which is where a
-        dropping connection stops.
+        Every source shares the collector's thread and the first sample is taken while
+        the server starts up, so a lookup that hangs holds up the app. `urlopen`'s timeout
+        is no guard, since it does not cover name resolution, which is where a dropping
+        connection stops.
         """
         if self._fetcher is None:
             self._stop.clear()
@@ -222,11 +220,11 @@ class Clock(Source):
         """Where each of this source's pages wants to look.
 
         Called whenever the config changes, so a place typed in the browser is fetched on
-        the next sample rather than at the next restart.
+        the next sample and not at the next restart.
 
-        Two maps, because they answer different questions: pages are keyed by page id, so
-        the badge can find its own entry without deriving a key, and locations are keyed
-        by where they are, so two pages showing one city cost one request.
+        Two maps, for two questions. Pages are keyed by page id, letting the badge find its
+        entry without deriving a key. Locations are keyed by where they are, so two pages
+        showing one city cost one request.
         """
         order, targets = [], {}
         for page in instances:
@@ -239,8 +237,8 @@ class Clock(Source):
             targets.setdefault(key, {"place": place, "lat": latitude,
                                      "lon": longitude})
         with self._lock:
-            # Carry over what has already been fetched for somewhere still wanted; anywhere
-            # no page asks for now is dropped, along with its timer.
+            # Carry over what has already been fetched for somewhere still in the list.
+            # Anywhere no page asks for is dropped, along with its timer.
             for key, spec in targets.items():
                 was = self._targets.get(key) or {}
                 spec["data"] = was.get("data", {})
@@ -262,7 +260,7 @@ class Clock(Source):
         self.wind_units = self.config.get("wind_units", "kmh")
         if self.wind_units not in WIND_UNITS:
             self.wind_units = "kmh"
-        # What the place name resolved to, kept so a name costs one lookup rather than one
+        # What the place name resolved to, kept so a name costs one lookup and not one
         # per forecast. configure() runs on every save, so an unchanged name keeps it.
         if was != self.place or not hasattr(self, "_located"):
             self._located = None
@@ -272,7 +270,7 @@ class Clock(Source):
         """Take a location while running.
 
         The values are copied out in __init__, so they have to be copied again here. The
-        next sample refetches rather than waiting out the rest of the interval, because a
+        next sample refetches, and does not wait out the rest of the interval, since a
         location typed in the browser should show up on the badge and not in a quarter of
         an hour.
         """
@@ -283,7 +281,7 @@ class Clock(Source):
         self._wake.set()
 
     def sample(self, frame, dt):
-        """Whatever the fetcher has already brought back. Nothing here touches the network."""
+        """The clock from the host, and whatever forecast the fetcher has brought back."""
         now = time.localtime()
         frame["clock"] = {
             "time": time.strftime("%H:%M", now),
@@ -296,7 +294,7 @@ class Clock(Source):
         frame["weather"] = dict(self._weather)
 
     def _places(self):
-        """One entry per page, its weather and that place's own clock, keyed by page id.
+        """One entry per page, its weather and that place's clock, keyed by page id.
 
         The clock fields come from the location's UTC offset, which the forecast returns,
         so a page showing another city shows its time without the badge knowing anything
@@ -313,9 +311,9 @@ class Clock(Source):
         return out
 
     def _refresh(self):
-        """Fetch whatever is due, on the fetcher's own thread.
+        """Fetch whatever is due, on the fetcher's thread.
 
-        A failure waits RETRY_AFTER rather than the whole interval, and rather than never:
+        A failure waits RETRY_AFTER, and neither the whole interval nor forever:
         the timer used to be set before the attempt, so one refused lookup at startup left a
         page with no weather until the next save.
         """
@@ -330,7 +328,7 @@ class Clock(Source):
             except Exception as exc:
                 self._next_weather = time.monotonic() + RETRY_AFTER
                 self.note_fault(exc)
-        # The pages' own places, which are often the only ones set. Fetched outside the lock,
+        # The pages' places, which are often the only ones set. Fetched outside the lock,
         # against a snapshot: a spec dropped meanwhile is written to and discarded.
         with self._lock:
             specs = list(self._targets.values())
@@ -356,10 +354,11 @@ class Clock(Source):
     def _where(self):
         """Coordinates to ask about, and the name to show for them.
 
-        Coordinates win where they are given, being the more specific answer. Otherwise the
-        place name is looked up and kept, since it cannot change until the setting does - but a
-        lookup that failed is tried again once the backoff is out, the geocoder being the thing
-        here most likely to be rate limited or briefly unreachable.
+        Coordinates win where they are given, being the more specific answer. Otherwise
+        the place name is looked up and kept, since it cannot change until the setting does.
+
+        A lookup that failed is tried again once the backoff is out, the geocoder being the
+        part here most likely to be rate limited.
         """
         if self.latitude is not None and self.longitude is not None:
             return (self.latitude, self.longitude, None)
@@ -378,17 +377,18 @@ class Clock(Source):
         return self._located
 
     def _geocode(self, place):
-        """A place name to coordinates, through Open-Meteo's own geocoder.
+        """A place name to coordinates, through Open-Meteo's geocoder.
 
         No key and no account, like the forecast. A name after a comma is matched against
         the country, so "Sheffield, US" gets Alabama and "Sheffield" gets the one most
         people mean: results arrive ordered by how well known they are.
 
-        Answered from the store where it can be. A town does not move, so the lookup is worth
-        doing once per name ever rather than once per launch: the geocoder is the part of this
-        most likely to be rate limited, and a name already resolved needs it not to answer at
-        all. Both callers come through here, so it is one cache for the default place and the
-        pages' own.
+        Answered from the store where it can be. A town does not move, so the lookup is
+        done once per name ever and not once per launch. A name already resolved needs the
+        geocoder to answer at all.
+
+        Both callers come through here, so the default place and the pages share one
+        cache.
         """
         key = place.strip().lower()
         cached = (self.store.get(GEOCODED) or {}).get(key)
@@ -432,7 +432,7 @@ class Clock(Source):
             f"&wind_speed_unit={self.wind_units}"
         )
         if local_time:
-            # Asks for the location's own offset, which is what a per-place clock needs.
+            # Asks for the location's offset, which a per-place clock needs.
             url += "&timezone=auto"
         with urllib.request.urlopen(url, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
@@ -450,8 +450,8 @@ class Clock(Source):
             "condition": condition,
             "code": code,
             "place": label,
-            # Units travel with the numbers: the badge has no way to know which was asked
-            # for, and a temperature with no scale on it is worse than none.
+            # Units travel with the numbers. The badge cannot tell which was asked for,
+            # and a temperature with no scale on it is worse than none.
             "temp_unit": TEMPERATURE_UNITS.get(self.units, "C"),
             "wind_unit": WIND_UNITS[self.wind_units],
             "icon": icon or ICONS.get(condition),

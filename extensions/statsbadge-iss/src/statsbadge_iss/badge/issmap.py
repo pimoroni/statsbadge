@@ -1,15 +1,15 @@
 """The badge side of the ISS extension: the station, its track, and the terminator.
 
 Installed into the app's `ext/` directory by `statsbadge install` and imported by the app,
-which is when it registers itself.
+at which point it registers itself.
 
 The map and the day and night wash are `worldmap`, which is the app's. What is here is the
 station: an orbit of ground track with the flown half drawn behind it, a marker that says
 whether it is in sunlight, and the readouts under the map.
 
-Why this is code and not a picture over the wire: the station moves 0.066 degrees a second
-and the terminator a quarter of a degree a minute, so both are carried forward from a reading
-that arrives every five seconds. A picture would cost a fetch a frame to do the same.
+Code and not a picture over the wire. The station moves 0.066 degrees a second and the
+terminator a quarter of a degree a minute, so both are carried forward from a reading that
+arrives every five seconds. A picture would cost a fetch a frame.
 """
 
 from array import array
@@ -39,19 +39,19 @@ TRACK_W = 1.6
 # curve reads as one.
 TRACK_STEPS = 4
 # What is left of the flown half, against the accent the part ahead is drawn in. It has been
-# and gone, so it is there to give the marker somewhere to have come from.
+# and gone, and it gives the marker somewhere to have come from.
 FLOWN_ALPHA = 96
-# What the part in shadow keeps, so the track says where the station is in daylight and the
+# What the part in shadow keeps, letting the track say where the station is in daylight and the
 # terminator says why.
 DARK_ALPHA = 110
 
 # The marker: a body and two solar panels, in degrees of arc so it holds its size on screen
-# whatever the zoom. Drawn rather than blitted, so it takes the theme and can point along the
+# whatever the zoom. Drawn and not blitted, letting it take the theme and point along the
 # track.
 BODY = 3.0
 PANEL_LONG = 7.0
 PANEL_SHORT = 1.6
-# The halo behind it, which is what makes a 12px marker read as the subject of the page.
+# The halo behind it, which makes a 12px marker the subject of the page.
 HALO = 6.0
 
 # Where each page is looking, keyed by page id.
@@ -107,8 +107,8 @@ def _marker(theme, view, where):
 def _smoothed(points):
     """The track resampled to a curve through every point the host sent.
 
-    Five minutes of orbit is twenty-odd degrees of longitude, so the samples drawn as chords
-    read as a fan of straight lines. Catmull-Rom passes through each of them, which is the
+    Five minutes of orbit is twenty-odd degrees of longitude, and the samples drawn as chords
+    show as a fan of straight lines. Catmull-Rom passes through each of them, which is the
     same curve the graph pages are drawn with, and an orbit is exactly the smooth thing it
     suits: nothing moves, the corners just stop being corners.
 
@@ -127,8 +127,8 @@ def _smoothed(points):
         return list(zip(lons, lats, lit))
     dense_lon = draw.curve(lons, TRACK_STEPS)
     dense_lat = draw.curve(lats, TRACK_STEPS)
-    # A point takes the light of the sample it came from, so a crossing lands on a sample
-    # rather than somewhere the host never reported.
+    # A point takes the light of the sample it came from, and a crossing lands on a sample
+    # and never somewhere the host did not report.
     return [(dense_lon[index], dense_lat[index],
              lit[min(len(lit) - 1, index // TRACK_STEPS)])
             for index in range(len(dense_lon))]
@@ -137,10 +137,10 @@ def _smoothed(points):
 def _track(theme, view, state, points, flown):
     """The ground track, an orbit of it, with the part already flown left behind.
 
-    Split at `flown`, which is where the host says now is in the run: the points are a
+    Split at `flown`, where the host says now is in the run. The points are a
     prediction made when it was asked for, so the station walks along them between fetches.
 
-    Drawn as a stroked path per stretch rather than a shape per segment: one open contour is
+    Drawn as a stroked path per stretch, and not a shape per segment. One open contour is
     0.08ms plus its edges where seventy-six lines are 0.08ms each.
     """
     if len(points) < 2:
@@ -180,9 +180,9 @@ def _track(theme, view, state, points, flown):
 def _project(view, dense, cut):
     """The track as stroked shapes, one per run of it that is drawn the same way.
 
-    Projected into one buffer that outlives the frame and stroked out of slices of it: a vec2 a
-    point and a list a run would be 77 objects, which is the sort of allocation that leaves a heap
-    in pieces. Same idiom as draw.line, which strokes a plot out of `draw._points`.
+    Projected into one buffer that outlives the frame and stroked out of slices of it. A
+    vec2 a point and a list a run would be 77 objects, which is the allocation that leaves
+    a heap in pieces. Same idiom as draw.line.
     """
     global _path
     wanted = len(dense) * 2
@@ -194,7 +194,7 @@ def _project(view, dense, cut):
     at = 0
     previous_x = None
     for index, (lon, lat, sunlit) in enumerate(dense):
-        # What this point is drawn as, rather than the pen itself: a run ends where the answer
+        # What this point is drawn as, and not the pen itself. A run ends where the answer
         # changes, and comparing two colours is not something a pen can be asked.
         want = (index >= cut, bool(sunlit))
         x, y = view.at(lon, lat)
@@ -227,7 +227,7 @@ def _band(theme, where, aboard, note="waiting for the feed"):
     """The strip under the map: how high, how fast, in sun or shadow, and who is aboard."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
-    # The same rule the header draws, in the same colour, so the band reads as furniture.
+    # The header's rule, in the header's colour, which makes the band furniture.
     screen.pen = theme.accent_b
     screen.rectangle(rect(0, BAND_TOP, look.W, 1))
     if not where:
@@ -240,7 +240,7 @@ def _band(theme, where, aboard, note="waiting for the feed"):
     draw.blit_label(altitude, look.SIZE_BIG, theme.ink, look.PAD, BAND_TOP + 3)
     left = look.PAD + draw.text_width(altitude, look.SIZE_BIG) + 10
 
-    # Sunlight is the one thing here that is a state rather than a number, so it takes the
+    # Sunlight is the one state here among the numbers, so it takes the
     # accent when it is on and the dim when it is not.
     sunlit = where.get("sunlit", True)
     lit = "in sunlight" if sunlit else "in shadow"

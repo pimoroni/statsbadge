@@ -3,14 +3,16 @@
 Three feeds, none of which needs a key or an account:
 
     wheretheiss.at   where it is now, and where it will be. Its reply carries the sub-solar
-                     point as well, which is the whole of the day and night terminator, so
-                     nothing here works out where the sun is.
+                     point as well, which is the whole of the day and night terminator,
+                     leaving no solar arithmetic here.
     open-notify.org  who is aboard.
 
-The ground track is asked for rather than integrated: the same endpoint answers a list of
+The ground track is asked for and never integrated. The same endpoint answers a list of
 timestamps, so forty-five minutes either side of now comes back as twenty positions and the
-badge has a track to draw the moment it turns the page. Keeping a trail of observed positions
-instead would have drawn nothing until the app had been up for most of an orbit.
+badge has a track to draw the moment it turns the page.
+
+Keeping a trail of observed positions instead draws nothing until the app has been up for
+most of an orbit.
 """
 
 import json
@@ -33,7 +35,7 @@ POSITION_EVERY = 5.0
 # The track is a prediction from now, so it goes stale as now moves on.
 TRACK_EVERY = 120.0
 CREW_EVERY = 3600.0
-# A failure waits this long rather than the whole interval, and rather than never.
+# A failure waits this long, and neither the whole interval nor forever.
 RETRY_AFTER = 30.0
 FETCH_POLL = 1.0
 
@@ -61,7 +63,7 @@ class ISS(Source):
          "hint": "How many people are aboard, from open-notify.org"},
     )
 
-    # No field slots: the renderer draws from its own group and never reads `fields`.
+    # No field slots. `issmap` draws from the `iss` group and ignores `fields`.
     badge_page = {
         "kind": "issmap",
         "title": "ISS",
@@ -97,11 +99,7 @@ class ISS(Source):
         self._read_settings()
 
     def start(self):
-        """Take up where the last run left off, then fetch on a thread of its own.
-
-        Nothing in `sample` may wait on a network: every source shares the collector's thread
-        and the first sample is taken while the server is still starting up.
-        """
+        """Restore the last position, then fetch the track and crew on a thread."""
         self._where = self.store.get(LAST) or {}
         if self._fetcher is None:
             self._stop.clear()
@@ -144,19 +142,19 @@ class ISS(Source):
         self._wake.set()
 
     def sample(self, frame, dt):
-        """Whatever the fetcher has already brought back. Nothing here touches the network."""
+        """The position, ground track and crew the fetcher has brought back."""
         with self._lock:
             where = dict(self._where)
             track = list(self._track)
             track_from = self._track_from
             crew = list(self._crew)
         # Where "now" sits in the track, as an index into it: the run is a prediction from
-        # when it was asked for, so the station moves along it between fetches and the badge
-        # draws what is behind differently from what is ahead.
+        # when it was asked for. The station moves along it between fetches, and what is
+        # behind is drawn differently from what is ahead.
         flown = (time.time() - track_from) / TRACK_STEP_S if track else 0.0
         if where:
-            # Seconds since the reading, so the badge can say how live it is and carry the
-            # station on from there rather than drawing a stale dot as though it were now.
+            # Seconds since the reading, letting the badge say how live it is and carry
+            # the station on from there instead of drawing a stale dot as now.
             where["age_s"] = max(0, int(time.time() - where.get("at", 0)))
         frame["iss"] = {
             "where": where,
@@ -165,7 +163,7 @@ class ISS(Source):
             # The count, not the names: the page has room for "9 aboard" and the frame is sent
             # again every second, so nine names would be a hundred and fifty bytes of nothing.
             "aboard": len(crew) if self.crew_wanted else None,
-            # For anything wanting a number rather than a map.
+            # For anything drawing a number and not a map.
             "lat": where.get("lat"),
             "lon": where.get("lon"),
             "altitude": where.get("altitude"),
@@ -188,7 +186,7 @@ class ISS(Source):
             "sunlit": payload.get("visibility") != "eclipsed",
             "unit": "km" if self.units == "kilometres" else "mi",
             # The sub-solar point, which is the terminator: the badge builds the curve from
-            # these two and nothing here has to know what day it is.
+            # these two, and no calendar is needed here.
             "solar_lat": round(float(payload["solar_lat"]), 2),
             "solar_lon": round(float(payload["solar_lon"]), 2),
             "at": int(payload.get("timestamp") or time.time()),
