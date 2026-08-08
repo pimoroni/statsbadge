@@ -70,17 +70,6 @@ def note_series_spacing(spacing):
             SPACING[key] = every
 
 
-def walkable(refs):
-    """Whether a plot of these can be animated at all.
-
-    A plot is translated as a whole - one shift, one set of samples wide - so its series
-    have to be on one clock for the movement to mean anything on all of them. They are
-    unless a source answered for one, and an hourly ring shifted by a number worked out
-    from a second is a plot sliding a year an hour.
-    """
-    return not any(ref in SPACING for ref in refs)
-
-
 # The kinds that draw a series, and so have one fetched for them.
 PLOTS = ("graph", "spark", "trend")
 # The ones that move between readings. A sparkline is 22px tall and a sample of it 5px, so
@@ -344,12 +333,11 @@ def behind_at(age_ms, since_ms):
 def _walk(refs=()):
     """How far back in the series a graph should draw, or None to draw it where it stands.
 
-    None and not 0.0 when nothing is animating. A plot that moves needs room for the
-    samples still coming in, and one that never will should use the whole of its box. And
-    none for a plot whose series are not on the collector's clock, `BEHIND` being counted
-    in its samples.
+    None, so a still plot uses the whole of its box where a moving one keeps room on the
+    right. A ref in SPACING is on its own clock, and BEHIND is counted in collector
+    samples, so those are drawn still too.
     """
-    if not PLOT_ANIMATION or not walkable(refs):
+    if not PLOT_ANIMATION or any(ref in SPACING for ref in refs):
         return None
     return BEHIND
 
@@ -610,30 +598,22 @@ def _badge_page(_page, _frame, _history, theme):
     draw.vitals(theme, meters, facts, notes)
 
 
-def group_name(ref):
-    """What to call a reading's group.
-
-    The host's name for it where one travelled with the layout, which gets an extension's
-    group drawn as gadgetoid.com and not CF_GADGETOID_COM. The key is all the badge has,
-    and the dots that made it a domain cannot be put back.
-
-    Otherwise the key, in the case the rest of the furniture is in.
-    """
-    group = ref.split(".")[0]
-    return LABELS.get(group) or group.upper()
-
-
 def names_for(refs):
     """Display names that tell these readings apart.
 
     The field name where that is already unique - LOAD, TEMP - the group where it is
     not, and both where neither is: a page of cpu.pct and gpu.pct would otherwise be
     two rows both called LOAD.
+
+    A group takes the host's label where one travelled with the layout, so an extension
+    draws as gadgetoid.com rather than CF_GADGETOID_COM; the key cannot be turned back
+    into a domain here.
     """
     plain = [name_for(ref) for ref in refs]
     if len(set(plain)) == len(plain):
         return plain
-    groups = [group_name(ref) for ref in refs]
+    groups = [LABELS.get(group) or group.upper()
+              for group in (ref.split(".")[0] for ref in refs)]
     if len(set(groups)) == len(groups):
         return groups
     return [f"{group} {name}" for group, name in zip(groups, plain)]

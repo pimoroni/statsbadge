@@ -1020,16 +1020,6 @@ class App:
         self._saved_page = self.page_index
 
 
-def consume_press():
-    """Take the press that closed a modal screen out of the current frame's edges.
-
-    A screen returns the moment its button goes down, before the loop reaches
-    `badge.update()`. That edge is still standing when `buttons()` runs, so B on the
-    hosts menu chose a server and then fired whatever B was bound to on the page.
-    """
-    badge.poll()
-
-
 def no_network(theme):
     """The command that sets a network, held until HOME."""
     draw.banner(theme, "No WiFi", "no network set",
@@ -1070,7 +1060,8 @@ def main():
     if not app.config.paired:
         if not pairing_ui().run(app):
             return
-        consume_press()
+        # Drop the press that closed the screen, before buttons() sees it as an edge.
+        badge.poll()
     app.apply_layout()
 
     while True:
@@ -1080,7 +1071,8 @@ def main():
             return
         if pressed_home == "menu":
             outcome = pairing_ui().hosts_menu(app)
-            consume_press()
+            # As above: B chose a server, and would otherwise also fire B's binding here.
+            badge.poll()
             if outcome == "exit":
                 app.save_page()
                 return

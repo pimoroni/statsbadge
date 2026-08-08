@@ -2946,8 +2946,6 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
     # it a year an hour.
     try:
         pages.note_series_spacing({"cf_pinout_xyz.requests": {"every_ms": 3600000}})
-        assert pages.walkable(("cpu.pct", "mem.pct"))
-        assert not pages.walkable(("cpu.pct", "cf_pinout_xyz.requests"))
         pages.PLOT_ANIMATION = True
         pages.BEHIND = 0.5
         assert pages._walk(("cpu.pct",)) == 0.5
@@ -3002,13 +3000,10 @@ def test_a_press_that_closes_a_modal_screen_stops_there(_h):
     """
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
 
-    assert "def consume_press():" in app, "no helper to clear the edge"
-    assert "badge.poll()" in app[app.index("def consume_press():"):], "the helper polls"
-
     loop = app[app.index("def main():"):]
     menu = loop[loop.index("pairing_ui().hosts_menu(app)"):]
     handled = menu[:menu.index("app.buttons()")]
-    assert "consume_press()" in handled, (
+    assert "badge.poll()" in handled, (
         "the menu press reaches buttons(): " + handled)
 
 
