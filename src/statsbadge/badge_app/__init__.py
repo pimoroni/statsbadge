@@ -396,6 +396,26 @@ class App:
         # and without it the host inlines every group.
         self._start("stats", f"/v1/stats?have={self.slow_rev}")
 
+    def forget_host(self):
+        """Drop everything belonging to the host we were talking to.
+
+        Readings, series and revisions are all numbered by whoever sent them, so held on
+        they would be drawn under the new host's name until it happened to number one the
+        same. A queued command was a press meant for the host we just left.
+        """
+        self.client.close()
+        self.layout = None
+        self.layout_rev = -1
+        self.history = {}
+        self.slow = {}
+        self.slow_rev = -1
+        self._queued = None
+        self._commands = []
+        self._series_age = 0
+        self._series_at = 0
+        self.rejected = False
+        draw.clear_cache()
+
     def hunt(self):
         """Look for a paired host on the network after the current one went quiet.
 
@@ -425,19 +445,7 @@ class App:
                 self.config.note_address(server_id, beacon["host"], beacon["port"],
                                          beacon.get("name"))
                 if self.config.switch(server_id):
-                    self.client.close()
-                    self.layout = None
-                    self.history = {}
-                    # Another host's slow readings are not this one's, and its revisions
-                    # belong to it. Held on, they would be drawn under the new host's name
-                    # until it happened to number one the same.
-                    self.slow = {}
-                    self.slow_rev = -1
-                    self._queued = None
-                    # A press meant for the host we just left.
-                    self._commands = []
-                    self._series_at = 0
-                    draw.clear_cache()
+                    self.forget_host()
                     self.note(self.config.name or "switched host")
                     self.dirty = True
                 return
@@ -984,8 +992,7 @@ def main():
         if app.needs_setup() and badge.pressed(BUTTON_B):
             if not pairing_ui().run(app):
                 return
-            app.rejected = False
-            app.layout = None
+            app.forget_host()
             app.apply_layout()
         app.poll()
         app.tick()

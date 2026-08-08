@@ -3003,6 +3003,34 @@ def test_the_notice_screen_offers_a_way_out(_h):
 
 
 @check
+def test_switching_host_forgets_the_old_one_the_same_way(_h):
+    """Three ways to leave one host for another, and all of them reset through one method.
+
+    The beacon in hunt(), the hosts menu, and setup reached from the app. Readings, series
+    and revisions are numbered by whoever sent them, so anything held is drawn under the
+    new host's name.
+    """
+    app_dir = pathlib.Path(install.app_source_dir())
+    app = (app_dir / "__init__.py").read_text()
+    menu = (app_dir / "setup.py").read_text()
+
+    forget = app[app.index("    def forget_host(self):"):]
+    forget = forget[:forget.index("\n    def ", 1)]
+    for cleared in ("self.layout = None", "self.layout_rev = -1", "self.history = {}",
+                    "self.slow = {}", "self.slow_rev = -1", "self._queued = None",
+                    "self._commands = []", "self._series_age = 0", "self._series_at = 0",
+                    "self.rejected = False", "draw.clear_cache()"):
+        assert cleared in forget, cleared
+
+    # Reset nowhere else, or the paths go back to disagreeing. Twice in the app: once as a
+    # starting value and once here.
+    for cleared in ("self.slow = {}", "self.history = {}", "self.slow_rev = -1"):
+        assert app.count(cleared) == 2, cleared
+    assert "app.layout" not in menu, "the menu is resetting state of its own"
+    assert menu.count("forget_host()") == 2, "a host joined is a host switched to"
+
+
+@check
 def test_a_press_that_closes_a_modal_screen_stops_there(_h):
     """B on the hosts menu picked a server and then fired the page binding behind it.
 

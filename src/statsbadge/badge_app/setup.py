@@ -37,14 +37,10 @@ def hosts_menu(app):
             continue
         if picked["kind"] == "known":
             if app.config.switch(picked["id"]):
-                app.layout = None
-                app.history = {}
-                app.rejected = False
-                draw.clear_cache()
+                app.forget_host()
             return None
         if _ask_to_join(app, picked["host_entry"]):
-            app.layout = None
-            app.rejected = False
+            app.forget_host()
             return None
 
 
