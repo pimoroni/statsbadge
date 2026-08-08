@@ -1,9 +1,8 @@
 """Extensions: a pip install away from a new page.
 
 An extension is a normal package advertising a `statsbadge.sources` entry point. It
-contributes a source (so it can put anything in the frame) and, optionally, badge-side
-Python that the server pushes to the badge so a page can animate at 45fps instead of
-being a picture fetched over the wire.
+contributes a source, and optionally badge-side Python that the server pushes across, so
+a page can animate at 45fps instead of being a picture fetched over the wire.
 
     [project.entry-points."statsbadge.sources"]
     weather = "statsbadge_weather:Weather"
@@ -14,8 +13,8 @@ The class is a `sources.base.Source` with two extras:
     badge_assets     paths to further files the badge side needs, an .af icon font say
     badge_page       the page descriptor the config UI should offer
 
-Anything under a group the frame already names is merged. An extension may also add a
-top-level group, which the badge draws by name.
+Anything under a group the frame already names is merged; an extension may also add a
+top-level group.
 """
 
 import os

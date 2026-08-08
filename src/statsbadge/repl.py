@@ -1,15 +1,13 @@
 """Talk to the badge over its serial REPL.
 
-Two things are ever asked of a badge over the cable. Run a short script and read what it
-printed, and hard reset so `main.py` starts again.
+Two things: run a short script and read what it printed, and hard reset so `main.py`
+starts again. Both are the raw REPL, four control characters and two end markers, which
+is why mpremote is not a dependency: its console script is off PATH under a uv tool
+install, and it spawns an interpreter per command.
 
-Both are the raw REPL, four control characters and two end markers, so they are here and
-not behind a dependency on mpremote. Its console script is not on PATH when statsbadge is
-installed as a uv tool, and it spawns an interpreter for every command.
-
-Standard raw REPL, not raw-paste: the longest script sent from here is about 600 bytes, so
-the flow control raw-paste negotiates buys nothing over writing in paced chunks. Nothing
-here copies files either, since the app goes on over USB mass storage.
+Raw REPL and not raw-paste. The longest script sent from here is about 600 bytes, so the
+flow control raw-paste negotiates buys nothing over paced chunks. Nothing here copies
+files, the app going on over USB mass storage.
 
 The protocol follows MicroPython's own implementation, `tools/mpremote/transport_serial.py`,
 which is MIT licensed - see licences/MIT-MicroPython.txt.

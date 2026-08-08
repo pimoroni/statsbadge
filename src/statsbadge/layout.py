@@ -1,9 +1,8 @@
 """What the badge draws: pages, tiles and themes.
 
-A page is data, not code, wherever it can be. The badge ships a handful of page
-kinds - a dial, a bar stack, a graph, a text readout - and a page says which kind it
-is and which fields go in it. That way rearranging a display is a config change the
-badge picks up on its next poll, with no install.
+A page is data wherever it can be: the badge ships the kinds, and a page names one and
+the fields that go in it. Rearranging a display is then a config change the badge picks
+up on its next poll.
 
 `rev` increments on every change. The badge sees it in each stats frame and refetches
 the layout only when it moves, so the common case is one small GET a second.
@@ -32,42 +31,33 @@ KINDS = ("dial", "dials", "bars", "graph", "grid", "text",
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
               "rings": 4, "spark": 6, "radar": 6, "notify": 6}
 
-# How a page turn moves. "over" draws the incoming page over the outgoing one; "deck" moves
-# them together, the outgoing page leaving to the left.
+# "over" draws the incoming page over the outgoing one; "deck" moves them together.
 SLIDE_STYLES = ("off", "over", "deck")
 
 # How the sparkline page tells one row from the next: a band behind every other row, a
 # hairline between them, or nothing.
 ROW_STYLES = ("zebra", "rules", "none")
 
-# How the gauge on a dial page fills. One colour, the ramp's for the reading, or the ramp
-# swept round the arc with the part past the reading faint. Only that gauge is large
-# enough to read a ramp off.
+# One colour for the reading, or the ramp swept round the arc. Only the dial's gauge is
+# large enough to read a ramp off.
 GAUGE_FILLS = ("solid", "ramp")
 
-# How a derived theme picks its second accent, the colour used sparingly beside the first.
-# A graph's second series is the one place it appears. A written-down palette names one, or
-# gets the accent again.
+# How a derived theme picks its second accent. A written-down palette names one, or gets
+# the accent again.
 ACCENT_B_RULES = derive.ACCENT_B_RULES
 
-# The names, from the palettes themselves; a theme is data.
-#
-# The tinted pair are derived from the accent in `tint`. Storing the choice and not its
-# result carries a change in the derivation to a badge holding it.
+# The names, from the palettes themselves; a theme is data. The tinted pair are derived
+# from the accent in `tint`, and storing the choice carries a change in the derivation.
 TINTED = {"tinted-dark": "dark", "tinted-light": "light",
           "tinted-bold-dark": "dark", "tinted-bold-light": "light"}
-# Which of them take each hue as far as sRGB allows and keep the ramp in it, as against
-# holding every hue at one chroma and sending the ramp to red.
+# Which take each hue as far as sRGB allows and keep the ramp in it.
 BOLD = ("tinted-bold-dark", "tinted-bold-light")
 THEMES = tuple(themes.PALETTES) + tuple(TINTED)
 
-# Themes that were a palette each and are now one of the derived pair with an accent.
+# Palettes that are now the derived pair with an accent. `red` and tinted bold dark at
+# the same hue differ by 8 counts in the accent and nowhere else.
 #
-# Measured against the ones they replace, `red` and tinted bold dark at the same hue differ
-# by 8 counts in the accent and nowhere else. Each of the five sat within 0.003 of its hue's
-# chroma limit, which the bold variant does for all twelve.
-#
-# A stored name still resolves, so a badge already showing one carries on showing it.
+# A stored name still resolves, so a badge showing one carries on showing it.
 THEME_ALIASES = {
     "red": ("tinted-bold-dark", 30.0),
     "green": ("tinted-bold-dark", 150.0),
@@ -90,8 +80,7 @@ def resolve_theme(theme, tint):
     at = derive.ACCENT_HUES.index(int(hue))
     return name, list(derive.accents("saturated")[at])
 
-# What a picker calls a theme, where that is not the name title cased. `dark` and `light`
-# are the two nothing was designed around, so they are named for what they are.
+# What a picker calls a theme, where that is not the name title cased.
 THEME_LABELS = {"dark": "Default Dark", "light": "Default Light"}
 # Where a page stops being dark and starts being light, as OKLCH lightness of the background.
 PALE_FROM = 0.5
@@ -114,17 +103,15 @@ def theme_records():
         })
     return records
 
-# Button bindings the badge answers itself, and never sends here. Paging and the panel are
-# the badge's business, and a round trip would be slower than the press. Offered to the UI
-# alongside the host's commands, which is the only reason this list is on this side.
+# Bindings the badge answers itself and never sends here. On this side only so the UI can
+# offer them alongside the host's commands.
 LOCAL_ACTIONS = (
     ("badge.prev", "previous page"),
     ("badge.next", "next page"),
     ("badge.brightness", "brightness"),
 )
 
-# What to show on a machine nobody has configured. Only pages whose fields the host
-# actually produces survive `prune`, and this is a superset of every machine.
+# A superset of every machine: `prune` drops the pages whose fields the host lacks.
 DEFAULT_PAGES = [
     {"id": "cpu", "kind": "dial", "title": "CPU",
      "field": "cpu.pct",
@@ -169,8 +156,7 @@ DEFAULT_CONFIG = {
     "advance_every_s": 10,
     "pages": DEFAULT_PAGES,
     "buttons": {"a": None, "b": None, "c": None},
-    # Per-extension settings, keyed by extension name. Host-side: the badge never sees
-    # these, so a location or a token does not travel to it.
+    # Per-extension settings, keyed by name. Host-side, so a token never travels to a badge.
     "settings": {},
 }
 
@@ -207,8 +193,7 @@ class Config:
                 for badge_id, block in (stored.get("badges") or {}).items()
                 if isinstance(block, dict)
             }
-            # Retired theme names are resolved here, once, so nothing downstream - a picker, a
-            # palette lookup, a badge - has to know they ever existed.
+            # Retired theme names resolve here, once, and nothing downstream sees them again.
             for block in [merged] + list(merged["badges"].values()):
                 name, accent = resolve_theme(block.get("theme"), None)
                 block["theme"] = name
@@ -305,13 +290,12 @@ class Config:
             cleaned["rev"] = self._next_rev()
             cleaned["updated_at"] = int(time.time())
             if badge_id:
-                # What an extension is told is the host's answer and not a badge's - one place,
-                # one API key - so it is kept at the top level however it arrives.
+                # One place, one API key: an extension's settings are the host's, so they stay
+                # at the top level however they arrive.
                 self.data["settings"] = cleaned.pop("settings", None) or {}
                 self.data.setdefault("badges", {})[str(badge_id)] = cleaned
             else:
-                # The table belongs to the file, not to the default layout, so replacing the
-                # default must not take every badge's layout with it.
+                # The table belongs to the file, so replacing the default must not empty it.
                 kept = self.data.get("badges") or {}
                 self.data = cleaned
                 self.data["badges"] = kept
@@ -351,14 +335,12 @@ class Config:
 def group_labels(pages, capabilities):
     """What to call the groups these pages draw, where the badge cannot work it out.
 
-    A badge names a reading after its field - LOAD, TEMP - and falls back to the group where
-    one page draws the same field from several of them. That is fine for `cpu` and `gpu`, and
-    comes out CF_GADGETOID_COM for a group an extension named after a domain. The badge
-    has only the key, and the dots that made it a domain cannot be put back.
+    The badge falls back to the group key where one page draws a field from several, which is
+    fine for `cpu` and comes out CF_GADGETOID_COM for a group named after a domain. The dots
+    cannot be put back from the key.
 
-    So the groups an extension declared travel with the layout, where a name the reader
-    chose belongs and is refetched only when `rev` moves. The model's are left out:
-    "Processor" is read at a desk and the badge says CPU at arm's length.
+    So an extension's declared groups travel with the layout. The model's are left out: the
+    badge says CPU at arm's length.
     """
     owned = capabilities.get("group_source") or {}
     known = capabilities.get("group_labels") or {}
@@ -402,8 +384,7 @@ def palette_for(theme, tint, second="same"):
     if theme in TINTED:
         return derive.palette(tuple(tint), TINTED[theme], theme in BOLD, second)
     stored = themes.PALETTES.get(theme, themes.PALETTES[themes.DEFAULT])
-    # The greys a picture is drawn in follow from the accent's hue, as `stripe` does, so
-    # they are derived. Copied, since PALETTES is shared.
+    # Derived from the accent's hue, as `stripe` is. Copied, since PALETTES is shared.
     return {**stored, "image": derive.image_ramps(stored["accent"])}
 
 
@@ -411,13 +392,12 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
              page_settings_schema=None):
     """Reject anything the badge could not draw, and normalise the rest.
 
-    The config UI is the only writer, but it arrives over HTTP so it is checked
-    here: a bad `kind` on the badge is a crash dialog in a launcher, not a 400.
+    The config UI is the only writer, but it arrives over HTTP: a bad `kind` on the badge is
+    a crash dialog in a launcher and not a 400.
 
-    `extra_kinds` are page kinds contributed by installed extensions, which the badge
-    can only draw once their module has been pushed to it, and
-    `page_settings_schema` is what those kinds let a single page be told. Anything a
-    kind has not declared is dropped, so a page cannot smuggle keys to the badge.
+    `extra_kinds` are the kinds installed extensions contribute, and `page_settings_schema`
+    what those let a single page be told. Anything undeclared is dropped, so a page cannot
+    smuggle keys to the badge.
     """
     if not isinstance(incoming, dict):
         raise ValueError("config must be an object")
@@ -428,8 +408,7 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     if theme not in THEMES:
         raise ValueError(f"unknown theme: {theme!r}")
     out["theme"] = theme
-    # A retired name brings an accent with it. It named a colour, and that is the choice
-    # being kept, not whatever tint was stored beside it.
+    # A retired name brings its accent: the colour was the choice, not the tint beside it.
     out["tint"] = tint_accent(aliased or incoming.get("tint"), out["tint"])
 
     interval = int(incoming.get("interval_ms", out["interval_ms"]))
@@ -444,39 +423,33 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     out["graph_points"] = max(8, min(160, int(incoming.get("graph_points", 48))))
     # Whether a graph is a curve through its samples or a polyline between them.
     out["smooth"] = bool(incoming.get("smooth", True))
-    # Whether a gauge sweeps to each new reading or steps to it. Off by default. On a
-    # noisy field, a throughput that halves between polls, the sweep looks like lag.
+    # Whether a gauge sweeps to each new reading or steps to it. Off by default: on a noisy
+    # field the sweep looks like lag.
     out["animate"] = bool(incoming.get("animate", False))
-    # Whether a plot moves between readings. A graph scrolls, a sparkline slides its
-    # points along y. A separate choice from a gauge sweeping, and off for the same reason.
+    # Whether a plot moves between readings. Separate from `sweep`, and off for the same
+    # reason.
     out["plot_animation"] = bool(incoming.get("plot_animation", False))
-    # How a page turn moves: not at all, the next page sliding over this one, or the two
-    # travelling together like a card off a deck. Off by default, since it is a fifth of a
-    # second before what the reader pressed for can be read. A bool is taken as well, from
-    # before there was a choice.
+    # How a page turn moves. Off by default: it is a fifth of a second before what the reader
+    # pressed for can be read. A bool is taken too, from before there was a choice.
     slide = incoming.get("slide", "off")
     if isinstance(slide, bool):
         slide = "over" if slide else "off"
     out["slide"] = slide if slide in SLIDE_STYLES else "off"
-    # How the sparkline page separates its rows. Banded by default: six lines on one page
-    # read as one plot with six traces otherwise.
+    # How the sparkline page separates its rows. Banded by default, or six lines read as one
+    # plot with six traces.
     rows = incoming.get("rows", "zebra")
     out["rows"] = rows if rows in ROW_STYLES else "zebra"
-    # How the dial page's gauge fills. One colour by default: the reading is one value, and
-    # the ramp behind it is worth showing on some machines and clutter on others.
+    # How the dial page's gauge fills. One colour by default.
     fill = incoming.get("gauge_fill", "solid")
     out["gauge_fill"] = fill if fill in GAUGE_FILLS else "solid"
-    # How a derived theme picks the colour it uses beside the accent. The same colour by
-    # default, matching a palette that names none.
+    # The colour used beside the accent. The same colour by default, as a palette naming
+    # none gets.
     second = incoming.get("accent_b", "same")
     out["accent_b"] = second if second in ACCENT_B_RULES else "same"
-    # Whether the badge takes its brightness down to suit a dim room. Off by default,
-    # since it needs the light sensor and not every board has one.
+    # Whether the badge dims to suit the room. Off by default: not every board has the sensor.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))
-    # How long the badge waits before it starts paging unattended, and how long it then
-    # holds each page. Zero is off.
-    #
-    # An hour is the longest wait worth offering, and a page needs a second to be seen.
+    # How long the badge waits before paging unattended, and how long it holds each page.
+    # Zero is off; an hour is the longest wait offered.
     out["idle_advance_s"] = max(0, min(3600, int(incoming.get("idle_advance_s", 0))))
     out["advance_every_s"] = max(1, min(600, int(incoming.get("advance_every_s", 10))))
 
@@ -547,8 +520,7 @@ def _coerce_setting(value, entry):
             number = float(value)
         except (TypeError, ValueError):
             return None
-        # A browser's min and max stop the spinner and mark the field, but a value typed
-        # straight in still reaches here, so a declared floor is held to on this side.
+        # A browser's min and max only mark the field, so a typed value still reaches here.
         if entry.get("min") is not None:
             number = max(float(entry["min"]), number)
         if entry.get("max") is not None:
@@ -602,8 +574,7 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
             raise ValueError(f"page {page_id} needs a field")
         clean["field"] = field
     elif kind == "badge":
-        # Nothing to configure: the page reads the badge, so there is no field to pick and no
-        # host that could fail to answer for it.
+        # Nothing to configure: the page reads the badge, and no host answers for it.
         pass
     elif kind in ("dials", "graph", "grid", "text", "rings", "spark", "radar"):
         fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
@@ -641,9 +612,8 @@ def prune(pages, capabilities):
     user should not have to know that to get a sensible default.
     """
     available = capabilities.get("available", {})
-    # The page kinds an installed extension draws. A map page declares no fields, leaving
-    # nothing in the host's field list to confirm it by. `from_extension` is only on a page
-    # the browser added since that field existed.
+    # The page kinds an installed extension draws. A map page declares no fields, so there is
+    # nothing in the host's field list to confirm it by.
     from_extensions = {page.get("kind") for page in capabilities.get("extension_pages", ())}
 
     def has(ref):
@@ -657,8 +627,8 @@ def prune(pages, capabilities):
             kept.append(page)
             continue
         if page.get("kind") not in KINDS:
-            # An extension page. It declares a group of its own, and the model's field
-            # list is no authority on whether the host produces it.
+            # An extension page declares its own group, which is absent from the model's field
+            # list.
             fields = [f for f in page.get("fields", []) if has(f)]
             if (fields or page.get("from_extension")
                     or page.get("kind") in from_extensions):

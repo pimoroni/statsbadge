@@ -12,9 +12,8 @@ import time
 from . import extensions, model
 from .sources import discover
 
-# Everything on a frame besides a group of readings, written down once because anything
-# walking a frame has to step over them. app.js keeps a copy of this list, and a test
-# holds the two together.
+# Everything on a frame besides a group of readings, so anything walking one can step
+# over them. app.js keeps a copy and a test holds the two together.
 FRAME_SCALARS = ("v", "t", "seq", "slow_rev")
 
 
@@ -25,8 +24,8 @@ class Collector:
         self._history_at = 0
         self.config = config or {}
         self.sources = discover(self.config)
-        # Each extension gets a store to itself under here, for what it works out as
-        # against what it is told. Nothing is written until one asks to keep something.
+        # A store per extension, for what it works out as against what it is told. Nothing is
+        # written until one asks to keep something.
         self.extensions = extensions.load(self.config, state_dir)
         self.frame = model.empty_frame()
         self.seq = 0
@@ -35,16 +34,14 @@ class Collector:
         self._thread = None
         self._stop = threading.Event()
         self._last_sample = None
-        # A short ring per graphed field, letting a page draw a sparkline without the
-        # badge having been watching.
+        # A short ring per graphed field, so a page can plot without the badge having watched.
         self.history_len = history
         self._history = {}
-        # The busiest each rate has been seen to be, which is the only full scale a
-        # throughput has: nothing states what a full one would be, and the link speed is
-        # not reported on every platform.
+        # The busiest each rate has been seen to be, which is the only full scale a throughput
+        # has: link speed is not reported on every platform.
         self._peaks = {}
-        # The slow half of the frame as it last stood, and how many times it has changed.
-        # A badge sends the number back and is sent the readings only when it is behind.
+        # The slow half of the frame and how many times it has changed. A badge sends the number
+        # back and gets the readings only when it is behind.
         self._slow_last = None
         self._slow_rev = 0
 
@@ -76,8 +73,8 @@ class Collector:
             try:
                 self.sample_once()
             except Exception:
-                # The collector thread must never die; a bad source is recorded on
-                # that source and the next tick tries again.
+                # The collector thread must never die: a fault is recorded on its source and the
+                # next tick tries again.
                 pass
 
     # -- sampling -----------------------------------------------------------
@@ -92,8 +89,7 @@ class Collector:
             try:
                 source.sample(frame, dt)
             except Exception as exc:
-                # A source letting an exception out of `sample` has hit something it
-                # does not handle, and the fault stays until the source clears it.
+                # The fault stays on the source until it clears it.
                 source.note_fault(exc)
 
         frame["t"] = int(now * 1000)
@@ -159,8 +155,7 @@ class Collector:
         if part != self._slow_last:
             self._slow_last = part
             self._slow_rev += 1
-        # In the frame either way, since the badge sends it back to say what it holds.
-        # A badge with no slow groups still has to see it hold still.
+        # In the frame either way: the badge sends it back to say what it holds.
         frame["slow_rev"] = self._slow_rev
 
     def _push_peaks(self, frame):
@@ -175,9 +170,8 @@ class Collector:
         for group, declared in self._declared().items():
             for field, entry in (declared.get("fields") or {}).items():
                 if entry.get("peak"):
-                    # A rate the model does not define takes a per-field floor. 64KB/s
-                    # stops a trickle filling a link's gauge, and would stop a gauge of
-                    # requests a minute ever moving.
+                    # A per-field floor: 64KB/s stops a trickle filling a link's gauge, and
+                    # would stop a gauge of requests a minute ever moving.
                     peaked[f"{group}.{field}"] = float(entry.get("peak_floor") or 1.0)
         for key, floor in peaked.items():
             group, field = key.split(".", 1)
@@ -270,18 +264,15 @@ class Collector:
     def history_at(self, keys=None, points=48, spacing=False):
         """The same rings, plus when they were taken.
 
-        `every_ms` is the spacing of the positions and `age_ms` how old the newest is, so a
-        plot can place every point on a time axis without knowing anything about this host's
-        clock or about how often the badge asked. Ages and not timestamps, so nothing has
-        to be aligned between two machines and the only error left is the trip back.
+        `every_ms` is the spacing and `age_ms` how old the newest point is, so a plot can place
+        every point on a time axis. Ages and not timestamps, so no clocks have to be aligned and
+        the only error left is the trip back.
 
-        Those two are the collector's, and cover every ring it keeps. A source answering
-        for its own history is on a different clock, so with `spacing` its rings come too,
-        each with the pair that belongs to it.
+        Both are the collector's. A source answering for its own history is on another
+        clock, so `spacing` brings its rings with the pair belonging to each.
 
-        Without it they are left out. Served under a spacing not theirs, an app that cannot
-        read the difference would animate an hourly series as though it arrived every
-        second.
+        Without it they are left out: served under a spacing not theirs, an older app
+        animates an hourly series as a per-second one.
         """
         with self._lock:
             wanted = keys or list(self._history)
@@ -335,19 +326,17 @@ class Collector:
                  "faults": s.faults, "last_fault": s.last_fault}
                 for s in self.sources + self.extensions
             ],
-            # Which extension each declared group belongs to, for a picker to head them
-            # with. Only the declared ones; what is absent here is this host.
+            # Which extension each declared group belongs to. What is absent here is this host.
             "group_source": extensions.group_owners(self.extensions),
-            # What has a history ring. A graph of anything else can only draw the live
-            # value twice, which is a flat line whatever the machine is doing. Rings the
-            # collector keeps and rings a source answers for itself both count: they are
-            # the same thing to whoever is choosing a field.
+            # What has a history ring: a graph of anything else draws the live value twice, a
+            # flat line whatever the machine is doing. Collector rings and source-answered rings
+            # both count.
             "graphed": [f"{group}.{field}" for group, field in
                         _GRAPHED + self._extra("graphed") + self._extra("history")],
             "series_fields": [f"{group}.{field}"
                               for group, field in _GRAPHED_SERIES + self._extra("series")],
-            # Extensions are reported by the server, which describes every discovered one and
-            # not only those that loaded. Two lists under one name was one list too many.
+            # From the server, which describes every discovered extension and not only those
+            # that loaded.
             "interval": self.interval,
             "uptime_s": int(time.time() - self.started_at),
             **described,
@@ -364,17 +353,16 @@ _GRAPHED = (
     ("power", "package_w"),
 )
 
-# Fields whose value is already a list, kept as a ring of lists for a page to plot one
-# lane per element over time. Rounded to whole numbers and held shorter than the scalar
-# rings, a ring of twelve-core samples costing twelve times a scalar one on the wire.
+# Fields already carrying a list, kept as a ring of lists so a page can plot a lane per
+# element. Rounded and held shorter: twelve-core samples cost twelve times a scalar ring
+# on the wire.
 _GRAPHED_SERIES = (
     ("cpu", "cores"),
 )
 SERIES_LEN = 64
 
-# A peak left alone halves in about ten minutes at a sample a second, which follows the
-# machine and drops one busy night. The floor keeps a quiet link from scaling a trickle
-# up to a full ring.
+# A peak left alone halves in about ten minutes at a sample a second, so it follows the
+# machine. The floor keeps a quiet link from scaling a trickle to a full ring.
 PEAK_DECAY = 0.99885
 PEAK_FLOOR = 64 * 1024.0
 

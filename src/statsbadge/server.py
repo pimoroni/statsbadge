@@ -1,9 +1,8 @@
 """The HTTP server the badge talks to, and the config UI beside it.
 
-Every response goes out as a single `write()` with TCP_NODELAY set. That is not a
-micro-optimisation: `http.server` flushing headers and body separately costs a badge
-247ms per request against 7ms for one write, because Nagle holds the body until lwIP
-gets round to acknowledging the headers. DEVELOPMENT.md has the measurements.
+Every response goes out as a single `write()` with TCP_NODELAY set. Flushing headers and
+body separately costs a badge 247ms a request against 7ms, Nagle holding the body until
+lwIP acknowledges the headers. DEVELOPMENT.md has the measurements.
 
 Two audiences on one port:
 
@@ -24,8 +23,8 @@ import traceback
 from . import auth, commands, derive, extensions, identity, layout, themes
 from .collect import Collector
 
-# Normalised, and absolute: `_static` compares a normalised target against this to refuse a path
-# out of the directory, so a `..` or a relative segment left in here refuses everything instead.
+# Normalised and absolute: `_static` compares a normalised target against this, so a `..`
+# left in here would refuse everything instead.
 STATIC_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"))
 
 REASONS = {
@@ -97,23 +96,20 @@ class Service:
 
     def capabilities(self):
         caps = self.collector.capabilities()
-        # With the heading and label each takes in the button picker, letting the UI
-        # group the media ones together without knowing which is which.
+        # With each one's heading and label, so the picker can group them without knowing which
+        # is which.
         caps["commands"] = commands.records()
-        # With the label and mode each takes in a picker, letting the UI group the dark
-        # ones together without knowing which is which.
+        # With each one's label and mode, so a picker can group the dark ones.
         caps["themes"] = layout.theme_records()
         # What a button can be bound to that the badge does itself, labelled: the UI offers
-        # them in the same list as the commands, which is where someone looks for them.
+        # these in the same list as the commands.
         caps["local_actions"] = [{"action": action, "label": label}
                                  for action, label in layout.LOCAL_ACTIONS]
-        # The colours too, so the UI's swatches come from the badge's tables and cannot
-        # drift from them.
+        # The colours too, so the UI's swatches cannot drift from the badge's tables.
         # What a tinted theme can be built from, so the UI offers exactly what will work.
         caps["tinted"] = dict(layout.TINTED)
         caps["bold"] = list(layout.BOLD)
-        # Four families of twelve, the same for every page. A family sets how loud the
-        # accent is, and the hue is the choice. The picker shows them as tabs.
+        # Four families of twelve, the same for every page. The picker shows them as tabs.
         caps["accents"] = {family: [list(accent) for accent in derive.accents(family)]
                            for family in derive.ACCENT_FAMILIES}
         caps["accent_family"] = derive.DEFAULT_FAMILY
@@ -122,9 +118,8 @@ class Service:
                                    "ramp": [rgb for _pos, rgb in palette["ramp"]]}
                             for name, palette in themes.PALETTES.items()}
         caps["kinds"] = list(layout.KINDS)
-        # Every discovered extension, and not only the ones with something to be told.
-        # One that asks nothing gets a box in the UI, and one that failed to import is
-        # reported here instead of showing up as a page that never draws.
+        # Every discovered extension, not only those with something to be told: one that failed
+        # to import is reported here instead of showing up as a page that never draws.
         caps["extensions"] = extensions.describe()
         caps["extension_pages"] = extensions.badge_pages(self.collector.extensions)
         caps["extension_settings"] = self.extension_settings()
@@ -141,12 +136,11 @@ class Service:
         rev = self.config.replace(incoming, self.extension_kinds(),
                                  self.extension_settings(),
                                  self.extension_page_settings(), badge_id)
-        # Settings are the host's and not a badge's - a location or an API key is one answer
-        # per machine - so they are read back from where the store keeps them.
+        # One answer per machine, so settings are read back from the store and not from a badge.
         extensions.configure(self.collector.extensions,
                              self.config.snapshot().get("settings"))
-        # Pages too, letting a source doing per-page work see the new ones without a
-        # restart. Every badge's, since it fetches for all of them at once.
+        # Pages too, so a source doing per-page work sees new ones without a restart. Every
+        # badge's, since it fetches for all of them at once.
         extensions.configure_pages(self.collector.extensions, self.config.all_pages())
         return rev
 
@@ -262,8 +256,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _badge_api(self, method, path, body):
         service = self.service
 
-        # Unauthenticated, since a badge has to find the host and learn whether pairing
-        # is open before it holds a secret. Neither leaks stats.
+        # Unauthenticated: a badge has to find the host and learn whether pairing is open before
+        # it holds a secret. Neither leaks stats.
         if path == "/v1/hello" and method == "GET":
             return self._json(200, {
                 "server": "statsbadge",
@@ -272,9 +266,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": service.identity["name"],
                 "host": service.collector.latest().get("sys", {}).get("host"),
                 "pairing": service.badges.pairing_active(),
-                # The default's, since this is the one call a badge makes before it can
-                # prove who it is. It watches for a layout change on the revision in a
-                # signed stats frame, which is the one for that badge.
+                # The default's: this is the one call a badge makes before it can prove who it
+                # is. It watches for changes on the revision in a signed stats frame instead.
                 "layout_rev": service.config.rev,
                 "interval_ms": service.config.layout_for().get("interval_ms", 1000),
             })
@@ -301,35 +294,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 outcome["name"] = service.identity["name"]
             return self._json(200, outcome)
 
-        # Everything past here is signed. Over `self.path`, not the routing path:
-        # the query string changes the response, so it has to be covered too.
+        # Everything past here is signed over `self.path` and not the routing path, the query
+        # string changing the response.
         badge_id = service.badges.verify(method, self.path, _lower(self.headers), body)
 
         if path == "/v1/stats" and method == "GET":
             frame = dict(service.collector.latest())
-            # This badge's layout revision. It refetches when the number moves, so a save
-            # for one badge must not send the others after a layout nothing changed.
+            # This badge's revision. It refetches when the number moves, so a save for one badge
+            # must not send the others after a layout nothing changed.
             frame["layout_rev"] = service.config.rev_for(badge_id)
-            # A badge names the slow readings it already holds, so a domain's traffic,
-            # fetched once a minute, is not sent sixty times. That state travels in the
-            # query, leaving the host one frame for every badge.
+            # A badge names the slow readings it holds, so a domain's traffic is not sent sixty
+            # times a minute. The state travels in the query, leaving the host one frame for all
+            # badges.
             #
-            # Asking is also what marks the badge as able to read the answer. An app old
-            # enough not to ask gets every group inline.
+            # Asking also marks the badge as able to read the answer; an older app gets every group
+            # inline.
             held = self._query().get("have")
             if held is not None:
                 slow = service.collector.slow_groups()
                 for group in slow:
                     frame.pop(group, None)
                 if frame.get("peaks"):
-                    # A new dict, the one in the frame being the collector's, shared with
-                    # every other badge reading it.
+                    # A new dict: the one in the frame is the collector's, shared with every
+                    # other badge.
                     frame["peaks"] = {ref: value
                                       for ref, value in frame["peaks"].items()
                                       if ref.split(".")[0] not in slow}
                 if held != str(frame.get("slow_rev")):
-                    # Under one key, letting the badge keep what it is handed without
-                    # knowing which of the frame's groups are the slow ones.
+                    # Under one key, so the badge can keep what it is handed without knowing
+                    # which groups are the slow ones.
                     frame["slow"] = service.collector.slow_part()
             return self._json(200, frame)
 
@@ -341,12 +334,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             query = self._query()
             keys = [k for k in (query.get("keys") or "").split(",") if k]
             points = max(1, min(160, int(query.get("points") or 48)))
-            # v=2 carries the spacing of the points and the age of the newest, which is what
-            # lets a plot put them on a time axis. v=3 adds `spacing`, a pair of its own for
-            # each ring a source answers for itself, those being on whatever clock the
-            # readings are really on rather than on the collector's. Asked for rather than
-            # assumed: an app copy older than this host would hand the wrapper straight to a
-            # graph, and would animate an hourly series as though it arrived every second.
+            # v=2 carries the spacing of the points and the age of the newest, which puts them
+            # on a time axis. v=3 adds `spacing` for each ring a source answers for itself,
+            # those being on their own clock.
+            #
+            # Asked for and not assumed: an older app would hand the wrapper straight to a graph
+            # and animate an hourly series as though it arrived every second.
             version = query.get("v")
             if version in ("2", "3"):
                 return self._json(200, service.collector.history_at(
@@ -378,9 +371,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/capabilities" and method == "GET":
             return self._json(200, service.capabilities())
 
-        # The palette a theme draws with, for the UI to show before anything is saved.
-        # One path for all of them. A tinted theme is derived here and not in the browser,
-        # which keeps the preview and what reaches the badge from drifting apart.
+        # The palette a theme draws with, for the UI to preview. A tinted theme is derived here
+        # and not in the browser, so the preview cannot drift from what reaches the badge.
         if path == "/api/theme" and method == "GET":
             query = self._query()
             theme = query.get("theme") or themes.DEFAULT
@@ -452,8 +444,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {"pairing": False})
 
         if path == "/api/badges" and method == "GET":
-            # With whether each has a layout to itself, which the UI's badge picker
-            # has to say: the rest are drawing the default.
+            # With whether each has a layout of its own, which the badge picker has to say.
             configured = set(service.config.configured())
             return self._json(200, {
                 badge_id: dict(record, configured=badge_id in configured)
@@ -469,8 +460,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/api/badges/") and method == "DELETE":
             badge_id = path[len("/api/badges/"):]
-            # Its layout too, which would otherwise sit in the file naming a badge
-            # nothing can reach, and be handed to whatever next held that id.
+            # Its layout too, or it sits in the file naming an unreachable badge and is handed
+            # to whatever next holds that id.
             service.config.forget(badge_id)
             return self._json(200, {"forgotten": service.badges.forget(badge_id)})
 

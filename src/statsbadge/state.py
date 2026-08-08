@@ -1,14 +1,11 @@
 """What a source worked out, kept between runs.
 
-Settings are what a source is *told* - a place, a unit, an API key, all of them the user's
-answers and all editable in the UI. This is the other half: what a source *found out*, and
-would otherwise have to find out again on every launch. A resolved location, a refresh token,
-a high-water mark.
+Settings are what a source is told and are editable in the UI. This is the other half:
+what it found out and would otherwise find out again on every launch, a resolved location
+or a refresh token.
 
-Namespaced by source name and written here, so an extension never touches the config
-directory: it asks for a value and sets one, and where that lands is the host's business.
-One file per source rather than one file with a key each, so two of them writing at once
-cannot cost a third its state.
+Namespaced by source name, so an extension asks for a value and sets one without touching
+the config directory. One file per source, or two writing at once cost a third its state.
 """
 
 import json

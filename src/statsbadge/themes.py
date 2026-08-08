@@ -1,9 +1,7 @@
 """The themes, as data.
 
-A theme is a table of colours and one gradient rule, which makes it config and not code.
-The selected one travels to the badge in its layout, and a palette can be changed or
-invented with nothing installed. The badge carries one of these to boot with, and takes
-the rest from here.
+A theme is a table of colours and one gradient rule, so it is config and not code. The
+selected one travels in the layout, and the badge carries one to boot with.
 
   bg / panel      the page, and the header, footer and tiles on it
   ink / dim       text, and text that is only labelling something

@@ -1,23 +1,19 @@
 """Pairing and request signing.
 
-Plain HTTP on a LAN, so the transport authenticates nothing. Every request carries
-an HMAC-SHA256 over the method, path, a counter and the body, keyed on a secret the
-badge and host share from pairing. That makes a command unforgeable without the
-secret, and the counter stops one being replayed. See DEVELOPMENT.md for why the
-transport is not HTTPS.
+Plain HTTP on a LAN, so the transport authenticates nothing; DEVELOPMENT.md has why it is
+not HTTPS. Every request carries an HMAC-SHA256 over the method, path, a counter and the
+body, keyed on the secret pairing shared. Reads are signed too, at one HMAC a second, so
+an unpaired device on the network learns nothing.
 
-Reads are signed too. It costs the badge one HMAC per second and means an
-unpaired device on the network learns nothing about the machine.
+Pairing is rate limited and not counted out: a hard cap is something an attacker can
+exhaust to stop the owner pairing at all. The limit is global to the window and not per
+badge, the badge id being a field a guesser picks fresh each time.
 
-Pairing is rate limited, not counted out. A hard cap is something an attacker can
-exhaust to stop the owner pairing at all, so wrong guesses back off. The limit is global
-to the window and not per badge, since the badge id is a field in the request and a
-guesser picks a fresh one each time.
-
-Doubling from 1s to a 30s ceiling fits ~13 guesses into a 300s window against 5 for a
+Doubling from 1s to a 30s ceiling fits ~13 guesses into a 300s window, against 5 for a
 hard cap of five. That is the same order of safety, 1 in 77,000 for a six-digit code,
-while a mistyped code costs a second. The enrol code is never derived from badge.uid, which
-travels as X-Badge-Id over plain HTTP where an attacker could read it.
+and a mistyped code costs a second.
+
+The enrol code is never derived from badge.uid, which travels as X-Badge-Id in clear.
 """
 
 import base64
@@ -46,13 +42,12 @@ SIGNED_HEADER_ID = "x-badge-id"
 SIGNED_HEADER_SEQ = "x-badge-seq"
 SIGNED_HEADER_SIG = "x-badge-sig"
 
-# How far a counter may jump forward in one request. Generous, because a badge that
-# reboots loses count and rounds its counter up; small enough that a captured
-# request cannot be replayed later.
+# How far a counter may jump in one request. Generous, since a badge that reboots rounds
+# its counter up; small enough that a captured request cannot be replayed.
 SEQ_WINDOW = 4096
 
-# Write the counter back once it has advanced this far, and not every request, a badge
-# polling once a second all day. A restart otherwise rewinds the counter.
+# Written back once the counter has advanced this far, not every request: a badge polls
+# once a second all day, and a restart otherwise rewinds it.
 SEQ_PERSIST_EVERY = 32
 
 
@@ -85,9 +80,8 @@ class Store:
     # -- persistence --------------------------------------------------------
 
     def load(self):
-        # A store that is there but cannot be read is remembered, not treated as empty:
-        # empty means every badge is unknown, and saving over it would take the real
-        # pairings with it. Happens after the server has been run with sudo.
+        # An unreadable store is remembered and not treated as empty, or saving over it takes
+        # the real pairings with it. Happens after the server has been run with sudo.
         self.unreadable = None
         try:
             with open(self.path) as handle:
@@ -124,8 +118,8 @@ class Store:
             return
         self._mtime = mtime
         incoming = data.get("badges", {})
-        # Keep whichever counter is higher: ours may have advanced past the file
-        # since it was written, and going backwards would let a replay through.
+        # The higher counter wins: ours may have advanced past the file, and going backwards
+        # lets a replay through.
         for badge_id, record in incoming.items():
             existing = self.badges.get(badge_id)
             if existing and existing.get("secret") == record.get("secret"):
@@ -205,8 +199,8 @@ class Store:
             now = time.monotonic()
             self._expire_enrolments(now)
 
-            # Checked before the rate limit: a badge retrying after a dropped reply is
-            # not a new attempt, and must not be throttled out of its own code.
+            # Before the rate limit: a badge retrying after a dropped reply is not a new
+            # attempt.
             for request_id, entry in self.enrolments.items():
                 if entry["badge_id"] == badge_id and entry["status"] == "pending":
                     return {"request_id": request_id, "code": entry["code"]}
@@ -367,10 +361,9 @@ class Store:
             raise AuthError("unsigned request")
 
         with self._lock:
-            # Every request, not just for an unknown badge: `install --new-secret`
-            # replaces the secret of a badge we already know, and keeping the stale
-            # one in memory would reject the badge we just provisioned. It is a stat()
-            # unless the file actually moved.
+            # Every request, not only for an unknown badge: `install --new-secret` replaces the
+            # secret of a known one, and the stale copy would reject it. A stat() unless the file
+            # moved.
             self._reload_if_changed()
             record = self.badges.get(badge_id)
             if record is None:
@@ -387,13 +380,11 @@ class Store:
         if not hmac.compare_digest(signature.lower(), expected):
             raise AuthError("bad signature")
 
-        # Only now that the signature is good is it safe to let the request move the
-        # counter, otherwise anyone could push it up and lock the badge out.
+        # Only a good signature may move the counter, or anyone could push it up and lock the
+        # badge out.
         #
-        # Both refusals carry the counter to use next. That is safe because the
-        # signature above already proved the caller holds the secret, and it lets a
-        # badge that rebooted, or was provisioned against a different starting point,
-        # resync in one request instead of guessing.
+        # Both refusals carry the counter to use next. Safe, the signature having proved the
+        # caller holds the secret, and it resyncs a rebooted badge in one request.
         if seq <= last_seq:
             raise AuthError("replayed request", detail={"next_seq": last_seq + 1})
         if seq > last_seq + SEQ_WINDOW:

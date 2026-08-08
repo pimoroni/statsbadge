@@ -1,13 +1,10 @@
 """Install the badge app and its credentials over USB.
 
-`/system` is read-only to MicroPython, so the app itself cannot be written over the
-serial REPL: it goes on by putting the badge into USB mass storage mode, which means
-a reset and a volume appearing. What *can* be written over the REPL is `/state`,
-which is where the pairing secret goes - so the common case, re-pairing or moving to
-a new host, needs no remount at all.
+`/system` is read-only to MicroPython, so the app goes on through USB mass storage mode,
+which means a reset and a volume appearing. `/state` can be written over the REPL, so
+re-pairing or moving to a new host needs no remount.
 
-Nothing here remounts a filesystem behind the user's back: pushing the app asks
-first, because it resets the badge.
+Pushing the app asks first, since it resets the badge.
 """
 
 import glob
@@ -67,11 +64,11 @@ def find_ports():
         text = " ".join(filter(None, (port.product, port.manufacturer))).lower()
         if "cmsis" in text or "debug probe" in text:
             continue
-        # A board that says MicroPython is a surer thing than one that does not.
+        # A board naming MicroPython is the surer match.
         rank = 0 if "micropython" in text else 1
         ranked.append((rank, port.device))
-    # pyserial can see vid/pid, so its answer is authoritative: falling back to a
-    # glob here would hand back the debug probe it just ruled out.
+    # pyserial sees vid/pid, so its answer stands: a glob fallback would hand back the
+    # debug probe it just ruled out.
     ranked.sort()
     return [device for _, device in ranked]
 
@@ -96,9 +93,8 @@ def _exec(port, script, timeout=30):
         raise InstallError(str(exc) or f"the badge on {port} did not answer") from None
 
 
-# What `os.uname()[4]` says on the board this app is for. Checked before `import
-# badgeware`, the first thing every script here does, which on anything else fails as a
-# traceback naming a module the reader has never heard of.
+# What `os.uname()[4]` reports on the board this app is for. Checked before `import
+# badgeware`, which on anything else fails as a traceback naming an unknown module.
 BOARD = "Tufty 2350"
 
 _BOARD_SCRIPT = (
@@ -149,8 +145,8 @@ def badge_info(port):
         "model": lines[-4],
         "uid": lines[-3],
         "app_installed": lines[-2] == "True",
-        # The bytecode version this firmware will load. Only the badge reports it, so a
-        # precompiled app is checked here and not only where it was built.
+        # The bytecode version this firmware loads. Only the badge reports it, so a precompiled
+        # app is checked here too.
         "mpy": int(lines[-1] or 0),
     }
 
@@ -209,8 +205,8 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
         "name": name or host, "seq": seq,
     })
     key = server_id or "unknown"
-    # Read-modify-write on the badge, so an existing pairing with another host
-    # survives and an older flat file is upgraded in place.
+    # Read-modify-write, so a pairing with another host survives and an older flat file is
+    # upgraded in place.
     script = (
         "import os, json\n"
         "try:\n"
@@ -232,9 +228,8 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
         "                            'name': data.get('host'),\n"
         "                            'seq': data.get('seq', 0)}\n"
         f"entry = json.loads({entry!r})\n"
-        # A stand-in entry holding the same secret is this host before it was
-        # identified, so fold it in and keep the higher counter. A duplicate would look
-        # like a second machine.
+        # A stand-in entry with the same secret is this host before it was identified. Folded
+        # in at the higher counter, or it reads as a second machine.
         "old = hosts.get('unknown')\n"
         "if old and old.get('secret') == entry['secret']:\n"
         "    entry['seq'] = max(entry.get('seq', 0), old.get('seq', 0))\n"
@@ -254,9 +249,8 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
 
 APP_DIR = f"/system/apps/{APP_NAME}"
 
-# Hashing on the badge, and not reading the files back over the REPL. It does the
-# whole app directory in 45ms and only the digests cross the wire. Marker-prefixed,
-# the reply being many lines to pick out of whatever else the REPL said.
+# Hashed on the badge: the whole app directory in 45ms, with only the digests crossing
+# the wire. Marker-prefixed, to pick the lines out of whatever else the REPL said.
 _HASH_SCRIPT = """
 import hashlib, os, binascii
 def walk(base, prefix=''):
@@ -628,8 +622,7 @@ def copy_app(volume, source=None, extra_modules=()):
     return target, [name for name, _ in files], removed
 
 
-# Only these are the installer's to delete. Anything else in the app directory was put
-# there by someone, and an install that removes it is worse than one that leaves litter.
+# Only these are the installer's to delete. Anything else came from elsewhere and stays.
 PRUNABLE = (".py", ".mpy", ".png", ".af")
 
 
@@ -687,15 +680,12 @@ def wait_for_port(timeout=40, previous=None):
 def hard_reset(port, settle=True):
     """Reset the badge so it boots as it normally would. True if it was reset.
 
-    Anything that talks over the REPL interrupts whatever the badge was running to get
-    there, which leaves it sitting at a bare prompt on a blank screen. A reset runs
-    `main.py` again, so the badge starts whatever it is set up to start.
+    Talking over the REPL interrupts whatever the badge was running, leaving it at a bare
+    prompt on a blank screen; a reset runs `main.py` again.
 
-    A port something else holds is the one case that skips this. The badge was left
-    running, so it is already where it should be.
-
-    Waiting for a port that stayed put costs fifteen seconds of timeout before announcing
-    a reset that never happened.
+    Skipped for a port something else holds, the badge never having been interrupted.
+    Waiting for a port that stayed put costs fifteen seconds before announcing a reset that
+    never happened.
     """
     try:
         repl.reset(port, timeout=10)
@@ -717,8 +707,7 @@ def wait_for_enumeration(previous=None, timeout=15):
     interrupt whatever has just started. So this only watches enumeration.
     """
     deadline = time.time() + timeout
-    # Wait for the previous path to disappear. A port that has yet to go reads as the
-    # badge already being back.
+    # Wait for the previous path to go, or it reads as the badge already being back.
     if previous:
         while time.time() < deadline and previous in find_ports():
             time.sleep(0.2)

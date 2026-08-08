@@ -1,20 +1,17 @@
 """Managing extensions when statsbadge is installed as a uv tool.
 
-`uv tool install` is declarative: each run replaces the last, so adding a second extension
-means naming the first one again or losing it. That is a list worth keeping somewhere, so it
+`uv tool install` is declarative, each run replacing the last, so the list of extensions
 lives in the config directory as `extensions.txt` and every install is made from it.
 
-The base requirement - `statsbadge`, or `statsbadge[nvidia]`, or a path for a checkout - comes
-from uv's receipt, which sits beside the tool's environment and records what it was built
-from. Reading that instead of guessing keeps an extra from being dropped on the next
-add.
+The base requirement - `statsbadge`, `statsbadge[nvidia]`, or a path for a checkout -
+comes from uv's receipt beside the tool environment, so an extra is not dropped on the
+next add.
 
-uv has no `pipx inject`, so `uv tool install --with-requirements` is the way in. Its
-progress and its resolver's prose are not this command's output: uv runs quiet, one line is
-printed here, and `--verbose` hands the terminal back to uv for when the reason matters.
+uv has no `pipx inject`, so `uv tool install --with-requirements` is the way in. It runs
+quiet, one line is printed here, and `--verbose` hands the terminal back to it.
 
-`uv pip install --python <the tool environment>` would put a package in without a rebuild, and
-is not used: nothing would record it, so the next `uv tool upgrade` would drop it again.
+`uv pip install --python <the tool environment>` is not used: nothing would record the
+package, and the next `uv tool upgrade` would drop it.
 """
 
 import importlib.metadata
@@ -27,16 +24,15 @@ import tomllib
 import urllib.error
 import urllib.request
 
-# uv writes this beside the environment of every tool it installs, so finding one next to the
-# running interpreter is what tells us this is a tool and not a venv or a checkout.
+# uv writes this beside the environment of every tool it installs, so one next to the
+# running interpreter means a tool install and not a venv or a checkout.
 RECEIPT = "uv-receipt.toml"
-# The extensions listed for this host, one requirement a line, in the config directory.
-# Hand editable, and the thing every reinstall is made from.
+# The extensions listed for this host, one requirement a line. Hand editable, and what
+# every reinstall is made from.
 WANTED = "extensions.txt"
 # What a plugin is called if it is named by its short name.
 PREFIX = "statsbadge-"
-# Anything with one of these in it is already a requirement, a path or a URL, so it is passed
-# through as it stands.
+# Anything carrying one of these is already a requirement, a path or a URL.
 SPEC_MARKS = "/\\=<>@[]!~;: "
 
 
@@ -68,8 +64,7 @@ def base_requirement(receipt, name="statsbadge"):
         extras = requirement.get("extras") or ()
         marked = f"{name}[{','.join(extras)}]" if extras else name
         if requirement.get("directory"):
-            # A path install keeps the path, or the reinstall would take the published package
-            # in place of the checkout it came from.
+            # A path install keeps its path, or a reinstall takes the published package instead.
             where = requirement["directory"]
             return f"{where}[{','.join(extras)}]" if extras else where
         if requirement.get("url"):
@@ -169,13 +164,10 @@ def install_argv(base, config_dir, fresh=False):
     --force because the tool is already there and this is a replacement, which is the only
     thing uv tool install does: there is no adding to an existing one.
 
-    --fresh, and so --reinstall, for taking something out. Whether --force alone prunes
-    depends on the uv doing the work.
-
-    Measured against a tool holding two extensions, uv 0.9.2 drops the package from
-    site-packages. uv 0.4.28 writes the shorter receipt and leaves it there, with its entry
-    point still registering a page. Nothing here chooses which uv a user has, and a removal
-    that leaves the package behind is worse than a slow one. Adding needs neither.
+    --fresh, and so --reinstall, for taking something out: whether --force alone prunes
+    depends on the uv doing the work. Against a tool holding two extensions, uv 0.9.2 drops
+    the package and uv 0.4.28 leaves it there with its entry point still registering a page.
+    Adding needs neither.
     """
     argv = [shutil.which("uv") or "uv", "tool", "install", "--force"]
     if fresh:
@@ -218,17 +210,17 @@ def quoted(argv):
     return " ".join(f'"{part}"' if " " in part else part for part in argv)
 
 
-# Where a plain name can be checked before anything is installed, so an unknown name is
-# answered as one and not as a failed rebuild.
+# Where a plain name is checked before anything is installed, so an unknown one is
+# answered as unknown and not as a failed rebuild.
 SIMPLE_INDEX = "https://pypi.org/simple/{}/"
 
 
 def on_index(requirement, timeout=4.0):
     """Whether a plain name is a project on PyPI, or None when it cannot be told.
 
-    Only asked of a bare name: a path, a URL or a version specifier is something uv resolves
-    its way. An index that cannot be reached is no answer either, so both come back
-    None and the caller carries on and lets uv decide.
+    Only asked of a bare name; a path, a URL or a version specifier goes straight to uv. An
+    unreachable index is no answer either, so both come back None and the caller carries on
+    without the check.
     """
     if requirement.startswith(".") or any(mark in requirement for mark in SPEC_MARKS):
         return None
@@ -239,7 +231,6 @@ def on_index(requirement, timeout=4.0):
     except urllib.error.HTTPError as exc:
         return False if exc.code == 404 else None
     except (OSError, ValueError):
-        # No network, a proxy in the way, a mangled name: none of those is an answer either.
         return None
 
 
@@ -266,13 +257,12 @@ def _collapsed(said):
     return " ".join((said or "").split())
 
 
-# uv's answer when a name is not a package. Its resolver explains itself at length, and the
-# useful part is the name.
+# uv's answer when a name is not a package. The resolver is long; the name is the useful
+# part.
 MISSING = re.compile(r"Because (\S+) was not found in the package registry")
 
-# Its answer when an extension needs a statsbadge this tool cannot have, which is a plugin
-# built against a newer host. Three things are kept: which extension, what it needs, and
-# what this tool is pinned to.
+# A plugin built against a newer host. Three things are kept: which extension, what it
+# needs, and what this tool is pinned to.
 CONFLICT = re.compile(
     r"Because (?:all versions of )?(\S+) depends? on (\S+) and you require (\S+?)[,\s]")
 
@@ -286,7 +276,7 @@ def run_install(base, config_dir, fresh=False, verbose=False):
     argv = install_argv(base, config_dir, fresh)
     if verbose:
         print(f"  {quoted(argv)}")
-    # uv writes to the same terminal, and what is already printed should be on it first.
+    # uv writes to the same terminal, so flush before handing it over.
     sys.stdout.flush()
     if verbose:
         try:
@@ -307,10 +297,8 @@ def explain(said):
     missing = MISSING.search(flat)
     if missing:
         return f"no such package: {missing.group(1)}"
-    # An extension built against a newer statsbadge than this tool is pinned to. Worth
-    # translating and not passing on, since uv's last line is "your requirements are
-    # unsatisfiable", which is true of every resolution failure and says nothing about the
-    # versions, and the versions are the whole of it.
+    # Translated and not passed on: uv ends with "your requirements are unsatisfiable",
+    # which is true of every resolution failure and names no versions.
     clash = CONFLICT.search(flat)
     if clash:
         wants, needs, held = clash.groups()
