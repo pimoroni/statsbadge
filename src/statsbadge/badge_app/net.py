@@ -21,8 +21,7 @@ STATE_FILE = "/state/stats.json"
 
 # How long to wait on a whole request before giving up and dropping the socket.
 REQUEST_TIMEOUT_MS = 6000
-# Time budget per step. Several short reads per frame beats one per frame without
-# risking the frame, and a frame at 90Hz is 11ms.
+# Time budget per step, against the 11ms a frame has at 90Hz.
 STEP_BUDGET_US = 2500
 
 IDLE, BUSY, DONE, FAILED = 0, 1, 2, 3
@@ -403,8 +402,7 @@ class Client:
                 self.error = error_text(exc)
                 return True
             except Exception as exc:  # noqa: BLE001
-                # Nothing from a socket may reach the draw loop: a surprise here has
-                # to end as a failed request, not a crash dialog.
+                # Nothing from a socket may reach the draw loop as an exception.
                 self._gen = None
                 self.close()
                 self.status = FAILED

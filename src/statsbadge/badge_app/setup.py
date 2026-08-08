@@ -123,8 +123,8 @@ def draw_rows(theme, shown, index):
         ink = theme.bg if selected else theme.ink
         dim = ink if selected else theme.dim
         draw.blit_label(row["label"], look.SIZE_VALUE, ink, look.PAD + 8, y + 2)
-        # The note is drawn first and the address is right-aligned to clear it, since a
-        # note as wide as "not seen" overlaps a fixed column.
+        # The note goes first and the address is right-aligned to clear it: "not seen" is wider
+        # than a fixed column allows.
         right = look.W - look.PAD - 8
         if row["note"]:
             right -= draw.blit_label(row["note"], look.SIZE_SMALL, dim,
@@ -307,8 +307,7 @@ def _ask_to_join(app, chosen):
 
 def _remember(app, chosen, outcome, host, port):
     app.config.badge_id = badge.uid
-    # Keyed on the host id and added, not replaced, so a badge can hold several. Both
-    # counters start at 0.
+    # Keyed on the host id and added, so a badge can hold several. Both counters start at 0.
     app.config.remember(outcome.get("id") or chosen.get("id"), host, port,
                         outcome["secret"], outcome.get("name") or chosen.get("name"),
                         seq=0)

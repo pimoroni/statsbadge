@@ -127,6 +127,16 @@ A theme is config, so the badge carries one. The palette travels in the layout a
 readable on the page" settles as arithmetic checked against WCAG 7 and 4.5.
 [`themes.py`](src/statsbadge/themes.py) is the only place a palette is written down.
 
+## The heap, the panel and the light sensor
+
+Measured on the board. The constants they settle live in `badge_app/__init__.py`.
+
+Left alone the collector runs only when an allocation fails, which on 8MB of PSRAM lets megabytes pile up and leaves the free list in pieces: 71KB largest contiguous run with 7MB free, from `tools/mem_probe.py`. A collect is 3.9ms. `GC_THRESHOLD` covers an animated page, where a frame allocates up to 15KB and a collect every seventeen frames amortises to 0.23ms. `COLLECT_EVERY_MS` sweeps a resting page, where the pause costs nothing.
+
+`display.backlight` takes a 0-1 fraction and the firmware maps it onto the panel. `tools/backlight_floor.py` measures where a given fraction puts the bottom of that range.
+
+The light sensor is a phototransistor a hand can shadow, read through the 12-bit ADC with a couple of counts of noise either way. With the room and the panel held still, 256 reads spanned 64-80 of the raw u16. That is nothing against the 4500 a lit room reads, but darkness reads 48 and `look.ambient_fraction` is logarithmic, so the noise costs most where the curve is steepest. `LIGHT_READS` of 16 is 256us and halves it.
+
 ## Extensions
 
 A package advertising a `statsbadge.sources` entry point gets a group in the frame, which the
