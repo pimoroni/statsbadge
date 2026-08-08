@@ -41,7 +41,7 @@ flat = true
 builtins_from = "ci/ruff.toml"
 # Firmware modules the app imports by name rather than having injected, so they are
 # expected not to resolve to a file here.
-external_modules = ["wifi", "machine"]
+external_modules = ["wifi", "machine", "secrets"]
 entrypoints = ["__init__:main", "__init__:on_exit"]
 # Drawing primitives are called from everywhere including the extensions, so an
 # unreferenced one here is API surface rather than dead code.

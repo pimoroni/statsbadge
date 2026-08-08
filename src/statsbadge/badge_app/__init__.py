@@ -62,6 +62,7 @@ splash.show()
 import draw  # noqa: E402
 import net  # noqa: E402
 import pages as pages_module  # noqa: E402
+import secrets  # noqa: E402
 import wifi  # noqa: E402
 
 
@@ -1029,6 +1030,17 @@ def consume_press():
     badge.poll()
 
 
+def no_network(theme):
+    """The command that sets a network, held until HOME."""
+    draw.banner(theme, "No WiFi", "no network set",
+                'statsbadge install --ssid "..."')
+    draw.blit_label("HOME quit", look.SIZE_SMALL, theme.dim,
+                    look.W // 2, look.H - 18, align=1)
+    badge.update()
+    while not badge.pressed(BUTTON_HOME):
+        badge.update()
+
+
 def main():
     global _app
     # Before anything is drawn: a collect on allocation volume, and not only on failure.
@@ -1037,6 +1049,12 @@ def main():
     load_extensions()
     app = App()
     _app = app
+
+    # wifi.connect() triggers a fatal_error (no SSID) if WiFi is not configured
+    # intercept it and display a dialog recommending `statsbadge install --ssid "..."`
+    if not getattr(secrets, "WIFI_SSID", ""):
+        no_network(app.theme)
+        return
 
     # Say something before the first fetch lands: a blank screen for a second reads
     # as a hang.
