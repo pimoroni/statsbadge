@@ -2652,6 +2652,55 @@ def test_a_graph_s_two_series_read_apart(_h):
 
 
 @check
+def test_the_preview_reads_a_number_as_the_badge_does(_h):
+    """The preview formats and scales readings itself, pages.py importing draw and draw
+    expecting the firmware's globals, so the host cannot answer for it.
+
+    The tables are the half that drifts, so they are compared entry by entry, parsed out of
+    the source: this job has no node to run it with.
+    """
+    import re
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import pages as pages_module
+
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+
+    def table(name):
+        body = script.split(f"const {name} = {{")[1].split("}")[0]
+        return {key.strip('"'): value.strip().strip('"')
+                for key, value in re.findall(r'([\w".]+):\s*([^,\n]+)', body)}
+
+    # A subset, since the preview draws four pages: every entry it carries has to agree,
+    # and every ref it draws has to be one of them.
+    shown = table("NAMES")
+    assert shown, "the preview carries no names"
+    for ref, name in shown.items():
+        assert pages_module.NAMES[ref] == name, (ref, name, pages_module.NAMES.get(ref))
+    for group in ("cpu.pct", "cpu.temp", "net.down_bps", "disk.pct", "disk.used_mb"):
+        assert group in shown, group
+    assert set(re.findall(r'"([\w.]+)"', script.split("const PERCENT_FIELDS = [")[1]
+                          .split("]")[0])) == set(pages_module.PERCENT)
+    assert set(re.findall(r'"(_\w+)"', script.split("const UNIT_SUFFIXES = [")[1]
+                          .split("]")[0])) == set(pages_module.UNIT_SUFFIXES)
+
+    scale = {key: float(value.replace("e6", "e6"))
+             for key, value in table("SCALE").items()}
+    assert scale == pages_module.SCALE
+
+    # The sizes a page is laid out to are look.py's too.
+    import look
+
+    for name, value in (("HEADER_H", look.HEADER_H), ("FOOTER_H", look.FOOTER_H),
+                        ("PAD", look.PAD), ("SIZE_TITLE", look.SIZE_TITLE),
+                        ("SIZE_HUGE", look.SIZE_HUGE), ("DIAL_OUTER", look.DIAL_OUTER),
+                        ("DIAL_INNER", look.DIAL_INNER), ("DIAL_FROM", int(look.DIAL_FROM)),
+                        ("DIAL_TO", int(look.DIAL_TO))):
+        assert f"const {name} = {value}\n" in script, (name, value)
+
+
+@check
 def test_the_preview_draws_in_the_badge_s_own_faces(_h):
     """Four pages at 320x240, in Lexend and the badge's symbols. The icon font is subset
     from the corpus badge_app/icons.af is built from, so the two cannot differ."""

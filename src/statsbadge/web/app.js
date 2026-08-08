@@ -901,50 +901,234 @@ const ICONS = {
   a: 0xeff2, h: 0xefd6,
 }
 
-function chrome(ctx, palette, title, current) {
-  ctx.fillStyle = rgb(palette.bg)
-  ctx.fillRect(0, 0, W, H)
+// -- what a badge shows for a number ---------------------------------------
+//
+// draw.fmt, draw.short_unit and pages.fraction_of, in the browser.
+//
+// The badge cannot answer for them: pages.py imports draw, and draw expects the firmware's
+// globals. A check compares these against the badge's for a table of readings.
 
-  ctx.textBaseline = "alphabetic"
+const SCALE = {
+  temp: 100, power: 250, package_w: 150, rpm: 6000,
+  freq: 6000, clock: 3000,
+  up_bps: 12.5e6, down_bps: 12.5e6, read_bps: 500e6, write_bps: 500e6,
+}
+// pages.PERCENT. Longer than the live view's list further down, which is a different job:
+// `cores` is a list of percentages, and a gauge needs to know that where a printed reading
+// does not.
+const PERCENT_FIELDS = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores"]
+
+const isPercent = (field) => PERCENT_FIELDS.includes(field) || field.endsWith("_pct")
+
+function rate(bps) {
+  if (bps >= 1024 ** 3) return `${(bps / 1024 ** 3).toFixed(1)}G`
+  if (bps >= 1024 ** 2) return `${(bps / 1024 ** 2).toFixed(1)}M`
+  if (bps >= 1024) return `${(bps / 1024).toFixed(0)}K`
+  return `${bps.toFixed(0)}`
+}
+
+function size(mb) {
+  if (mb >= 1024 ** 2) return `${(mb / 1024 ** 2).toFixed(1)}T`
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)}G`
+  return `${mb.toFixed(0)}M`
+}
+
+function duration(seconds) {
+  const whole = Math.trunc(seconds)
+  if (whole >= 86400) return `${Math.floor(whole / 86400)}d${Math.floor((whole % 86400) / 3600)}h`
+  if (whole >= 3600) return `${Math.floor(whole / 3600)}h${Math.floor((whole % 3600) / 60)}m`
+  return `${Math.floor(whole / 60)}m`
+}
+
+/** A number as a badge would show it: short, and never wider than its box. */
+function fmt(value, field) {
+  if (value === null || value === undefined) return "--"
+  if (typeof value === "boolean") return value ? "yes" : "no"
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) return String(value.length)
+  if (field.endsWith("_bps")) return rate(value)
+  if (field.endsWith("_mb")) return size(value)
+  if (field === "uptime_s" || field === "secs_left") return duration(value)
+  if (["freq", "clock", "rpm", "procs"].includes(field)) return value.toFixed(0)
+  return value >= 100 ? value.toFixed(0) : value.toFixed(1)
+}
+
+/** What follows the number. The prefix stays on the number, so 11.4 and MB/s make 11.4MB/s. */
+function shortUnit(field) {
+  if (field.endsWith("_bps")) return "B/s"
+  if (field === "cores" || field === "pct" || field.endsWith("_pct")) return "%"
+  if (field === "temp") return "\u00b0C"
+  if (field === "power" || field === "package_w") return "W"
+  if (field === "freq" || field === "clock") return "MHz"
+  if (field.endsWith("_mb")) return "B"
+  return ""
+}
+
+/** Where a value sits on 0-1, for a gauge. A rate is scaled by the busiest the host has
+ * seen, which travels with the frame. A fixed full scale pegs a fast link and idles a
+ * slow one. */
+function fractionOf(ref, value, frame) {
+  if (value === null || value === undefined || typeof value === "string"
+      || typeof value === "boolean") return null
+  const field = ref.split(".").pop()
+  let top
+  if (isPercent(field)) top = 100
+  else top = Number((frame?.peaks || {})[ref]) || SCALE[field]
+  if (!top) return null
+  return Math.max(0, Math.min(1, value / top))
+}
+
+/** A reading out of the frame, by "group.field". The badge reads a list's first entry the
+ * same way, a host with two GPUs having sent both. */
+function readingOf(frame, ref) {
+  const [group, field] = ref.split(".")
+  let held = (frame || {})[group]
+  if (Array.isArray(held)) held = held[0]
+  return held === undefined || held === null ? null : held[field]
+}
+
+// look.py's geometry, so a preview lays a page out where the badge lays it out.
+const HEADER_H = 30
+const FOOTER_H = 20
+const BODY_TOP = HEADER_H
+const BODY_H = H - HEADER_H - FOOTER_H
+const PAD = 10
+const SIZE_TITLE = 19
+const SIZE_SMALL = 11
+const SIZE_VALUE = 17
+const SIZE_BIG = 26
+const SIZE_HUGE = 44
+
+const DIAL_GAP = 16
+const DIAL_OUTER = 82
+const DIAL_INNER = 62
+const DIAL_C = [DIAL_GAP + DIAL_OUTER, BODY_TOP + Math.floor(BODY_H / 2) + 2]
+const DIAL_FROM = 225
+const DIAL_TO = 495
+const READOUT_X = DIAL_C[0] + DIAL_OUTER + DIAL_GAP
+const READOUT_W = W - READOUT_X - DIAL_GAP
+const READOUT_H = 38
+
+// look.readout_rows: level with the top of the dial, lifted only where the rows would run
+// past the band.
+function readoutRows(count) {
+  const room = BODY_TOP + BODY_H - 6 - count * READOUT_H
+  const top = Math.max(BODY_TOP + 6, Math.min(DIAL_C[1] - DIAL_OUTER, room))
+  return Array.from({ length: count }, (_, index) => top + index * READOUT_H)
+}
+
+// pages.NAMES and pages.name_for. The badge names a reading in the room it has: "DOWN"
+// against the host's "Download".
+const NAMES = {
+  "cpu.pct": "LOAD", "cpu.temp": "TEMP", "cpu.freq": "CLOCK", "cpu.procs": "PROCS",
+  "mem.pct": "USED", "mem.used_mb": "USED", "mem.total_mb": "TOTAL", "mem.swap_pct": "SWAP",
+  "gpu.pct": "LOAD", "gpu.temp": "TEMP", "gpu.power": "POWER", "gpu.mem_pct": "VRAM",
+  "net.up_bps": "UP", "net.down_bps": "DOWN", "net.up_total_mb": "SENT",
+  "net.down_total_mb": "RECV",
+  "disk.pct": "FULL", "disk.read_bps": "READ", "disk.write_bps": "WRITE",
+  "disk.used_mb": "USED", "disk.total_mb": "TOTAL",
+  "power.battery_pct": "BATTERY", "power.package_w": "PACKAGE",
+  "sys.host": "HOST", "sys.os": "OS", "sys.cpu_name": "CPU", "sys.uptime_s": "UPTIME",
+}
+const UNIT_SUFFIXES = ["_bps", "_mb", "_pct"]
+
+function nameFor(ref) {
+  if (NAMES[ref]) return NAMES[ref]
+  let field = ref.split(".").pop()
+  for (const suffix of UNIT_SUFFIXES) {
+    if (field.endsWith(suffix) && field.length > suffix.length) {
+      field = field.slice(0, -suffix.length)
+      break
+    }
+  }
+  return field.replace(/_/g, " ").toUpperCase()
+}
+
+// The pages the preview draws, and the readings behind them. The same refs the default
+// layout uses, so a preview shows a page somebody will actually have.
+const DIAL = { field: "cpu.pct", readouts: ["cpu.temp", "cpu.freq", "cpu.procs"] }
+const BARS = "cpu.cores"
+const SERIES = ["net.down_bps", "net.up_bps"]
+const TILE_REFS = ["disk.pct", "disk.read_bps", "disk.write_bps", "disk.used_mb"]
+
+/** draw.background and draw.furniture: the body is the page colour and the two bands are
+ * panels over it, with the rule along the bottom of the header. */
+function chrome(ctx, palette, title, current) {
+  ctx.textBaseline = "top"          // blit_label draws from the top, as screen.text does
   ctx.textAlign = "left"
+
+  ctx.fillStyle = rgb(palette.bg)
+  ctx.fillRect(0, BODY_TOP, W, BODY_H)
+
+  ctx.fillStyle = rgb(palette.panel)
+  ctx.fillRect(0, 0, W, HEADER_H)
+  ctx.fillRect(0, H - FOOTER_H, W, FOOTER_H)
+
+  // The chrome takes accent_b, leaving the accent for readings.
+  const chromePen = rgb(palette.accent_b || palette.accent)
+  ctx.fillStyle = chromePen
+  ctx.fillRect(0, HEADER_H - 2, W, 2)
+
   ctx.fillStyle = rgb(palette.ink)
-  ctx.font = face(400, 21)
-  ctx.fillText(title, 10, 26)
+  ctx.font = face(400, SIZE_TITLE)
+  ctx.fillText(title, PAD, 4)
 
   ctx.textAlign = "right"
   ctx.fillStyle = rgb(palette.dim)
-  ctx.font = face(400, 10)
-  ctx.fillText("workshop-pc", W - 9, 24)
+  ctx.font = face(400, SIZE_SMALL)
+  ctx.fillText(hostName(), W - PAD, 10)
   ctx.textAlign = "left"
 
-  // The chrome takes the second accent, leaving the accent for readings.
-  const chromePen = rgb(palette.accent_b || palette.accent)
-  ctx.fillStyle = chromePen
-  ctx.fillRect(0, 32, W, 2)
+  pips(ctx, palette, chromePen, current)
+}
 
-  const gap = 11
-  const from = W / 2 - (7 * gap) / 2
-  for (let i = 0; i < 8; i += 1) {
+const hostName = () => readingOf(frameNow, "sys.host") || "workshop-pc"
+
+// draw._pips: a dash per page, four high with rounded ends. Every pip is the same size and
+// only the current one's colour differs.
+const PIP_ROOM = W - PAD * 4
+const PIP_MAX_W = 14
+const PIP_GAP = 5
+const PIP_DOT = 4
+const PIP_TIGHT = 2
+const PIP_H = 4
+
+function pips(ctx, palette, chromePen, current, total = 8) {
+  let gap = PIP_GAP
+  let width = Math.min(PIP_MAX_W, Math.floor((PIP_ROOM - (total - 1) * gap) / total))
+  if (width < PIP_DOT) {
+    gap = PIP_TIGHT
+    width = Math.max(PIP_DOT,
+                     Math.min(PIP_MAX_W, Math.floor((PIP_ROOM - (total - 1) * gap) / total)))
+  }
+  const span = total * width + (total - 1) * gap
+  const left = Math.floor((W - span) / 2)
+  const top = H - FOOTER_H + Math.floor(FOOTER_H / 2) - 2
+  const round = Math.min(2, Math.floor(width / 2))
+  for (let i = 0; i < total; i += 1) {
     ctx.beginPath()
-    ctx.arc(from + i * gap, H - 12, i === current ? 3 : 2.2, 0, Math.PI * 2)
+    ctx.roundRect(left + i * (width + gap), top, width, PIP_H, round)
     ctx.fillStyle = i === current ? chromePen : rgb(palette.grid)
     ctx.fill()
   }
 }
 
-function drawDial(ctx, palette) {
+function drawDial(ctx, palette, _series, frame) {
   chrome(ctx, palette, "CPU", 0)
-  const cx = 88
-  const cy = 130
-  const radius = 53
-  const from = (135 * Math.PI) / 180
-  const sweep = (270 * Math.PI) / 180
-  const reading = 0.635
+
+  const value = readingOf(frame, DIAL.field)
+  const reading = fractionOf(DIAL.field, value, frame) ?? 0.635
+  const [cx, cy] = DIAL_C
+  const middle = (DIAL_OUTER + DIAL_INNER) / 2
+  // shape.arc angles start at the top and run clockwise; canvas starts at three o'clock.
+  const at = (degrees) => ((degrees - 90) * Math.PI) / 180
 
   ctx.lineCap = "butt"
-  ctx.lineWidth = 15
+  ctx.lineWidth = DIAL_OUTER - DIAL_INNER
+  const sweep = DIAL_FROM + (DIAL_TO - DIAL_FROM) * reading
+
   ctx.beginPath()
-  ctx.arc(cx, cy, radius, from, from + sweep)
+  ctx.arc(cx, cy, middle, at(sweep), at(DIAL_TO))
   ctx.strokeStyle = rgb(palette.grid)
   ctx.stroke()
 
@@ -952,65 +1136,113 @@ function drawDial(ctx, palette) {
     const steps = 96
     for (let i = 0; i < steps; i += 1) {
       ctx.beginPath()
-      ctx.arc(cx, cy, radius, from + (sweep * reading * i) / steps,
-              from + (sweep * reading * (i + 1)) / steps + 0.006)
+      ctx.arc(cx, cy, middle, at(DIAL_FROM + ((sweep - DIAL_FROM) * i) / steps),
+              at(DIAL_FROM + ((sweep - DIAL_FROM) * (i + 1)) / steps + 0.35))
       ctx.strokeStyle = rgb(rampAt(palette.ramp, (i / steps) * reading))
       ctx.stroke()
     }
   } else {
     ctx.beginPath()
-    ctx.arc(cx, cy, radius, from, from + sweep * reading)
-    ctx.strokeStyle = rgb(palette.accent)
+    ctx.arc(cx, cy, middle, at(DIAL_FROM), at(sweep))
+    ctx.strokeStyle = rgb(rampAt(palette.ramp, reading))
     ctx.stroke()
   }
 
-  ctx.textAlign = "center"
-  ctx.fillStyle = rgb(palette.ink)
-  ctx.font = face(400, 34)
-  ctx.fillText("63.5", cx, cy + 10)
-  ctx.fillStyle = rgb(palette.dim)
-  ctx.font = face(400, 11)
-  ctx.fillText("%", cx, cy + 27)
-  ctx.textAlign = "left"
+  // The tick draw.gauge puts over the join.
+  if (reading > 0.001) {
+    ctx.beginPath()
+    ctx.lineWidth = DIAL_OUTER + 3 - (DIAL_INNER - 3)
+    ctx.arc(cx, cy, (DIAL_OUTER + 3 + DIAL_INNER - 3) / 2, at(sweep - 1.4), at(sweep + 1.4))
+    ctx.strokeStyle = rgb(palette.ink)
+    ctx.stroke()
+    ctx.lineWidth = DIAL_OUTER - DIAL_INNER
+  }
 
-  const rows = [["TEMP", "71.0\u00b0C"], ["CLOCK", "4200MHz"], ["PROCS", "512"]]
-  rows.forEach(([label, value], index) => {
-    const y = 60 + index * 47
+  // The reading and its unit share a baseline inside the ring, centred as a pair.
+  const text = fmt(value, "pct")
+  const unit = shortUnit("pct")
+  const unitSize = Math.max(SIZE_SMALL, Math.trunc(SIZE_HUGE * 0.45))
+  ctx.font = face(400, SIZE_HUGE)
+  const readingW = ctx.measureText(text).width
+  ctx.font = face(400, unitSize)
+  const suffixW = ctx.measureText(unit).width
+  const left = cx - (readingW + suffixW) / 2
+  const top = cy - SIZE_HUGE * 0.62
+
+  ctx.fillStyle = rgb(palette.ink)
+  ctx.font = face(400, SIZE_HUGE)
+  ctx.fillText(text, left, top)
+  ctx.fillStyle = rgb(palette.dim)
+  ctx.font = face(400, unitSize)
+  ctx.fillText(unit, left + readingW, top + SIZE_HUGE - unitSize)
+
+  // draw.readout: a name, the reading under it, and a bar for the level.
+  const rows = readoutRows(DIAL.readouts.length)
+  DIAL.readouts.forEach((ref, index) => {
+    const field = ref.split(".").pop()
+    const held = readingOf(frame, ref)
+    const y = rows[index]
     ctx.fillStyle = rgb(palette.dim)
-    ctx.font = face(500, 9)
-    ctx.fillText(label, 186, y)
+    ctx.font = face(400, SIZE_SMALL)
+    ctx.fillText(nameFor(ref), READOUT_X, y)
     ctx.fillStyle = rgb(palette.ink)
-    ctx.font = face(400, 17)
-    ctx.fillText(value, 186, y + 20)
+    ctx.font = face(400, SIZE_VALUE)
+    ctx.fillText(fmt(held, field) + shortUnit(field), READOUT_X, y + 10)
+
+    const part = fractionOf(ref, held, frame)
+    if (part === null) return
+    const filled = Math.trunc(READOUT_W * part)
     ctx.fillStyle = rgb(palette.grid)
-    ctx.fillRect(186, y + 27, 120, 1)
+    ctx.fillRect(READOUT_X + filled, y + 28, READOUT_W - filled, 3)
+    if (filled) {
+      ctx.fillStyle = rgb(rampAt(palette.ramp, part))
+      ctx.fillRect(READOUT_X, y + 28, filled, 3)
+    }
   })
 }
 
 const CORES = [0.31, 0.882, 0.125, 0.741, 0.2, 0.955, 0.602, 0.05]
 
-function drawBars(ctx, palette) {
+function drawBars(ctx, palette, _series, frame) {
   chrome(ctx, palette, "CORES", 1)
-  CORES.forEach((value, index) => {
-    const y = 42 + index * 22
-    if (index % 2 === 0) {
-      ctx.fillStyle = rgb(palette.panel)
-      ctx.fillRect(0, y, W, 22)
-    }
+  const held = readingOf(frame, BARS)
+  const values = (Array.isArray(held) ? held : CORES.map((v) => v * 100)).slice(0, 16)
+  const count = values.length
+  const top = BODY_TOP + 6
+  // Sized as draw.bars sizes it, whatever the core count.
+  const slot = Math.max(6, Math.floor((BODY_H - 12) / count))
+  const height = Math.max(4, slot - 3)
+
+  ctx.font = face(400, SIZE_SMALL)
+  const readings = values.map((value) => fmt(value, "cores") + shortUnit("cores"))
+  const labelW = Math.max(...values.map((_v, i) => ctx.measureText(String(i)).width))
+  const valueW = Math.max(...readings.map((text) => ctx.measureText(text).width))
+  const x = PAD + labelW + COLUMN_GAP
+  const width = Math.max(20, W - x - COLUMN_GAP - valueW - PAD)
+
+  values.forEach((value, index) => {
+    const part = Math.max(0, Math.min(1, value / 100))
+    const y = top + index * slot
+    ctx.textAlign = "left"
     ctx.fillStyle = rgb(palette.dim)
-    ctx.font = face(400, 10)
-    ctx.fillText(String(index), 9, y + 15)
+    ctx.font = face(400, SIZE_SMALL)
+    ctx.fillText(String(index), PAD, y - 1)
+
+    const filled = part > 0 ? Math.max(1, Math.trunc(width * part)) : 0
     ctx.fillStyle = rgb(palette.grid)
-    ctx.fillRect(26, y + 6, 240, 11)
-    ctx.fillStyle = rgb(rampAt(palette.ramp, value))
-    ctx.fillRect(26, y + 6, 240 * value, 11)
+    ctx.fillRect(x + filled, y, width - filled, height)
+    if (filled) {
+      ctx.fillStyle = rgb(rampAt(palette.ramp, part))
+      ctx.fillRect(x, y, filled, height)
+    }
     ctx.textAlign = "right"
     ctx.fillStyle = rgb(palette.ink)
-    ctx.font = face(400, 11)
-    ctx.fillText(`${(value * 100).toFixed(1)}%`, W - 8, y + 15)
+    ctx.fillText(readings[index], W - PAD, y - 1)
     ctx.textAlign = "left"
   })
 }
+
+const COLUMN_GAP = 8
 
 const DOWN = [0.12, 0.2, 0.55, 0.86, 0.7, 0.52, 0.62, 0.44, 0.2, 0.1, 0.08, 0.3, 0.66, 0.8,
               0.62, 0.5, 0.72, 0.9, 0.55, 0.2, 0.12, 0.1, 0.26, 0.42, 0.3, 0.18, 0.12]
@@ -1022,20 +1254,30 @@ const PALE_SUM = 384
 
 function drawGraph(ctx, palette, series) {
   chrome(ctx, palette, "NETWORK", 4)
-  const left = 32
-  const right = W - 8
-  const top = 50
-  const bottom = 194
   const pale = palette.bg[0] + palette.bg[1] + palette.bg[2] >= PALE_SUM
 
+  // Both series share a scale, as the badge's graph does, so one cannot dwarf the other.
+  const plots = SERIES.map((ref) => rings[ref] || [])
+  const live = plots.some((ring) => ring.length > 1)
+  const peak = live ? Math.max(...plots.flat().map((v) => v ?? 0), 1) * 1.15 : 9.8 * 1024 ** 2
+  const peakText = fmt(peak, "down_bps") + shortUnit("down_bps")
+
+  // The gutter takes its width from the scale in it, as draw.graph does.
+  ctx.font = face(400, SIZE_SMALL)
+  const left = PAD + Math.max(ctx.measureText(peakText).width, ctx.measureText("0").width) + 4
+  const top = BODY_TOP + 8
+  const width = W - left - PAD
+  const height = BODY_H - 26
+  const right = left + width
+  const bottom = top + height
+
   ctx.fillStyle = rgb(palette.grid)
-  for (let i = 0; i <= 3; i += 1) {
-    ctx.fillRect(left, top + ((bottom - top) / 3) * i, right - left, 1)
+  for (let i = 0; i < 5; i += 1) {
+    ctx.fillRect(left, top + (height * i) / 4, width, 1)
   }
   ctx.fillStyle = rgb(palette.dim)
-  ctx.font = face(400, 9)
-  ctx.fillText("9.8MB/s", 4, top + 3)
-  ctx.fillText("0", 4, bottom + 3)
+  ctx.fillText(peakText, PAD, top - 4)
+  ctx.fillText("0", PAD, top + height - 8)
 
   const plot = (points, index) => {
     ctx.globalAlpha = (index === 0 || pale ? SERIES_ALPHA[0] : SERIES_ALPHA[1]) / 255
@@ -1051,16 +1293,19 @@ function drawGraph(ctx, palette, series) {
     ctx.fill()
     ctx.globalAlpha = 1
   }
-  plot(DOWN, 0)
-  plot(UP, 1)
+  const scaled = plots.map((ring) => ring.map((v) => Math.max(0, (v ?? 0) / peak)))
+  plot(live ? scaled[0] : DOWN, 0)
+  plot(live ? scaled[1] : UP, 1)
 
-  ;["DOWN", "UP"].forEach((label, index) => {
-    const x = 44 + index * 104
+  SERIES.forEach((ref, index) => {
+    const label = nameFor(ref)
+    const x = left + index * 110
+    const y = H - FOOTER_H - 14
     ctx.fillStyle = rgb(series[index])
-    ctx.fillRect(x, 206, 13, 9)
+    ctx.fillRect(x, y + 3, 10, 4)
     ctx.fillStyle = rgb(palette.dim)
-    ctx.font = face(500, 10)
-    ctx.fillText(label, x + 19, 215)
+    ctx.font = face(400, SIZE_SMALL)
+    ctx.fillText(label, x + 14, y - 2)
   })
 }
 
@@ -1069,33 +1314,93 @@ function drawGraph(ctx, palette, series) {
 const TILES = [["FULL", "74.2%", 0.742, "l"], ["READ", "50.0MB/s", 0.5, "u"],
                ["WRITE", "8.0MB/s", 0.08, "o"], ["USED", "687.3GB", 0.62, "a"]]
 
-function drawGrid(ctx, palette) {
+function drawGrid(ctx, palette, _series, frame) {
   chrome(ctx, palette, "DISK", 5)
-  const width = 152
-  const height = 84
-  TILES.forEach(([label, value, part, symbol], index) => {
-    const x = 6 + (index % 2) * (width + 4)
-    const y = 42 + Math.floor(index / 2) * (height + 4)
+  const count = TILE_REFS.length
+  const columns = count > 4 ? 3 : 2
+  const rows = Math.ceil(count / columns)
+  const cellW = Math.floor((W - PAD * 2 - (columns - 1) * 6) / columns)
+  const cellH = Math.floor((BODY_H - 12 - (rows - 1) * 6) / rows)
+  const size = rows < 3 ? SIZE_BIG : SIZE_VALUE
+
+  TILE_REFS.forEach((ref, index) => {
+    const field = ref.split(".").pop()
+    const held = readingOf(frame, ref)
+    const part = fractionOf(ref, held, frame) ?? TILES[index][2]
+    const x = PAD + (index % columns) * (cellW + 6)
+    const y = BODY_TOP + 6 + Math.floor(index / columns) * (cellH + 6)
+
+    ctx.beginPath()
+    ctx.roundRect(x, y, cellW, cellH, 5)
     ctx.fillStyle = rgb(palette.panel)
-    ctx.fillRect(x, y, width, height)
+    ctx.fill()
+    if (part !== null) {
+      ctx.fillStyle = rgb(rampAt(palette.ramp, part))
+      ctx.fillRect(x, y + cellH - 3, Math.trunc(cellW * part), 3)
+    }
+
+    ctx.textAlign = "left"
     ctx.fillStyle = rgb(palette.dim)
-    ctx.font = face(500, 9)
-    ctx.fillText(label, x + 10, y + 19)
+    ctx.font = face(400, SIZE_SMALL)
+    ctx.fillText(nameFor(ref), x + 7, y + 5)
     ctx.textAlign = "right"
-    ctx.font = '16px "Badge Icons"'
-    ctx.fillText(String.fromCodePoint(ICONS[symbol]), x + width - 9, y + 21)
+    ctx.font = `${SIZE_VALUE}px "Badge Icons"`
+    ctx.fillText(String.fromCodePoint(ICONS[TILES[index][3]]), x + cellW - 7, y + 4)
     ctx.textAlign = "left"
     ctx.fillStyle = rgb(palette.ink)
-    ctx.font = face(400, 22)
-    ctx.fillText(value, x + 10, y + 51)
-    ctx.fillStyle = rgb(palette.grid)
-    ctx.fillRect(x + 10, y + height - 13, width - 20, 3)
-    ctx.fillStyle = rgb(rampAt(palette.ramp, part))
-    ctx.fillRect(x + 10, y + height - 13, (width - 20) * part, 3)
+    ctx.font = face(400, size)
+    ctx.fillText(held === null ? TILES[index][1] : fmt(held, field) + shortUnit(field),
+                 x + 7, y + Math.floor(cellH / 2) - Math.floor(size / 2) + 2)
   })
 }
 
 const SCREENS = [drawDial, drawBars, drawGraph, drawGrid]
+
+// What the previews draw from. The palette arrives on a theme change; the readings ride
+// the frame this page already fetches every second.
+let shown = null
+let frameNow = null
+let rings = {}
+
+/** The rings the graph plots. Seeded from the host, or the graph stays flat for half a
+ * minute, then appended from each frame. */
+async function seedHistory() {
+  try {
+    rings = await api(`/api/history?keys=${SERIES.join(",")}&points=${GRAPH_POINTS}`)
+  } catch (error) { rings = {} }
+}
+
+const GRAPH_POINTS = 48
+
+function pushFrame(frame) {
+  frameNow = frame
+  for (const ref of SERIES) {
+    const value = readingOf(frame, ref)
+    if (value === null) continue
+    const ring = rings[ref] || (rings[ref] = [])
+    ring.push(value)
+    if (ring.length > GRAPH_POINTS) ring.splice(0, ring.length - GRAPH_POINTS)
+  }
+  paintScreens()
+}
+
+function paintScreens() {
+  if (!shown) return
+  const holder = $("screens")
+  if (holder.childElementCount !== SCREENS.length) {
+    holder.replaceChildren(...SCREENS.map(() => {
+      const canvas = el("canvas")
+      canvas.width = W * 2                 // drawn at 2x, shown at 320 wide, so it stays sharp
+      canvas.height = H * 2
+      return canvas
+    }))
+  }
+  SCREENS.forEach((paint, index) => {
+    const ctx = holder.children[index].getContext("2d")
+    ctx.setTransform(2, 0, 0, 2, 0, 0)
+    paint(ctx, shown.palette, shown.series, frameNow)
+  })
+}
 
 async function preview() {
   const query = new URLSearchParams({ theme: config.theme || "dark" })
@@ -1105,31 +1410,18 @@ async function preview() {
     query.set("second", config.accent_b || "same")
   }
   const mine = ++previewWanted
-  let shown
+  let answer
   try {
-    shown = await api(`/api/theme?${query}`)
+    answer = await api(`/api/theme?${query}`)
   } catch (error) {
     return
   }
   if (mine !== previewWanted) return
 
-  const palette = shown.palette
-  $("accentbchip").style.background = rgb(palette.accent_b || palette.accent)
-
-  const holder = $("screens")
-  if (holder.childElementCount !== SCREENS.length) {
-    holder.replaceChildren(...SCREENS.map(() => {
-      const canvas = el("canvas")
-      canvas.width = W * 2                 // drawn at 2x and shown at 320 wide, so it is crisp
-      canvas.height = H * 2
-      return canvas
-    }))
-  }
-  SCREENS.forEach((paint, index) => {
-    const ctx = holder.children[index].getContext("2d")
-    ctx.setTransform(2, 0, 0, 2, 0, 0)
-    paint(ctx, palette, shown.series)
-  })
+  shown = answer
+  $("accentbchip").style.background = rgb(answer.palette.accent_b || answer.palette.accent)
+  if (!Object.keys(rings).length) await seedHistory()
+  paintScreens()
 }
 
 function rampAt(stops, at) {
@@ -1435,6 +1727,8 @@ async function renderLive() {
   try {
     frame = await api("/api/stats")
   } catch (error) { return }
+
+  pushFrame(frame)
 
   const shape = Object.keys(frame).filter((key) => !FRAME_META.includes(key)).join(",")
   if (shape !== liveGroups && !dirty) {

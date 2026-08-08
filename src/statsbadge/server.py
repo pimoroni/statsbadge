@@ -416,6 +416,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/stats" and method == "GET":
             return self._json(200, service.collector.latest())
 
+        # The readings behind the preview's graph. The badge asks for its own over /v1; this
+        # is the same rings, for a UI that is already loopback-only.
+        if path == "/api/history" and method == "GET":
+            query = self._query()
+            keys = [key for key in (query.get("keys") or "").split(",") if key]
+            points = max(1, min(160, int(query.get("points") or 48)))
+            return self._json(200, service.collector.history(keys or None, points))
+
         if path == "/api/preview" and method == "GET":
             # What the badge would be sent, for the UI to show pruning.
             return self._json(200, service.config.for_badge(
