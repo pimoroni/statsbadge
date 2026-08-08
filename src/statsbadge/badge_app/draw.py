@@ -998,7 +998,10 @@ def graph(theme, series, labels, maximum=None, shift=None):
     """
     field = labels[0][1] if labels else "pct"
     if maximum is None:
-        peak = axis_top(max((max(s) for s in series if s), default=1.0), field)
+        # A gap in a ring is a None, so the samples are flattened past them. max() over the
+        # series themselves compared None against a float and took the app down.
+        peak = axis_top(max((p for s in series for p in s if p is not None),
+                            default=1.0), field)
     else:
         peak = max(maximum, 1.0) * 1.15
 
