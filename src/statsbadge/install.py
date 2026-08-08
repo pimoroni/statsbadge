@@ -357,7 +357,7 @@ def _secret_value(text, key):
 def write_secrets(volume, ssid, password, region=None, timezone=None):
     """Set WiFi details in the badge's secrets.py, leaving the rest of the file alone.
 
-    This is the file the badge's own error message tells people to edit, so it is the one
+    This is the file the badge's error message tells people to edit, so it is the one
     to change; a /secrets.py on the internal filesystem would take precedence over it and
     silently defeat that edit.
     """

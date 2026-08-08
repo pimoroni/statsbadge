@@ -626,7 +626,7 @@ class App:
         return True
 
     def apply_caselights(self):
-        """Off, the theme's own level, or a level that follows a reading.
+        """Off, the theme's level, or a level that follows a reading.
 
         A reading maps onto CASELIGHT_FLOOR of the theme's level up to all of it, so an
         idle machine still glows: dark is what the setting being off looks like, and the

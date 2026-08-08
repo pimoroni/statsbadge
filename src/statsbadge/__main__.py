@@ -20,7 +20,7 @@ LEGACY_CONFIG_DIR = os.path.join(os.path.expanduser("~/.config"), "statsbadge")
 def config_dir(explicit=None):
     """Where layout.json, badges.json and server.json live.
 
-    Each platform's own location, ~/.config on Windows being just a dotfile in the home
+    Each platform's location, ~/.config on Windows being just a dotfile in the home
     directory. XDG_CONFIG_HOME wins wherever it is set.
 
     An existing ~/.config/statsbadge keeps being used: it holds pairing secrets, and moving

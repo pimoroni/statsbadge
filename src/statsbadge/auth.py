@@ -325,7 +325,7 @@ class Store:
     def rename(self, badge_id, name):
         """A name somebody chose for a badge, or its id back when they clear it.
 
-        A badge announces itself by whatever its own setup screen was told, which is its id
+        A badge announces itself by whatever its setup screen was told, which is its id
         until somebody names it - and two badges on one host then read the same.
         """
         with self._lock:

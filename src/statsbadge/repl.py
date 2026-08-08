@@ -9,7 +9,7 @@ Raw REPL and not raw-paste. The longest script sent from here is about 600 bytes
 flow control raw-paste negotiates buys nothing over paced chunks. Nothing here copies
 files, the app going on over USB mass storage.
 
-The protocol follows MicroPython's own implementation, `tools/mpremote/transport_serial.py`,
+The protocol follows MicroPython's implementation, `tools/mpremote/transport_serial.py`,
 which is MIT licensed - see licences/MIT-MicroPython.txt.
 """
 

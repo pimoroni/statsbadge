@@ -994,7 +994,7 @@ def _series_colour(theme, index):
     if index == 0:
         return theme.accent
     alpha = _series_alpha(theme, index)
-    # The palette's own second colour, still checked against the page.
+    # The palette's second colour, still checked against the page.
     if theme.accent_b != theme.accent:
         if theme.bg.difference(theme.accent_b.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
             return theme.accent_b

@@ -349,7 +349,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/v1/command" and method == "POST":
             payload = json.loads(body or b"{}")
             name = str(payload.get("cmd") or "")
-            # Bound on this badge's own layout: the buttons are configured per badge.
+            # Bound on this badge's layout: the buttons are configured per badge.
             allowed = {
                 v for v in service.config.layout_for(badge_id).get("buttons", {}).values()
                 if v
