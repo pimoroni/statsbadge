@@ -80,14 +80,17 @@ def mute():
 
 # -- media ------------------------------------------------------------------
 
-# MediaRemote's command number and playerctl's name, for each thing a button can ask of
-# whatever is playing.
+# MediaRemote's MRCommand numbers. Private, so they come from the framework's order and
+# not from anything documented: next is 4 and previous is 5, that way round.
+MR_PLAY, MR_PAUSE, MR_TOGGLE, MR_NEXT, MR_PREVIOUS = 0, 1, 2, 4, 5
+
+# What each thing a button can ask of whatever is playing is called at either end.
 _MEDIA = {
-    "play": (0, "play"),
-    "pause": (1, "pause"),
-    "play_pause": (2, "play-pause"),
-    "previous_track": (5, "previous"),
-    "next_track": (4, "next"),
+    "play": (MR_PLAY, "play"),
+    "pause": (MR_PAUSE, "pause"),
+    "play_pause": (MR_TOGGLE, "play-pause"),
+    "previous_track": (MR_PREVIOUS, "previous"),
+    "next_track": (MR_NEXT, "next"),
 }
 
 

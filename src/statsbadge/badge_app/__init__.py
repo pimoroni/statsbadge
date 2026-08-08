@@ -96,6 +96,15 @@ HOLD_TO_EXIT_MS = 700
 GC_THRESHOLD = 256 * 1024
 COLLECT_EVERY_MS = 1000
 
+# A revision nothing has, so the first poll asks the host for everything.
+NO_REV = -1
+# Failed polls before the badge listens for the host at another address. It is a scan a
+# frame long, so not on the first one.
+HUNT_AFTER = 3
+# Failed polls before B opens setup. One, since waiting for three left the screen with
+# nothing on it that worked.
+SETUP_AFTER = 1
+
 # The smallest change worth asking for. The panel takes a byte, so anything finer lands on
 # the level it already shows and only restarts the ramp.
 BACKLIGHT_STEP = 1.0 / 255
@@ -192,12 +201,12 @@ class App:
         self._swept = 0
         self._pressed_at = time.ticks_ms()
         self._advanced_at = 0
-        self.layout_rev = -1
+        self.layout_rev = NO_REV
         self.frame = {}
         # Merged into every frame. The host sends these only when its slow_rev is past the
-        # one we send it, and -1 is a revision nothing has, so the first poll asks for all.
+        # one we send it.
         self.slow = {}
-        self.slow_rev = -1
+        self.slow_rev = NO_REV
         self.history = {}
         self.page_index = 0
         self.status = "starting"
@@ -370,7 +379,7 @@ class App:
             interval = min(15000, interval * (1 << min(self.client.failures, 4)))
         self._next_poll = time.ticks_add(now, interval)
 
-        if self.client.failures >= 3:
+        if self.client.failures >= HUNT_AFTER:
             self.hunt()
 
         # The rev rides in every stats frame, so a config change is picked up next poll.
@@ -399,10 +408,10 @@ class App:
         """
         self.client.close()
         self.layout = None
-        self.layout_rev = -1
+        self.layout_rev = NO_REV
         self.history = {}
         self.slow = {}
-        self.slow_rev = -1
+        self.slow_rev = NO_REV
         self._queued = None
         self._commands = []
         self._series_age = 0
@@ -707,12 +716,11 @@ class App:
         """Whether to offer the pairing screens.
 
         Also when a host rejects the credentials, or when no poll has ever landed: both
-        leave a badge with no other way to reach setup. One failed poll is enough, since
-        waiting for three left the screen with nothing on it that worked.
+        leave a badge with no other way to reach setup.
         """
         if not self.config.paired or self.rejected:
             return True
-        return self.layout is None and self.client.failures >= 1
+        return self.layout is None and self.client.failures >= SETUP_AFTER
 
     def retry(self):
         """Drop the connection and poll again now, resetting the backoff.

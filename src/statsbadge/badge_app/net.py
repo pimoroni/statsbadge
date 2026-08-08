@@ -38,18 +38,23 @@ STEP_BUDGET_US = 2500
 
 IDLE, BUSY, DONE, FAILED = 0, 1, 2, 3
 
-# errno as this firmware actually reports it, checked on the board. Nothing listening
-# comes back as ECONNRESET and not ECONNREFUSED, lwIP surfacing the RST that way. An
-# address with nothing at it gives ECONNABORTED on the non-blocking path and ETIMEDOUT
-# on a blocking one, so both are worded for what they mean.
+# Written out rather than taken from the errno module, which is one more import at launch
+# and has nothing to call EAI_NONAME: that arrives from getaddrinfo and is not an errno.
+ECONNABORTED, ECONNRESET, ETIMEDOUT = 103, 104, 110
+ECONNREFUSED, EHOSTUNREACH, ENOENT, EAI_NONAME = 111, 113, 2, -2
+
+# What this firmware actually reports, checked on the board. Nothing listening comes back
+# as ECONNRESET and not ECONNREFUSED, lwIP surfacing the RST that way. An address with
+# nothing at it gives ECONNABORTED on the non-blocking path and ETIMEDOUT on a blocking
+# one, so both are worded for what they mean.
 _NET_ERRORS = {
-    104: "no server answering",         # ECONNRESET: nothing there, or it went away
-    103: "could not reach the host",    # ECONNABORTED
-    110: "could not reach the host",    # ETIMEDOUT
-    111: "connection refused",
-    113: "host unreachable",
-    2: "cannot resolve that name",
-    -2: "cannot resolve that name",
+    ECONNRESET: "no server answering",
+    ECONNABORTED: "could not reach the host",
+    ETIMEDOUT: "could not reach the host",
+    ECONNREFUSED: "connection refused",
+    EHOSTUNREACH: "host unreachable",
+    ENOENT: "cannot resolve that name",
+    EAI_NONAME: "cannot resolve that name",
 }
 
 _HTTP_ERRORS = {

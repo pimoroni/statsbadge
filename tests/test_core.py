@@ -1763,24 +1763,30 @@ def test_a_rate_is_scaled_by_what_it_has_reached(_h):
     12.5MB/s was assumed, so anything over that filled the ring: a 40MB/s transfer and a
     200MB/s one looked the same. The collector tracks what each rate has reached instead.
     """
-    from statsbadge.collect import PEAK_DECAY, PEAK_FLOOR
+    from statsbadge.collect import PEAK_FLOOR, PEAK_HALF_LIFE_S, Collector
 
-    assert 0.9 < PEAK_DECAY < 1.0
-    peak = 0.0
-    for rate in [40e6] * 5:
-        peak = max(rate, peak * PEAK_DECAY, PEAK_FLOOR)
+    def run(rates, interval):
+        """The peak after each rate in turn, sampled `interval` seconds apart."""
+        collector = Collector(interval=interval, config={"sources": []})
+        for rate in rates:
+            collector._push_peaks({"net": {"down_bps": rate}}, interval)  # noqa: SLF001
+        return collector._peaks["net.down_bps"]  # noqa: SLF001
+
+    peak = run([40e6] * 5, 1.0)
     assert peak == 40e6
     # A trickle afterwards is a small part of the ring, not an eighth of a ring that was
     # already full.
     assert (1.5e6 / peak) < 0.05
-    # The peak comes down again, so one busy night does not flatten it for good.
-    quiet = peak
-    for _ in range(600):
-        quiet = max(0.0, quiet * PEAK_DECAY, PEAK_FLOOR)
-    assert quiet < peak * 0.6, quiet
+
+    # The peak comes down again, so one busy night does not flatten it for good, and it
+    # halves in the same wall-clock time whatever the sample interval is set to.
+    halved = run([40e6, *[1.0] * int(PEAK_HALF_LIFE_S)], 1.0)
+    slower = run([40e6, *[1.0] * int(PEAK_HALF_LIFE_S / 4)], 4.0)
+    assert abs(halved - 20e6) < 1e5, halved
+    assert abs(halved - slower) < 1e5, (halved, slower)
 
     # The floor keeps a quiet link from scaling a trickle up to a full ring.
-    assert max(10_000.0, 0.0, PEAK_FLOOR) == PEAK_FLOOR
+    assert run([1.0] * 5, 1.0) == PEAK_FLOOR
 
 
 @check
@@ -3101,7 +3107,8 @@ def test_the_notice_screen_offers_a_way_out(_h):
     # a screen of controls that all did nothing.
     setup = app[app.index("    def needs_setup(self):"):]
     setup = setup[:setup.index("\n    def ", 1)]
-    assert "self.client.failures >= 1" in setup, setup
+    assert "self.client.failures >= SETUP_AFTER" in setup, setup
+    assert "SETUP_AFTER = 1" in app, "more than one failed poll before setup is offered"
 
 
 @check
@@ -3118,15 +3125,15 @@ def test_switching_host_forgets_the_old_one_the_same_way(_h):
 
     forget = app[app.index("    def forget_host(self):"):]
     forget = forget[:forget.index("\n    def ", 1)]
-    for cleared in ("self.layout = None", "self.layout_rev = -1", "self.history = {}",
-                    "self.slow = {}", "self.slow_rev = -1", "self._queued = None",
+    for cleared in ("self.layout = None", "self.layout_rev = NO_REV", "self.history = {}",
+                    "self.slow = {}", "self.slow_rev = NO_REV", "self._queued = None",
                     "self._commands = []", "self._series_age = 0", "self._series_at = 0",
                     "self.rejected = False", "draw.clear_cache()"):
         assert cleared in forget, cleared
 
     # Reset nowhere else, or the paths go back to disagreeing. Twice in the app: once as a
     # starting value and once here.
-    for cleared in ("self.slow = {}", "self.history = {}", "self.slow_rev = -1"):
+    for cleared in ("self.slow = {}", "self.history = {}", "self.slow_rev = NO_REV"):
         assert app.count(cleared) == 2, cleared
     assert "app.layout" not in menu, "the menu is resetting state of its own"
     assert menu.count("forget_host()") == 2, "a host joined is a host switched to"

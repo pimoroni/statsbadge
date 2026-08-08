@@ -96,7 +96,7 @@ class Collector:
         with self._lock:
             self.seq += 1
             frame["seq"] = self.seq
-            self._push_peaks(frame)
+            self._push_peaks(frame, dt)
             self._push_slow_rev(frame)
             self.frame = frame
             self._push_history(frame)
@@ -158,7 +158,7 @@ class Collector:
         # In the frame either way: the badge sends it back to say what it holds.
         frame["slow_rev"] = self._slow_rev
 
-    def _push_peaks(self, frame):
+    def _push_peaks(self, frame, dt):
         """Track the high-water mark of each rate, decaying so it follows the machine.
 
         Without the decay one overnight transfer flattens the gauge for as long as the
@@ -173,12 +173,13 @@ class Collector:
                     # A per-field floor: 64KB/s stops a trickle filling a link's gauge, and
                     # would stop a gauge of requests a minute ever moving.
                     peaked[f"{group}.{field}"] = float(entry.get("peak_floor") or 1.0)
+        decay = 0.5 ** (max(dt, 0.0) / PEAK_HALF_LIFE_S)
         for key, floor in peaked.items():
             group, field = key.split(".", 1)
             value = _dig(frame, group, field)
             if value is None:
                 continue
-            decayed = self._peaks.get(key, 0.0) * PEAK_DECAY
+            decayed = self._peaks.get(key, 0.0) * decay
             self._peaks[key] = max(float(value), decayed, floor)
         if self._peaks:
             # Scale, not a reading, so it is never offered as a field.
@@ -361,9 +362,11 @@ _GRAPHED_SERIES = (
 )
 SERIES_LEN = 64
 
-# A peak left alone halves in about ten minutes at a sample a second, so it follows the
-# machine. The floor keeps a quiet link from scaling a trickle to a full ring.
-PEAK_DECAY = 0.99885
+# How long a peak left alone takes to halve, so it follows the machine. Applied against
+# the time between samples, which is a setting: a factor per sample would make the peak
+# fall twice as fast at half the rate.
+PEAK_HALF_LIFE_S = 600.0
+# The floor keeps a quiet link from scaling a trickle to a full ring.
 PEAK_FLOOR = 64 * 1024.0
 
 

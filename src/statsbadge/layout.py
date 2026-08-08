@@ -38,6 +38,20 @@ KINDS = {
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
               "rings": 4, "spark": 6, "radar": 6, "notify": 6}
 
+# The widest a setting may be, as (low, high). validate() clamps to these rather than
+# refusing, so a config edited by hand still loads. The sliders in the UI offer a narrower
+# range inside them, which is what someone is likely to want.
+#   Under 250ms the badge spends its whole frame budget on HTTP; a minute is the longest
+#   gap where a reading still reads as live.
+INTERVAL_MS = (250, 60000)
+#   Eight points is a plot with a shape; past 160 they are under a pixel apart.
+GRAPH_POINTS = (8, 160)
+#   Zero is off, and an hour is the longest wait before paging unattended.
+IDLE_ADVANCE_S = (0, 3600)
+#   How long each page is held once it is paging by itself.
+ADVANCE_EVERY_S = (1, 600)
+BRIGHTNESS = (0.05, 1.0)
+
 # "over" draws the incoming page over the outgoing one; "deck" moves them together.
 SLIDE_STYLES = ("off", "over", "deck")
 
@@ -366,6 +380,12 @@ def group_labels(pages, capabilities):
     return labels
 
 
+def _clamped(value, bounds):
+    """A setting brought inside its bounds, which are a (low, high) pair up the file."""
+    low, high = bounds
+    return max(low, min(high, value))
+
+
 def tint_accent(incoming, current):
     """The accent a tinted theme is built from, checked against what is offered.
 
@@ -419,15 +439,14 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     out["tint"] = tint_accent(aliased or incoming.get("tint"), out["tint"])
 
     interval = int(incoming.get("interval_ms", out["interval_ms"]))
-    # Under about 250ms the badge spends its whole frame budget on HTTP.
-    out["interval_ms"] = max(250, min(60000, interval))
+    out["interval_ms"] = _clamped(interval, INTERVAL_MS)
 
     brightness = float(incoming.get("brightness", out["brightness"]))
-    out["brightness"] = max(0.05, min(1.0, brightness))
+    out["brightness"] = _clamped(brightness, BRIGHTNESS)
     # Off, the theme's level, or a field reference for the lights to follow.
     caselights = incoming.get("caselights", out["caselights"])
     out["caselights"] = caselights if _is_ref(caselights) else bool(caselights)
-    out["graph_points"] = max(8, min(160, int(incoming.get("graph_points", 48))))
+    out["graph_points"] = _clamped(int(incoming.get("graph_points", 48)), GRAPH_POINTS)
     # Whether a graph is a curve through its samples or a polyline between them.
     out["smooth"] = bool(incoming.get("smooth", True))
     # Whether a gauge sweeps to each new reading or steps to it. Off by default: on a noisy
@@ -455,10 +474,9 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     out["accent_b"] = second if second in ACCENT_B_RULES else "same"
     # Whether the badge dims to suit the room. Off by default: not every board has the sensor.
     out["auto_brightness"] = bool(incoming.get("auto_brightness", False))
-    # How long the badge waits before paging unattended, and how long it holds each page.
-    # Zero is off; an hour is the longest wait offered.
-    out["idle_advance_s"] = max(0, min(3600, int(incoming.get("idle_advance_s", 0))))
-    out["advance_every_s"] = max(1, min(600, int(incoming.get("advance_every_s", 10))))
+    out["idle_advance_s"] = _clamped(int(incoming.get("idle_advance_s", 0)), IDLE_ADVANCE_S)
+    out["advance_every_s"] = _clamped(
+        int(incoming.get("advance_every_s", 10)), ADVANCE_EVERY_S)
 
     pages = incoming.get("pages")
     if pages is None:
