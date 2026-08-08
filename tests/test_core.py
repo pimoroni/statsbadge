@@ -1838,6 +1838,43 @@ def test_the_badge_scans_for_longer_than_the_host_waits(_h):
 
 
 @check
+def test_every_cache_that_holds_a_colour_is_dropped_on_a_theme_change(_h):
+    """A cache added to draw.py and left out of clear_cache survives a theme switch.
+
+    It shows as one widget in the palette before last, which looks like a rendering
+    fault and is a missing line. Registering at the point of definition is what makes
+    leaving one out hard.
+    """
+    import ast
+
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    # Registered, or named here as holding no colour and why.
+    exempt = {"_fonts", "_weights", "_CLEARS"}
+    loose = []
+    for node in ast.parse(source).body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            name = getattr(target, "id", "")
+            if not name.startswith("_") or name in exempt:
+                continue
+            if isinstance(node.value, (ast.Dict, ast.Set)) or (
+                    isinstance(node.value, ast.Call)
+                    and getattr(node.value.func, "id", None) in ("dict", "set")):
+                loose.append(name)
+    assert not loose, f"caches in draw.py outside _CLEARS: {loose}"
+
+    body = source[source.index("def clear_cache"):]
+    body = body[:body.index("\ndef ", 1)]
+    assert "for empty in _CLEARS" in body, "clear_cache is enumerating by hand again"
+
+    # The waterfall's scroll buffer and worldmap's pens are state, not one container.
+    assert "@clears\ndef waterfall_reset" in source
+    world = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    assert "@draw.clears\ndef forget" in world, "the map keeps the old theme's pens"
+
+
+@check
 def test_the_theme_the_badge_boots_with_is_the_host_s_dark(_h):
     """look.THEMES holds one palette, for the frames before the first layout arrives.
 

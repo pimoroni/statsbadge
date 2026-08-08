@@ -13,6 +13,7 @@ import gc
 import json
 import math
 
+import draw
 import look
 
 FILE = "/system/assets/world.geo.json"
@@ -141,8 +142,13 @@ def pens(theme, alpha=LAND_ALPHA):
     return found
 
 
+@draw.clears
 def forget():
-    """Drop the pens. The shapes outlive a theme change: they hold no colour."""
+    """Drop the pens on a theme change. The shapes stay: they hold no colour.
+
+    The key is the theme's name, which two tints of one derived theme share, so a tint
+    changed on its own would otherwise draw the map in the ramp it had before.
+    """
     _pens.clear()
 
 

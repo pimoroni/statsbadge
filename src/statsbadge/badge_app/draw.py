@@ -17,16 +17,39 @@ from array import array
 import look
 
 FONT = None
+
+# Emptied by clear_cache(). Each cache registers where it is defined, so one added later
+# is dropped on a theme change and this list stays as it is.
+_CLEARS = []
+
+
+def _cached(empty):
+    """Register a container holding colours, or sprites painted in them. Returns it."""
+    _CLEARS.append(empty.clear)
+    return empty
+
+
+def clears(reset):
+    """Register a function to run on a theme change, as a decorator.
+
+    For state that is not one container. worldmap uses it: its pens are keyed by theme
+    name, and two tints of one theme share a name.
+    """
+    _CLEARS.append(reset)
+    return reset
+
+
 # How many decoded pictures to hold. The same bytes arrive every frame between changes,
 # and at most three are on screen.
-_pictures = {}
+_pictures = _cached({})
 PICTURE_CACHE = 4
 
-_labels = {}
-_pip_rows = {}
+_labels = _cached({})
+_pip_rows = _cached({})
 
 # Fonts by name, so a sprite cache key can say which one drew it. Without the name an icon
-# and a letter of the same string collide and one is drawn in the wrong font.
+# and a letter of the same string collide and one is drawn in the wrong font. Kept across
+# a theme change: a font holds no colour, and loading the text one is 107ms.
 TEXT = "text"
 ICONS = "icons"
 _fonts = {}
@@ -122,7 +145,7 @@ CACHE_UNDER = 40
 
 # Strings seen once, so a second sighting is what bakes one. Every reading that moves is a
 # new key, and baking each one fills the heap: 221 sprites at a time, from mem_probe.py.
-_once = set()
+_once = _cached(set())
 # Keys, not pictures: about 50KB full.
 ONCE_MAX = 512
 
@@ -210,18 +233,12 @@ def blit_icon(character, size, pen, x, y, align=0):
 def clear_cache():
     """Forget everything held from an earlier draw.
 
-    Everything holding colours, not only the sprites: the waterfall's scroll buffer is a
-    second of columns painted in the ramp they were drawn with, and it showed the previous
-    theme's for a screen's width after a switch.
+    Everything holding colours, not only the sprites: a decoded picture is painted in the
+    theme's greys, and the waterfall's scroll buffer is a second of columns painted in the
+    ramp they were drawn with.
     """
-    _labels.clear()
-    _once.clear()
-    _pip_rows.clear()
-    _readings.clear()
-    _gradients.clear()
-    # A decoded picture is painted in the theme's greys, so it goes too.
-    _pictures.clear()
-    waterfall_reset()
+    for empty in _CLEARS:
+        empty()
 
 
 # -- measuring --------------------------------------------------------------
@@ -377,7 +394,7 @@ def short_unit(field):
 
 # What a value came out as. Formatting one is 305us against 21us to look it up, and
 # sixteen bars a frame is 4.9ms of formatting the same numbers.
-_readings = {}
+_readings = _cached({})
 
 
 def reading(value, field):
@@ -488,7 +505,7 @@ GAUGE_FILL = "solid"
 # How faint that is, per stop: a gradient brush ignores screen.alpha where a solid pen
 # blends at it.
 TRACK_ALPHA = 32
-_gradients = {}
+_gradients = _cached({})
 
 
 def swept_pens(theme, centre, radius, backwards=False):
@@ -1598,6 +1615,7 @@ WF_LEFT = look.PAD + 22
 WF_TOP = look.BODY_TOP + 6
 
 
+@clears
 def waterfall_reset():
     global _wf_image, _wf_cursor, _wf_lanes
     _wf_image = None
