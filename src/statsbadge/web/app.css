@@ -458,13 +458,13 @@ main > section section[aria-label="Theme"] {
     > [hidden] { display: none; }
   }
 
+  /* No rows named. The headings and the previews run the full width; the fields take the
+     first column, which leaves the picker the second of the same row. */
   @media (width >= 80rem) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
-    > h3 { grid-row: 1; }
-    > .screens { grid-row: 2; }
-    > .fields { grid-row: 3; grid-column: 1; }
-    > .accents { grid-row: 3; grid-column: 2; align-self: start; }
+    > .fields { grid-column: 1; }
+    > .accents { grid-column: 2; align-self: start; }
   }
 }
 
