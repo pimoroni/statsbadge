@@ -114,92 +114,90 @@
       <div class="accents" data-tint hidden></div>
     </section>
 
-    <div class="stack">
-      <section>
-        <h2>Readings</h2>
-        <label for="interval">Refresh</label>
-        <input type="range" id="interval" min="250" max="5000" step="250">
-        <output for="interval"></output>
+    <section>
+      <h2>Readings</h2>
+      <label for="interval">Refresh</label>
+      <input type="range" id="interval" min="250" max="5000" step="250">
+      <output for="interval"></output>
 
-        <label for="points">Readings kept</label>
-        <input type="range" id="points" min="8" max="160" step="8">
-        <output for="points"></output>
-      </section>
+      <label for="points">Readings kept</label>
+      <input type="range" id="points" min="8" max="160" step="8">
+      <output for="points"></output>
+    </section>
 
-      <section>
-        <h2>Plots and gauges</h2>
-        <label for="smooth">Plot line</label>
-        <select id="smooth">
-          <option value="curved">Curved</option>
-          <option value="straight">Straight</option>
-        </select>
+    <section>
+      <h2>Plots and gauges</h2>
+      <label for="smooth">Plot line</label>
+      <select id="smooth">
+        <option value="curved">Curved</option>
+        <option value="straight">Straight</option>
+      </select>
 
-        <label for="rows">Sparkline rows</label>
-        <select id="rows">
-          <option value="zebra">Banded</option>
-          <option value="rules">Ruled</option>
-          <option value="none">Nothing</option>
-        </select>
+      <label for="rows">Sparkline rows</label>
+      <select id="rows">
+        <option value="zebra">Banded</option>
+        <option value="rules">Ruled</option>
+        <option value="none">Nothing</option>
+      </select>
 
-        <label for="gaugefill">Dial gauge</label>
-        <select id="gaugefill">
-          <option value="solid">One Colour</option>
-          <option value="ramp">The Whole Ramp</option>
-        </select>
-      </section>
+      <label for="gaugefill">Dial gauge</label>
+      <select id="gaugefill">
+        <option value="solid">One Colour</option>
+        <option value="ramp">The Whole Ramp</option>
+      </select>
+    </section>
 
-      <section>
-        <h2>Movement</h2>
-        <label for="plotanim">Scroll between readings</label>
-        <input type="checkbox" id="plotanim">
+    <section>
+      <h2>Movement</h2>
+      <label for="plotanim">Scroll between readings</label>
+      <input type="checkbox" id="plotanim">
 
-        <label for="animate">Sweep gauges to each reading</label>
-        <input type="checkbox" id="animate">
-      </section>
+      <label for="animate">Sweep gauges to each reading</label>
+      <input type="checkbox" id="animate">
+    </section>
 
-      <section>
-        <h2>Paging and auto advance</h2>
+    <section>
+      <h2>Paging and auto advance</h2>
 
-        <label for="slide">Page turn</label>
-        <select id="slide">
-          <option value="off">Immediate</option>
-          <option value="over">Slide Over</option>
-          <option value="deck">Slide as a Deck</option>
-        </select>
+      <label for="slide">Page turn</label>
+      <select id="slide">
+        <option value="off">Immediate</option>
+        <option value="over">Slide Over</option>
+        <option value="deck">Slide as a Deck</option>
+      </select>
 
-        <label for="idle">After</label>
-        <input type="range" id="idle" min="0" max="300" step="15">
-        <output for="idle"></output>
+      <label for="idle">After</label>
+      <input type="range" id="idle" min="0" max="300" step="15">
+      <output for="idle"></output>
 
-        <label for="advance">Every</label>
-        <input type="range" id="advance" min="2" max="60" step="2">
-        <output for="advance"></output>
-      </section>
+      <label for="advance">Every</label>
+      <input type="range" id="advance" min="2" max="60" step="2">
+      <output for="advance"></output>
+    </section>
 
-      <section>
-        <h2>Backlight and case lights</h2>
+    <section>
+      <h2>Backlight and case lights</h2>
 
-        <label for="brightness">Brightness</label>
-        <input type="range" id="brightness" min="5" max="100" step="5">
-        <output for="brightness"></output>
+      <label for="brightness">Brightness</label>
+      <input type="range" id="brightness" min="5" max="100" step="5">
+      <output for="brightness"></output>
 
-        <label for="caselights">Case lights</label>
-        <select id="caselights"></select>
+      <label for="caselights">Case lights</label>
+      <select id="caselights"></select>
 
-        <label for="autobright">Dim to suit the room</label>
-        <input type="checkbox" id="autobright">
-      </section>
+      <label for="autobright">Dim to suit the room</label>
+      <input type="checkbox" id="autobright">
+    </section>
 
-      <section class="buttons">
-        <h2>Buttons</h2>
-        <label for="btn-a">A</label>
-        <select id="btn-a"></select>
-        <label for="btn-b">B</label>
-        <select id="btn-b"></select>
-        <label for="btn-c">C</label>
-        <select id="btn-c"></select>
-      </section>
-    </div>
+    <section class="buttons">
+      <h2>Buttons</h2>
+      <label for="btn-a">A</label>
+      <select id="btn-a"></select>
+      <label for="btn-b">B</label>
+      <select id="btn-b"></select>
+      <label for="btn-c">C</label>
+      <select id="btn-c"></select>
+    </section>
 
     <section id="badges">
       <h2>Badges</h2>

@@ -30,6 +30,10 @@
   --text-md: 0.875rem;
   --text-sm: 0.75rem;
   --gap: 20px;
+
+  /* Where the page stops widening. Past this the previews are a poster of a
+     320x240 screen rather than a picture of one, and a slider is a runway. */
+  --page: 1280px;
   --pad: 16px;
   --bg: #0e0e11;
   --panel: #17171c;
@@ -44,6 +48,8 @@
 }
 
 /* -- page furniture ------------------------------------------------------ */
+
+main { max-width: var(--page); margin-inline: auto; }
 
 * { box-sizing: border-box; }
 
@@ -83,7 +89,7 @@ body > header {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 16px;
-  padding: 12px var(--gap) 0;
+  padding: 12px max(var(--gap), calc((100% - var(--page)) / 2)) 0;
   background: var(--panel);
   border-bottom: 4px solid var(--accent);
   position: sticky;
@@ -382,7 +388,7 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 
   canvas {
     display: block;
-    width: 100%; aspect-ratio: 4 / 3;
+    width: 100%; max-width: 480px; aspect-ratio: 4 / 3;
     border: 1px solid var(--line);
   }
 }
@@ -400,20 +406,15 @@ main > section[aria-label="Settings"] {
     letter-spacing: normal; text-transform: none;
   }
 
-  /* Everything that fits beside the theme box, stacked rather than laid across a row: one
-     panel per row would leave the rest of that row empty next to a tall preview. Spaced as
-     the page spaces its own panels, and not by a second measure. */
-  > .stack {
-    display: grid;
-    align-content: start;
-    gap: inherit;
-  }
 
   @media (width >= 56rem) {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 
-    > section[aria-label="Theme"] { grid-column: 1; }
-    > .stack { grid-column: 2; }
+    > section[aria-label="Theme"] { grid-column: 1; grid-row: span 6; }
+
+    /* The six panels beside it, and not the badge list, which holds sections of its own
+       and runs the full width underneath. */
+    > section:not([aria-label="Theme"], :has(> section)) { grid-column: 2; }
   }
 }
 

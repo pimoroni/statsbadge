@@ -2983,6 +2983,28 @@ def test_the_big_gauge_can_show_the_whole_ramp(_h):
 
 
 @check
+def test_the_theme_box_spans_the_panels_beside_it(_h):
+    """The theme box stands beside the settings panels, which it does by spanning their
+    rows. The span is a count, so it has to match how many there are."""
+    import re
+
+    page = pathlib.Path("src/statsbadge/web/index.html").read_text()
+    settings = page.split('aria-label="Settings"')[1].split('<section id="badges">')[0]
+    beside = len(re.findall(r"<section(?: class=\"[^\"]*\")?>", settings))
+    assert beside == 6, beside
+
+    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text()
+    spanned = re.search(r'section\[aria-label="Theme"\] \{ grid-column: 1; grid-row: span (\d+)',
+                        sheet)
+    assert spanned, "the theme box no longer spans the panels"
+    assert int(spanned.group(1)) == beside, (spanned.group(1), beside)
+
+    # Past this a preview stops being a picture of a 320x240 screen and becomes a poster.
+    assert "--page: 1280px" in sheet
+    assert "max-width: var(--page)" in sheet
+
+
+@check
 def test_the_settings_are_grouped_by_what_they_do(_h):
     """One list of every control was a soup. A setting is grouped under the heading it sits
     under, so the panel can be read by what somebody came to change."""
