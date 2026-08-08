@@ -18,11 +18,10 @@ run with 7MB free, from tools/mem_probe.py. A collect is 3.9ms. GC_THRESHOLD cov
 animated page, where a frame allocates up to 15KB and a collect every seventeen frames
 amortises to 0.23ms; COLLECT_EVERY_MS sweeps a resting page, where the pause costs nothing.
 
-**The panel.** The backlight driver raises its input to the power of 2.8 for the PWM duty,
-so BACKLIGHT_FLOOR is 3.4% of duty and below it the panel is dark whatever the arithmetic
-says; tools/backlight_floor.py measures it. display.backlight() is cast to a byte before
-that correction, so a change under BACKLIGHT_STEP sets the panel to what it already shows
-and only restarts the ramp.
+**The panel.** `display.backlight` takes a 0-1 fraction and the panel resolves a byte of
+it, so a change under BACKLIGHT_STEP asks for the level already showing and only restarts
+the ramp. The firmware owns how a fraction maps onto the panel, and
+tools/backlight_floor.py measures where a given one puts the bottom of that range.
 
 **The light sensor.** A phototransistor a hand can shadow, read through the 12-bit ADC with
 a couple of counts of noise either way. With the room and the panel held still, 256 reads
@@ -118,12 +117,9 @@ COLLECT_EVERY_MS = 1000
 # and write it, and page saves go through State.modify, which merges.
 STATE_APP = "stats"
 
-# The lowest display.backlight value that lights the panel, which every brightness is
-# measured up from; see the docstring.
-BACKLIGHT_FLOOR = 0.3
-
-# The smallest change worth asking for; see the docstring.
-BACKLIGHT_STEP = 1.0 / 255 / (1.0 - BACKLIGHT_FLOOR)
+# The smallest change worth asking for. The panel takes a byte, so anything finer lands on
+# the level it already shows and only restarts the ramp.
+BACKLIGHT_STEP = 1.0 / 255
 
 # The share of the theme's case light level a reading of zero still gets.
 CASELIGHT_FLOOR = 0.15
@@ -168,13 +164,13 @@ _backlight_to = None
 
 
 def backlight(fraction):
-    """Set the display brightness, over the range the panel responds to.
+    """Set the display brightness, as a 0-1 fraction of what the panel does.
 
-    Clamped as well as scaled: the binding casts to uint8_t, so anything over 1.0 wraps
-    and blanks the screen over a framebuffer that still dumps perfectly.
+    Clamped, since that is the range the call takes: the binding casts to a byte, and a
+    value above 1.0 wraps to a dark panel. The firmware maps the fraction onto the panel,
+    and doing that again here would only fight it.
     """
-    fraction = max(0.0, min(1.0, fraction))
-    display.backlight(BACKLIGHT_FLOOR + (1.0 - BACKLIGHT_FLOOR) * fraction)
+    display.backlight(max(0.0, min(1.0, fraction)))
 
 
 def backlight_to(fraction, ms=BACKLIGHT_MS, shape=None):

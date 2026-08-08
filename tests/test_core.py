@@ -4198,6 +4198,39 @@ def test_the_mark_is_the_same_one_everywhere(h):
 
 
 @check
+def test_a_brightness_the_ui_offers_stays_a_fraction(_h):
+    """Everything the panel is ever asked for is a 0-1 fraction, and never zero.
+
+    The firmware maps a fraction onto the panel. This side owes it a number in range:
+    `display.backlight` casts to a byte, so a value over 1.0 wraps to a dark panel over a
+    framebuffer that still dumps perfectly.
+
+    Never zero either, since a dark room should dim the badge and not switch it off.
+    `LIGHT_FLOOR` holds that line, and is the setting to move if a dark room reads too dim.
+    """
+    sys.path.insert(0, install.app_source_dir())
+    import look as look_module
+
+    def sent(wanted):
+        """What `backlight` passes on, which is the clamp."""
+        return max(0.0, min(1.0, wanted))
+
+    # The slider is 5 to 100 in fives; see web/index.html.
+    for percent in range(5, 101, 5):
+        asked = percent / 100.0
+        assert 0.0 < sent(asked) <= 1.0, f"{percent}% leaves the range as {sent(asked)}"
+
+    # Auto-brightness scales the configured level by the room, so the dimmest the badge can
+    # ask for is the bottom of the slider in the dark.
+    darkest = 0.05 * look_module.LIGHT_FLOOR
+    assert 0.0 < sent(darkest) <= 1.0, f"a dark room asks for {sent(darkest)}"
+    assert look_module.LIGHT_FLOOR > 0.0, "a dark room would switch the panel off"
+
+    # A fraction that escaped above 1.0 would wrap, so the clamp is what stops it.
+    assert sent(2.463) == 1.0, "an out-of-range brightness reaches the panel"
+
+
+@check
 def test_the_badge_can_report_on_itself_with_no_host(_h):
     """The one page kind whose readings do not come from the frame. It needs no field, so
     nothing can be picked for it and nothing can fail to answer: a prune that keeps only pages

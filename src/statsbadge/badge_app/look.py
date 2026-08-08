@@ -95,9 +95,9 @@ APP_DIR = "/system/apps/stats"
 LIGHT_DIM = 48
 LIGHT_BRIGHT = 4000
 # What ambient light is allowed to take away. A curtained room gets this much of the
-# configured brightness and full daylight gets all of it. Held off zero, since a dark room
-# at zero looks like a fault.
-LIGHT_FLOOR = 0.2
+# configured brightness, and full daylight all of it. Off zero, a dark room at zero
+# reading as a fault.
+LIGHT_FLOOR = 0.1
 
 
 def ambient_fraction(raw):

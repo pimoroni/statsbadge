@@ -37,7 +37,7 @@ screen.pen = color.rgb(255, 255, 255)
 screen.clear()
 badge.update()
 
-WANTED = ("BACKLIGHT_FLOOR", "BACKLIGHT_STEP", "BACKLIGHT_MS", "LIGHT_FOLLOW", "LIGHT_READS",
+WANTED = ("BACKLIGHT_STEP", "BACKLIGHT_MS", "LIGHT_FOLLOW", "LIGHT_READS",
           "LIGHT_EVERY_MS")
 
 # The app's own settings, so this cannot drift from what it ships with.
@@ -51,20 +51,15 @@ missing = [name for name in WANTED if name not in SETTINGS]
 if missing:
     raise SystemExit("not in the app any more, so update this probe: " + ", ".join(missing))
 
-FLOOR = SETTINGS["BACKLIGHT_FLOOR"]
 STEP = SETTINGS["BACKLIGHT_STEP"]
 # The configured brightness this is sampling against, which is the app's default.
 BRIGHTNESS = 0.8
 
 
 def duty(fraction):
-    """What the panel is lit at, for a 0-1 brightness. The binding casts to a byte and the
-    driver raises that to the power of 2.8 for the PWM level."""
-    return (int((FLOOR + (1 - FLOOR) * fraction) * 255) / 255.0) ** 2.8
-
-
-print(f"backlight floor {FLOOR:.2f}, so the dimmest the panel goes is "
-      f"{duty(0.0) * 100:.2f}% duty")
+    """What the panel is lit at, for a 0-1 brightness. The panel resolves a byte of it and
+    raises that to the power of 2.8 for the PWM level."""
+    return (int(fraction * 255) / 255.0) ** 2.8
 print(f"light floor {look.LIGHT_FLOOR:.2f}, {SETTINGS['LIGHT_READS']} reads a sample, "
       f"{SETTINGS['LIGHT_FOLLOW'] * 100:.0f}% of the gap every "
       f"{SETTINGS['LIGHT_EVERY_MS']}ms, brightness {BRIGHTNESS:.1f}")
@@ -99,7 +94,7 @@ while True:
         if want is None or abs(wanted - want) >= STEP:
             want = wanted
             aims += 1
-            display.backlight(FLOOR + (1 - FLOOR) * want)
+            display.backlight(want)
 
     if time.ticks_diff(now, said) >= 1000:
         said = now
