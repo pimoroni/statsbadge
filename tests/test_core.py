@@ -4471,6 +4471,41 @@ def test_the_quake_page_agrees_with_its_source(_h):
 
 
 @check
+def test_the_app_keeps_what_extensions_reach_into_it_for(_h):
+    """A badge module reaches into draw, look, worldmap and pages by attribute.
+
+    Those resolve on the badge alone, so a helper whose callers are all extensions reads
+    as unused here, and taking it out is a crash dialog after launch. `draw.readable` is
+    one such helper.
+    """
+    import ast
+
+    app_dir = pathlib.Path(install.app_source_dir())
+    defined = {}
+    for module in ("draw", "look", "worldmap", "pages"):
+        tree = ast.parse((app_dir / f"{module}.py").read_text())
+        names = set()
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                names.add(node.name)
+            elif isinstance(node, ast.Assign):
+                names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        defined[module] = names
+
+    reached = set()
+    for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
+        path = (pathlib.Path("extensions") / extension / "src"
+                / extension.replace("-", "_") / "badge" / f"{module}.py")
+        for node in ast.walk(ast.parse(path.read_text())):
+            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                    and node.value.id in defined):
+                reached.add((node.value.id, node.attr))
+                assert node.attr in defined[node.value.id], (
+                    f"{path}: {node.value.id}.{node.attr} is not in the app")
+    assert ("draw", "readable") in reached, "the case this check was written for"
+
+
+@check
 def test_a_map_page_only_uses_names_the_badge_has(_h):
     """An extension's badge module is compiled on the badge at launch and cannot be imported
     here, so a name that is neither defined, imported nor a badge builtin is a crash dialog
