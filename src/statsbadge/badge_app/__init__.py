@@ -422,7 +422,9 @@ class App:
         # Listening costs a frame's worth of time, so not on every failed poll.
         self._next_hunt = time.ticks_add(now, 20000)
 
-        for beacon in net.discover(timeout_ms=1200):
+        # Ends as soon as a host we hold credentials for answers, so the full scan is only
+        # paid for when there is nothing out there.
+        for beacon in net.discover(wanted=self.config.hosts):
             server_id = beacon.get("id")
             if not server_id:
                 continue

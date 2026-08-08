@@ -16,8 +16,6 @@ import look
 import net
 
 POLL_INTERVAL_MS = 1200
-# The host beacons every 2s, so a scan has to be longer than that to catch every server.
-BEACON_INTERVAL_MS = 2000
 
 
 def hosts_menu(app):
@@ -49,9 +47,7 @@ def _host_rows(app):
     draw.banner(app.theme, "Hosts", "looking for servers")
     badge.update()
     seen = {}
-    # Longer than the beacon interval, or a server that has just broadcast is missed and
-    # the list silently comes back short.
-    for entry in net.discover(timeout_ms=2 * BEACON_INTERVAL_MS):
+    for entry in net.discover():
         if entry.get("id"):
             seen[entry["id"]] = entry
 
@@ -161,6 +157,8 @@ def _find_hosts(app):
     found = []
     deadline = time.ticks_add(time.ticks_ms(), 6000)
     while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        # Short scans so the countdown moves, and six seconds of them, which is what
+        # outlasts the beacon interval here.
         found = net.discover(timeout_ms=600)
         if found:
             return found

@@ -1801,6 +1801,37 @@ def test_setup_waves_through_a_server_already_paired(_h):
 
 
 @check
+def test_the_badge_scans_for_longer_than_the_host_waits(_h):
+    """The badge listens for a beacon and the host sends one, and neither imports the other.
+
+    A scan shorter than the gap between two beacons misses a host that has just broadcast,
+    and comes back saying nothing is there.
+    """
+    from statsbadge import beacon
+
+    source = (pathlib.Path(install.app_source_dir()) / "net.py").read_text()
+    assert f"BEACON_PORT = {beacon.PORT}" in source, "the badge listens on another port"
+    assert f"BEACON_EVERY_MS = {int(beacon.INTERVAL * 1000)}" in source, (
+        "the badge assumes a different interval")
+    assert "DISCOVER_MS = 2 * BEACON_EVERY_MS" in source
+
+    # The host's own figure travels, so a server started with a different interval is
+    # scanned for long enough without the badge being rebuilt.
+    sent = beacon.Beacon(8420, "here", server_id="abc", interval=5.0).payload()
+    assert sent["every_ms"] == 5000, sent
+    assert len(json.dumps(sent)) < 256, "the packet is read into a 256 byte buffer"
+    assert 'beacon.get("every_ms"' in source, "the badge drops what it is told"
+
+    # Every scan covers an interval. Setup's countdown does it by repeating a short one
+    # until the six seconds are up, so its own scans are allowed to be brief.
+    menu = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    for short in re.findall(r"discover\(timeout_ms=(\d+)\)", app):
+        raise AssertionError(f"a {short}ms scan outside the countdown")
+    assert "deadline" in menu, "the countdown is what makes setup's short scans add up"
+
+
+@check
 def test_one_writer_owns_the_badge_state_file(_h):
     """The installer writes it over the REPL and the app writes it at runtime.
 

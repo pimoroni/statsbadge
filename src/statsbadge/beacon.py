@@ -33,14 +33,20 @@ class Beacon:
         if self._thread:
             self._thread.join(timeout=2.0)
 
-    def _run(self):
-        payload = json.dumps({
+    def payload(self):
+        """What goes out, as a dict. Small: it travels in one UDP packet under 256 bytes."""
+        return {
             "statsbadge": 1,
             "port": self.http_port,
             "host": self.name,
             # The badge keys its credentials on this, not on the address.
             "id": self.server_id,
-        }).encode("utf-8")
+            # So a scan can be made longer than the gap between two of these.
+            "every_ms": int(self.interval * 1000),
+        }
+
+    def _run(self):
+        payload = json.dumps(self.payload()).encode("utf-8")
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         try:

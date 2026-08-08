@@ -21,6 +21,16 @@ import time
 # Config is the only writer, so nothing has to merge against anything else.
 STATE_FILE = "/state/stats.json"
 
+# Where `statsbadge serve` broadcasts. beacon.py holds the same number, and a check on
+# the host holds the two together.
+BEACON_PORT = 8421
+# How often it goes out. The packet carries the host's figure as `every_ms`; this is what
+# to assume before one has been heard.
+BEACON_EVERY_MS = 2000
+# A scan has to outlast the interval, or a host that has just broadcast is missed and the
+# list silently comes back short.
+DISCOVER_MS = 2 * BEACON_EVERY_MS
+
 # How long to wait on a whole request before giving up and dropping the socket.
 REQUEST_TIMEOUT_MS = 6000
 # Time budget per step, against the 11ms a frame has at 90Hz.
@@ -454,12 +464,16 @@ class Client:
             return None
 
 
-def discover(timeout_ms=4000):
+def discover(timeout_ms=DISCOVER_MS, wanted=None):
     """Listen for host beacons, so nobody has to type an IP address.
 
     `statsbadge serve` broadcasts a small JSON beacon; this collects whatever answers
     within the timeout. Returns a list of dicts with `id`, `host`, `port` and `name`.
     Credentials are keyed on the id, so a host that changed address is still recognised.
+
+    `wanted` is a set of server ids to stop at, for a caller after a host it holds
+    credentials for. The scan runs long enough to catch a beacon that has only just gone out,
+    and ends the moment one of those ids answers.
     """
     found = []
     sock = None
@@ -467,7 +481,7 @@ def discover(timeout_ms=4000):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setblocking(False)
-        sock.bind(("0.0.0.0", 8421))
+        sock.bind(("0.0.0.0", BEACON_PORT))
         deadline = time.ticks_add(time.ticks_ms(), timeout_ms)
         while time.ticks_diff(deadline, time.ticks_ms()) > 0:
             try:
@@ -488,10 +502,13 @@ def discover(timeout_ms=4000):
                 "host": address[0],
                 "port": int(beacon.get("port", 8420)),
                 "name": beacon.get("host") or address[0],
+                "every_ms": int(beacon.get("every_ms", BEACON_EVERY_MS)),
             }
             if not any(e["host"] == entry["host"] and e["port"] == entry["port"]
                        for e in found):
                 found.append(entry)
+            if wanted and entry["id"] in wanted:
+                break
     except OSError:
         pass
     finally:
