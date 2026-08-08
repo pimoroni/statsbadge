@@ -1262,11 +1262,15 @@ def test_every_kind_has_a_badge_layout_and_a_ui_shape(_h):
 
 @check
 def test_caselights_take_a_field_or_a_flag(_h):
-    """Three settings in one value: off, the theme's level, or a reading to follow."""
+    """Three settings in one value: off, the backlight's level, or a reading to follow."""
     base = dict(layout.DEFAULT_CONFIG)
 
     def stored(value):
         return layout.validate({**base, "caselights": value})["caselights"]
+
+    # Offered as following the backlight now, though the flag is still stored as it was.
+    page = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    assert "Follow the Backlight" in page and "Follow the Theme" not in page
 
     assert stored("cpu.pct") == "cpu.pct"
     assert stored(True) is True
@@ -2985,9 +2989,10 @@ def test_the_settings_are_grouped_by_what_they_do(_h):
     page = pathlib.Path("src/statsbadge/web/index.html").read_text()
     sections = sections_of(page)
     wanted = {
-        "Look": ("theme", "accentb"),
-        "Graphs and gauges": ("points", "interval", "smooth", "plotanim", "rows", "animate",
-                              "gaugefill"),
+        "Look &amp; Feel": ("theme", "accentb"),
+        "Readings": ("interval", "points"),
+        "Plots and gauges": ("smooth", "rows", "gaugefill"),
+        "Movement": ("plotanim", "animate"),
         "Paging and auto advance": ("slide", "idle", "advance"),
         "Backlight and case lights": ("brightness", "autobright", "caselights"),
     }

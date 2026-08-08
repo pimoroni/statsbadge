@@ -756,10 +756,11 @@ function bindCheck(id, key) {
   input.onchange = () => { config[key] = input.checked; markDirty() }
 }
 
-/** Off, the theme's level, or a reading for the lights to follow. The stored value is
+/** Off, the backlight's level, or a reading for the lights to follow. The stored value is
  * false, true, or a field ref, so the option values carry it directly. */
 function renderCaseLights() {
-  const options = [["off", "Off"], ["theme", "Follow the Theme"]]
+  // The flag has always stored "theme", from when a palette named the level.
+  const options = [["off", "Off"], ["theme", "Follow the Backlight"]]
   for (const ref of numericRefs()) {
     options.push([ref, `${groupLabel(ref.split(".")[0])} - ${fieldLabel(ref)}`])
   }
@@ -835,8 +836,8 @@ function familyOf(accent) {
 }
 
 function renderTint() {
-  // Which themes take an accent is the host's answer, not a list held here: a derived theme
-  // is built from the one chosen, and a written palette is fixed as drawn.
+  // Whether a theme takes an accent comes from the host, so no list is held here: a derived
+  // theme is built from the one chosen, and a written palette is fixed as drawn.
   const record = (caps.themes || []).find((entry) => entry.name === config.theme)
   const derived = Boolean(record && record.derived)
   for (const node of all("[data-tint]")) node.hidden = !derived
