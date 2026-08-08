@@ -2419,6 +2419,35 @@ def test_a_theme_with_a_counterpart_has_one_in_the_other_mode(_h):
 
 
 @check
+def test_a_badge_s_own_layout_falls_back_to_the_default(_h):
+    """A badge's block sits over the default, not instead of it.
+
+    A block saved before a setting existed carries none, and returning it whole handed the
+    badge a layout with holes: no tint to build a palette from, and a theme of None that
+    drew the boot colours whatever was chosen.
+    """
+    path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-blocks-"), "layout.json")
+    with open(path, "w") as handle:
+        json.dump({"rev": 4, "theme": "sakura", "brightness": 0.8,
+                   "badges": {"partial": {"brightness": 0.5},
+                              "whole": {"theme": "mono", "tint": layout.DEFAULT_CONFIG["tint"]}}},
+                  handle)
+    config = layout.Config(path)
+
+    # A block that named no theme keeps none.
+    assert "theme" not in config.data["badges"]["partial"]
+
+    partial = config.for_badge(None, "partial")
+    assert partial["theme"] == "sakura", "a partial block lost the theme it inherits"
+    assert partial["brightness"] == 0.5, "a partial block lost what it does say"
+    assert partial["palette"]["bg"] == themes.written()["sakura"]["bg"]
+
+    whole = config.for_badge(None, "whole")
+    assert whole["theme"] == "mono"
+    assert whole["brightness"] == 0.8, "a block should inherit what it does not name"
+
+
+@check
 def test_the_case_lights_follow_the_backlight(_h):
     """A case light is one brightness and not a colour, so a theme leaves it alone.
 

@@ -166,8 +166,12 @@ class Config:
                 if isinstance(block, dict)
             }
             # Retired theme names resolve here, once, and nothing downstream sees them again.
+            # A block that names no theme is left alone: writing None into it would override
+            # the default with nothing, and that badge would draw in the boot theme forever.
             for block in [merged] + list(merged["badges"].values()):
-                name, accent = resolve_theme(block.get("theme"), None)
+                if not block.get("theme"):
+                    continue
+                name, accent = resolve_theme(block["theme"], None)
                 block["theme"] = name
                 if accent:
                     block["tint"] = accent
@@ -197,7 +201,11 @@ class Config:
         """
         with self._lock:
             own = (self.data.get("badges") or {}).get(str(badge_id or ""))
-            data = copy.deepcopy(own if own is not None else self.data)
+            data = copy.deepcopy(self.data)
+            if own is not None:
+                # Over the default and not instead of it. A block saved before a setting
+                # existed carries none, and the badge asked for a layout with holes in it.
+                data.update(copy.deepcopy(own))
             data["settings"] = copy.deepcopy(self.data.get("settings") or {})
         data.pop("badges", None)
         return data
