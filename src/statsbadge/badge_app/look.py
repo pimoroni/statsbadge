@@ -146,6 +146,12 @@ class Theme:
         # leg olive, 39 counts adrift at 0.64 of the ramp.
         self.ramp = tuple((pos, color.rgb(*rgb).to_oklch()) for pos, rgb in ramp)
         self.grid = color.rgb(*grid) if grid else self.dim
+        # What a cache keys on. The name does not move when a derived theme is built again
+        # from another accent, so anything baked under it outlived the colours it was baked
+        # in. Built once, here, and not per frame.
+        self.key = (name, tuple(bg), tuple(accent),
+                    tuple(accent_b) if accent_b else tuple(accent),
+                    tuple(ramp[0][1]), tuple(ramp[-1][1]))
         self.pale = sum(bg) >= PALE_SUM
         # `lighten` has nowhere to go on a page that is already near white.
         self.stripe = self.bg.darken(STRIPE) if self.pale else self.bg.lighten(STRIPE)

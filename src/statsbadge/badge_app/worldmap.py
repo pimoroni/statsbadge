@@ -130,7 +130,7 @@ def pens(theme, alpha=LAND_ALPHA):
 
     Cached per theme, so a frame builds none of them. See LAND_BANDS.
     """
-    key = (theme.name, alpha)
+    key = (theme.key, alpha)
     found = _pens.get(key)
     if found is None:
         # Dropped rather than grown: a badge cycling themes would keep a set for each.

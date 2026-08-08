@@ -2448,6 +2448,39 @@ def test_a_badge_s_own_layout_falls_back_to_the_default(_h):
 
 
 @check
+def test_a_re_tinted_theme_is_a_different_theme_to_a_cache(_h):
+    """A derived theme keeps its name when it is built again from another accent, so
+    anything baked under the name went on being drawn in the colours it was baked in.
+
+    The clock's face was the visible one: re-tinting left the old dial behind.
+    """
+    import sys
+
+    from statsbadge import derive
+
+    sys.path.insert(0, install.app_source_dir())
+    import look
+
+    accents = derive.accents("saturated")
+    one = layout.palette_for("tinted-dark", accents[0])
+    other = layout.palette_for("tinted-dark", accents[6])
+    first = look.from_palette("tinted-dark", one)
+    second = look.from_palette("tinted-dark", other)
+
+    assert first.name == second.name, "the names were expected to match"
+    assert first.key != second.key, "a cache cannot tell the two apart"
+    # The same accent twice is one key, or every poll would throw the caches away.
+    assert first.key == look.from_palette("tinted-dark", one).key
+
+    # Every cache that holds something baked in a theme's colours keys on that.
+    app = pathlib.Path(install.app_source_dir())
+    clock = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge/clockface.py")
+    for source in [app / "draw.py", app / "worldmap.py", app / "__init__.py", clock]:
+        body = source.read_text()
+        assert "theme.name" not in body, f"{source.name} still keys a cache on the name"
+
+
+@check
 def test_the_case_lights_follow_the_backlight(_h):
     """A case light is one brightness and not a colour, so a theme leaves it alone.
 
@@ -4819,7 +4852,9 @@ def test_the_world_map_is_parsed_once_for_every_page_that_wants_it(_h):
     source = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
     body = source[source.index("def pens("):]
     body = body[:body.index("\ndef ", 1)]
-    assert "theme.name" in body and "alpha" in body, "the pens are not keyed by theme"
+    # By `theme.key` and not `theme.name`: a derived theme keeps its name when it is built
+    # again from another accent, so a cache under the name outlives the colours in it.
+    assert "theme.key" in body and "alpha" in body, "the pens are not keyed by theme"
     assert "_pens.clear()" in body, "the table of pens grows without bound"
 
     # Every page's band comes out of one View, leaving the projection stated once.

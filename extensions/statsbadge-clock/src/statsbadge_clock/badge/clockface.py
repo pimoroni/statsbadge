@@ -199,10 +199,10 @@ def _bake_hands(spec):
 def _face(name, theme):
     """A face's colours, its baked dial and its hands, baking on first use."""
     global _baked_for
-    if _baked_for != theme.name:
+    if _baked_for != theme.key:
         _face_cache.clear()
         _hands_cache.clear()
-        _baked_for = theme.name
+        _baked_for = theme.key
     spec = FACES.get(name) or FACES[DEFAULT_FACE]
     pens = _colours(spec, theme)
     key = spec["label"]

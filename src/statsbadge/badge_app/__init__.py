@@ -559,7 +559,7 @@ class App:
         # still draws. Only the key to fall back on, for a host too old to send them.
         theme = (look.from_palette(theme_name, (self.layout or {}).get("palette"))
                  or look.get(theme_name))
-        if theme.name != self.theme.name or theme is not self.theme:
+        if theme.key != self.theme.key:
             self.theme = theme
             draw.clear_cache()
         # The first layout to land is the badge coming up, so it takes its brightness

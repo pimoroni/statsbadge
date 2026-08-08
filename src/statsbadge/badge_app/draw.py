@@ -471,7 +471,7 @@ def _pips(theme, index, total):
     Baked, and no wider than the pips: a rounded rectangle is 0.19ms whatever its size, and
     a dozen a frame is more than the footer is worth.
     """
-    key = (theme.name, index, total)
+    key = (theme.key, index, total)
     row = _pip_rows.get(key)
     if row is not None:
         return row
@@ -521,7 +521,7 @@ def swept_pens(theme, centre, radius, backwards=False):
 
     Cached, a pair from OKLCH stops being 3.4ms.
     """
-    key = (theme.name, centre, radius, backwards)
+    key = (theme.key, centre, radius, backwards)
     pens = _gradients.get(key)
     if pens is None:
         import math
