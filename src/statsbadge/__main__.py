@@ -157,9 +157,10 @@ def cmd_serve(args):
     for address in server._local_addresses():
         print(f"  badge should use:  {address}:{args.port}")
     print(f"  config UI:         http://127.0.0.1:{args.port}/")
-    print("  sources:           {}".format(", ".join(
-        s["name"] for s in caps["sources"])) or "none")
-    print("  groups with data:  {}".format(", ".join(sorted(caps["available"]))) or "none")
+    sources = ", ".join(source["name"] for source in caps["sources"])
+    groups = ", ".join(sorted(caps["available"]))
+    print(f"  sources:           {sources or 'none'}")
+    print(f"  groups with data:  {groups or 'none'}")
     if caps["extensions"]:
         print("  extensions:        {}".format(", ".join(
             _extension_line(record) for record in caps["extensions"])))
