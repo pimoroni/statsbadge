@@ -1894,7 +1894,7 @@ def test_the_theme_the_badge_boots_with_is_the_host_s_dark(_h):
 
     carried = {kw.arg: ast.literal_eval(kw.value) for kw in call.keywords}
     assert ast.literal_eval(call.args[0]) == themes.DEFAULT, "a theme other than the default"
-    wanted = themes.PALETTES[themes.DEFAULT]
+    wanted = themes.written()[themes.DEFAULT]
     assert carried == wanted, (
         f"the badge boots a different {themes.DEFAULT}: "
         f"{ {k: v for k, v in carried.items() if wanted.get(k) != v} }")
@@ -2179,7 +2179,7 @@ def test_a_theme_travels_as_its_colours(_h):
 
     # Every palette is complete, ordered and usable by the badge's builder.
     assert layout.DEFAULT_CONFIG["theme"] == themes.DEFAULT
-    for name, palette in themes.PALETTES.items():
+    for name, palette in themes.written().items():
         assert name in layout.THEMES, f"{name} is not offered"
         built = look.from_palette(name, palette)
         assert built is not None, f"the badge cannot build {name}"
@@ -2196,7 +2196,7 @@ def test_a_theme_travels_as_its_colours(_h):
     # The one the app carries to boot with agrees with the host's copy of it, or the
     # first frame is drawn in colours the config left behind.
     assert list(look.THEMES) == [themes.DEFAULT], list(look.THEMES)
-    booted, sent = look.THEMES[themes.DEFAULT], themes.PALETTES[themes.DEFAULT]
+    booted, sent = look.THEMES[themes.DEFAULT], themes.written()[themes.DEFAULT]
     for key in ("bg", "panel", "ink", "dim", "accent", "grid"):
         assert getattr(booted, key) == builtins.color.rgb(*sent[key]), key
     assert booted.ramp == tuple((pos, builtins.color.rgb(*rgb))
@@ -2207,7 +2207,7 @@ def test_a_theme_travels_as_its_colours(_h):
     config.replace({"theme": "eva01", "pages": layout.DEFAULT_PAGES})
     sent = config.for_badge()
     assert sent["theme"] == "eva01"
-    stored = themes.PALETTES["eva01"]
+    stored = themes.written()["eva01"]
     assert {key: sent["palette"][key] for key in stored} == stored, sent["palette"]
     assert look.from_palette(sent["theme"], sent["palette"]).accent == \
         builtins.color.rgb(143, 212, 0)
@@ -2304,16 +2304,16 @@ def test_a_palette_can_carry_a_second_accent(h):
     assert draw._series_colour(theme, 1) == theme.accent_b
     assert draw._series_colour(theme, 0) == theme.accent
     # A palette with none: the accent again, and the ramp still answers for the second series.
-    plain = look.from_palette("dark", themes.PALETTES["dark"])
+    plain = look.from_palette("dark", themes.written()["dark"])
     assert plain.accent_b == plain.accent
     assert draw._series_colour(plain, 1) != plain.accent
 
     # The one written-down palette that needed it: a page that pink shows its green nowhere
     # else, the ramp's cold end being a reading that goes unused.
-    melon = look.from_palette("watermelon-light", themes.PALETTES["watermelon-light"])
+    melon = look.from_palette("watermelon-light", themes.written()["watermelon-light"])
     assert melon.accent_b != melon.accent
-    assert derive.apart(themes.PALETTES["watermelon-light"]["accent_b"],
-                        themes.PALETTES["watermelon-light"]["accent"]) > 20.0
+    written = themes.written()["watermelon-light"]
+    assert derive.apart(written["accent_b"], written["accent"]) > 20.0
 
     # Where it shows: the chrome takes it, so the first accent is left for what a reading is
     # drawn in. A palette with none has the two the same colour, and it holds.
@@ -2346,10 +2346,10 @@ def test_the_single_hue_themes_are_the_bold_variant_now(_h):
     variant with an accent, and the names still resolve."""
     from statsbadge import derive, themes
 
-    for retired in layout.THEME_ALIASES:
-        assert retired not in themes.PALETTES, f"{retired} is still a written-down palette"
+    for retired in themes.ALIASES:
+        assert retired not in themes.written(), f"{retired} is still a written-down palette"
         name, accent = layout.resolve_theme(retired, None)
-        assert name in layout.BOLD, (retired, name)
+        assert themes.THEMES[name]["derived"].get("bold"), (retired, name)
         assert tuple(accent) in derive.offered(), (retired, accent)
 
     # A stored name keeps drawing: resolved once when the file is read, so nothing
@@ -2367,7 +2367,7 @@ def test_the_single_hue_themes_are_the_bold_variant_now(_h):
     cyan = derive.oklch(stored.layout_for("badgeone")["tint"])[2]
     assert abs(amber - 60.0) < 1.0 and abs(cyan - 210.0) < 1.0, (amber, cyan)
     assert stored.for_badge()["palette"]["ramp"][-1][1] != list(
-        themes.PALETTES["dark"]["ramp"][-1][1])
+        themes.written()["dark"]["ramp"][-1][1])
     # A PUT carrying an old name is taken as well, an open browser being older than the host.
     assert layout.validate({"theme": "red", "pages": layout.DEFAULT_PAGES})["theme"] == (
         "tinted-bold-dark")
@@ -2402,7 +2402,7 @@ def test_a_theme_with_a_counterpart_has_one_in_the_other_mode(_h):
 
     # Every palette clears the bar the shipped ones set: AAA for ink, since it
     # what a reading is drawn in, and a hot end that shows against the page at all.
-    for name, palette in themes.PALETTES.items():
+    for name, palette in themes.written().items():
         ink = derive.contrast(palette["ink"], palette["bg"])
         dim = derive.contrast(palette["dim"], palette["bg"])
         hot = derive.contrast(palette["ramp"][-1][1], palette["bg"])
@@ -2412,6 +2412,238 @@ def test_a_theme_with_a_counterpart_has_one_in_the_other_mode(_h):
         cold = palette["ramp"][0][1]
         apart = sum((a - b) ** 2 for a, b in zip(cold, palette["ramp"][-1][1], strict=True))
         assert apart > 1600, (name, apart)
+
+
+@check
+def test_the_case_lights_follow_the_backlight(_h):
+    """A case light is one brightness and not a colour, so a theme leaves it alone.
+
+    They track the panel instead. A dark room otherwise dims the screen and leaves four
+    lights burning at the level a palette happened to name."""
+    import ast
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import look
+
+    # The palette, the theme and the wire have all dropped it.
+    assert not hasattr(look.THEMES[look.DEFAULT], "case")
+    assert look.from_palette("d", {**_palette_of("dark"), "case": 0.9}).__dict__.get("case") is None
+
+    source = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    tree = ast.parse(source)
+    bodies = {node.name: node for node in ast.walk(tree)
+              if isinstance(node, ast.FunctionDef)}
+
+    lights = ast.dump(bodies["apply_caselights"])
+    assert "wanted_brightness" in lights, "the case lights do not follow the backlight"
+    # The attribute and not the word; the docstring still uses it.
+    assert "attr='case'" not in lights, "the case lights still read the theme"
+    assert "CASELIGHT_FLOOR" in lights, "a followed reading lost its floor"
+    # Reapplied wherever the brightness moves, and not only when a layout lands: a button
+    # press would otherwise dim the panel alone.
+    assert "apply_caselights" in ast.dump(bodies["apply_backlight"])
+
+
+def _palette_of(name):
+    """A theme's palette as it reaches the badge, for a from_palette check."""
+    return layout.palette_for(name, layout.DEFAULT_CONFIG["tint"])
+
+
+@check
+def test_the_themes_are_a_data_file(_h):
+    """A theme is data, so it lives in a data file, where every entry is the same shape.
+
+    A special case was what put a second half-description of it in layout.py before."""
+    import tomllib
+    from importlib import resources
+
+    from statsbadge import derive, themes
+
+    raw = tomllib.loads(resources.files("statsbadge").joinpath("themes.toml").read_text())
+    raw.pop("aliases")
+    assert set(raw) == set(themes.THEMES) and len(raw) == 22, len(raw)
+
+    for name, record in raw.items():
+        spec = record.get("derived")
+        named = [role for role in themes.ROLES if role in record]
+        assert bool(spec) != bool(named), f"{name} is both written down and derived"
+        if spec:
+            assert spec["shape"] in derive.SHAPES, (name, spec)
+            continue
+        assert set(named) == set(themes.ROLES), f"{name} is missing {set(themes.ROLES) - set(named)}"
+        for role in named + (["accent_b"] if "accent_b" in record else []):
+            channels = record[role]
+            assert len(channels) == 3 and all(0 <= v <= 255 for v in channels), (name, role)
+        at = [position for position, _rgb in record["ramp"]]
+        assert at[0] == 0.0 and at[-1] == 1.0 and at == sorted(at), (name, at)
+
+    # The retired names still resolve, so a badge showing one carries on showing it.
+    for retired, aliased in themes.ALIASES.items():
+        assert aliased["theme"] in themes.THEMES, (retired, aliased)
+
+    # A case light is a brightness and not a colour, so no palette carries one.
+    assert not any("case" in record for record in raw.values())
+    palette = layout.palette_for("tinted-dark", layout.DEFAULT_CONFIG["tint"])
+    assert "case" not in palette
+
+
+@check
+def test_a_lit_theme_is_one_hue_throughout(_h):
+    """Glow is Tinted Bold with a lit page: monochromatic, soft, a vintage screen.
+
+    Which means it has to take the bold ramp. A ramp that travels to red is not monochrome
+    whatever the furniture does, and that is the whole flavour rather than a detail.
+    """
+    from statsbadge import derive, themes
+
+    def wander(palette):
+        """The furthest any colour sits from the rest in hue, ignoring the near-greys."""
+        hues = []
+        for role in ("bg", "panel", "grid", "dim", "ink", "accent"):
+            lightness, chroma, hue = derive.oklch(palette[role])
+            if chroma > 0.01:
+                hues.append(hue)
+        for _at, colour in palette["ramp"]:
+            lightness, chroma, hue = derive.oklch(colour)
+            if chroma > 0.01:
+                hues.append(hue)
+        return max(abs((hue - hues[0] + 180.0) % 360.0 - 180.0) for hue in hues)
+
+    for name in ("tinted-glow-dark", "tinted-glow-light"):
+        assert themes.THEMES[name]["derived"].get("bold"), f"{name} would travel to red"
+
+    worst = {}
+    for name, record in themes.THEMES.items():
+        spec = record.get("derived")
+        if not spec:
+            continue
+        for family in derive.ACCENT_FAMILIES:
+            for accent in derive.accents(family):
+                moved = wander(layout.palette_for(name, accent))
+                worst[name] = max(worst.get(name, 0.0), moved)
+    # Measured: a signal ramp takes a palette most of the way round the wheel.
+    for name in ("tinted-glow-dark", "tinted-glow-light", "tinted-bold-dark"):
+        assert worst[name] < 20.0, (name, worst[name])
+    assert worst["tinted-dark"] > 100.0, worst["tinted-dark"]
+    # The hand-tuned originals it was shaped from, for scale.
+    for name in ("luminescence", "luminescence-dark"):
+        assert wander(themes.written()[name]) < 20.0, name
+
+    # The other half is the page. A lit one carries more of the hue at less contrast,
+    # and both move together or readable_on walks the ink back out.
+    for lit, plain in (("glow-dark", "dark"), ("glow-light", "light")):
+        assert derive.SHAPES[lit]["ink_ratio"] < derive.INK_RATIO
+        for family in derive.ACCENT_FAMILIES:
+            for accent in derive.accents(family):
+                shaped = derive.palette(accent, lit, bold=True)
+                flat = derive.palette(accent, plain)
+                assert (derive.contrast(shaped["ink"], shaped["bg"])
+                        < derive.contrast(flat["ink"], flat["bg"])), (lit, accent)
+                assert (derive.oklch(shaped["bg"])[1] > derive.oklch(flat["bg"])[1]), (lit, accent)
+
+
+@check
+def test_a_graph_s_two_series_read_apart(_h):
+    """The second series is the badge's choice, worked out on the host for the preview.
+
+    Whichever end of the ramp sits furthest from the accent and can still be seen, with
+    `dim` last. Measured, no theme lands on that last resort."""
+    import sys
+
+    from statsbadge import derive, themes
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+    import look
+
+    assert layout.SERIES_FLOOR == draw.SERIES_FLOOR
+    assert layout.SERIES_ALPHA == draw.SERIES_ALPHA
+    assert layout.PALE_SUM == look.PALE_SUM
+
+    for name in themes.THEMES:
+        for accent in (derive.accents()[6], derive.accents("saturated")[0]):
+            palette = layout.palette_for(name, accent)
+            first, second = layout.series_colours(palette)
+            assert tuple(first) == tuple(palette["accent"])
+            # The candidates are the badge's. Which one it lands on is not asserted
+            # against `draw._series_colour`: that runs on FakeColour, whose `difference`
+            # stands in for the firmware's with sRGB distance, and the two part company
+            # on shell-light.
+            theme = look.from_palette(name, palette)
+            assert draw._series_colour(theme, 0) == theme.accent
+            # `dim` is the last resort. Membership and not colour: mono's dim and its
+            # cold end are the same grey.
+            chosen = {tuple(palette["ramp"][0][1]), tuple(palette["ramp"][-1][1])}
+            if "accent_b" in palette:
+                chosen.add(tuple(palette["accent_b"]))
+            assert tuple(second) in chosen, f"{name} fell back to dim"
+            # Seen against the page, which the floor is there to keep true.
+            alpha = layout.SERIES_ALPHA[0 if sum(palette["bg"]) >= layout.PALE_SUM else 1]
+            shown = tuple(round(pen * alpha / 255.0 + bg * (1 - alpha / 255.0))
+                          for pen, bg in zip(second, palette["bg"], strict=True))
+            assert derive.apart(palette["bg"], shown) >= layout.SERIES_FLOOR, (name, second)
+
+
+@check
+def test_the_preview_draws_in_the_badge_s_own_faces(_h):
+    """Four pages at 320x240, in Lexend and the badge's symbols. The icon font is subset
+    from the corpus badge_app/icons.af is built from, so the two cannot differ."""
+    import re
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import pages as pages_module
+
+    web = pathlib.Path("src/statsbadge/web")
+    for name in ("lexend-var.ttf", "icons.woff2"):
+        assert (web / name).is_file(), f"{name} is not shipped with the UI"
+    sheet = (web / "app.css").read_text()
+    assert "@font-face" in sheet and "lexend-var.ttf" in sheet and "icons.woff2" in sheet
+
+    corpus = pathlib.Path("ci/badge-icons.txt").read_text()
+    rows = [m.groups() for m in
+            (re.match(r"^(\w+)\s+([0-9a-f]{4})\s+(\S)\s*$", line)
+             for line in corpus.splitlines()) if m]
+    assert len(rows) == 18, len(rows)
+
+    # The JS addresses a symbol by the same letter badge-side code does.
+    script = (web / "app.js").read_text()
+    shown = dict(re.findall(r"(\w): 0x([0-9a-f]{4})", script.split("const ICONS = {")[1]
+                            .split("}")[0]))
+    assert shown == {letter: point for _name, point, letter in rows}, shown
+    drawn = set(pages_module.GROUP_ICONS.values()) | set(pages_module.FIELD_ICONS.values())
+    assert drawn <= set(shown), drawn - set(shown)
+
+
+@check
+def test_the_dark_theme_s_colours_are_not_copied_by_hand(h):
+    """The UI's accent, its ramp and the mark on its tab all come from the dark theme.
+
+    Generated or checked. A copy typed in goes stale the moment a palette moves."""
+    from statsbadge import themes
+
+    dark = themes.written()[themes.DEFAULT]
+    def hexed(colour):
+        red, green, blue = colour
+        return f"#{red:02x}{green:02x}{blue:02x}"
+
+    # Served generated, so the sheet holds no stale copy. Fetched rather than rebuilt,
+    # which would check a second copy of the generator instead.
+    with urllib.request.urlopen(h.url("/tokens.css"), timeout=5) as response:
+        tokens = response.read().decode()
+        assert response.headers["Content-Type"].startswith("text/css")
+    assert f"--accent: {hexed(dark['accent'])};" in tokens
+    for at, colour in enumerate(rgb for _pos, rgb in dark["ramp"]):
+        assert f"--ramp-{at}: {hexed(colour)};" in tokens, (at, colour)
+
+    # The splash mark is the badge's, so the tab icon is too. Two copies of it, with
+    # icon.svg's comment asking for a test rather than a build step.
+    marks = [pathlib.Path("src/statsbadge/web/icon.svg").read_text(),
+             pathlib.Path("src/statsbadge/web/index.html").read_text()]
+    for role in ("bg", "grid", "accent", "ink"):
+        for mark in marks:
+            assert hexed(dark[role]) in mark.lower(), (role, hexed(dark[role]))
 
 
 @check
@@ -2428,13 +2660,17 @@ def test_the_themes_are_offered_light_and_dark(h):
     # The two that came first are named for what they are.
     assert records["dark"]["label"] == "Default Dark"
     assert records["light"]["label"] == "Default Light"
-    assert records["sakura"]["label"] is None, "a theme is titled by the UI unless it is named"
+    # Every theme arrives named: the UI holds no rule for turning a slug into a title.
+    assert records["sakura"]["label"] == "Sakura"
+    assert records["mono-light"]["label"] == "Mono Light"
+    assert all(record["label"] for record in records.values()), "a theme arrived unnamed"
 
     _status, caps = h.raw("GET", "/api/capabilities")
     assert {record["name"] for record in caps["themes"]} == set(layout.THEMES)
     script = pathlib.Path("src/statsbadge/web/app.js").read_text()
     assert "optgroup" in script, "the picker is still one flat list"
-    assert "record.label || titleCase(record.name)" in script
+    assert "record.label" in script
+    assert "titleCase(record.name)" not in script, "the UI still titles a theme itself"
 
 
 @check
@@ -2449,9 +2685,9 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     sys.path.insert(0, install.app_source_dir())
     import look
 
-    assert set(layout.TINTED) <= set(layout.THEMES)
-    assert set(layout.TINTED.values()) == set(derive.MODES)
-    assert set(layout.BOLD) <= set(layout.TINTED)
+    derived = {name for name, record in themes.THEMES.items() if "derived" in record}
+    assert derived <= set(layout.THEMES)
+    assert {themes.THEMES[name]["derived"]["shape"] for name in derived} == set(derive.SHAPES)
     assert len(derive.accents()) == len(derive.ACCENT_HUES) == 12
     assert len(derive.ACCENT_FAMILIES) == 4
 
@@ -2459,12 +2695,15 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     # the even variant travels to red where the accent has somewhere to travel and stays in its
     # accent's hue where it has not, and the bold one always stays in it.
     checked = 0
-    for theme in layout.TINTED:
+    for theme in sorted(derived):
       for family in derive.ACCENT_FAMILIES:
         for accent in derive.accents(family):
             palette = layout.palette_for(theme, accent)
-            assert derive.contrast(palette["ink"], palette["bg"]) >= derive.INK_RATIO
-            assert derive.contrast(palette["dim"], palette["bg"]) >= derive.DIM_RATIO
+            shape = derive.SHAPES[themes.THEMES[theme]["derived"]["shape"]]
+            assert (derive.contrast(palette["ink"], palette["bg"])
+                    >= shape.get("ink_ratio", derive.INK_RATIO)), (theme, accent)
+            assert (derive.contrast(palette["dim"], palette["bg"])
+                    >= shape.get("dim_ratio", derive.DIM_RATIO)), (theme, accent)
             # The hot end has to be seen against the page, or a gauge goes blank when it
             # matters most - which is the fault the shipped `cyan` ramp has.
             assert derive.contrast(palette["ramp"][-1][1], palette["bg"]) >= 1.9
@@ -2474,7 +2713,8 @@ def test_a_theme_can_be_derived_from_one_accent(h):
             # The badge can build it, as the app does.
             assert look.from_palette("tinted", palette) is not None
             checked += 1
-    assert checked == 192, checked
+    # Six derived themes, four families, twelve accents.
+    assert checked == 288, checked
 
     reds = [a for a in derive.accents() if derive.ramp_for(a) == "mono"]
     assert reds, "every accent claims it can travel to red"
@@ -2508,13 +2748,15 @@ def test_a_theme_can_be_derived_from_one_accent(h):
 
     # The UI offers exactly what the host will accept.
     status, caps = h.raw("GET", "/api/capabilities")
-    assert caps["tinted"] == layout.TINTED
+    assert {r["name"] for r in caps["themes"] if r["derived"]} == derived
     assert set(caps["accents"]) == set(derive.ACCENT_FAMILIES)
     assert caps["accents"]["saturated"] == [list(a) for a in derive.accents("saturated")]
     web = pathlib.Path("src/statsbadge/web")
     page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
-    assert "data-tint" in page and "<figure" in page, "no picker or preview in the UI"
-    assert "caps.tinted" in script and "config.tint" in script
+    assert "data-tint" in page and 'id="screens"' in page, "no picker or preview in the UI"
+    # Which themes take an accent is the host's answer, and the UI holds no list.
+    assert "record.derived" in script and "config.tint" in script
+    assert "caps.tinted" not in script, "the UI still keeps a list of tinted themes"
     # Clicking along the swatches starts several previews; the last click has to win rather
     # than the last reply, or the panel shows a colour nobody chose.
     assert "previewWanted" in script, "a stale preview reply can win"
@@ -2761,7 +3003,7 @@ def test_the_settings_are_grouped_by_what_they_do(_h):
 
 def themes_bg(name):
     from statsbadge import themes
-    return themes.PALETTES[name]["bg"]
+    return themes.written()[name]["bg"]
 
 
 @check
@@ -2769,14 +3011,20 @@ def test_the_ui_takes_its_colours_from_the_host(_h):
     """The UI asks for the palette of whatever theme is selected, so there is nowhere for
     a copy to live and drift from the badge's tables."""
     web = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text()
     assert "THEME_COLOURS" not in web, "the UI still carries a palette table"
     assert "/api/theme?" in web, "the UI does not ask the host for a palette"
-    # The gauge's gradient is built where the stops are: a stop list handed to a gradient
-    # through a custom property and then given positions parses as invalid, and the
-    # whole gauge vanished.
-    assert "paintDial" in web, "the preview does not paint the gauge"
-    assert "--pv-ramp" not in web + pathlib.Path("src/statsbadge/web/app.css").read_text()
-    assert '"palettes"' in pathlib.Path("src/statsbadge/server.py").read_text()
+    # Four pages at 320x240, drawn from what the host sent.
+    assert "drawDial" in web and "drawGraph" in web, "the preview does not draw the pages"
+    assert "--pv-" not in web + sheet, "the preview still keeps colours in the sheet"
+    # The rule for a graph's second series is the badge's, resolved on the host and sent.
+    assert "shown.series" in web, "the UI picks the second series itself"
+    assert '"series"' in pathlib.Path("src/statsbadge/server.py").read_text()
+    # The UI's accent and ramp are generated from the dark theme, not typed in.
+    assert "--ramp-0:" not in sheet, "the sheet still declares the ramp by hand"
+    assert "--accent:" not in sheet, "the sheet still declares the accent by hand"
+    assert "var(--ramp-0)" in sheet, "the sheet stopped using the generated tokens"
+    assert "/tokens.css" in pathlib.Path("src/statsbadge/web/index.html").read_text()
 
 
 @check
@@ -3243,7 +3491,7 @@ def test_sparkline_rows_can_be_told_apart(_h):
     # nowhere to go on a background that is already near white.
     from statsbadge import themes
 
-    pale = look.from_palette("light", themes.PALETTES["light"])
+    pale = look.from_palette("light", themes.written()["light"])
     assert pale.pale and not dark.pale
     assert pale.stripe.r < pale.bg.r and dark.stripe.r > dark.bg.r
 

@@ -124,16 +124,17 @@ STRIPE = 10
 class Theme:
     """A palette's colours, plus the ramp a gauge fills with as it climbs.
 
-    `accent_b` is a second colour used sparingly, a graph's second series most of all;
+    `accent_b` is a second colour used sparingly - the chrome, and a graph's second series;
     it falls back to the accent. `stripe` is derived rather than named in a palette, so
-    a palette cannot state it wrong.
+    a palette cannot state it wrong. A case light's brightness is not here: it is not a
+    colour, and it follows the backlight.
 
     Built from the palette data a layout carries, and held as `color` objects: one built
     per pen set is 36.5us against 18.4 for one already made.
     """
 
     def __init__(self, name, bg, panel, ink, dim, accent, ramp, grid=None,
-                 case=0.1, accent_b=None, image=None):
+                 accent_b=None, image=None):
         self.name = name
         self.bg = color.rgb(*bg)
         self.panel = color.rgb(*panel)
@@ -145,9 +146,6 @@ class Theme:
         # leg olive, 39 counts adrift at 0.64 of the ramp.
         self.ramp = tuple((pos, color.rgb(*rgb).to_oklch()) for pos, rgb in ramp)
         self.grid = color.rgb(*grid) if grid else self.dim
-        # The four case lights are single-channel PWM, one brightness fraction each.
-        # badge.caselights takes one value for all four or four values.
-        self.case = case
         self.pale = sum(bg) >= PALE_SUM
         # `lighten` has nowhere to go on a page that is already near white.
         self.stripe = self.bg.darken(STRIPE) if self.pale else self.bg.lighten(STRIPE)
@@ -173,8 +171,8 @@ class Theme:
 
 
 # Until the first layout lands, and for a layout that carries no palette. Every other
-# theme is data on the host, in statsbadge/themes.py, and travels in the layout. This one
-# is that file's default copied out, since MicroPython cannot import it, and a check holds
+# theme is data on the host, in statsbadge/themes.toml, and travels in the layout. This one
+# is that file's default copied out, since MicroPython cannot read it, and a check holds
 # the two the same.
 THEMES = {
     "dark": Theme(
@@ -183,7 +181,7 @@ THEMES = {
         accent=(56, 232, 209),
         ramp=((0.0, (56, 232, 209)), (0.45, (126, 211, 117)),
               (0.72, (236, 159, 7)), (1.0, (215, 25, 8))),
-        grid=(44, 51, 70), case=0.22,
+        grid=(44, 51, 70),
     ),
 }
 
@@ -219,7 +217,7 @@ def from_palette(name, palette):
         # too old to send these leaves a theme that draws no pictures, and still builds.
         image = {len(greys): [tuple(int(v) for v in rgb[:3]) for rgb in greys]
                  for greys in (palette.get("image") or {}).values()}
-        return Theme(name, ramp=ramp, case=float(palette.get("case", 0.1)),
+        return Theme(name, ramp=ramp,
                      grid=tuple(int(v) for v in grid[:3]) if grid else None,
                      accent_b=tuple(int(v) for v in second[:3]) if second else None,
                      image=image, **colours)

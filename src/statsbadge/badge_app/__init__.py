@@ -109,7 +109,7 @@ SETUP_AFTER = 1
 # the level it already shows and only restarts the ramp.
 BACKLIGHT_STEP = 1.0 / 255
 
-# The share of the theme's case light level a reading of zero still gets.
+# The share of the backlight's level a reading of zero still gets.
 CASELIGHT_FLOOR = 0.15
 
 
@@ -582,22 +582,31 @@ class App:
         if self.page_index >= len(self.page_list):
             self.page_index = 0
 
-    def apply_backlight(self, ms=BACKLIGHT_MS, shape=None):
-        """The configured brightness, scaled by the room if the setting says so.
+    def wanted_brightness(self):
+        """The brightness the panel should be showing, 0-1.
 
         The scale is a floor plus what the sensor reads, so `brightness` stays the ceiling
         and ambient only ever takes some of it away. `self.dimmed`, set by the brightness
         button, wins over both.
-
-        Eased, except at startup: ramping to the first level from full brightness is a
-        flash in a dark room.
         """
         wanted = self.dimmed
         if wanted is None:
             wanted = float((self.layout or {}).get("brightness", 0.8))
         if (self.layout or {}).get("auto_brightness") and self.ambient is not None:
             wanted *= look.LIGHT_FLOOR + (1.0 - look.LIGHT_FLOOR) * self.ambient
-        backlight_to(wanted, ms, shape)
+        return wanted
+
+    def apply_backlight(self, ms=BACKLIGHT_MS, shape=None):
+        """Head for that brightness, and take the case lights with it.
+
+        Eased, except at startup: ramping to the first level from full brightness is a
+        flash in a dark room.
+
+        The lights follow here and not only on a new layout. A button press would else
+        dim the panel and leave four lights at the old level.
+        """
+        backlight_to(self.wanted_brightness(), ms, shape)
+        self.apply_caselights()
 
     def read_light(self):
         """Follow the room, slowly. Returns True when the panel needs setting again.
@@ -626,17 +635,21 @@ class App:
         return True
 
     def apply_caselights(self):
-        """Off, the theme's level, or a level that follows a reading.
+        """Off, the backlight's level, or a level that follows a reading.
 
-        A reading maps onto CASELIGHT_FLOOR of the theme's level up to all of it, so an
-        idle machine still glows: dark is what the setting being off looks like, and the
-        two should not be the same. A field the host is not sending sits at the floor.
+        A case light is one brightness and not a colour, so a theme has nothing to say
+        about it. They track the panel: lights burning at full while the screen dims for a
+        dark room are the wrong way round.
+
+        A reading maps onto CASELIGHT_FLOOR of that level up to all of it, so an idle
+        machine still glows. Dark is what the setting being off looks like. A field the
+        host is not sending sits at the floor.
         """
         setting = (self.layout or {}).get("caselights", True)
         if not setting:
             badge.caselights(0.0)
             return
-        level = self.theme.case
+        level = self.wanted_brightness()
         if isinstance(setting, str):
             fraction = pages_module.fraction_of(
                 setting, pages_module.value_of(self.frame, setting)) or 0.0

@@ -33,7 +33,7 @@ def palettes():
     """Both palettes, each with its ramp flattened to `STEPS` hex strings."""
     built = {}
     for mode in MODES:
-        palette = themes.PALETTES[mode]
+        palette = themes.written()[mode]
         built[mode] = {
             "bg": hex_of(palette["bg"]),
             "panel": hex_of(palette["panel"]),

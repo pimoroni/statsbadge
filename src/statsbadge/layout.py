@@ -67,62 +67,13 @@ GAUGE_FILLS = ("solid", "ramp")
 # the accent again.
 ACCENT_B_RULES = derive.ACCENT_B_RULES
 
-# The names, from the palettes themselves; a theme is data. The tinted pair are derived
-# from the accent in `tint`, and storing the choice carries a change in the derivation.
-TINTED = {"tinted-dark": "dark", "tinted-light": "light",
-          "tinted-bold-dark": "dark", "tinted-bold-light": "light"}
-# Which take each hue as far as sRGB allows and keep the ramp in it.
-BOLD = ("tinted-bold-dark", "tinted-bold-light")
-THEMES = tuple(themes.PALETTES) + tuple(TINTED)
+# The names, from the file itself; a theme is data. Which of them take an accent, what each
+# is called and which half of the picker it belongs in are all answered there too.
+THEMES = tuple(themes.THEMES)
 
-# Palettes that are now the derived pair with an accent. `red` and tinted bold dark at
-# the same hue differ by 8 counts in the accent and nowhere else.
-#
-# A stored name still resolves, so a badge showing one carries on showing it.
-THEME_ALIASES = {
-    "red": ("tinted-bold-dark", 30.0),
-    "green": ("tinted-bold-dark", 150.0),
-    "cyan": ("tinted-bold-dark", 210.0),
-    "amber": ("tinted-bold-dark", 60.0),
-    "blueprint": ("tinted-bold-dark", 240.0),
-}
-
-
-def resolve_theme(theme, tint):
-    """A theme name and accent, with a retired name mapped onto what replaced it.
-
-    The accent comes from the saturated family, where each of those palettes had one.
-    Measured, all five sat within 0.003 of their hue's chroma limit.
-    """
-    aliased = THEME_ALIASES.get(theme)
-    if not aliased:
-        return theme, tint
-    name, hue = aliased
-    at = derive.ACCENT_HUES.index(int(hue))
-    return name, list(derive.accents("saturated")[at])
-
-# What a picker calls a theme, where that is not the name title cased.
-THEME_LABELS = {"dark": "Default Dark", "light": "Default Light"}
-# Where a page stops being dark and starts being light, as OKLCH lightness of the background.
-PALE_FROM = 0.5
-
-
-def theme_records():
-    """Every theme with the label and the mode a picker needs.
-
-    The mode is read off the palette and not named in it. A background is either pale or
-    dark, and a theme that had to declare which could declare it wrong.
-    """
-    records = []
-    for name in THEMES:
-        palette = palette_for(name, DEFAULT_CONFIG["tint"])
-        lightness = derive.oklch(palette["bg"])[0]
-        records.append({
-            "name": name,
-            "label": THEME_LABELS.get(name),
-            "mode": "light" if lightness >= PALE_FROM else "dark",
-        })
-    return records
+# Retired names, resolved once at load. Nothing downstream sees one.
+resolve_theme = themes.resolve
+theme_records = themes.records
 
 # Bindings the badge answers itself and never sends here. On this side only so the UI can
 # offer them alongside the host's commands.
@@ -406,13 +357,44 @@ def tint_accent(incoming, current):
 
 
 def palette_for(theme, tint, second="same"):
-    """The palette a theme draws with: derived for the tinted four, looked up for the rest."""
+    """The palette a theme draws with: derived from the accent, or looked up."""
     theme, tint = resolve_theme(theme, tint)
-    if theme in TINTED:
-        return derive.palette(tuple(tint), TINTED[theme], theme in BOLD, second)
-    stored = themes.PALETTES.get(theme, themes.PALETTES[themes.DEFAULT])
-    # Derived from the accent's hue, as `stripe` is. Copied, since PALETTES is shared.
-    return {**stored, "image": derive.image_ramps(stored["accent"])}
+    return themes.palette(theme, tint, second)
+
+
+# The two graph series' alphas, and how far from the page a series has to land. Both are
+# badge_app/draw.py's, and a check holds them the same.
+SERIES_ALPHA = (200, 150)
+SERIES_FLOOR = 20
+# Where a background stops being dark, summed over the three channels, as look.Theme reads it.
+PALE_SUM = 384
+
+
+def series_colours(palette):
+    """What a graph draws its two series in.
+
+    Worked out here for the config UI's preview, which then carries no rule of its own.
+    `draw._series_colour` is where the behaviour lives; a check holds the two together.
+    """
+    background = palette["bg"]
+    pale = sum(background) >= PALE_SUM
+
+    def over(pen, alpha):
+        return tuple(round(p * alpha / 255.0 + b * (1 - alpha / 255.0))
+                     for p, b in zip(pen, background, strict=True))
+
+    alpha = SERIES_ALPHA[0] if pale else SERIES_ALPHA[1]
+    accent = palette["accent"]
+    second = palette.get("accent_b") or accent
+    if tuple(second) != tuple(accent) and derive.apart(background, over(second, alpha)) >= SERIES_FLOOR:
+        return [list(accent), list(second)]
+    cold, hot = palette["ramp"][0][1], palette["ramp"][-1][1]
+    order = ((cold, hot) if derive.apart(accent, cold) >= derive.apart(accent, hot)
+             else (hot, cold))
+    for pen in order:
+        if derive.apart(background, over(pen, alpha)) >= SERIES_FLOOR:
+            return [list(accent), list(pen)]
+    return [list(accent), list(palette["dim"])]
 
 
 def validate(incoming, extra_kinds=(), settings_schema=None,

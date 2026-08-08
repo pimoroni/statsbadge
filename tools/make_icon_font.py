@@ -439,6 +439,26 @@ def default_output(extension):
     return found[0] / "icons.af"
 
 
+def write_web(font, entries, out):
+    """The same corpus as a woff2, for the config UI.
+
+    The preview draws the badge's pages, so it draws the badge's symbols. Built from the
+    corpus and source font the .af came from, so a second hand-kept list cannot drift.
+
+    Needs fonttools, which the fonts dependency group brings in for the .af anyway.
+    """
+    try:
+        from fontTools import subset
+    except ImportError:
+        raise SystemExit("--web needs fonttools: uv sync --group fonts") from None
+    points = ",".join(f"U+{codepoint:04X}" for _name, codepoint, _remap in entries)
+    subset.main([str(font), f"--unicodes={points}", "--flavor=woff2",
+                 "--layout-features=", "--no-hinting", "--desubroutinize",
+                 f"--output-file={out}"])
+    size = pathlib.Path(out).stat().st_size
+    print(f"wrote {out}, {size} bytes for {len(entries)} icons")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Build an .af icon font for a vendored extension.")
@@ -463,6 +483,9 @@ def main():
     parser.add_argument("--optical-size", type=int, help="variable optical size axis")
     parser.add_argument("--list", action="store_true",
                         help="show what would be built, and write nothing")
+    parser.add_argument("--web", metavar="OUT.woff2",
+                        help="also subset the same corpus to a woff2, which the config "
+                             "UI's preview draws the badge's symbols with")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
@@ -506,6 +529,8 @@ def main():
     out.write_bytes(blob)
     print(f"wrote {out}, {len(blob)} bytes for {len(glyphs)} icons "
           f"({len(blob) // len(glyphs)} bytes each)")
+    if args.web:
+        write_web(font, entries, args.web)
     return 0
 
 

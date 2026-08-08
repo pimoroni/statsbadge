@@ -41,6 +41,9 @@ TYPES = {
     ".svg": "image/svg+xml",
     ".png": "image/png",
     ".json": "application/json",
+    # The faces the badge draws with, so the preview matches the device.
+    ".ttf": "font/ttf",
+    ".woff2": "font/woff2",
 }
 
 
@@ -99,24 +102,20 @@ class Service:
         # With each one's heading and label, so the picker can group them without knowing which
         # is which.
         caps["commands"] = commands.records()
-        # With each one's label and mode, so a picker can group the dark ones.
+        # With each one's label, mode and whether it takes an accent, so the picker groups
+        # them and offers the swatches without holding a list.
         caps["themes"] = layout.theme_records()
         # What a button can be bound to that the badge does itself, labelled: the UI offers
         # these in the same list as the commands.
         caps["local_actions"] = [{"action": action, "label": label}
                                  for action, label in layout.LOCAL_ACTIONS]
         # The colours too, so the UI's swatches cannot drift from the badge's tables.
-        # What a tinted theme can be built from, so the UI offers exactly what will work.
-        caps["tinted"] = dict(layout.TINTED)
-        caps["bold"] = list(layout.BOLD)
         # Four families of twelve, the same for every page. The picker shows them as tabs.
         caps["accents"] = {family: [list(accent) for accent in derive.accents(family)]
                            for family in derive.ACCENT_FAMILIES}
         caps["accent_family"] = derive.DEFAULT_FAMILY
-        caps["palettes"] = {name: {"bg": palette["bg"], "accent": palette["accent"],
-                                   "ink": palette["ink"],
-                                   "ramp": [rgb for _pos, rgb in palette["ramp"]]}
-                            for name, palette in themes.PALETTES.items()}
+        # How a second accent can be picked, so the HTML holds no copy of the list.
+        caps["accent_b_rules"] = list(layout.ACCENT_B_RULES)
         caps["kinds"] = list(layout.KINDS)
         # Every discovered extension, not only those with something to be told: one that failed
         # to import is reported here instead of showing up as a page that never draws.
@@ -240,6 +239,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._fail(403, "config API is loopback only")
                 return self._config_api(method, path, body)
             if method == "GET":
+                if path == "/tokens.css":
+                    return self._tokens()
                 return self._static(path)
             return self._fail(405, "method not allowed")
         except auth.AuthError as exc:
@@ -375,10 +376,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # and not in the browser, so the preview cannot drift from what reaches the badge.
         if path == "/api/theme" and method == "GET":
             query = self._query()
-            theme = query.get("theme") or themes.DEFAULT
+            # A retired name resolves here as it does on the way in, so a preview of one
+            # shows what it now draws with rather than refusing it.
+            theme, aliased = layout.resolve_theme(query.get("theme") or themes.DEFAULT, None)
             if theme not in layout.THEMES:
                 return self._fail(400, f"unknown theme: {theme!r}")
-            tint = layout.DEFAULT_CONFIG["tint"]
+            tint = aliased or layout.DEFAULT_CONFIG["tint"]
             if query.get("accent"):
                 try:
                     wanted = [int(part) for part in query["accent"].split(",")[:3]]
@@ -388,8 +391,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             second = query.get("second") or "same"
             if second not in layout.ACCENT_B_RULES:
                 return self._fail(400, f"unknown second accent rule: {second!r}")
+            palette = layout.palette_for(theme, tint, second)
+            # The two graph series resolved here too, by the badge's rule, so the preview
+            # draws them without the browser carrying it.
             return self._json(200, {"theme": theme, "tint": tint, "second": second,
-                                    "palette": layout.palette_for(theme, tint, second)})
+                                    "palette": palette,
+                                    "series": layout.series_colours(palette)})
 
         # One layout per badge, and a default for a badge with nothing saved yet.
         # `?badge=` says whose; without it, the default.
@@ -468,6 +475,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self._fail(404, "no such endpoint")
 
     # -- static -------------------------------------------------------------
+
+    def _tokens(self):
+        """The UI's accent and ramp, generated from the dark theme.
+
+        The stylesheet used to carry these as hex typed in by hand, where a palette moving
+        left them stale. The greys around them belong to the UI and stay there.
+        """
+        dark = themes.written()[themes.DEFAULT]
+
+        def hexed(colour):
+            red, green, blue = colour
+            return f"#{red:02x}{green:02x}{blue:02x}"
+
+        lines = [":root {", f"  --accent: {hexed(dark['accent'])};"]
+        for at, colour in enumerate(rgb for _pos, rgb in dark["ramp"]):
+            lines.append(f"  --ramp-{at}: {hexed(colour)};")
+        lines.append("}")
+        return self._send(200, ("\n".join(lines) + "\n").encode(), TYPES[".css"])
 
     def _static(self, path):
         rel = "index.html" if path in ("/", "") else path.lstrip("/")

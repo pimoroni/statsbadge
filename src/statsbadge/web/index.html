@@ -6,6 +6,7 @@
 <title>statsbadge</title>
 <link rel="icon" href="/icon.png" sizes="64x64">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -98,28 +99,12 @@
       <label for="theme">Theme</label>
       <select id="theme"></select>
 
-      <figure aria-hidden="true">
-        <header>CPU <small>host</small></header>
-        <div>
-          <strong>63.5</strong>
-          <dl>
-            <dt>TEMP</dt><dd>71.0&deg;C</dd>
-            <dt>MEM</dt><dd>58.0%</dd>
-            <dt>DISK</dt><dd>74.2%</dd>
-          </dl>
-        </div>
-        <footer><span></span><span></span><span></span><span></span><span></span></footer>
-      </figure>
+      <div class="screens" id="screens" aria-hidden="true"></div>
 
       <div class="accents" data-tint hidden></div>
       <label for="accentb" data-tint hidden>Second accent</label>
       <span data-tint hidden>
-        <select id="accentb">
-          <option value="same">Same</option>
-          <option value="complementary">Complementary</option>
-          <option value="triadic">Triadic</option>
-          <option value="contrasting">Contrasting</option>
-        </select>
+        <select id="accentb"></select>
         <i id="accentbchip"></i>
       </span>
     </section>

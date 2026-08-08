@@ -692,12 +692,12 @@ function settingRow(stored, setting, options) {
 function renderLook() {
   const theme = $("theme")
   // Grouped by mode: which of them suit a lit room is the first thing anybody is choosing
-  // between, and a flat list of twenty had the pairs scattered through it.
+  // between, and a flat list of twenty-two had the pairs scattered through it.
   theme.replaceChildren(...[["dark", "Dark"], ["light", "Light"]].map(([mode, heading]) =>
     el("optgroup", { label: heading }, caps.themes
       .filter((entry) => entry.mode === mode)
       .map((record) => el("option", { value: record.name, selected: record.name === config.theme,
-                                      textContent: record.label || titleCase(record.name) })))))
+                                      textContent: record.label })))))
   theme.onchange = () => { config.theme = theme.value; markDirty(); renderTint() }
   renderTint()
 
@@ -835,18 +835,23 @@ function familyOf(accent) {
 }
 
 function renderTint() {
-  const tinted = !!(caps.tinted || {})[config.theme]
-  // How the second accent is picked, which only a derived palette works out: a written-down
-  // one either names a second accent or has none.
-  for (const node of all("[data-tint]")) node.hidden = !tinted
+  // Which themes take an accent is the host's answer, not a list held here: a derived theme
+  // is built from the one chosen, and a written palette is fixed as drawn.
+  const record = (caps.themes || []).find((entry) => entry.name === config.theme)
+  const derived = Boolean(record && record.derived)
+  for (const node of all("[data-tint]")) node.hidden = !derived
 
   const second = $("accentb")
+  if (!second.options.length) {
+    second.replaceChildren(...(caps.accent_b_rules || []).map((rule) =>
+      el("option", { value: rule, textContent: titleCase(rule) })))
+  }
   second.value = config.accent_b || "same"
   second.onchange = () => { config.accent_b = second.value; markDirty(); renderTint() }
 
   const accents = pick("div[data-tint]")
   accents.replaceChildren()
-  if (tinted) {
+  if (derived) {
     if (!family) family = familyOf(config.tint)
     accents.append(familyTabs(), swatches())
   }
@@ -876,15 +881,225 @@ function swatches() {
     }))
 }
 
-// Where each of the preview's three bars sits on the ramp, in row order. The readings printed
-// beside them are in the HTML.
-const PREVIEW_BARS = [0.62, 0.46, 0.78]
+// -- the preview -----------------------------------------------------------
+//
+// Four pages at the badge's own 320x240, drawn in the badge's own faces. The colours and the
+// two graph series come from /api/theme: this file holds no palette and no rule for picking
+// one, only where a page puts things.
 
+const W = 320
+const H = 240
 const rgb = (parts) => `rgb(${parts.join(", ")})`
+const face = (weight, size) => `${weight} ${size}px Lexend, system-ui, sans-serif`
+
+// ci/badge-icons.txt, third column: the letter badge-side code draws, and what it means.
+// GROUP_ICONS and FIELD_ICONS in badge_app/pages.py address them by the same letters.
+const ICONS = {
+  c: 0xe322, g: 0xe30d, m: 0xf7a3, d: 0xe1db, n: 0xeb2f, p: 0xea0b, f: 0xf168, y: 0xe31e,
+  l: 0xe9e4, t: 0xf076, s: 0xe1b8, r: 0xe677, u: 0xf09b, o: 0xf090, b: 0xe1a5, e: 0xeb58,
+  a: 0xeff2, h: 0xefd6,
+}
+
+function chrome(ctx, palette, title, current) {
+  ctx.fillStyle = rgb(palette.bg)
+  ctx.fillRect(0, 0, W, H)
+
+  ctx.textBaseline = "alphabetic"
+  ctx.textAlign = "left"
+  ctx.fillStyle = rgb(palette.ink)
+  ctx.font = face(400, 21)
+  ctx.fillText(title, 10, 26)
+
+  ctx.textAlign = "right"
+  ctx.fillStyle = rgb(palette.dim)
+  ctx.font = face(400, 10)
+  ctx.fillText("workshop-pc", W - 9, 24)
+  ctx.textAlign = "left"
+
+  // The chrome takes the second accent, leaving the accent for readings.
+  const chromePen = rgb(palette.accent_b || palette.accent)
+  ctx.fillStyle = chromePen
+  ctx.fillRect(0, 32, W, 2)
+
+  const gap = 11
+  const from = W / 2 - (7 * gap) / 2
+  for (let i = 0; i < 8; i += 1) {
+    ctx.beginPath()
+    ctx.arc(from + i * gap, H - 12, i === current ? 3 : 2.2, 0, Math.PI * 2)
+    ctx.fillStyle = i === current ? chromePen : rgb(palette.grid)
+    ctx.fill()
+  }
+}
+
+function drawDial(ctx, palette) {
+  chrome(ctx, palette, "CPU", 0)
+  const cx = 88
+  const cy = 130
+  const radius = 53
+  const from = (135 * Math.PI) / 180
+  const sweep = (270 * Math.PI) / 180
+  const reading = 0.635
+
+  ctx.lineCap = "butt"
+  ctx.lineWidth = 15
+  ctx.beginPath()
+  ctx.arc(cx, cy, radius, from, from + sweep)
+  ctx.strokeStyle = rgb(palette.grid)
+  ctx.stroke()
+
+  if (config.gauge_fill === "ramp") {
+    const steps = 96
+    for (let i = 0; i < steps; i += 1) {
+      ctx.beginPath()
+      ctx.arc(cx, cy, radius, from + (sweep * reading * i) / steps,
+              from + (sweep * reading * (i + 1)) / steps + 0.006)
+      ctx.strokeStyle = rgb(rampAt(palette.ramp, (i / steps) * reading))
+      ctx.stroke()
+    }
+  } else {
+    ctx.beginPath()
+    ctx.arc(cx, cy, radius, from, from + sweep * reading)
+    ctx.strokeStyle = rgb(palette.accent)
+    ctx.stroke()
+  }
+
+  ctx.textAlign = "center"
+  ctx.fillStyle = rgb(palette.ink)
+  ctx.font = face(400, 34)
+  ctx.fillText("63.5", cx, cy + 10)
+  ctx.fillStyle = rgb(palette.dim)
+  ctx.font = face(400, 11)
+  ctx.fillText("%", cx, cy + 27)
+  ctx.textAlign = "left"
+
+  const rows = [["TEMP", "71.0\u00b0C"], ["CLOCK", "4200MHz"], ["PROCS", "512"]]
+  rows.forEach(([label, value], index) => {
+    const y = 60 + index * 47
+    ctx.fillStyle = rgb(palette.dim)
+    ctx.font = face(500, 9)
+    ctx.fillText(label, 186, y)
+    ctx.fillStyle = rgb(palette.ink)
+    ctx.font = face(400, 17)
+    ctx.fillText(value, 186, y + 20)
+    ctx.fillStyle = rgb(palette.grid)
+    ctx.fillRect(186, y + 27, 120, 1)
+  })
+}
+
+const CORES = [0.31, 0.882, 0.125, 0.741, 0.2, 0.955, 0.602, 0.05]
+
+function drawBars(ctx, palette) {
+  chrome(ctx, palette, "CORES", 1)
+  CORES.forEach((value, index) => {
+    const y = 42 + index * 22
+    if (index % 2 === 0) {
+      ctx.fillStyle = rgb(palette.panel)
+      ctx.fillRect(0, y, W, 22)
+    }
+    ctx.fillStyle = rgb(palette.dim)
+    ctx.font = face(400, 10)
+    ctx.fillText(String(index), 9, y + 15)
+    ctx.fillStyle = rgb(palette.grid)
+    ctx.fillRect(26, y + 6, 240, 11)
+    ctx.fillStyle = rgb(rampAt(palette.ramp, value))
+    ctx.fillRect(26, y + 6, 240 * value, 11)
+    ctx.textAlign = "right"
+    ctx.fillStyle = rgb(palette.ink)
+    ctx.font = face(400, 11)
+    ctx.fillText(`${(value * 100).toFixed(1)}%`, W - 8, y + 15)
+    ctx.textAlign = "left"
+  })
+}
+
+const DOWN = [0.12, 0.2, 0.55, 0.86, 0.7, 0.52, 0.62, 0.44, 0.2, 0.1, 0.08, 0.3, 0.66, 0.8,
+              0.62, 0.5, 0.72, 0.9, 0.55, 0.2, 0.12, 0.1, 0.26, 0.42, 0.3, 0.18, 0.12]
+const UP = [0.05, 0.08, 0.14, 0.2, 0.16, 0.12, 0.18, 0.14, 0.08, 0.05, 0.04, 0.1, 0.16, 0.2,
+            0.14, 0.1, 0.16, 0.22, 0.12, 0.06, 0.05, 0.04, 0.09, 0.13, 0.1, 0.07, 0.05]
+// draw.SERIES_ALPHA: on a pale page a translucent area washes out, so both go solid.
+const SERIES_ALPHA = [200, 150]
+const PALE_SUM = 384
+
+function drawGraph(ctx, palette, series) {
+  chrome(ctx, palette, "NETWORK", 4)
+  const left = 32
+  const right = W - 8
+  const top = 50
+  const bottom = 194
+  const pale = palette.bg[0] + palette.bg[1] + palette.bg[2] >= PALE_SUM
+
+  ctx.fillStyle = rgb(palette.grid)
+  for (let i = 0; i <= 3; i += 1) {
+    ctx.fillRect(left, top + ((bottom - top) / 3) * i, right - left, 1)
+  }
+  ctx.fillStyle = rgb(palette.dim)
+  ctx.font = face(400, 9)
+  ctx.fillText("9.8MB/s", 4, top + 3)
+  ctx.fillText("0", 4, bottom + 3)
+
+  const plot = (points, index) => {
+    ctx.globalAlpha = (index === 0 || pale ? SERIES_ALPHA[0] : SERIES_ALPHA[1]) / 255
+    ctx.beginPath()
+    ctx.moveTo(left, bottom)
+    points.forEach((value, at) => {
+      ctx.lineTo(left + ((right - left) * at) / (points.length - 1),
+                 bottom - (bottom - top) * value)
+    })
+    ctx.lineTo(right, bottom)
+    ctx.closePath()
+    ctx.fillStyle = rgb(series[index])
+    ctx.fill()
+    ctx.globalAlpha = 1
+  }
+  plot(DOWN, 0)
+  plot(UP, 1)
+
+  ;["DOWN", "UP"].forEach((label, index) => {
+    const x = 44 + index * 104
+    ctx.fillStyle = rgb(series[index])
+    ctx.fillRect(x, 206, 13, 9)
+    ctx.fillStyle = rgb(palette.dim)
+    ctx.font = face(500, 10)
+    ctx.fillText(label, x + 19, 215)
+  })
+}
+
+// FIELD_ICONS for disk: the arrows invert between a link and a disk, since storage is drawn
+// against the disk and a write goes down into it.
+const TILES = [["FULL", "74.2%", 0.742, "l"], ["READ", "50.0MB/s", 0.5, "u"],
+               ["WRITE", "8.0MB/s", 0.08, "o"], ["USED", "687.3GB", 0.62, "a"]]
+
+function drawGrid(ctx, palette) {
+  chrome(ctx, palette, "DISK", 5)
+  const width = 152
+  const height = 84
+  TILES.forEach(([label, value, part, symbol], index) => {
+    const x = 6 + (index % 2) * (width + 4)
+    const y = 42 + Math.floor(index / 2) * (height + 4)
+    ctx.fillStyle = rgb(palette.panel)
+    ctx.fillRect(x, y, width, height)
+    ctx.fillStyle = rgb(palette.dim)
+    ctx.font = face(500, 9)
+    ctx.fillText(label, x + 10, y + 19)
+    ctx.textAlign = "right"
+    ctx.font = '16px "Badge Icons"'
+    ctx.fillText(String.fromCodePoint(ICONS[symbol]), x + width - 9, y + 21)
+    ctx.textAlign = "left"
+    ctx.fillStyle = rgb(palette.ink)
+    ctx.font = face(400, 22)
+    ctx.fillText(value, x + 10, y + 51)
+    ctx.fillStyle = rgb(palette.grid)
+    ctx.fillRect(x + 10, y + height - 13, width - 20, 3)
+    ctx.fillStyle = rgb(rampAt(palette.ramp, part))
+    ctx.fillRect(x + 10, y + height - 13, (width - 20) * part, 3)
+  })
+}
+
+const SCREENS = [drawDial, drawBars, drawGraph, drawGrid]
 
 async function preview() {
   const query = new URLSearchParams({ theme: config.theme || "dark" })
-  if ((caps.tinted || {})[config.theme]) {
+  const record = (caps.themes || []).find((entry) => entry.name === config.theme)
+  if (record && record.derived) {
     query.set("accent", (config.tint || []).join(","))
     query.set("second", config.accent_b || "same")
   }
@@ -898,68 +1113,22 @@ async function preview() {
   if (mine !== previewWanted) return
 
   const palette = shown.palette
-  const node = pick("main figure")
-  const set = (name, parts) => node.style.setProperty(name, rgb(parts))
-  set("--pv-bg", palette.bg)
-  set("--pv-panel", palette.panel)
-  set("--pv-ink", palette.ink)
-  set("--pv-dim", palette.dim)
-  // The header's rule and the current pip, which on the badge take the second accent.
-  set("--pv-accent", palette.accent_b || palette.accent)
-  set("--pv-grid", palette.grid)
-  paintDial(node.querySelector("strong"), palette, config.gauge_fill)
   $("accentbchip").style.background = rgb(palette.accent_b || palette.accent)
-  node.querySelectorAll("dd").forEach((bar, index) => {
-    const at = PREVIEW_BARS[index]
-    bar.style.setProperty("--at", `${at * 100}%`)
-    bar.style.setProperty("--bar", rgb(rampAt(palette.ramp, at)))
-  })
-}
 
-// The gauge the preview draws: a 270 degree sweep from the lower left, filled to the reading
-// the panel shows, in the ramp's own colours.
-const PV_SWEEP = 0.75                   // of a whole turn, the gap centred on the bottom
-const PV_READING = 0.635                // the reading printed inside it
-
-// How faint the part past the reading is when the full ramp is shown, matching
-// draw.TRACK_ALPHA on the badge. A gradient there is drawn over the page and not
-// composited, so the colours are mixed towards it here.
-const PV_TRACK_ALPHA = 32 / 255
-
-function paintDial(dial, palette, fill) {
-  if (!dial) return
-  const faint = (parts) => rgb(parts.map((part, index) =>
-    Math.round(part * PV_TRACK_ALPHA + palette.bg[index] * (1 - PV_TRACK_ALPHA))))
-  const bg = rgb(palette.bg)
-  const filled = PV_SWEEP * PV_READING
-  const at = (part) => `${(part * 100).toFixed(1)}%`
-  const reached = rampAt(palette.ramp, PV_READING)
-
-  const stops = []
-  if (fill === "ramp") {
-    // The full ramp laid round the arc, as the conical gradient does it. A colour sits at
-    // its place on the ramp, so the sweep ends at the reading's colour and the rest of the
-    // ramp shows faintly beyond it.
-    for (const [position, parts] of palette.ramp) {
-      if (position < PV_READING) stops.push(`${rgb(parts)} ${at(position * PV_SWEEP)}`)
-    }
-    stops.push(`${rgb(reached)} ${at(filled)}`)
-    stops.push(`${rgb(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`)
-    stops.push(`${faint(reached)} ${at(filled + 0.004)}`)
-    for (const [position, parts] of palette.ramp) {
-      if (position > PV_READING) stops.push(`${faint(parts)} ${at(position * PV_SWEEP)}`)
-    }
-  } else {
-    stops.push(`${rgb(reached)} ${at(filled)}`)
-    stops.push(`${rgb(palette.ink)} ${at(filled)} ${at(filled + 0.004)}`)
-    stops.push(`${rgb(palette.grid)} ${at(filled + 0.004)}`)
+  const holder = $("screens")
+  if (holder.childElementCount !== SCREENS.length) {
+    holder.replaceChildren(...SCREENS.map(() => {
+      const canvas = el("canvas")
+      canvas.width = W * 2                 // drawn at 2x and shown at 320 wide, so it is crisp
+      canvas.height = H * 2
+      return canvas
+    }))
   }
-  stops.push(`${rgb(palette.grid)} ${at(PV_SWEEP)}`, `${bg} ${at(PV_SWEEP)}`)
-  // Built here and not in the sheet: a stop list cannot be handed to a gradient through a
-  // custom property and then given positions: the declaration parses as invalid and the
-  // gauge disappears entirely.
-  dial.style.background = `radial-gradient(closest-side, ${bg} 74%, transparent 75%), `
-    + `conic-gradient(from 225deg, ${stops.join(", ")})`
+  SCREENS.forEach((paint, index) => {
+    const ctx = holder.children[index].getContext("2d")
+    ctx.setTransform(2, 0, 0, 2, 0, 0)
+    paint(ctx, palette, shown.series)
+  })
 }
 
 function rampAt(stops, at) {

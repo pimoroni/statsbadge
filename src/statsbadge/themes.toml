@@ -1,0 +1,205 @@
+# The themes, as data. See themes.py for what each role is and how a table is read.
+#
+# A table names palette roles or carries a [table.derived] spec, never both. Order here is
+# the order a picker offers them in.
+
+[dark]
+label = "Default Dark"
+bg = [18, 20, 28]
+panel = [26, 30, 43]
+ink = [242, 245, 255]
+dim = [139, 147, 171]
+accent = [56, 232, 209]
+grid = [44, 51, 70]
+ramp = [[0.00, [56, 232, 209]], [0.45, [126, 211, 117]], [0.72, [236, 159, 7]], [1.00, [215, 25, 8]]]
+
+[light]
+label = "Default Light"
+bg = [250, 247, 242]
+panel = [240, 236, 228]
+ink = [30, 26, 20]
+dim = [102, 94, 82]
+accent = [16, 145, 157]
+grid = [216, 209, 195]
+ramp = [[0.00, [16, 145, 157]], [0.45, [81, 146, 74]], [0.72, [188, 103, 12]], [1.00, [138, 3, 22]]]
+
+[frost]
+bg = [244, 248, 252]
+panel = [231, 237, 244]
+ink = [22, 27, 33]
+dim = [87, 96, 107]
+accent = [0, 100, 185]
+grid = [200, 211, 223]
+ramp = [[0.00, [0, 142, 182]], [0.45, [0, 125, 120]], [0.72, [125, 75, 0]], [1.00, [136, 0, 1]]]
+
+[mono]
+pair = "mono-light"
+bg = [8, 8, 8]
+panel = [20, 20, 20]
+ink = [245, 245, 245]
+dim = [110, 110, 110]
+accent = [235, 235, 235]
+grid = [38, 38, 38]
+ramp = [[0.00, [110, 110, 110]], [1.00, [255, 255, 255]]]
+
+["mono-light"]
+pair = "mono"
+bg = [250, 250, 250]
+panel = [238, 238, 238]
+ink = [16, 16, 16]
+dim = [108, 108, 108]
+accent = [36, 36, 36]
+grid = [214, 214, 214]
+ramp = [[0.00, [108, 108, 108]], [1.00, [0, 0, 0]]]
+
+[vapor]
+bg = [18, 8, 30]
+panel = [34, 14, 56]
+ink = [245, 225, 255]
+dim = [140, 100, 180]
+accent = [255, 90, 200]
+grid = [56, 26, 90]
+ramp = [[0.00, [90, 220, 255]], [0.50, [190, 130, 255]], [1.00, [255, 80, 190]]]
+
+[sakura]
+bg = [247, 241, 244]
+panel = [240, 226, 234]
+ink = [58, 40, 50]
+dim = [139, 110, 124]
+accent = [226, 116, 154]
+grid = [226, 205, 216]
+ramp = [[0.00, [138, 178, 212]], [0.45, [232, 138, 174]], [0.75, [214, 146, 60]], [1.00, [176, 30, 78]]]
+
+[watermelon]
+pair = "watermelon-light"
+bg = [16, 26, 22]
+panel = [25, 40, 34]
+ink = [249, 205, 173]
+dim = [150, 152, 129]
+accent = [254, 67, 101]
+grid = [38, 58, 48]
+ramp = [[0.00, [131, 175, 155]], [0.40, [200, 200, 169]], [0.72, [252, 157, 154]], [1.00, [254, 67, 101]]]
+
+["watermelon-light"]
+pair = "watermelon"
+bg = [247, 222, 232]
+panel = [242, 201, 210]
+ink = [26, 58, 45]
+dim = [120, 90, 94]
+accent = [203, 59, 84]
+accent_b = [74, 158, 124]
+grid = [230, 192, 204]
+ramp = [[0.00, [133, 192, 163]], [0.40, [224, 143, 168]], [0.72, [228, 74, 99]], [1.00, [171, 21, 66]]]
+
+[eva00]
+bg = [8, 16, 28]
+panel = [16, 28, 44]
+ink = [230, 240, 250]
+dim = [124, 150, 178]
+accent = [240, 146, 42]
+grid = [26, 44, 66]
+ramp = [[0.00, [74, 168, 226]], [0.50, [240, 146, 42]], [1.00, [214, 42, 42]]]
+
+[eva01]
+bg = [22, 14, 34]
+panel = [34, 22, 52]
+ink = [236, 232, 245]
+dim = [146, 130, 172]
+accent = [143, 212, 0]
+grid = [52, 34, 78]
+ramp = [[0.00, [143, 212, 0]], [0.55, [238, 170, 40]], [1.00, [255, 60, 30]]]
+
+[eva02]
+bg = [28, 12, 12]
+panel = [44, 18, 18]
+ink = [255, 238, 232]
+dim = [176, 132, 126]
+accent = [226, 72, 61]
+grid = [70, 28, 26]
+ramp = [[0.00, [238, 125, 47]], [0.60, [226, 72, 61]], [1.00, [255, 214, 120]]]
+
+[shell]
+pair = "shell-light"
+bg = [14, 24, 52]
+panel = [22, 36, 72]
+ink = [182, 222, 181]
+dim = [120, 156, 176]
+accent = [120, 214, 168]
+grid = [34, 54, 92]
+ramp = [[0.00, [52, 95, 117]], [0.40, [120, 214, 168]], [0.70, [182, 222, 181]], [1.00, [218, 163, 60]]]
+
+["shell-light"]
+pair = "shell"
+bg = [233, 243, 237]
+panel = [216, 231, 222]
+ink = [25, 38, 75]
+dim = [73, 107, 126]
+accent = [34, 133, 92]
+grid = [197, 214, 204]
+ramp = [[0.00, [137, 177, 200]], [0.40, [38, 136, 95]], [0.70, [64, 105, 64]], [1.00, [114, 77, 7]]]
+
+[luminescence]
+pair = "luminescence-dark"
+bg = [158, 240, 206]
+panel = [136, 226, 192]
+ink = [34, 60, 52]
+dim = [86, 146, 126]
+accent = [18, 96, 80]
+grid = [124, 208, 176]
+ramp = [[0.00, [104, 182, 156]], [0.45, [58, 130, 110]], [0.75, [34, 82, 70]], [1.00, [20, 46, 40]]]
+
+["luminescence-dark"]
+pair = "luminescence"
+bg = [4, 24, 18]
+panel = [9, 37, 28]
+ink = [158, 240, 206]
+dim = [89, 148, 128]
+accent = [138, 227, 192]
+grid = [24, 58, 47]
+ramp = [[0.00, [46, 113, 94]], [0.45, [82, 161, 135]], [0.75, [119, 203, 172]], [1.00, [163, 250, 214]]]
+
+# Built from the chosen accent rather than written down. `shape` names a set of levels in
+# derive.SHAPES; `bold` holds the ramp in the accent's hue instead of sending it to red.
+
+["tinted-dark"]
+label = "Tinted"
+pair = "tinted-light"
+derived = { shape = "dark" }
+
+["tinted-light"]
+label = "Tinted"
+pair = "tinted-dark"
+derived = { shape = "light" }
+
+["tinted-bold-dark"]
+label = "Tinted Bold"
+pair = "tinted-bold-light"
+derived = { shape = "dark", bold = true }
+
+["tinted-bold-light"]
+label = "Tinted Bold"
+pair = "tinted-bold-dark"
+derived = { shape = "light", bold = true }
+
+["tinted-glow-dark"]
+label = "Tinted Glow"
+pair = "tinted-glow-light"
+derived = { shape = "glow-dark", bold = true }
+
+["tinted-glow-light"]
+label = "Tinted Glow"
+pair = "tinted-glow-dark"
+derived = { shape = "glow-light", bold = true }
+
+# Palettes that are now the derived pair with an accent, and the tinted names that carried a
+# ramp choice. A stored name still resolves, so a badge showing one carries on showing it.
+#
+# `hue` is taken from the saturated family, where each of those palettes had its accent:
+# measured, all five sat within 0.003 of their hue's chroma limit.
+
+[aliases]
+red = { theme = "tinted-bold-dark", hue = 30 }
+green = { theme = "tinted-bold-dark", hue = 150 }
+cyan = { theme = "tinted-bold-dark", hue = 210 }
+amber = { theme = "tinted-bold-dark", hue = 60 }
+blueprint = { theme = "tinted-bold-dark", hue = 240 }

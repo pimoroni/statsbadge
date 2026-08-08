@@ -48,19 +48,33 @@ BOLD_TOWARD = 0.23
 BOLD_AWAY = 0.20
 
 # Where the page sits on the lightness scale, which way its panel steps, and how much of
-# the accent's hue the greys carry. None of it looks like another theme's furniture, too
-# much tints the whole screen.
+# the accent's hue the greys carry. The lightnesses come out of the shipped palettes,
+# placed by hand.
 #
-# The lightnesses come out of the shipped palettes, placed by hand: walking out from the
-# page until the contrast passes lands on the dimmest ink that clears the bar.
-MODES = {
+# Colourfulness is `chroma`, an absolute, or `share`, a fraction of the hue's limit at that
+# lightness. A lit panel holds the share: luminescence runs 0.030 to 0.100 of chroma across
+# its roles at a share of about 0.6.
+SHAPES = {
     "dark": {"bg": 0.193, "panel": 0.237, "grid": 0.323, "dim": 0.665, "ink": 0.971,
-             "accent": 0.720, "hot": 0.560, "chroma": 0.020, "case": 0.22},
+             "hot": 0.560, "chroma": 0.020},
     "light": {"bg": 0.977, "panel": 0.944, "grid": 0.862, "dim": 0.486, "ink": 0.220,
-              "accent": 0.600, "hot": 0.400, "chroma": 0.012, "case": 0.3},
+              "hot": 0.400, "chroma": 0.012},
+    # A lit panel, always drawn with the bold ramp: a ramp travelling to red is not
+    # monochrome whatever the furniture does. No `hot`; only the signal ramp reads it.
+    "glow-dark": {"bg": 0.225, "panel": 0.272, "grid": 0.350, "dim": 0.600, "ink": 0.855,
+                  "share": 0.58, "ink_ratio": 4.5, "dim_ratio": 2.2},
+    "glow-light": {"bg": 0.930, "panel": 0.888, "grid": 0.820, "dim": 0.545, "ink": 0.345,
+                   "share": 0.55, "ink_ratio": 4.5, "dim_ratio": 2.2},
 }
+DEFAULT_SHAPE = "dark"
+
+# How much of the shape's colourfulness each role takes. Two tables, since one is a multiple
+# of an absolute and the other of a share.
+ROLE_CHROMA = {"bg": 1.0, "panel": 1.0, "grid": 1.5, "ink": 0.7, "dim": 1.8}
+ROLE_SHARE = {"bg": 1.0, "panel": 1.0, "grid": 1.0, "ink": 0.55, "dim": 1.0}
+
 # What ink and dim have to clear against the page: AAA for something read, AA for
-# something naming what is beside it. A placed lightness that misses is walked out.
+# something naming what is beside it. A shape may lower them, and the glow pair do.
 INK_RATIO = 7.0
 DIM_RATIO = 4.5
 
@@ -365,38 +379,49 @@ def image_ramps(accent):
             for levels in IMAGE_LEVELS}
 
 
-def palette(accent, mode="dark", bold=False, second="same"):
-    """A whole palette from one accent, as `themes.PALETTES` holds them.
+def tone(shape, role, hue):
+    """The lightness and chroma a role takes in this shape, at this hue."""
+    level = shape[role]
+    if "share" in shape:
+        return level, max_chroma(level, hue) * shape["share"] * ROLE_SHARE[role]
+    return level, shape["chroma"] * ROLE_CHROMA[role]
 
-    The greys carry a little of the accent's hue so the furniture belongs to it. `ink` and
-    `dim` are placed by contrast and not by taste: 7 is AAA for body text and 4.5 is AA,
-    which suits a label that only names the thing beside it.
 
-    `bold` is the other variant, a ramp that stays in the accent's hue and sweeps lightness
-    without travelling to red. `second` is how the second accent is chosen: the colour a
-    graph's second series is drawn in, and the only place a palette repeats itself.
+def palette(accent, shape="dark", bold=False, second="same"):
+    """A whole palette from one accent, shaped like the written-down ones.
+
+    The greys carry some of the accent's hue so the furniture belongs to it. A little for
+    the plain shapes; most of it for the glow pair, which makes a lit panel.
+
+    `ink` and `dim` are placed by contrast and not by taste, against whatever the shape
+    asks for. `bold` keeps the ramp in the accent's hue instead of sending it to red.
+    `second` picks the second accent: the chrome, and a graph's second series.
     """
-    if mode not in MODES:
-        mode = "dark"
-    ramp = ramp_for(accent)
-    shape = MODES[mode]
+    shape = SHAPES.get(shape, SHAPES[DEFAULT_SHAPE])
     lightness, chroma, hue = oklch(accent)
-    tint = shape["chroma"]
-    background = rgb(shape["bg"], tint, hue)
+    background = rgb(*tone(shape, "bg", hue), hue)
     # As picked, unless the page would swallow it: the same swatch is offered for both modes.
     placed = readable_on(lightness, chroma, hue, background, ACCENT_RATIO)
     lightness, chroma, _hue = oklch(placed)
-    build = _bold_ramp if bold else (_signal_ramp if ramp == "signal" else _mono_ramp)
+    build = _bold_ramp if bold else (_signal_ramp if ramp_for(accent) == "signal"
+                                     else _mono_ramp)
+
+    def at(role, ratio=None):
+        level, own = tone(shape, role, hue)
+        if ratio is None:
+            return rgb(level, own, hue)
+        return readable_on(level, own, hue, background, ratio)
+
+    settled = rgb(lightness, chroma, hue)
     return {
         "bg": background,
-        "panel": rgb(shape["panel"], tint, hue),
-        "ink": readable_on(shape["ink"], tint * 0.7, hue, background, INK_RATIO),
-        "dim": readable_on(shape["dim"], tint * 1.8, hue, background, DIM_RATIO),
-        "accent": rgb(lightness, chroma, hue),
-        "accent_b": second_accent(rgb(lightness, chroma, hue), second),
-        "grid": rgb(shape["grid"], tint * 1.5, hue),
-        "case": shape["case"],
+        "panel": at("panel"),
+        "ink": at("ink", shape.get("ink_ratio", INK_RATIO)),
+        "dim": at("dim", shape.get("dim_ratio", DIM_RATIO)),
+        "accent": settled,
+        "accent_b": second_accent(settled, second),
+        "grid": at("grid"),
         "ramp": build(lightness, chroma, hue, shape),
         # Fixed lightnesses in this theme's hue, so a picture keeps its levels in any palette.
-        "image": image_ramps(rgb(lightness, chroma, hue)),
+        "image": image_ramps(settled),
     }

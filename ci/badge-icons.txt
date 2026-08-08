@@ -1,7 +1,12 @@
 # Material Symbols for the badge app's own pages. Built with:
 #
 #   python3 tools/make_icon_font.py --corpus ci/badge-icons.txt \
-#                                   --out src/statsbadge/badge_app/icons.af
+#                                   --out src/statsbadge/badge_app/icons.af \
+#                                   --web src/statsbadge/web/icons.woff2
+#
+# Both artefacts come off the one command: the .af the badge draws with, and a woff2 the
+# config UI's preview draws the same pages with. Kept together so they cannot come to show
+# different pictures.
 #
 # Kept here rather than in badge_app, because everything in there is pushed to the badge
 # and the corpus is a build input. The .af it produces is committed.

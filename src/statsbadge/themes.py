@@ -1,202 +1,108 @@
-"""The themes, as data.
+"""The themes, loaded from themes.toml.
 
-A theme is a table of colours and one gradient rule, so it is config and not code. The
-selected one travels in the layout, and the badge carries one to boot with.
+A theme is a table of colours and one gradient rule, so it is config. It lives in a data
+file, where nobody can write a special case. The selected one travels in the layout, and
+the badge carries one to boot with.
 
   bg / panel      the page, and the header, footer and tiles on it
   ink / dim       text, and text that is only labelling something
   accent          the one colour that says "this is the thing"
+  accent_b        chrome, and a graph's second series; the accent where a theme names none
   grid            the unfilled part of any gauge, and a graph's rules
   ramp            what a gauge fills with as it climbs, cold to hot
-  case            the four case lights, which are one brightness each and not RGB
+
+A table names those, or carries a `derived` spec and is built from whatever accent the
+config picked. Nothing declares which mode it is: `records` reads that off the background,
+since a theme that had to declare it could declare it wrong.
 """
 
-PALETTES = {
-    "dark": {
-        "bg": (18, 20, 28), "panel": (26, 30, 43),
-        "ink": (242, 245, 255), "dim": (139, 147, 171),
-        "accent": (56, 232, 209), "grid": (44, 51, 70),
-        "case": 0.22,
-        "ramp": ((0.0, (56, 232, 209)),
-                 (0.45, (126, 211, 117)),
-                 (0.72, (236, 159, 7)),
-                 (1.0, (215, 25, 8))),
-    },
-    "light": {
-        "bg": (250, 247, 242), "panel": (240, 236, 228),
-        "ink": (30, 26, 20), "dim": (102, 94, 82),
-        "accent": (16, 145, 157), "grid": (216, 209, 195),
-        "case": 0.3,
-        "ramp": ((0.0, (16, 145, 157)),
-                 (0.45, (81, 146, 74)),
-                 (0.72, (188, 103, 12)),
-                 (1.0, (138, 3, 22))),
-    },
-    "frost": {
-        "bg": (244, 248, 252), "panel": (231, 237, 244),
-        "ink": (22, 27, 33), "dim": (87, 96, 107),
-        "accent": (0, 100, 185), "grid": (200, 211, 223),
-        "case": 0.3,
-        "ramp": ((0.0, (0, 142, 182)),
-                 (0.45, (0, 125, 120)),
-                 (0.72, (125, 75, 0)),
-                 (1.0, (136, 0, 1))),
-    },
-    "mono": {
-        "bg": (8, 8, 8), "panel": (20, 20, 20),
-        "ink": (245, 245, 245), "dim": (110, 110, 110),
-        "accent": (235, 235, 235), "grid": (38, 38, 38),
-        "case": 0.14,
-        "ramp": ((0.0, (110, 110, 110)),
-                 (1.0, (255, 255, 255))),
-    },
-    # Mono the other way up. Nothing is inverted channel by channel, which lands ink on
-    # white at the wrong lightness. The levels are placed against the page the way every
-    # other light theme's are, and the ramp darkens away from a pale page.
-    "mono-light": {
-        "bg": (250, 250, 250), "panel": (238, 238, 238),
-        "ink": (16, 16, 16), "dim": (108, 108, 108),
-        "accent": (36, 36, 36), "grid": (214, 214, 214),
-        "case": 0.3,
-        "ramp": ((0.0, (108, 108, 108)),
-                 (1.0, (0, 0, 0))),
-    },
-    "vapor": {
-        "bg": (18, 8, 30), "panel": (34, 14, 56),
-        "ink": (245, 225, 255), "dim": (140, 100, 180),
-        "accent": (255, 90, 200), "grid": (56, 26, 90),
-        "case": 0.24,
-        "ramp": ((0.0, (90, 220, 255)),
-                 (0.5, (190, 130, 255)),
-                 (1.0, (255, 80, 190))),
-    },
-    # From a photograph of a kanzan cherry in flower. The pale sky is the page and the
-    # branch its ink. The ramp runs sky, blossom, stamen, to the cerise at a flower's
-    # throat.
-    "sakura": {
-        "bg": (247, 241, 244), "panel": (240, 226, 234),
-        "ink": (58, 40, 50), "dim": (139, 110, 124),
-        "accent": (226, 116, 154), "grid": (226, 205, 216),
-        "case": 0.3,
-        "ramp": ((0.0, (138, 178, 212)),
-                 (0.45, (232, 138, 174)),
-                 (0.75, (214, 146, 60)),
-                 (1.0, (176, 30, 78))),
-    },
-    # The five colours of the palette it is named after, rind to flesh. #83AF9B #C8C8A9
-    # #F9CDAD #FC9D9A #FE4365. The page is the seed, so the fruit is what shows.
-    "watermelon": {
-        "bg": (16, 26, 22), "panel": (25, 40, 34),
-        "ink": (249, 205, 173), "dim": (150, 152, 129),
-        "accent": (254, 67, 101), "grid": (38, 58, 48),
-        "case": 0.24,
-        "ramp": ((0.0, (131, 175, 155)),
-                 (0.4, (200, 200, 169)),
-                 (0.72, (252, 157, 154)),
-                 (1.0, (254, 67, 101))),
-    },
-    # The same five colours on paper. The palest pink is the page and the deeper flesh
-    # the one colour that shows. The rind green is its ink, being the only thing dark
-    # enough to read on a page that pale. The ramp is still rind to flesh.
-    "watermelon-light": {
-        "bg": (247, 222, 232), "panel": (242, 201, 210),
-        "ink": (26, 58, 45), "dim": (120, 90, 94),
-        # The rind, as the second colour. On a page this pink the mint only appears at
-        # the cold end of the ramp, which a steady reading never reaches. A graph's
-        # second series takes it, and not another indistinguishable pink.
-        "accent": (203, 59, 84), "accent_b": (74, 158, 124), "grid": (230, 192, 204),
-        "case": 0.3,
-        "ramp": ((0.0, (133, 192, 163)),
-                 (0.4, (224, 143, 168)),
-                 (0.72, (228, 74, 99)),
-                 (1.0, (171, 21, 66))),
-    },
-    # Unit-00 as it came back from the repair: navy armour, orange trim. The ramp is that
-    # trim warming to the red of a Rei eye.
-    "eva00": {
-        "bg": (8, 16, 28), "panel": (16, 28, 44),
-        "ink": (230, 240, 250), "dim": (124, 150, 178),
-        "accent": (240, 146, 42), "grid": (26, 44, 66),
-        "case": 0.2,
-        "ramp": ((0.0, (74, 168, 226)),
-                 (0.5, (240, 146, 42)),
-                 (1.0, (214, 42, 42))),
-    },
-    # Unit-01. Violet armour and the acid green of its chest plate. The ramp goes where
-    # that unit goes: green, through the orange of the horn, to berserk.
-    "eva01": {
-        "bg": (22, 14, 34), "panel": (34, 22, 52),
-        "ink": (236, 232, 245), "dim": (146, 130, 172),
-        "accent": (143, 212, 0), "grid": (52, 34, 78),
-        "case": 0.24,
-        "ramp": ((0.0, (143, 212, 0)),
-                 (0.55, (238, 170, 40)),
-                 (1.0, (255, 60, 30))),
-    },
-    # Unit-02. Red armour over orange, a theme that is hot before it starts, and the ramp
-    # finishes pale the way the other single-hue ones do.
-    "eva02": {
-        "bg": (28, 12, 12), "panel": (44, 18, 18),
-        "ink": (255, 238, 232), "dim": (176, 132, 126),
-        "accent": (226, 72, 61), "grid": (70, 28, 26),
-        "case": 0.24,
-        "ramp": ((0.0, (238, 125, 47)),
-                 (0.6, (226, 72, 61)),
-                 (1.0, (255, 214, 120))),
-    },
-    # Gold, night navy, slate, mint and pale green, off a palette of the 1995 film. Green on
-    # navy is the terminal. The gold is the only warm thing in it, and the ramp ends
-    # there.
-    "shell": {
-        "bg": (14, 24, 52), "panel": (22, 36, 72),
-        "ink": (182, 222, 181), "dim": (120, 156, 176),
-        "accent": (120, 214, 168), "grid": (34, 54, 92),
-        "case": 0.22,
-        "ramp": ((0.0, (52, 95, 117)),
-                 (0.4, (120, 214, 168)),
-                 (0.7, (182, 222, 181)),
-                 (1.0, (218, 163, 60))),
-    },
-    # The same palette off the screen and onto paper: the navy becomes the ink, the mint stays
-    # the one colour that means anything, and the gold has to darken to bronze to be seen at
-    # all on a pale page. The ramp keeps the film's order - slate, mint, green, gold.
-    "shell-light": {
-        "bg": (233, 243, 237), "panel": (216, 231, 222),
-        "ink": (25, 38, 75), "dim": (73, 107, 126),
-        "accent": (34, 133, 92), "grid": (197, 214, 204),
-        "case": 0.3,
-        "ramp": ((0.0, (137, 177, 200)),
-                 (0.4, (38, 136, 95)),
-                 (0.7, (64, 105, 64)),
-                 (1.0, (114, 77, 7))),
-    },
-    # A Casio electroluminescent watch face. The panel glows one colour and everything on
-    # it is that colour's ink at different weights, and the ramp darkens without changing
-    # hue, the way mono's does. The ink is a dark slate green and not the black of a
-    # segment, which on a lit panel reads as harsh.
-    "luminescence": {
-        "bg": (158, 240, 206), "panel": (136, 226, 192),
-        "ink": (34, 60, 52), "dim": (86, 146, 126),
-        "accent": (18, 96, 80), "grid": (124, 208, 176),
-        "case": 0.3,
-        "ramp": ((0.0, (104, 182, 156)),
-                 (0.45, (58, 130, 110)),
-                 (0.75, (34, 82, 70)),
-                 (1.0, (20, 46, 40))),
-    },
-    # The same watch in the dark with the backlight on. The glow is the ink now, and the
-    # ramp brightens where the lit one darkens. One hue throughout either way, which makes
-    # it a panel and not a page with things on it.
-    "luminescence-dark": {
-        "bg": (4, 24, 18), "panel": (9, 37, 28),
-        "ink": (158, 240, 206), "dim": (89, 148, 128),
-        "accent": (138, 227, 192), "grid": (24, 58, 47),
-        "case": 0.22,
-        "ramp": ((0.0, (46, 113, 94)),
-                 (0.45, (82, 161, 135)),
-                 (0.75, (119, 203, 172)),
-                 (1.0, (163, 250, 214))),
-    },
-}
+import tomllib
+from importlib import resources
+
+from . import derive
 
 DEFAULT = "dark"
+
+# Where a page stops being dark and starts being light, as OKLCH lightness of the background.
+PALE_FROM = 0.5
+
+# The roles a written palette names. `accent_b` is optional; the rest are not.
+ROLES = ("bg", "panel", "ink", "dim", "accent", "grid")
+
+
+def _load():
+    text = resources.files(__package__).joinpath("themes.toml").read_text()
+    data = tomllib.loads(text)
+    aliases = data.pop("aliases", {})
+    return data, aliases
+
+
+THEMES, ALIASES = _load()
+
+
+def label(name):
+    """What a picker calls a theme: the label given, or the name title cased."""
+    given = THEMES.get(name, {}).get("label")
+    return given or name.replace("-", " ").replace("_", " ").title()
+
+
+def _stored(record):
+    """A written table as a palette: tuples, and only the colour keys."""
+    palette = {role: tuple(record[role]) for role in ROLES}
+    if "accent_b" in record:
+        palette["accent_b"] = tuple(record["accent_b"])
+    palette["ramp"] = tuple((at, tuple(rgb)) for at, rgb in record["ramp"])
+    return palette
+
+
+def written():
+    """The written-down palettes, keyed by name, without the picker's metadata."""
+    return {name: _stored(record) for name, record in THEMES.items()
+            if "derived" not in record}
+
+
+def mode(name):
+    """Which half of the picker a theme belongs in, read off its background.
+
+    A derived theme's background lightness is its shape's, whatever accent it is built from,
+    so no palette has to be built to answer this.
+    """
+    record = THEMES.get(name) or THEMES[DEFAULT]
+    spec = record.get("derived")
+    lightness = (derive.SHAPES[spec["shape"]]["bg"] if spec
+                 else derive.oklch(record["bg"])[0])
+    return "light" if lightness >= PALE_FROM else "dark"
+
+
+def records():
+    """Every theme with what a picker needs: the label, the mode, and whether it takes an
+    accent. `derived` is what the UI gates the accent picker on."""
+    return [{"name": name, "label": label(name), "mode": mode(name),
+             "pair": record.get("pair"), "derived": "derived" in record}
+            for name, record in THEMES.items()]
+
+
+def resolve(name, tint):
+    """A theme name and accent, with a retired name mapped onto what replaced it."""
+    aliased = ALIASES.get(name)
+    if not aliased:
+        return name, tint
+    at = derive.ACCENT_HUES.index(int(aliased["hue"])) if "hue" in aliased else None
+    return aliased["theme"], (list(derive.accents("saturated")[at]) if at is not None
+                              else tint)
+
+
+def palette(name, accent, second="same"):
+    """The palette a theme draws with: derived from the accent, or looked up.
+
+    `accent` and `second` are consulted only where the theme is derived. A written palette is
+    fixed as drawn, which is the point of writing it down.
+    """
+    record = THEMES.get(name) or THEMES[DEFAULT]
+    spec = record.get("derived")
+    if spec:
+        return derive.palette(tuple(accent), spec["shape"], spec.get("bold", False), second)
+    stored = _stored(record)
+    # Derived from the accent's hue, as `stripe` is.
+    stored["image"] = derive.image_ramps(stored["accent"])
+    return stored

@@ -146,7 +146,7 @@ Twelve kinds, and any field can go in any of them. Six show readings as they are
 
 Sixteen themes, and forty-eight accents. The written-down ones are grouped light and dark in the picker: Default Dark and Default Light, `frost`, `vapor`, `sakura` and the three Eva units. Four more come as a pair for a lit room and a dark one: Mono, Watermelon, Shell and Luminescence.
 
-Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images. The palette travels to the badge with the layout, which makes it config: [`themes.py`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/themes.py) is the only place one is written down, and adding one needs no install.
+Everything is drawn as vector shapes taking their colours from one table, so a theme is a palette and not a set of images. The palette travels to the badge with the layout, which makes it config: [`themes.toml`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/themes.toml) is the only place one is written down, and adding one needs no install.
 
 Then four you can tune yourself, derived rather than written. Pick one of forty-eight accents: twelve hues in four families, Pastel, Normal, Saturated and Dark. Tinted Dark and Tinted Light hold every hue at one chroma and send the ramp to red unless the accent is already there. Tinted Bold Dark and Tinted Bold Light take each hue as far as sRGB allows and keep the ramp in it, sweeping lightness. The single-hue names red, green, cyan, amber and blueprint are that second pair with an accent, so they still resolve to what they always looked like.
 

@@ -125,7 +125,9 @@ margin moves under the reader when they press a button.
 A theme is config, so the badge carries one. The palette travels in the layout and
 `look.from_palette` builds a `Theme` from it. `derive.py` works in OKLCH, so "ink has to be
 readable on the page" settles as arithmetic checked against WCAG 7 and 4.5.
-[`themes.py`](src/statsbadge/themes.py) is the only place a palette is written down.
+[`themes.toml`](src/statsbadge/themes.toml) is the only place a palette is written down;
+`themes.py` reads it. A theme names its colours or carries a `derived` spec built from the
+accent chosen, and a special case cannot be written into a data file.
 
 ## The heap, the panel and the light sensor
 

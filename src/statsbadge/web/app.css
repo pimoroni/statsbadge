@@ -1,4 +1,26 @@
+/* -- the faces the badge draws with -------------------------------------- */
+
+/* Only the preview canvases use these; the rest of the UI keeps the system stack. Lexend
+   draws the badge's text. The symbols are subset from Material Symbols against
+   ci/badge-icons.txt, the corpus badge_app/icons.af is built from, so the two cannot come
+   to show different pictures. */
+@font-face {
+  font-family: Lexend;
+  src: url("/lexend-var.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Badge Icons";
+  src: url("/icons.woff2") format("woff2");
+  font-display: block;
+}
+
 /* -- palette and scale --------------------------------------------------- */
+
+/* The accent and the ramp are the dark theme's, served generated as /tokens.css so they
+   cannot drift from themes.toml. The greys below are the UI's own and are not a copy. */
 
 :root {
   font-size: 100%;
@@ -15,15 +37,10 @@
   --ink: #ecebe8;
   --dim: #8b8b96;
   --line: #2b2b34;
-  --accent: #38e8d1;
   --accent-lit: #6ff2e2;
   --good: #78e65a;
   --bad: #ff4530;
   --on-accent: #0a1614;
-  --ramp-0: #38e8d1;
-  --ramp-1: #7ed375;
-  --ramp-2: #ec9f07;
-  --ramp-3: #d71908;
 }
 
 /* -- page furniture ------------------------------------------------------ */
@@ -353,40 +370,19 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* -- the theme preview --------------------------------------------------- */
 
-figure {
-  container-type: inline-size;
-  width: 100%; max-width: 320px; aspect-ratio: 4 / 3;
-  display: flex; flex-direction: column;
-  margin: 4px 0; overflow: hidden;
-  background: var(--pv-bg); font-size: var(--text-sm);
+/* Four pages at the badge's 320x240, drawn on canvas. The colours come from /api/theme,
+   so no palette is written down here. */
+.screens {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 320px));
+  gap: 8px;
+  margin: 4px 0;
 
-  header {
-    height: 9.4cqw; padding: 0 3cqw;
-    background: var(--pv-panel); border-bottom: 0.6cqw solid var(--pv-accent);
-    display: flex; align-items: center; justify-content: space-between;
-    color: var(--pv-ink); font-size: 4.7cqw; letter-spacing: 0.06em;
+  canvas {
+    display: block;
+    width: 100%; max-width: 320px; aspect-ratio: 4 / 3;
+    border: 1px solid var(--line);
   }
-
-  header small { color: var(--pv-dim); font-size: 3.4cqw; }
-  div { flex: 1; display: flex; align-items: center; gap: 4.4cqw; padding: 0 3.8cqw; }
-
-  strong {
-    width: 30cqw; height: 30cqw; border-radius: 50%; flex: none;
-    display: grid; place-items: center;
-    color: var(--pv-ink); font-size: 6.6cqw; font-weight: 400;
-  }
-
-  dl { flex: 1; grid-template-columns: 1fr 40%; font-size: 3.4cqw; gap: 5px 6px; }
-  dt { color: var(--pv-dim); }
-  dd { color: var(--pv-ink); }
-
-  footer {
-    height: 6.2cqw; background: var(--pv-panel);
-    display: flex; align-items: center; justify-content: center; gap: 1.9cqw;
-  }
-
-  footer span { width: 4.4cqw; height: 1.2cqw; background: var(--pv-grid); }
-  footer span:first-child { width: 5.6cqw; background: var(--pv-accent); }
 }
 
 /* -- toast --------------------------------------------------------------- */

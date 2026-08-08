@@ -222,7 +222,7 @@ sys.path.insert(0, "/remote/src")
 from statsbadge import themes  # noqa: E402
 
 print("\nevery theme, on the CPU dial:")
-for name, palette in themes.PALETTES.items():
+for name, palette in themes.written().items():
     theme = look.from_palette(name, palette) or look.get(name)
     draw.clear_cache()
     per_frame = time_page(PAGES[0], theme)
