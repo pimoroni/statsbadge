@@ -2972,14 +2972,24 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
 
     # A gap in a ring is a None, and the axis works its top out from the samples. Comparing
     # one against a float is a TypeError, which took the app down mid-slide on a machine
-    # with an intermittent sensor. _lay_out already reads a None as zero.
+    # with an intermittent sensor.
     axis = source[source.index("def graph("):]
     axis = axis[:axis.index("\ndef ", 1)]
     axis = axis[axis.index("if maximum is None:"):axis.index("    peak_text")]
     assert "is not None" in axis, f"a None in a series reaches max(): {axis}"
+
+    # Every widget draws a gap at the axis, decided in one place: six sites each said
+    # `or 0.0` and one of them was reached with the raw series and crashed.
+    assert "or 0.0" not in source, "a widget is deciding what a gap looks like on its own"
+    assert draw.flat([0.5, None, 0.25]) == [0.5, 0.0, 0.25]
+    same = [0.5, 0.25]
+    assert draw.flat(same) is same, "a series with no gaps is copied every frame"
     layout = source[source.index("def _lay_out("):]
     layout = layout[:layout.index("\ndef ", 1)]
-    assert layout.count("or 0.0") == 2, layout
+    assert "values = flat(values)" in layout, layout
+    # The series as the ring hands it over, gaps and all, through the widget that crashed.
+    gappy = [0.5, None, 0.25, 0.9, None, None, 0.1, 0.4]
+    assert draw._lay_out(60, 40, 250, 150, gappy, 1.0, None) > 0  # noqa: SLF001
 
     # A fill and a line are the same layout with different ends on it, so both go through
     # _lay_out, each scaling its samples once.

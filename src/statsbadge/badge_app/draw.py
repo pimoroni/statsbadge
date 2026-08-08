@@ -681,6 +681,26 @@ def column_lines(entries, top=None, align=0):
     return y
 
 
+def flat(values):
+    """A series with its gaps at the axis, or the same list where it has none.
+
+    A None in a ring is a sample the host had no reading for. The ring keeps it so a plot
+    can read times off positions, and every widget then draws it at the bottom: there is
+    no ink for "nothing here", and a break in a line reads as zero anyway.
+
+    Only the series, and once per draw rather than per point. `graph` is passed the list
+    as it came: it looks past the gaps for the axis top, a gap not being a reading of zero.
+    """
+    if None not in values:
+        return values
+    return [0.0 if value is None else value for value in values]
+
+
+def at_axis(value):
+    """One reading, where a widget takes a single number and None means it never came."""
+    return 0.0 if value is None else value
+
+
 def bars(theme, values, maximum=100.0, field="pct", fractions=None):
     """A stack of horizontal bars. Raster rectangles: no AA needed on an axis-aligned
     bar, and this is the one page that can have 32 of them.
@@ -691,13 +711,14 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
     """
     if not values:
         return
+    values = flat(values)
     count = min(len(values), 16)
     top = look.BODY_TOP + 6
         # Fit the band whatever the core count, with at least a pixel between bars.
     slot = max(6, (look.BODY_H - 12) // count)
     height = max(4, slot - 3)
     names = [f"{i}" for i in range(count)]
-    readings = [reading(values[i] or 0.0, field) for i in range(count)]
+    readings = [reading(values[i], field) for i in range(count)]
     # Both columns are as wide as their widest entry: a fixed one either leaves a gap or
     # runs the readings into the bars.
     label_w = column_width(names, look.SIZE_SMALL)
@@ -706,7 +727,7 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
     width = max(20, look.W - x - COLUMN_GAP - value_w - look.PAD)
 
     for i in range(count):
-        value = values[i] or 0.0
+        value = values[i]
         if fractions is None:
             fraction = max(0.0, min(1.0, value / maximum if maximum else 0.0))
         else:
@@ -827,12 +848,13 @@ def _lay_out(left, top, width, height, values, peak, shift):
     4.2ms of the sparkline page.
     """
     global _points
+    values = flat(values)
     count = len(values)
     if count < 2:
         return 0
     steps = curve_steps(width, height, count)
     if steps > 1:
-        values = curve([value or 0.0 for value in values], steps)
+        values = curve(values, steps)
         count = len(values)
     if len(_points) < (count + 2) * 2:
         _points = array("f", bytes((count + 2) * 8))
@@ -857,7 +879,7 @@ def _lay_out(left, top, width, height, values, peak, shift):
     start = left - away
     i = 0
     for index in range(count):
-        y = bottom - (values[index] or 0.0) * scale
+        y = bottom - values[index] * scale
         _points[i] = start + index * step
         _points[i + 1] = top if y < top else (bottom if y > bottom else y)
         i += 2
@@ -1419,7 +1441,7 @@ def rings(theme, entries):
         if ring_inner < 8:
             break
         # Track and fill abut: four rings over their tracks is twice the arc for one picture.
-        sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * (fraction or 0.0)
+        sweep = look.DIAL_FROM + (look.DIAL_TO - look.DIAL_FROM) * at_axis(fraction)
         screen.pen = theme.grid
         if look.DIAL_TO - sweep > 0.5:
             screen.shape(shape.arc(vec2(*look.DIAL_C), ring_inner, ring_outer,
@@ -1527,7 +1549,7 @@ def radar(theme, entries):
     for i in range(count):
         screen.line(vec2(*centre), point(i, 1.0), 1)
 
-    filled = [point(i, row[2] or 0.0) for i, row in enumerate(rows)]
+    filled = [point(i, at_axis(row[2])) for i, row in enumerate(rows)]
     screen.pen = theme.accent
     screen.alpha = 150
     screen.shape(shape.custom(filled))
