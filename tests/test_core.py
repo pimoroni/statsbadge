@@ -1832,6 +1832,19 @@ def test_the_badge_scans_for_longer_than_the_host_waits(_h):
 
 
 @check
+def test_the_installer_and_the_app_name_the_same_extension_directory(_h):
+    """The installer writes badge modules into it and the app puts it on sys.path.
+
+    Disagreeing is an extension that installs and then draws nothing, with the page kind
+    it registers missing and no error anywhere.
+    """
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    assert f'EXT_DIR = "{install.EXT_DIR}"' in app, install.EXT_DIR
+    # `pages` would be a directory shadowing the app's pages.py on sys.path.
+    assert install.EXT_DIR != "pages"
+
+
+@check
 def test_one_writer_owns_the_badge_state_file(_h):
     """The installer writes it over the REPL and the app writes it at runtime.
 

@@ -22,6 +22,9 @@ from . import repl
 
 APP_NAME = "stats"
 STATE_FILE = "/state/stats.json"
+# Where an extension's badge modules go under the app directory. The app names it too,
+# and says there why it is not `pages`.
+EXT_DIR = "ext"
 
 
 class InstallError(Exception):
@@ -592,10 +595,8 @@ def app_files(source=None, extra_modules=()):
                 files.append((f"{name}/{inner}", os.path.join(path, inner)))
             continue
         files.append((name, path))
-    # `ext`, not `pages`: see load_extensions() in the app - a `pages` directory would
-    # shadow the app's pages.py module.
     for _name, path in extra_modules:
-        files.append((f"ext/{os.path.basename(path)}", path))
+        files.append((f"{EXT_DIR}/{os.path.basename(path)}", path))
     return files
 
 

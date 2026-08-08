@@ -33,6 +33,11 @@ except OSError:
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 
+# Where the installer puts an extension's badge modules, and what goes on sys.path for
+# them. Named `ext` and not `pages`: a `pages` directory on sys.path shadows the app's
+# pages.py, and an extension importing `pages` would get the directory.
+EXT_DIR = "ext"
+
 import look  # noqa: E402
 
 badge.mode(HIRES | VSYNC)
@@ -58,15 +63,12 @@ def pairing_ui():
 
 
 def load_extensions():
-    """Import any badge-side modules an extension had pushed into ext/.
+    """Import any badge-side modules an extension had pushed into EXT_DIR.
 
     Each registers a page kind in `pages.EXTRA` on import. A broken extension
     must not take the app down with it, so each is imported inside a try.
-
-    The directory is `ext`, not `pages`. A directory named `pages` on sys.path shadows
-    the app's `pages.py`, and an extension importing `pages` would get the directory.
     """
-    directory = APP_DIR + "/ext"
+    directory = f"{APP_DIR}/{EXT_DIR}"
     try:
         names = os.listdir(directory)
     except OSError:
