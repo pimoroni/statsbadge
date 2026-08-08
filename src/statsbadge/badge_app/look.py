@@ -173,7 +173,9 @@ class Theme:
 
 
 # Until the first layout lands, and for a layout that carries no palette. Every other
-# theme is data on the host, in statsbadge/themes.py, and travels in the layout.
+# theme is data on the host, in statsbadge/themes.py, and travels in the layout. This one
+# is that file's default copied out, since MicroPython cannot import it, and a check holds
+# the two the same.
 THEMES = {
     "dark": Theme(
         "dark",

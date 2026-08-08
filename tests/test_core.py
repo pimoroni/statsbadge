@@ -26,7 +26,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from statsbadge import auth, identity, install, layout, model, server  # noqa: E402
+from statsbadge import auth, identity, install, layout, model, server, themes  # noqa: E402
 
 
 class FakeColour:
@@ -1829,6 +1829,32 @@ def test_the_badge_scans_for_longer_than_the_host_waits(_h):
     for short in re.findall(r"discover\(timeout_ms=(\d+)\)", app):
         raise AssertionError(f"a {short}ms scan outside the countdown")
     assert "deadline" in menu, "the countdown is what makes setup's short scans add up"
+
+
+@check
+def test_the_theme_the_badge_boots_with_is_the_host_s_dark(_h):
+    """look.THEMES holds one palette, for the frames before the first layout arrives.
+
+    The same colours are in themes.PALETTES, and MicroPython cannot import that, so the
+    badge carries a copy. Drifting shows as the page changing colour a second after
+    launch, which reads as a rendering fault and is a palette edit made once.
+    """
+    import ast
+
+    source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text()
+    call = None
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Theme":
+            call = node
+            break
+    assert call is not None, "no Theme( in look.py"
+
+    carried = {kw.arg: ast.literal_eval(kw.value) for kw in call.keywords}
+    assert ast.literal_eval(call.args[0]) == themes.DEFAULT, "a theme other than the default"
+    wanted = themes.PALETTES[themes.DEFAULT]
+    assert carried == wanted, (
+        f"the badge boots a different {themes.DEFAULT}: "
+        f"{ {k: v for k, v in carried.items() if wanted.get(k) != v} }")
 
 
 @check
