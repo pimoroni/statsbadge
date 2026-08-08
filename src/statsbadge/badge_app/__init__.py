@@ -94,10 +94,6 @@ HOLD_TO_EXIT_MS = 700
 GC_THRESHOLD = 256 * 1024
 COLLECT_EVERY_MS = 1000
 
-# State writes /state/<app>.json, the same file net.Config keeps the pairing in. Both read
-# and write it, and page saves go through State.modify, which merges.
-STATE_APP = "stats"
-
 # The smallest change worth asking for. The panel takes a byte, so anything finer lands on
 # the level it already shows and only restarts the ramp.
 BACKLIGHT_STEP = 1.0 / 255
@@ -238,11 +234,7 @@ class App:
         self._next_hunt = 0
         self.rejected = False
 
-        # State.load merges into the dict it is given and returns whether a file was
-        # there, so the defaults are what to read afterwards.
-        saved = {"page": 0}
-        State.load(STATE_APP, saved)
-        self.page_index = int(saved.get("page", 0) or 0)
+        self.page_index = self.config.page
         self._saved_page = self.page_index
 
     # -- pages --------------------------------------------------------------
@@ -920,13 +912,13 @@ class App:
     def save_page(self):
         """Persist the page index, if it moved. Called on the way out.
 
-        modify, not save: save replaces the file and would drop the pairing that lives
-        in it. Not called per keypress - that is a flash write inside the input handler,
-        and the page is not worth one.
+        Not per keypress: that is a flash write inside the input handler, and the page is
+        not worth one.
         """
         if self.page_index == self._saved_page:
             return
-        State.modify(STATE_APP, {"page": self.page_index})
+        self.config.page = self.page_index
+        self.config.save()
         self._saved_page = self.page_index
 
 

@@ -17,6 +17,8 @@ import json
 import socket
 import time
 
+# Everything this app keeps across a power cycle, under the firmware's /state/<app>.json.
+# Config is the only writer, so nothing has to merge against anything else.
 STATE_FILE = "/state/stats.json"
 
 # How long to wait on a whole request before giving up and dropping the socket.
@@ -99,6 +101,7 @@ class Config:
         self.badge_id = None
         self.hosts = {}          # server id -> {host, port, secret, name, seq}
         self.active = None       # the server id in use
+        self.page = 0            # the page the badge was left on
         self._flushed = 0
         self.load()
 
@@ -112,6 +115,7 @@ class Config:
             return False
 
         self.badge_id = data.get("badge_id")
+        self.page = int(data.get("page", 0) or 0)
         if "hosts" in data:
             self.hosts = data["hosts"]
             self.active = data.get("active")
@@ -141,8 +145,8 @@ class Config:
     def save(self):
         """Write our keys back, leaving anything else in the file alone.
 
-        The app's page index lives here too, under "page", and State replaces a file
-        wholesale - so both writers merge or one wipes the other.
+        A key an older build wrote and this one knows nothing of survives, so downgrading
+        keeps whatever it kept.
         """
         try:
             try:
@@ -160,6 +164,7 @@ class Config:
             data["badge_id"] = self.badge_id
             data["active"] = self.active
             data["hosts"] = self.hosts
+            data["page"] = self.page
             with open(STATE_FILE, "w") as handle:
                 json.dump(data, handle)
             self._flushed = self.seq

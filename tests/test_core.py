@@ -1801,6 +1801,29 @@ def test_setup_waves_through_a_server_already_paired(_h):
 
 
 @check
+def test_one_writer_owns_the_badge_state_file(_h):
+    """The installer writes it over the REPL and the app writes it at runtime.
+
+    Two processes, so the path is a literal at each end and only a check holds them
+    together. Inside the app it is net.Config alone, which keeps the page index as well
+    as the pairing: two writers each had to merge, and either could have replaced.
+    """
+    app_dir = pathlib.Path(install.app_source_dir())
+    net_source = (app_dir / "net.py").read_text()
+    assert f'STATE_FILE = "{install.STATE_FILE}"' in net_source, (
+        f"the app does not write {install.STATE_FILE}")
+
+    # The installer merges, so a page index and a pairing with another host both survive.
+    assert "data = json.load(open(path))" in (
+        pathlib.Path("src/statsbadge/install.py").read_text())
+
+    app = (app_dir / "__init__.py").read_text()
+    assert "State." not in app, "the app is writing state behind Config's back"
+    for owned in ("self.config.page = self.page_index", "self.config.save()"):
+        assert owned in app, owned
+
+
+@check
 def test_a_row_of_text_and_a_plot_measures_its_columns(_h):
     """A fixed column either leaves a gap after the names or runs the readings into the
     plots, and which of the two it does depends on the fields the page carries."""
