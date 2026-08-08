@@ -1411,6 +1411,15 @@ def test_a_source_keeps_what_it_worked_out(_h):
     assert len(store.all()) == state.MAX_KEYS
     assert store.get(f"key{state.MAX_KEYS + 7}") == state.MAX_KEYS + 7, "dropped the newest"
 
+    # Setting a key again keeps it, so the one dropped at the cap is the longest untouched
+    # and a place looked up every launch outlives a typo made once.
+    kept, dropped = f"key{state.MAX_KEYS + 4}", f"key{state.MAX_KEYS + 5}"
+    store.set(kept, "still wanted")
+    for index in range(state.MAX_KEYS - 1):
+        store.set(f"later{index}", index)
+    assert store.get(kept) == "still wanted", "evicted a key that was being used"
+    assert store.get(dropped) is None, "the cap is not being reached"
+
     # A name that would be a bad filename is still made into one: this ends up as a path.
     assert state.for_source(directory, "../etc/passwd").path == os.path.join(
         directory, "___etc_passwd.json")
@@ -1912,7 +1921,7 @@ def test_a_gauge_can_sweep_to_its_reading(_h):
         pages.fraction_of("cpu.pct", 20.0)
         assert len(FakeTween.made) == made, "an unchanged reading restarted the sweep"
 
-        # A page turn forgets where everything stood, a turn not being a change in the
+        # A page turn drops where everything stood, a turn not being a change in the
         # machine.
         pages.sweep_reset()
         assert pages.fraction_of("cpu.pct", 20.0) == 0.2
@@ -3774,6 +3783,48 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
     assert 'source.last_fault ? "faulty" : null' in script, \
         "a recovered source still shows as broken"
     assert 'provides.join(", ")' in script.split("function renderSources")[1][:600]
+
+
+@check
+def test_the_cpu_temperature_linux_reports_is_the_hottest_one(_h):
+    """A sensor is ranked by its label, and blank labels all fall back to the chip name.
+
+    Every entry then ranks the same, and taking the first is taking core 0: an idle core
+    beside a busy one, reported as the CPU temperature.
+    """
+    import types
+
+    from statsbadge.sources import linux
+
+    def entry(label, current):
+        return types.SimpleNamespace(label=label, current=current, high=None, critical=None)
+
+    source = linux.LinuxHwmon({})
+    # psutil only grows sensors_temperatures on Linux, so on any other host it is added.
+    missing = object()
+    was = getattr(linux.psutil, "sensors_temperatures", missing)
+    try:
+        linux.psutil.sensors_temperatures = lambda: {
+            "coretemp": [entry("", 41.0), entry("", 78.4), entry("", 52.0)]}
+        assert source._cpu_temp() == 78.4, "reported an idle core"  # noqa: SLF001
+
+        # A better label still wins, hotter reading or not: k10temp offers Tctl as a
+        # control value that runs above the die it sits on.
+        linux.psutil.sensors_temperatures = lambda: {
+            "k10temp": [entry("Tdie", 60.0), entry("Tctl", 91.0)]}
+        assert source._cpu_temp() == 91.0, "Tctl outranks Tdie"  # noqa: SLF001
+        linux.psutil.sensors_temperatures = lambda: {
+            "coretemp": [entry("Package id 0", 60.0), entry("", 91.0)]}
+        assert source._cpu_temp() == 60.0, "an unlabelled core beat the package"  # noqa: SLF001
+
+        # A chip that means nothing about the CPU is no reading, and not the hottest drive.
+        linux.psutil.sensors_temperatures = lambda: {"nvme": [entry("Composite", 44.0)]}
+        assert source._cpu_temp() is None  # noqa: SLF001
+    finally:
+        if was is missing:
+            del linux.psutil.sensors_temperatures
+        else:
+            linux.psutil.sensors_temperatures = was
 
 
 class FakeBoard:

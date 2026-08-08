@@ -16,16 +16,23 @@ import time
 
 from . import derive, themes
 
-# A page kind the badge can draw, and what it needs.
-#   dial    one field as a sweep gauge, plus up to three readouts beside it
-#   dials   up to four fields as gauges side by side, each named under its reading
-#   bars    a list of fields as horizontal bars, good for per-core
-#   graph   one or two fields over time, from the server's history ring
-#   grid    up to six fields as big numbers
-#   text    labelled lines, for names and versions
-#   badge   the badge's own vitals, which need no field and come from no host
-KINDS = ("dial", "dials", "bars", "graph", "grid", "text",
-         "rings", "spark", "radar", "trend", "waterfall", "notify", "badge")
+# A page kind the badge can draw, and what it needs. Keyed, so a kind cannot arrive
+# without a description of it.
+KINDS = {
+    "dial": "one field as a sweep gauge, plus up to three readouts beside it",
+    "dials": "up to four fields as gauges side by side, each named under its reading",
+    "bars": "a list of fields as horizontal bars, good for per-core",
+    "graph": "one or two fields over time, from the server's history ring",
+    "grid": "up to six fields as big numbers",
+    "text": "labelled lines, for names and versions",
+    "rings": "up to four fields as arcs nested inside one another",
+    "spark": "up to six fields as small plots, one to a row, each holding still",
+    "radar": "up to six fields as the axes of one polygon",
+    "trend": "one field over time, with how far it has moved called out",
+    "waterfall": "one list field as lanes of colour, a column a frame, scrolling left",
+    "notify": "up to six lines of messages and counts",
+    "badge": "the badge's own vitals, which need no field and come from no host",
+}
 
 # How many fields a kind can draw. What is left out carries a layout table.
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,

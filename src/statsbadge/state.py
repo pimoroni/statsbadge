@@ -39,12 +39,15 @@ class Store:
         self.update({key: value})
 
     def update(self, values):
-        """Store several, in one write."""
+        """Store several, in one write. A key set again moves to the end of the queue."""
         with self._lock:
             merged = dict(self._data)
+            # Deleted before it is set, so a dict's insertion order is order of last use
+            # and the key dropped at the cap is the one longest untouched.
+            for key in values:
+                merged.pop(key, None)
             merged.update(values)
             if len(merged) > MAX_KEYS:
-                # The oldest first, since a dict keeps insertion order.
                 for key in list(merged)[:len(merged) - MAX_KEYS]:
                     del merged[key]
             payload = json.dumps(merged, indent=2, sort_keys=True)

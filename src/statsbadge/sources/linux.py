@@ -13,7 +13,7 @@ import psutil
 from .base import Source
 
 # Labels that mean "the package", best first. A machine offers several, and the one to
-# report is the hottest meaningful aggregate, not core 0.
+# report is the hottest meaningful aggregate.
 CPU_LABELS = (
     "package id 0", "tctl", "tdie", "cpu", "k10temp", "coretemp",
     "soc_thermal", "cpu_thermal", "acpitz",
@@ -62,7 +62,10 @@ class LinuxHwmon(Source):
                     (i for i, want in enumerate(CPU_LABELS) if want in label),
                     len(CPU_LABELS),
                 )
-                if best is None or rank < best[0]:
+                # Best-named first, then hottest. Several sensors rank the same where the
+                # labels are blank and every entry falls back to one chip name, and taking
+                # the first of those is taking core 0.
+                if best is None or (rank, -entry.current) < (best[0], -best[1]):
                     best = (rank, entry.current)
         if best and best[0] < len(CPU_LABELS):
             return round(float(best[1]), 1)
