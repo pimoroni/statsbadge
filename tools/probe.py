@@ -1,5 +1,6 @@
 """Run the app's drawing on a badge without installing it, time it, and dump frames.
 
+    python3 tools/dump_themes.py          # the palettes the host would send
     mpremote connect PORT mount . run tools/probe.py
 
 Mount the repo root, not the app directory: frames go to /remote/build/shots, which is
@@ -10,6 +11,7 @@ the badge happens to be paired.
 """
 
 import gc
+import json
 import os
 import sys
 import time
@@ -34,6 +36,12 @@ t0 = time.ticks_us()
 draw.prepare()
 print("font.load + prepare: %.1f ms" % (time.ticks_diff(time.ticks_us(), t0) / 1000))
 
+# The picture on a mocked post, encoded the way an extension sends one: a 128x96 indexed
+# PNG out of statsbadge.imaging, base64 in the frame. Beside this file rather than in it,
+# 4KB of base64 being nothing anybody reads.
+with open("/remote/tools/mock_post_image.b64") as _handle:
+    MOCK_IMAGE = _handle.read().strip()
+
 # A frame with everything filled in, so no page draws "--" by accident.
 FRAME = {
     "v": 1, "seq": 7, "layout_rev": 3,
@@ -50,17 +58,34 @@ FRAME = {
     "power": {"battery_pct": 91, "charging": True, "package_w": 44.2},
     # A feed, for the notifications page. Four things - who, what, when and why - which
     # is a post, a mention, a headline and an RSS entry alike.
+    # Invented, not copied from anybody's timeline: a shot of this goes on the project
+    # page, where a real post is somebody else's words republished without their say-so.
     "feed": {
-        "home": {"title": "Maaike", "text": "All of the above! I inherited my dad's old "
-                                            "cameras, my mum taught me how to see and knit",
-                 "age_s": 420, "note": "boosted"},
-        "mention": {"title": "dinkster75", "text": "@gadgetoid how did you side load onto "
-                                                   "the yaber t2? what cable?",
+        "home": {"title": "@alder", "text": "Your Tufty 2350 is crying out for some "
+                                            "statsbadge love",
+                 "age_s": 420, "note": "boosted", "image": MOCK_IMAGE},
+        "mention": {"title": "@questing.beetle", "text": "which pin header did you end up "
+                                                         "using for the display?",
                     "age_s": 34200},
-        "headline": {"title": "BBC News", "text": "Something has happened somewhere, and "
+        "headline": {"title": "The Wire", "text": "Something has happened somewhere, and "
                                                   "this is the headline about it",
                      "age_s": 90, "note": "Technology"},
         "followers": 1350, "following": 663, "posts": 6466, "likes": 21,
+    },
+    # A second one, for a page watching a handle and a feed rather than an account.
+    "bsky_example": {
+        "latest": {"title": "example.bsky.social", "text": "New firmware is up. Two years of "
+                                                           "battery on a coin cell, which we "
+                                                           "did not expect either",
+                   "age_s": 1500},
+        "followers": 8420, "likes": 96, "reposts": 31,
+    },
+    "bskyfeed_makers": {
+        "latest": {"title": "@wren.example", "text": "a lamp that gets brighter the longer "
+                                                     "you have been sitting still. it is "
+                                                     "judging me and it is right",
+                   "age_s": 240},
+        "likes": 214,
     },
     # What the collector sends as the scale for each rate.
     "peaks": {"net.down_bps": 23068672, "net.up_bps": 2516582,
@@ -88,13 +113,41 @@ FRAME = {
                 # Units travel with the numbers, and the icon is a character in the
                 # extension's own icons.af.
                 "temp_unit": "C", "wind_unit": "km/h", "icon": "f"},
+    # A group a domain, the shape statsbadge-cloudflare reports. Example domains, so a
+    # published shot names nobody's sites.
+    "cf_example_com": {"requests": 812.4, "bytes_bps": 4194304, "cached_pct": 87.0,
+                       "requests_today": 964120, "pageviews_today": 120433,
+                       "threats_today": 218},
+    "cf_example_org": {"requests": 214.8, "bytes_bps": 1153434, "cached_pct": 74.5,
+                       "requests_today": 251880, "pageviews_today": 31204,
+                       "threats_today": 46},
+    "cf_example_net": {"requests": 63.1, "bytes_bps": 327680, "cached_pct": 91.2,
+                       "requests_today": 74210, "pageviews_today": 8801,
+                       "threats_today": 12},
 }
+
+# What the host sends alongside the layout for groups the badge cannot name from the key.
+# Without it a domain draws as CF_EXAMPLE_COM.
+LABELS = {"cf_example_com": "example.com", "cf_example_org": "example.org",
+          "cf_example_net": "example.net",
+          "bsky_example": "example.bsky.social", "bskyfeed_makers": "Makers"}
 
 
 def ramp(n, peak=100.0):
     """A plausible wiggle for a graph, without needing a server's history."""
     import math
     return [peak * (0.35 + 0.3 * math.sin(i / 4.0) + 0.2 * math.sin(i / 1.7))
+            for i in range(n)]
+
+
+def day(n, peak, low=0.18):
+    """A day of hourly points, quiet overnight and busy in the afternoon.
+
+    Cloudflare's history is hourly and a day long, so a graph of it has the shape of a day
+    rather than the last ninety seconds a sampled reading would give.
+    """
+    import math
+    return [peak * (low + (1 - low) * max(0.0, math.sin((i / n) * math.pi) ** 1.6))
             for i in range(n)]
 
 
@@ -110,6 +163,8 @@ HISTORY = {
     "cpu.pct": ramp(48), "gpu.pct": ramp(48, 90),
     "cpu.temp": ramp(48, 80), "gpu.temp": ramp(48, 70),
     "net.down_bps": ramp(48, 11534336), "net.up_bps": ramp(48, 1258291),
+    "cf_example_com.requests": day(24, 1180), "cf_example_org.requests": day(24, 320),
+    "cf_example_net.requests": day(24, 96), "cf_example_com.cached_pct": day(24, 94, 0.82),
 }
 
 PAGES = [
@@ -146,12 +201,29 @@ PAGES = [
     {"id": "radar", "kind": "radar", "title": "Shape",
      "fields": ["cpu.pct", "mem.pct", "gpu.pct", "disk.pct", "gpu.temp"]},
     {"id": "trend", "kind": "trend", "title": "CPU", "field": "cpu.pct"},
-    {"id": "waterfall", "kind": "waterfall", "title": "Cores", "field": "cpu.cores"},
+    # Named apart from the shot the docs show. This renders a page once, and a waterfall
+    # puts down one column a frame, so what lands here is a sliver against a screen of
+    # background. tools/waterfall_shot.py drives it until the plot is full and writes
+    # `waterfall`; sharing the name meant whichever tool ran last won.
+    {"id": "waterfall_1frame", "kind": "waterfall", "title": "Cores",
+     "field": "cpu.cores"},
     {"id": "notify", "kind": "notify", "title": "Mastodon",
      "fields": ["feed.home", "feed.mention",
                 "feed.followers", "feed.following", "feed.posts", "feed.likes"]},
     {"id": "notify_one", "kind": "notify", "title": "Headlines",
      "fields": ["feed.headline"]},
+    {"id": "mastodon", "kind": "notify", "title": "Mastodon Feed",
+     "fields": ["feed.home", "feed.mention",
+                "feed.followers", "feed.posts", "feed.likes"]},
+    {"id": "bluesky", "kind": "notify", "title": "BlueSky",
+     "fields": ["bsky_example.latest", "bskyfeed_makers.latest",
+                "bsky_example.followers", "bsky_example.reposts", "bskyfeed_makers.likes"]},
+    # A service rather than a machine, drawn by the pages the badge already has.
+    {"id": "cloudflare", "kind": "graph", "title": "Requests",
+     "fields": ["cf_example_com.requests", "cf_example_org.requests"]},
+    {"id": "cloudflare_spark", "kind": "spark", "title": "Cloudflare",
+     "fields": ["cf_example_com.requests", "cf_example_org.requests",
+                "cf_example_net.requests", "cf_example_com.cached_pct"]},
     # The clock extension's pages, one per face. The ids name the shots, and each page
     # id is also the key its place is published under.
     {"id": "swiss_clock", "kind": "clockface", "title": "Clock", "face": "railway"},
@@ -188,8 +260,27 @@ def time_page(page, theme, n=12):
     return time.ticks_diff(time.ticks_us(), t) / n / 1000
 
 
+# The palettes the host would send, and not the one this app boots with: that one carries
+# no image ramps, so a picture keeps the greys it arrived in instead of being redrawn in
+# the theme's. tools/dump_themes.py writes them.
+try:
+    with open("/remote/build/themes.json") as _handle:
+        PALETTES = json.load(_handle)
+except (OSError, ValueError):
+    PALETTES = {}
+    print("no build/themes.json; run tools/dump_themes.py for themed pictures and the "
+          "theme sweep")
+
+
+def themed(name):
+    """`name` as the badge would build it from a layout, or what it booted with."""
+    palette = PALETTES.get(name)
+    return (look.from_palette(name, palette) if palette else None) or look.get(name)
+
+
 print()
-theme = look.get("dark")
+pages_module.LABELS = LABELS
+theme = themed("dark")
 for index, page in enumerate(PAGES):
     per_frame = time_page(page, theme)
     pages_module.render(page, FRAME, HISTORY, theme, index, len(PAGES),
@@ -220,12 +311,9 @@ print("\nfirst draw of a page, cold cache: %.1f ms"
 
 # Every palette the host has, built the way the badge builds one from a layout: the app
 # itself only carries the one it boots with.
-sys.path.insert(0, "/remote/src")
-from statsbadge import themes  # noqa: E402
-
 print("\nevery theme, on the CPU dial:")
-for name, palette in themes.written().items():
-    theme = look.from_palette(name, palette) or look.get(name)
+for name in PALETTES:
+    theme = themed(name)
     draw.clear_cache()
     per_frame = time_page(PAGES[0], theme)
     pages_module.render(PAGES[0], FRAME, HISTORY, theme, 0, len(PAGES), "workshop-pc")
@@ -235,7 +323,7 @@ for name, palette in themes.written().items():
 
 # Missing data must read as "unknown", not as zero.
 draw.clear_cache()
-theme = look.get("dark")
+theme = themed("dark")
 sparse = {"v": 1, "cpu": {"pct": 12.0}, "mem": {}, "gpu": [], "net": {},
           "disk": {}, "power": {}, "fans": [], "sys": {"host": "quiet"}}
 pages_module.render(PAGES[0], sparse, {}, theme, 0, len(PAGES), "quiet")
@@ -289,7 +377,7 @@ MENU_ROWS = [
 ]
 
 print()
-theme = look.get("dark")
+theme = themed("dark")
 for name, render in SCREENS:
     draw.clear_cache()
     render()

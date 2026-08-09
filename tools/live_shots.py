@@ -79,6 +79,10 @@ history = get(f"/v1/history?keys={keys}&points={layout.get('graph_points', 48)}"
 # default dark is not what the badge is showing.
 theme = (look.from_palette(layout.get("theme", look.DEFAULT), layout.get("palette"))
          or look.get(layout.get("theme", look.DEFAULT)))
+# What the app does on landing a layout. Without it a group named after a domain draws as
+# CF_GADGETOID_COM, which is the fallback for a label that never arrived and not what the
+# badge shows.
+pages_module.LABELS = layout.get("labels") or {}
 pages = layout["pages"]
 print(f"theme {layout.get('theme')}, {len(pages)} pages, "
       f"host {frame.get('sys', {}).get('host')}")
