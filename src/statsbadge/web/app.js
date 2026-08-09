@@ -757,24 +757,38 @@ function bindCheck(id, key) {
 }
 
 /** Off, the backlight's level, or a reading for the lights to follow. The stored value is
- * false, true, or a field ref, so the option values carry it directly. */
+ * false, true, or a field ref.
+ *
+ * Which of the three comes first, and the reading is then picked the way a page picks one -
+ * by source and then by metric - rather than from one list of every reading this host has. */
 function renderCaseLights() {
   // The flag has always stored "theme", from when a palette named the level.
-  const options = [["off", "Off"], ["theme", "Follow the Backlight"]]
-  for (const ref of numericRefs()) {
-    options.push([ref, `${groupLabel(ref.split(".")[0])} - ${fieldLabel(ref)}`])
-  }
-  const current = config.caselights === true ? "theme" : config.caselights || "off"
-  // A reading this host has stopped sending still has to be selectable, or opening the page
-  // and saving it would quietly turn the lights off.
-  if (!options.some(([value]) => value === current)) options.push([current, current])
+  const mode = $("caselights")
+  const stored = config.caselights
+  const chosen = stored === true ? "theme" : stored ? "reading" : "off"
+  const refs = numericRefs()
+  const offered = [["off", "Off"], ["theme", "Follow the Backlight"]]
+  // Nothing numeric to follow means nothing to offer following. A stored ref still counts,
+  // so a host that has stopped sending one does not silently drop it.
+  if (refs.length || chosen === "reading") offered.push(["reading", "Follow a Reading"])
+  mode.replaceChildren(...offered.map(([value, text]) =>
+    el("option", { value, textContent: text, selected: value === chosen })))
 
-  const caselights = $("caselights")
-  caselights.replaceChildren(...options.map(([value, text]) =>
-    el("option", { value, textContent: text, selected: value === current })))
-  caselights.onchange = () => {
-    const value = caselights.value
-    config.caselights = value === "off" ? false : value === "theme" ? true : value
+  // Held on to while the mode moves off it and back, so leaving and returning lands on the
+  // reading that was picked rather than on the first in the list.
+  let following = typeof stored === "string" ? stored : refs[0]
+
+  const row = $("caselightref")
+  row.hidden = chosen !== "reading"
+  row.replaceChildren(...refSelect(following, refs, (ref) => {
+    following = ref
+    config.caselights = ref
+  }))
+
+  mode.onchange = () => {
+    const value = mode.value
+    config.caselights = value === "off" ? false : value === "theme" ? true : following
+    row.hidden = value !== "reading"
     markDirty()
   }
 }

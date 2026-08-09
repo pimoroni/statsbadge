@@ -183,13 +183,18 @@ main > section section:not(:has(> section)) {
 
 main > section section[hidden] { display: none; }
 
-main section > span[data-tint]:not([hidden]) {
+/* A row of controls belonging to the field above it: the second accent beside its chip, and
+   the source and reading a setting follows. Sits under the field's own column, not the
+   label's, so it reads as part of that setting and not as another one. */
+main section > span:is([data-tint], .refs):not([hidden]) {
   grid-column: 2 / -1;
   display: flex; align-items: center; gap: 8px; min-width: 0;
 
   > select { max-width: 100%; }
   > i { width: 18px; height: 18px; flex: none; }
 }
+
+main section > span.refs > select { flex: 1; min-width: 0; }
 
 /* -- controls ------------------------------------------------------------ */
 
