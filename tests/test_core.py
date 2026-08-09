@@ -2205,7 +2205,7 @@ def test_a_page_can_slide_on_like_a_card(_h):
     # The turn only starts one when the layout asks, keeping the screen only for a deck.
     turn = app[app.index("def turn"):]
     turn = turn[:turn.index("\n    def ", 1)]
-    assert '.get("slide")' in turn and "delta < 0" in turn
+    assert 'setting("slide")' in turn and "delta < 0" in turn
     # A press schedules the movement, so a burst is one slide onto the page it landed on
     # and one only, several fighting over the screen being the fault.
     assert "SLIDE_WAIT_MS" in turn

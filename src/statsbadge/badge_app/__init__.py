@@ -90,6 +90,10 @@ def load_extensions():
 BUTTON_HOME.irq(None)
 HOLD_TO_EXIT_MS = 700
 
+# The bindable buttons, paired with the names the layout knows them by. Built here because
+# the buttons are runtime globals, so the literal was four tuples on every frame.
+BINDABLE = (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C))
+
 # How much may be allocated between collects, and how often the heap is swept while the
 # screen holds still. A collect is 3.9ms; see DEVELOPMENT.md.
 GC_THRESHOLD = 256 * 1024
@@ -247,11 +251,16 @@ class App:
         self.page_index = self.config.page
         self._saved_page = self.page_index
 
+    def setting(self, key, fallback=None):
+        """One of the host's layout settings, or `fallback` before a layout has landed."""
+        layout = self.layout
+        return fallback if layout is None else layout.get(key, fallback)
+
     # -- pages --------------------------------------------------------------
 
     @property
     def page_list(self):
-        return (self.layout or {}).get("pages") or []
+        return self.setting("pages") or []
 
     def current_page(self):
         pages = self.page_list
@@ -267,7 +276,7 @@ class App:
             return
         self.page_index = (self.page_index + delta) % len(pages)
         pages_module.sweep_reset()
-        style = (self.layout or {}).get("slide") or "off"
+        style = self.setting("slide") or "off"
         if style != "off" and len(pages) > 1:
             # Arm the wait and drop any slide in flight; slide_due() starts the movement.
             self.sliding = None
@@ -287,7 +296,7 @@ class App:
         if time.ticks_diff(now, self._slide_at) < 0:
             return
         self._slide_at = 0
-        style = (self.layout or {}).get("slide") or "off"
+        style = self.setting("slide") or "off"
         if style == "off":
             self.dirty = True
             return
@@ -371,7 +380,7 @@ class App:
         if time.ticks_diff(now, self._next_poll) < 0:
             return
 
-        interval = (self.layout or {}).get("interval_ms", 1000)
+        interval = self.setting("interval_ms", 1000)
         # Back off when the host is not answering, so a sleeping PC does not keep the
         # radio busy.
         if self.client.failures:
@@ -391,7 +400,7 @@ class App:
         # sample and the plots walk at half pace.
         if self._graph_keys():
             keys = ",".join(self._graph_keys())
-            points = (self.layout or {}).get("graph_points", 48)
+            points = self.setting("graph_points", 48)
             self._queued = ("history",
                             f"/v1/history?keys={keys}&points={points}&v=3")
         # Always sent: the parameter is what marks this app as able to read a split frame,
@@ -532,7 +541,7 @@ class App:
             self._series_age = int(payload.get("age_ms", 0) or 0)
             self._series_at = time.ticks_ms()
             pages_module.note_spacing(payload.get("every_ms", 1000),
-                                      (self.layout or {}).get("interval_ms", 1000))
+                                      self.setting("interval_ms", 1000))
             pages_module.note_series_spacing(payload.get("spacing"))
         self.dirty = True
 
@@ -553,10 +562,10 @@ class App:
         return keys[:6]
 
     def apply_layout(self):
-        theme_name = (self.layout or {}).get("theme", look.DEFAULT)
+        theme_name = self.setting("theme", look.DEFAULT)
         # The host sends the colours, so a theme it has and this app has never heard of
         # still draws. Only the key to fall back on, for a host too old to send them.
-        theme = (look.from_palette(theme_name, (self.layout or {}).get("palette"))
+        theme = (look.from_palette(theme_name, self.setting("palette"))
                  or look.get(theme_name))
         if theme.key != self.theme.key:
             self.theme = theme
@@ -565,15 +574,17 @@ class App:
         # and does not ramp to it.
         self.apply_backlight(BACKLIGHT_MS if self._lit else 0)
         self._lit = True
-        draw.SMOOTH = bool((self.layout or {}).get("smooth", True))
-        draw.ROWS = (self.layout or {}).get("rows", "zebra")
-        draw.GAUGE_FILL = (self.layout or {}).get("gauge_fill", "solid")
+        draw.SMOOTH = bool(self.setting("smooth", True))
+        draw.ROWS = self.setting("rows", "zebra")
+        draw.GAUGE_FILL = self.setting("gauge_fill", "solid")
         pages_module.PLOT_ANIMATION = bool(
-            (self.layout or {}).get("plot_animation", False))
+            self.setting("plot_animation", False))
         # What the host calls the groups an extension declared. Replaced and not
         # updated: a group dropped from every page should stop being named.
-        pages_module.LABELS = (self.layout or {}).get("labels") or {}
-        animate = bool((self.layout or {}).get("animate", False))
+        pages_module.LABELS = self.setting("labels") or {}
+        # Names and fields worked out from the old layout's refs, and read off LABELS.
+        pages_module.forget_layout()
+        animate = bool(self.setting("animate", False))
         if animate != pages_module.ANIMATE:
             pages_module.ANIMATE = animate
             pages_module.sweep_reset()
@@ -590,8 +601,8 @@ class App:
         """
         wanted = self.dimmed
         if wanted is None:
-            wanted = float((self.layout or {}).get("brightness", 0.8))
-        if (self.layout or {}).get("auto_brightness") and self.ambient is not None:
+            wanted = float(self.setting("brightness", 0.8))
+        if self.setting("auto_brightness") and self.ambient is not None:
             wanted *= look.LIGHT_FLOOR + (1.0 - look.LIGHT_FLOOR) * self.ambient
         return wanted
 
@@ -617,7 +628,7 @@ class App:
         making is backlight_to's to answer, since what counts as too small to bother with is
         a step of the panel and not a step of the sensor.
         """
-        if not (self.layout or {}).get("auto_brightness"):
+        if not self.setting("auto_brightness"):
             return False
         try:
             total = 0
@@ -644,14 +655,14 @@ class App:
         machine still glows. Dark is what the setting being off looks like. A field the
         host is not sending sits at the floor.
         """
-        setting = (self.layout or {}).get("caselights", True)
-        if not setting:
+        wanted = self.setting("caselights", True)
+        if not wanted:
             badge.caselights(0.0)
             return
         level = self.wanted_brightness()
-        if isinstance(setting, str):
+        if isinstance(wanted, str):
             fraction = pages_module.fraction_of(
-                setting, pages_module.value_of(self.frame, setting)) or 0.0
+                wanted, pages_module.value_of(self.frame, wanted)) or 0.0
             level *= CASELIGHT_FLOOR + (1.0 - CASELIGHT_FLOOR) * fraction
         badge.caselights(level)
 
@@ -665,7 +676,7 @@ class App:
         if badge.pressed(BUTTON_DOWN):
             self.turn(1)
             touched = True
-        for name, button in (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C)):
+        for name, button in BINDABLE:
             if badge.pressed(button):
                 if name == "c" and self.current_page() is None:
                     # Only the notice is on screen, so C is no command. It is the
@@ -682,7 +693,7 @@ class App:
 
     def press(self, which):
         """What a button is bound to: something this badge does, or a host command."""
-        binding = ((self.layout or {}).get("buttons") or {}).get(which)
+        binding = (self.setting("buttons") or {}).get(which)
         if not binding:
             return
         if binding.startswith(LOCAL_PREFIX):
@@ -705,7 +716,7 @@ class App:
         """
         self.dim_step = (self.dim_step + 1) % len(BRIGHTNESS_STEPS)
         share = BRIGHTNESS_STEPS[self.dim_step]
-        base = float((self.layout or {}).get("brightness", 0.8))
+        base = float(self.setting("brightness", 0.8))
         self.dimmed = None if share >= 1.0 else base * share
         self.apply_backlight()
         self.note(f"brightness {round(share * 100)}%")
@@ -810,12 +821,12 @@ class App:
         Off unless `idle_advance_s` is set. The first turn comes as soon as the badge
         counts as idle, the rest every `advance_every_s`.
         """
-        after = int((self.layout or {}).get("idle_advance_s", 0))
+        after = int(self.setting("idle_advance_s", 0))
         if not after or len(self.page_list) < 2:
             return
         if time.ticks_diff(now, self._pressed_at) < after * 1000:
             return
-        every = max(1, int((self.layout or {}).get("advance_every_s", 10)))
+        every = max(1, int(self.setting("advance_every_s", 10)))
         if self._advanced_at and time.ticks_diff(now, self._advanced_at) < every * 1000:
             return
         self._advanced_at = now

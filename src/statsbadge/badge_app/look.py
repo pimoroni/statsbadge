@@ -5,6 +5,8 @@ table of colours and one gradient rule: swapping the theme restyles the badge wi
 assets to rebuild.
 """
 
+import math
+
 W = 320
 H = 240
 
@@ -73,6 +75,7 @@ LIGHT_BRIGHT = 4000
 # configured brightness, and full daylight all of it. Off zero, a dark room at zero
 # reading as a fault.
 LIGHT_FLOOR = 0.1
+LIGHT_SPAN = math.log(LIGHT_BRIGHT / LIGHT_DIM)
 
 
 def ambient_fraction(raw):
@@ -81,10 +84,7 @@ def ambient_fraction(raw):
     Most of the useful range is between a curtained room and an overcast window, which
     is a small fraction of the way up the sensor's scale.
     """
-    import math
-
-    span = math.log(LIGHT_BRIGHT / LIGHT_DIM)
-    return max(0.0, min(1.0, math.log(max(raw, LIGHT_DIM) / LIGHT_DIM) / span))
+    return max(0.0, min(1.0, math.log(max(raw, LIGHT_DIM) / LIGHT_DIM) / LIGHT_SPAN))
 
 
 # Sizes are point sizes for the .af font. The size is the font's em scaled, a capital

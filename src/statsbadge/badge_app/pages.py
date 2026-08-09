@@ -103,9 +103,27 @@ def _swept(ref, fraction):
         moving = True
     return sweep.now
 
-# The host's names for an extension's groups, {"cf_pinout_xyz": "pinout.xyz"}. Only those;
-# the badge has shorter names for the model's own.
+# The host's names for an extension's groups, {"cf_pinout_xyz": "pinout.xyz"}. Extension
+# groups only: cpu, mem and the rest are named in NAMES below.
 LABELS = {}
+
+# Worked out from a ref and then held. Both depend on the ref alone, so only a layout that
+# retired a ref makes them worth dropping; names_for is not here because it reads LABELS.
+_fields = {}
+_names = {}
+
+
+def field_of(ref):
+    """The part after the last dot: what a scale, a unit and a severity are keyed on."""
+    field = _fields.get(ref)
+    if field is None:
+        field = _fields[ref] = ref.split(".")[-1]
+    return field
+
+
+def forget_layout():
+    _fields.clear()
+    _names.clear()
 
 # Nicer names than the raw field, where the raw field reads badly.
 NAMES = {
@@ -158,7 +176,7 @@ def severity_of(ref, fraction):
     """
     if fraction is None:
         return None
-    return 1.0 - fraction if ref.split(".")[-1] in GOOD_HIGH else fraction
+    return 1.0 - fraction if field_of(ref) in GOOD_HIGH else fraction
 
 
 # A trailing unit is stripped for the label, or "BYTES BPS 22KB/s" states it twice. The
@@ -172,12 +190,16 @@ LANE_NAMES = "_names"
 def name_for(ref):
     if ref in NAMES:
         return NAMES[ref]
-    field = ref.split(".")[-1]
+    held = _names.get(ref)
+    if held is not None:
+        return held
+    field = field_of(ref)
     for suffix in UNIT_SUFFIXES:
         if field.endswith(suffix) and len(field) > len(suffix):
             field = field[:-len(suffix)]
             break
-    return field.replace("_", " ").upper()
+    name = _names[ref] = field.replace("_", " ").upper()
+    return name
 
 
 def merge_slow(frame, held):
@@ -220,7 +242,7 @@ def fraction_of(ref, value, page=None, frame=None):
     """
     if value is None or isinstance(value, (str, bool)):
         return None
-    field = ref.split(".")[-1]
+    field = field_of(ref)
     if page and page.get("max"):
         top = float(page["max"])
     elif is_percent(field):
@@ -249,7 +271,7 @@ def scale_note(ref, frame):
     peak = peak_of(ref, frame)
     if peak is None:
         return None
-    return "peak " + draw.reading(peak, ref.split(".")[-1])
+    return "peak " + draw.reading(peak, field_of(ref))
 
 
 def render(page, frame, history, theme, index, total, subtitle=None):
@@ -275,7 +297,7 @@ def _dial(page, frame, _history, theme):
     ref = page.get("field", "")
     value = value_of(frame, ref)
     fraction = fraction_of(ref, value, page, frame)
-    field = ref.split(".")[-1]
+    field = field_of(ref)
     # The unit slot carries what full scale means, which for a rate is never obvious.
     under = scale_note(ref, frame) or draw.short_unit(field)
     draw.dial(theme, fraction, draw.fmt(value, field), under, cold=value is None,
@@ -283,7 +305,7 @@ def _dial(page, frame, _history, theme):
     readouts = page.get("readouts", [])[:3]
     for readout_ref, y in zip(readouts, look.readout_rows(len(readouts))):
         readout_value = value_of(frame, readout_ref)
-        readout_field = readout_ref.split(".")[-1]
+        readout_field = field_of(readout_ref)
         readout_fraction = fraction_of(readout_ref, readout_value, None, frame)
         draw.readout(theme, y, name_for(readout_ref),
                      draw.reading(readout_value, readout_field), readout_fraction,
@@ -297,7 +319,7 @@ def _bars(page, frame, _history, theme):
         values = [] if values is None else [values]
     maximum = float(page.get("max") or 100.0)
     names = value_of(frame, ref + LANE_NAMES)
-    draw.bars(theme, values, maximum, ref.split(".")[-1],
+    draw.bars(theme, values, maximum, field_of(ref),
               _swept_lanes(ref, values, maximum),
               names if isinstance(names, list) else None)
 
@@ -352,8 +374,8 @@ def _graph(page, frame, history, theme):
                 series[i] = [value, value]
     # names_for and not name_for: two domains' requests are both REQUESTS by field name,
     # so a key built from the field alone gives both series one label.
-    labels = list(zip(names_for(refs), [ref.split(".")[-1] for ref in refs]))
-    field = refs[0].split(".")[-1] if refs else "pct"
+    labels = list(zip(names_for(refs), [field_of(ref) for ref in refs]))
+    field = field_of(refs[0]) if refs else "pct"
     maximum = float(page["max"]) if page.get("max") else (
         100.0 if is_percent(field) else None)
     draw.graph(theme, series, labels, maximum, shift=_walk(refs))
@@ -366,7 +388,7 @@ def _grid(page, frame, _history, theme):
     entries = []
     for ref in refs:
         value = value_of(frame, ref)
-        field = ref.split(".")[-1]
+        field = field_of(ref)
         fraction = fraction_of(ref, value, None, frame)
         entries.append((name_for(ref), draw.reading(value, field), fraction,
                         icon_for(ref, by_group), severity_of(ref, fraction)))
@@ -405,7 +427,7 @@ def _dials(page, frame, _history, theme):
     entries = []
     for ref, group in zip(refs, groups):
         value = value_of(frame, ref)
-        field = ref.split(".")[-1]
+        field = field_of(ref)
         fraction = fraction_of(ref, value, page, frame)
         entries.append((group.upper() if by_group else name_for(ref),
                         draw.fmt(value, field), fraction,
@@ -419,7 +441,7 @@ def _text(page, frame, _history, theme):
     entries = []
     for ref in page.get("fields", [])[:7]:
         value = value_of(frame, ref)
-        entries.append((name_for(ref), draw.fmt(value, ref.split(".")[-1])))
+        entries.append((name_for(ref), draw.fmt(value, field_of(ref))))
     draw.lines(theme, entries)
 
 
@@ -436,7 +458,7 @@ def _notify(page, frame, _history, theme):
             items.append(value)
         elif value is not None or not items:
             # An empty counter still gets its label, so a page of them says what it is for.
-            counters.append((name_for(ref), draw.fmt(value, ref.split(".")[-1])))
+            counters.append((name_for(ref), draw.fmt(value, field_of(ref))))
     draw.notification(theme, items[:3], counters)
 
 
@@ -585,7 +607,7 @@ def names_for(refs):
     if len(set(plain)) == len(plain):
         return plain
     groups = [LABELS.get(group) or group.upper()
-              for group in (ref.split(".")[0] for ref in refs)]
+              for group in (ref.partition(".")[0] for ref in refs)]
     if len(set(groups)) == len(groups):
         return groups
     return [f"{group} {name}" for group, name in zip(groups, plain)]
@@ -593,15 +615,15 @@ def names_for(refs):
 
 def _series_for(ref, frame, history, page=None):
     """A field's history, falling back to the live value so a cold ring still plots."""
-    points = list(history.get(ref) or ())
+    # The ring as it stands, not a copy: nothing here or in draw writes to it.
+    points = history.get(ref) or ()
     if not points:
         value = value_of(frame, ref)
-        if value is not None:
-            points = [value, value]
+        points = [value, value] if value is not None else []
     peak = None
     if page and page.get("max"):
         peak = float(page["max"])
-    elif is_percent(ref.split(".")[-1]):
+    elif is_percent(field_of(ref)):
         peak = 100.0
     if peak is None:
         peak = max((p for p in points if p is not None), default=1.0)
@@ -614,7 +636,7 @@ def _rings(page, frame, _history, theme):
     labels = names_for(refs)
     for index, ref in enumerate(refs):
         value = value_of(frame, ref)
-        field = ref.split(".")[-1]
+        field = field_of(ref)
         fraction = fraction_of(ref, value, page, frame)
         # Coloured by its reading, not its position, or the outermost ring always looks calm.
         pen = (theme.at(severity_of(ref, fraction)) if fraction is not None
@@ -631,7 +653,7 @@ def _spark(page, frame, history, theme):
     for index, ref in enumerate(refs):
         points, peak = _series_for(ref, frame, history, page)
         value = value_of(frame, ref)
-        entries.append((labels[index], draw.reading(value, ref.split(".")[-1]),
+        entries.append((labels[index], draw.reading(value, field_of(ref)),
                         points, peak))
     draw.sparklines(theme, entries)
 
@@ -642,14 +664,14 @@ def _radar(page, frame, _history, theme):
     entries = []
     for index, ref in enumerate(refs):
         value = value_of(frame, ref)
-        entries.append((labels[index], draw.reading(value, ref.split(".")[-1]),
+        entries.append((labels[index], draw.reading(value, field_of(ref)),
                         fraction_of(ref, value, page, frame), theme.accent))
     draw.radar(theme, entries)
 
 
 def _trend(page, frame, history, theme):
     ref = page.get("field", "")
-    field = ref.split(".")[-1]
+    field = field_of(ref)
     value = value_of(frame, ref)
     points, peak = _series_for(ref, frame, history, page)
     # Against a few samples back. The last one alone is mostly noise.
@@ -671,10 +693,14 @@ _wf_seq = None
 _wf_at = 0
 # A poll is a second apart; the ease is over slightly less so it settles before the next.
 WF_EASE_MS = 850
+# Written in place: this kind draws every frame, and these only change with the core count.
+# Rebuilding them was 1.7ms and 640 bytes a frame at sixteen lanes.
+_wf_lanes = []
+_wf_labels = None
 
 
 def _waterfall(page, frame, history, theme):
-    global _wf_from, _wf_to, _wf_seq, _wf_at
+    global _wf_from, _wf_to, _wf_seq, _wf_at, _wf_labels
     ref = page.get("field", "cpu.cores")
     values = value_of_list(frame, ref)
     maximum = float(page.get("max") or 100.0)
@@ -699,14 +725,16 @@ def _waterfall(page, frame, history, theme):
     phase = 1.0
     if _wf_at:
         phase = min(1.0, max(0.0, time.ticks_diff(time.ticks_ms(), _wf_at) / WF_EASE_MS))
-    lanes = []
+    # Smoothstep, so a lane leaves and arrives gently instead of ramping linearly.
+    eased = phase * phase * (3.0 - 2.0 * phase)
+    count = len(_wf_to)
+    if len(_wf_lanes) != count:
+        _wf_lanes[:] = [0.0] * count
+        _wf_labels = [str(i) for i in range(count)] if count <= 16 else None
     for index, target in enumerate(_wf_to):
         start = _wf_from[index] if index < len(_wf_from) else target
-        # Smoothstep, so a lane leaves and arrives gently instead of ramping linearly.
-        eased = phase * phase * (3.0 - 2.0 * phase)
-        lanes.append((start + (target - start) * eased) / maximum)
-    labels = [str(i) for i in range(len(lanes))] if len(lanes) <= 16 else None
-    draw.waterfall(theme, lanes, labels)
+        _wf_lanes[index] = (start + (target - start) * eased) / maximum
+    draw.waterfall(theme, _wf_lanes, _wf_labels)
 
 
 def value_of_list(frame, ref):

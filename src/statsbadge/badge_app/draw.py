@@ -47,9 +47,9 @@ PICTURE_CACHE = 4
 _labels = _cached({})
 _pip_rows = _cached({})
 
-# Fonts by name, so a sprite cache key can say which one drew it. Without the name an icon
-# and a letter of the same string collide and one is drawn in the wrong font. Kept across
-# a theme change: a font holds no colour, and loading the text one is 107ms.
+# Fonts by role name. A sprite is keyed on the face behind the role, so an icon and a letter
+# of the same string cannot collide. Kept across a theme change: a font holds no colour, and
+# loading the text one is 107ms.
 TEXT = "text"
 ICONS = "icons"
 _fonts = {}
@@ -123,8 +123,8 @@ def has_font(name):
 def use_font(name):
     """Draw text with a registered font from here on. True when it is there.
 
-    The sprite cache keys on the name, not the font behind it, so changing what TEXT points
-    at has to empty it.
+    Nothing is emptied: sprites are keyed on the face, so what the old one baked stops being
+    asked for and goes with the next ceiling clear.
     """
     global FONT
     face = _fonts.get(name)
@@ -133,7 +133,6 @@ def use_font(name):
     _fonts[TEXT] = face
     FONT = face
     screen.font = face
-    clear_cache()
     return True
 
 
@@ -150,15 +149,17 @@ _once = _cached(set())
 ONCE_MAX = 512
 
 
-def label(text_value, size, pen, name=TEXT):
+def label(text_value, size, pen, face):
     """A string baked into a sprite, or None if it should be drawn where it stands.
 
     None for a string too large to keep, and for one not seen before; see `_once`. To place
     something against a string's width, ask `text_width` and draw with `blit_label`.
+
+    Takes the face, not the role it fills: `blit_label` has already looked it up.
     """
     if size >= CACHE_UNDER:
         return None
-    key = (name, text_value, size, pen)
+    key = (face, text_value, size, pen)
     cached = _labels.get(key)
     if cached is not None:
         return cached
@@ -166,9 +167,6 @@ def label(text_value, size, pen, name=TEXT):
         if len(_once) > ONCE_MAX:
             _once.clear()
         _once.add(key)
-        return None
-    face = _fonts.get(name)
-    if face is None:
         return None
     was = screen.font
     screen.font = face
@@ -202,7 +200,7 @@ def blit_label(text_value, size, pen, x, y, align=0, name=TEXT):
     face = _fonts.get(name)
     if face is None:
         return 0
-    sprite = label(text_value, size, pen, name)
+    sprite = label(text_value, size, pen, face)
     if sprite is None:
         width = text_width(text_value, size, name)
         if align == 1:
@@ -250,6 +248,7 @@ def text_width(text_value, size, name=TEXT):
     """How wide a string will be drawn, for a column to be fitted to it.
 
     Plus the pixel `label` adds, keeping a measurement and its sprite in agreement.
+    Not cached: keyed measurements cost more in tuples than measure_text does in time.
     """
     face = _fonts.get(name)
     if face is None:
@@ -843,7 +842,8 @@ def _lay_out(left, top, width, height, values, peak, shift):
     A moving plot is laid out `WALK_LEAD` samples wider than its box and clipped to it, so
     the samples still to come slide in at the right.
 
-    Smoothed first if it is tall enough for a curve, then scaled and laid out in one pass.
+    Smoothed, scaled and laid out in one pass where it is tall enough for a curve; `curve`
+    itself is the same maths for a caller that wants the values.
     `shape.custom` takes a float buffer, so no point is boxed as a vec2: 2.3ms against 3.7
     for 191 points.
     Scaled here and not in a list the caller passes, which saves a pass at 14.7us a point,
@@ -851,13 +851,13 @@ def _lay_out(left, top, width, height, values, peak, shift):
     """
     global _points
     values = flat(values)
-    count = len(values)
-    if count < 2:
+    samples = len(values)
+    if samples < 2:
         return 0
+    count = samples
     steps = curve_steps(width, height, count)
     if steps > 1:
-        values = curve(values, steps)
-        count = len(values)
+        count = (samples - 1) * steps + 1
     if len(_points) < (count + 2) * 2:
         _points = array("f", bytes((count + 2) * 8))
     # Points per original sample, so a shift of one moves the plot by one reading whether
@@ -880,6 +880,30 @@ def _lay_out(left, top, width, height, values, peak, shift):
     away = shift * step * per_sample if walking else 0.0
     start = left - away
     i = 0
+    if steps > 1:
+        # Interpolated straight into the buffer. The list `curve` returns was thrown away
+        # again the same frame: 1.0ms and 1.1KB of a graph page.
+        low, high = min(values), max(values)
+        table = _basis(steps)
+        last = samples - 1
+        point = 0
+        for index in range(last):
+            a = values[index - 1] if index else values[0]
+            b = values[index]
+            c = values[index + 1]
+            d = values[index + 2] if index + 2 <= last else values[last]
+            for w0, w1, w2, w3 in table:
+                value = w0 * a + w1 * b + w2 * c + w3 * d
+                value = low if value < low else (high if value > high else value)
+                y = bottom - value * scale
+                _points[i] = start + point * step
+                _points[i + 1] = top if y < top else (bottom if y > bottom else y)
+                i += 2
+                point += 1
+        y = bottom - values[last] * scale
+        _points[i] = start + point * step
+        _points[i + 1] = top if y < top else (bottom if y > bottom else y)
+        return i + 2
     for index in range(count):
         y = bottom - values[index] * scale
         _points[i] = start + index * step
