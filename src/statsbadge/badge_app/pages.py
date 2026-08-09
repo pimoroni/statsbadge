@@ -165,6 +165,9 @@ def severity_of(ref, fraction):
 # built-ins are all in NAMES, so this is for an extension's fields.
 UNIT_SUFFIXES = ("_bps", "_mb", "_pct")
 
+# `cached_pct` is labelled by `cached_pct_names`, where a source sends them.
+LANE_NAMES = "_names"
+
 
 def name_for(ref):
     if ref in NAMES:
@@ -293,8 +296,10 @@ def _bars(page, frame, _history, theme):
     if not isinstance(values, list):
         values = [] if values is None else [values]
     maximum = float(page.get("max") or 100.0)
+    names = value_of(frame, ref + LANE_NAMES)
     draw.bars(theme, values, maximum, ref.split(".")[-1],
-              _swept_lanes(ref, values, maximum))
+              _swept_lanes(ref, values, maximum),
+              names if isinstance(names, list) else None)
 
 
 def behind_at(age_ms, since_ms):

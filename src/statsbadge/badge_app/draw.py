@@ -701,13 +701,14 @@ def at_axis(value):
     return 0.0 if value is None else value
 
 
-def bars(theme, values, maximum=100.0, field="pct", fractions=None):
+def bars(theme, values, maximum=100.0, field="pct", fractions=None, names=None):
     """A stack of horizontal bars. Raster rectangles: no AA needed on an axis-aligned
     bar, and this is the one page that can have 32 of them.
 
     `field` is what the values are, so a per-core load prints as a percentage.
     `fractions` is where each bar should be drawn to, for a caller sweeping them; without
     it each bar is drawn at its value.
+    `names` labels the lanes; without it they are numbered.
     """
     if not values:
         return
@@ -717,7 +718,8 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None):
         # Fit the band whatever the core count, with at least a pixel between bars.
     slot = max(6, (look.BODY_H - 12) // count)
     height = max(4, slot - 3)
-    names = [f"{i}" for i in range(count)]
+    names = ([str(names[i]) if i < len(names) else "" for i in range(count)] if names
+             else [f"{i}" for i in range(count)])
     readings = [reading(values[i], field) for i in range(count)]
     # Both columns are as wide as their widest entry: a fixed one either leaves a gap or
     # runs the readings into the bars.

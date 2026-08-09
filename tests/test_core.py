@@ -1199,6 +1199,50 @@ def test_a_declared_group_is_named_on_the_badge_too(_h):
 
 
 @check
+def test_a_bar_can_be_named_by_whoever_sent_it(h):
+    """Bars number their lanes, which suits a core and is no use for a domain.
+
+    A source sends the names beside the values, the way `peaks` are sent beside the readings
+    they scale. Nothing has to declare the companion: the picker offers the list field, and
+    the names ride along in the frame where only the renderer looks for them.
+    """
+    from statsbadge.sources.base import Source
+
+    class Domains(Source):
+        name = "domains"
+        provides = ("edge",)
+        groups = {"edge": {"label": "Edge", "fields": {
+            "cached": {"label": "Cached % per domain", "percent": True, "list": True}}}}
+
+        def sample(self, frame, _dt):
+            frame["edge"] = {"cached": [87.0, 74.5],
+                             "cached_names": ["a.com", "b.com"]}
+
+    source = Domains({})
+    collector = h.service.collector
+    collector.extensions.append(source)
+    try:
+        collector.sample_once()
+        caps = collector.capabilities()
+        assert "cached" in caps["list_fields"], caps["list_fields"]
+        assert "cached_names" not in caps["list_fields"], caps["list_fields"]
+        assert "edge.cached_names" not in caps["available"], "the names were offered as a field"
+
+        sys.path.insert(0, install.app_source_dir())
+        import pages
+
+        frame = collector.latest()
+        assert pages.value_of(frame, "edge.cached") == [87.0, 74.5]
+        assert pages.value_of(frame, "edge.cached" + pages.LANE_NAMES) == ["a.com", "b.com"]
+    finally:
+        collector.extensions.remove(source)
+
+    source_text = pathlib.Path(install.app_source_dir(), "pages.py").read_text()
+    body = source_text[source_text.index("def _bars"):source_text.index("def behind_at")]
+    assert "LANE_NAMES" in body, "_bars numbers its lanes whatever the source sent"
+
+
+@check
 def test_stored_settings_beat_the_command_line(_h):
     merged = layout.merge_settings({"clock": {"latitude": 1.0, "units": "celsius"}},
                                    {"clock": {"latitude": 52.4}})
