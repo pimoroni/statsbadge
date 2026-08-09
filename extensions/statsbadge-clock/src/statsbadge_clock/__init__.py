@@ -420,6 +420,13 @@ class Clock(Source):
         self.store.set(GEOCODED, table)
         return located
 
+    @staticmethod
+    def _today(series):
+        """The first day out of a daily series, or None where the forecast carried none."""
+        if isinstance(series, list) and series and isinstance(series[0], (int, float)):
+            return series[0]
+        return None
+
     def _fetch(self, where, local_time=False):
         latitude, longitude, label = where
         url = (
@@ -430,10 +437,12 @@ class Clock(Source):
             f"&temperature_unit="
             f"{'fahrenheit' if self.units == 'fahrenheit' else 'celsius'}"
             f"&wind_speed_unit={self.wind_units}"
+            "&daily=temperature_2m_max,temperature_2m_min"
+            # The day's high and low are the day in this location, so the offset is asked
+            # for whether or not a page shows that location's time. Without it Open-Meteo
+            # cuts the day at UTC midnight, which is somebody else's day.
+            "&timezone=auto"
         )
-        if local_time:
-            # Asks for the location's offset, which a per-place clock needs.
-            url += "&timezone=auto"
         with urllib.request.urlopen(url, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
         current = payload.get("current", {})
@@ -442,7 +451,10 @@ class Clock(Source):
         # is_day is 1 or 0, and absent on a response that predates it.
         night = current.get("is_day") == 0
         icon = NIGHT_ICONS.get(condition) if night else None
+        daily = payload.get("daily") or {}
         return {
+            "high": self._today(daily.get("temperature_2m_max")),
+            "low": self._today(daily.get("temperature_2m_min")),
             "temp": current.get("temperature_2m"),
             "feels": current.get("apparent_temperature"),
             "humidity": current.get("relative_humidity_2m"),
@@ -456,6 +468,7 @@ class Clock(Source):
             "wind_unit": WIND_UNITS[self.wind_units],
             "icon": icon or ICONS.get(condition),
             # Seconds east of UTC for this location, which is what makes a per-place
-            # clock possible. Absent unless timezone=auto was asked for.
-            "utc_offset": payload.get("utc_offset_seconds"),
+            # clock possible. Only where a page asked for that location's own time; the
+            # badge's own weather is drawn beside the badge's own clock.
+            "utc_offset": payload.get("utc_offset_seconds") if local_time else None,
         }

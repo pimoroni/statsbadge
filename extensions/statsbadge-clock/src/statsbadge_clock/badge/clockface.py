@@ -26,6 +26,21 @@ WEATHER_FONT = "weather"
 # two of them have room for together.
 ICON_SIZE = 32
 
+
+def _high_low(weather):
+    """The day's range, or None where the forecast carried neither end.
+
+    One end alone is still worth drawing: a high with no low is a forecast that reaches
+    this far, and blanking the line leaves the day with no shape on it at all.
+    """
+    unit = weather.get("temp_unit") or ""
+    parts = []
+    for mark, key in (("H", "high"), ("L", "low")):
+        value = weather.get(key)
+        if value is not None:
+            parts.append(f"{mark} {value:.0f}\u00b0{unit}")
+    return "   ".join(parts) or None
+
 # DSEG7 Classic Bold, packed --wide --cap-from 8: a face with no H to measure a cap
 # height from. Its digits stand where a capital does, so it drops in at the same size.
 LCD_FONT = "lcd"
@@ -329,8 +344,15 @@ def _digital(clock, weather, label, theme, spec):
         unit = weather.get("temp_unit") or ""
         x += draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
                              look.SIZE_BIG, theme.ink, x, y) + 12
+    # The condition names what it is doing, the range how far the day goes, stacked beside
+    # the temperature so the row stays as tall as the number it sits next to.
+    span = _high_low(weather)
     if weather.get("condition"):
-        draw.blit_label(weather["condition"], look.SIZE_SMALL, theme.dim, x, y + 10)
+        draw.blit_label(weather["condition"], look.SIZE_SMALL, theme.dim, x,
+                        y + (2 if span else 10))
+    if span:
+        draw.blit_label(span, look.SIZE_SMALL, theme.dim, x,
+                        y + (look.SIZE_SMALL + 6 if weather.get("condition") else 10))
     if weather.get("wind") is not None:
         draw.blit_label("wind {:.0f} {}".format(weather["wind"],
                                                 weather.get("wind_unit") or ""),
@@ -397,6 +419,14 @@ def render(page, frame, _history, theme):
                             look.SIZE_BIG, theme.ink,
                             x + (drawn + 8 if drawn else 0), y)
         y += ICON_SIZE + 4
+
+    # The day's range under the number it is the range of, so the reading beside the symbol
+    # reads as now and this as the rest of the day. Lined up with the temperature and not
+    # the symbol, the symbol being taller than the text beside it.
+    span = _high_low(weather)
+    if span:
+        draw.blit_label(span, look.SIZE_SMALL, theme.dim, x, y)
+        y += look.SIZE_SMALL + 6
 
     wind = None
     if weather.get("wind") is not None:

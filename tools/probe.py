@@ -76,12 +76,14 @@ FRAME = {
     # One entry per clock page, which is how the host sends a page its own location.
     "places": {page_id: {"time": "10:09", "date": "Fri 31 Jul", "hour": 10, "minute": 9,
                          "seconds": 36, "temp": 16.0, "temp_unit": "C",
+                         "high": 19.0, "low": 11.0,
                          "condition": "overcast", "icon": "f", "wind": 14.0,
                          "wind_unit": "km/h", "place": "Sheffield, GB",
                          "utc_offset": 3600}
                for page_id in ("swiss_clock", "face_dots", "face_squircle",
                                "face_digital", "face_lcd")},
     "weather": {"temp": 16.0, "feels": 14.0, "humidity": 78, "wind": 14.0,
+                "high": 19.0, "low": 11.0,
                 "condition": "overcast", "code": 3,
                 # Units travel with the numbers, and the icon is a character in the
                 # extension's own icons.af.
