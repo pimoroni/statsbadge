@@ -231,7 +231,9 @@ pre code { color: var(--ink); }
 pre b { font-weight: 400; color: var(--accent); }
 pre i { font-style: normal; color: var(--dim); }
 
-/* Screens are 320x240 framebuffer dumps, so they scale up as pixels and not as blur. */
+/* Screens are 320x240 framebuffer dumps of antialiased vector renders, not pixel art, and
+   a column here can be narrower than 320. Left to the browser's smoothing, which downscales
+   without aliasing the thin rules and the dot pips. */
 figure {
   margin: 0;
 
@@ -242,7 +244,6 @@ figure {
     aspect-ratio: 4 / 3;
     border: 1px solid var(--grid);
     background: var(--panel);
-    image-rendering: pixelated;
   }
 
   figcaption {
@@ -325,7 +326,6 @@ footer {
 
   p { margin: 0; }
 
-  /* Badgeware's own mark, taking the footer's colour. */
   svg {
     height: 1.5em;
     width: auto;
@@ -382,44 +382,56 @@ footer {
     </li>
     <li>
       <figure>
-        <img src="shots/dial_ramp.png" alt="The same gauge filled with a gradient sweeping the theme's whole ramp." width="320" height="240" loading="lazy">
-        <figcaption>Or filled with the theme's whole ramp, swept round the arc, the rest of the scale left faint behind it.</figcaption>
+        <img src="shots/dial_ramp.png" alt="The same gauge filled with a gradient sweeping the theme's colour ramp." width="320" height="240" loading="lazy">
+        <figcaption>Or filled with the theme's colour ramp, swept around the arc.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/gauges.png" alt="Four gauges side by side, each with an icon and a percentage." width="320" height="240" loading="lazy">
+        <figcaption><b>dials</b> - up to four readings as gauges at once.</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/gauges2.png" alt="Two large gauges, one for load and one for temperature." width="320" height="240" loading="lazy">
+        <figcaption>Ask for fewer and they are drawn bigger.</figcaption>
       </figure>
     </li>
     <li>
       <figure>
         <img src="shots/waterfall.png" alt="Per-core load as coloured lanes scrolling right to left." width="320" height="240" loading="lazy">
-        <figcaption><b>waterfall</b> - a list field as lanes over time, interpolated between polls at 28fps.</figcaption>
+        <figcaption><b>waterfall</b> - a list field as lanes over time, interpolated between polls.</figcaption>
       </figure>
     </li>
     <li>
       <figure>
         <img src="shots/rings.png" alt="Four concentric ring gauges." width="320" height="240" loading="lazy">
-        <figcaption><b>rings</b> - up to four readings as concentric gauges, each coloured by its own value.</figcaption>
+        <figcaption><b>rings</b> - up to four readings as concentric gauges, coloured by value.</figcaption>
       </figure>
     </li>
     <li>
       <figure>
         <img src="shots/spark.png" alt="Six rows, each a name, a value and a sparkline." width="320" height="240" loading="lazy">
-        <figcaption><b>spark</b> - six readings at once, name, current value and recent history a row each.</figcaption>
+        <figcaption><b>spark</b> - six readings at once; name, current value and recent history.</figcaption>
       </figure>
     </li>
     <li>
       <figure>
         <img src="shots/radar.png" alt="A polygon plotted across six axes." width="320" height="240" loading="lazy">
-        <figcaption><b>radar</b> - the shape of the load, not its size.</figcaption>
+        <figcaption><b>radar</b> - visualise the shape of the load.</figcaption>
       </figure>
     </li>
     <li>
       <figure>
         <img src="shots/trend.png" alt="One large reading with a direction arrow and a history graph." width="320" height="240" loading="lazy">
-        <figcaption><b>trend</b> - one big reading, which way it is going, and where it has been.</figcaption>
+        <figcaption><b>trend</b> - one big reading, where it's going and where it has been.</figcaption>
       </figure>
     </li>
     <li>
       <figure>
         <img src="shots/cores.png" alt="A bar per processor core." width="320" height="240" loading="lazy">
-        <figcaption><b>bars</b> - a core each.</figcaption>
+        <figcaption><b>bars</b> - a complete overview of CPU cores.</figcaption>
       </figure>
     </li>
     <li>
@@ -428,12 +440,18 @@ footer {
         <figcaption><b>graph</b> - two series over time.</figcaption>
       </figure>
     </li>
+    <li>
+      <figure>
+        <img src="shots/disk.png" alt="Four tiles, each an icon, a name and a big number over a level bar." width="320" height="240" loading="lazy">
+        <figcaption><b>grid</b> - up to six readings; big numbers and little bars.</figcaption>
+      </figure>
+    </li>
   </ul>
 </section>
 
 <section>
-  <h2>Both ends of it</h2>
-  <p>Two pages report a machine instead of a reading.</p>
+  <h2>Statsbadge badge stats</h2>
+  <p>Two pages report info about your system and the badge.</p>
   <ul>
     <li>
       <figure>
@@ -443,16 +461,16 @@ footer {
     </li>
     <li>
       <figure>
-        <img src="shots/badge.png" alt="The badge's own battery, memory, flash use, ambient light, clock speed and screen size." width="320" height="240" loading="lazy">
-        <figcaption><b>badge</b> - the badge itself: battery, memory, flash, ambient light and what it is running. The one page whose numbers do not come from the host.</figcaption>
+        <img src="shots/badge.png" alt="The badge's battery, memory, flash use, ambient light, clock speed and screen size." width="320" height="240" loading="lazy">
+        <figcaption><b>badge</b> - the badge: battery, memory, flash, ambient light and what it is running.</figcaption>
       </figure>
     </li>
   </ul>
 </section>
 
 <section>
-  <h2>Sixteen themes, and forty-eight accents</h2>
-  <p>Everything is drawn as vector shapes taking their colours from one table. Every widget is coloured from a selection of finessed themes, or from four you can tune yourself.</p>
+  <h2>Twenty-two themes, and forty-eight accents</h2>
+  <p>Everything is drawn as crisp, vector shapes from the theme's palette. Choose from a selection of sixteen finessed themes:</p>
   <ul>
     <li>
       <figure>
@@ -481,13 +499,34 @@ footer {
     <li>
       <figure>
         <img src="shots/theme_eva01.png" alt="A badge page in acid green on violet." width="320" height="240" loading="lazy">
-        <figcaption>Unit-01</figcaption>
+        <figcaption>Eva01</figcaption>
       </figure>
     </li>
     <li>
       <figure>
         <img src="shots/theme_luminescence.png" alt="A badge page in dark green on a glowing mint panel." width="320" height="240" loading="lazy">
         <figcaption>Luminescence</figcaption>
+      </figure>
+    </li>
+  </ul>
+  <p>Or from six you can tint to your preference, picking one of forty-eight accents:</p>
+  <ul>
+    <li>
+      <figure>
+        <img src="shots/theme_tinted_bold_magenta.png" alt="A badge page in magenta on near-black." width="320" height="240" loading="lazy">
+        <figcaption><b>Tinted Bold</b>, magenta</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/theme_tinted_bold_blue.png" alt="The same page in blue on off-white." width="320" height="240" loading="lazy">
+        <figcaption><b>Tinted Bold</b>, blue, in its light mode</figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/theme_tinted_glow_amber.png" alt="A badge page in amber on warm brown, low contrast." width="320" height="240" loading="lazy">
+        <figcaption><b>Tinted Glow</b>, amber - one hue, low contrast for a vintage look</figcaption>
       </figure>
     </li>
   </ul>
@@ -531,7 +570,7 @@ footer {
   <pre><code><b>statsbadge ext add</b> clock
 <b>statsbadge install</b>            <i># pushes the badge-side code too</i></code></pre>
   <p>Then add a <b>Clock</b> page in the config UI.</p>
-  <p><small><code>ext add</code> keeps the list of extensions beside your config. <code>ext</code> on its own to see what's installed.</small></p>
+  <p><small><code>ext add</code> keeps the list of extensions beside your config. <code>ext</code> to see what's installed.</small></p>
 </section>
 
 <section>
@@ -556,16 +595,43 @@ footer {
         <figcaption><b>Quakes</b> - recent events from USGS, the reticle coloured by magnitude.</figcaption>
       </figure>
     </li>
-    <li>
+    <!--<li>
       <figure>
         <img src="shots/quakes_wide.png" alt="The same map pulled out to show a whole hemisphere." width="320" height="240" loading="lazy">
-        <figcaption>The page cycles through the set on its own, zooming out to cross an ocean.</figcaption>
+        <figcaption>The page cycles through the set, zooming out to cross an ocean.</figcaption>
       </figure>
-    </li>
+    </li>-->
   </ul>
   <pre><code><b>statsbadge ext add</b> iss quakes
 <b>statsbadge install</b>            <i># pushes the badge-side code too</i></code></pre>
   <p>Then add an <b>ISS</b> or a <b>Quakes</b> page in the config UI.</p>
+</section>
+
+<section>
+  <h2>Extension ecosystem</h2>
+  <p>Build your own extensions or explore those built by others. Extension sources are added to the same pickers as your stats. One page can hold, for example, a follower count, a domain's traffic and a temperature.</p>
+  <ul>
+    <li>
+      <figure>
+        <img src="shots/bluesky.png" alt="The newest post from an account and from a feed, with follower, repost and like counts along the bottom." width="320" height="240" loading="lazy">
+        <figcaption><b>Bluesky</b> - any number of handles and feeds. The latest post and reply are messages; followers, likes, reposts and quotes are numbers. Public APIs, no login and no keys needed.<br><a href="https://github.com/gadgetoid/statsbadge-bluesky">gadgetoid/statsbadge-bluesky</a></figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/mastodon.png" alt="A boosted post with a photograph beside it, a mention under it, and follower, post and like counts along the bottom." width="320" height="240" loading="lazy">
+        <figcaption><b>Mastodon</b> - your timeline, mentions and notifications as messages, with followers, posts and unread as counters in the strip along the bottom. The first attached photo is cropped, dithered and redrawn in the theme's colours.<br><a href="https://github.com/gadgetoid/statsbadge-mastodon">gadgetoid/statsbadge-mastodon</a></figcaption>
+      </figure>
+    </li>
+    <li>
+      <figure>
+        <img src="shots/cloudflare.png" alt="A day of requests for two domains, plotted as filled areas with the domains named in the key." width="320" height="240" loading="lazy">
+        <figcaption><b>Cloudflare</b> - every domain on your account, with requests a minute, bytes a second, cache hit rate and the day's totals. The history comes from Cloudflare as a day of hourly points, so a graph has a shape the moment you add it.<br><a href="https://github.com/gadgetoid/statsbadge-cloudflare">gadgetoid/statsbadge-cloudflare</a></figcaption>
+      </figure>
+    </li>
+  </ul>
+  <pre><code><b>statsbadge ext add</b> bluesky mastodon cloudflare</code></pre>
+  <p>Then set each one up under <b>Extensions</b> in the config UI: handles and feeds for Bluesky, an instance and a read-only token for Mastodon, an API token for Cloudflare. Mastodon and Cloudflare tokens are stored on the host and never travel to the badge.</p>
 </section>
 
 <section>
@@ -592,12 +658,12 @@ footer {
     <dt>mem</dt><dd>used, total, percentage, swap</dd>
     <dt>gpu</dt><dd>load, temperature, VRAM, power, clock, fan</dd>
     <dt>net</dt><dd>up/down rate and totals, interface</dd>
-    <dt>disk</dt><dd>used, total, read/write rate</dd>
-    <dt>power</dt><dd>battery, charging, package watts</dd>
-    <dt>fans</dt><dd>RPM</dd>
-    <dt>sys</dt><dd>host, OS, CPU name, uptime</dd>
+    <dt>disk</dt><dd>used, total, percentage, read/write rate</dd>
+    <dt>power</dt><dd>battery, charging, time left, package watts</dd>
+    <dt>fans</dt><dd>name, RPM, percentage</dd>
+    <dt>sys</dt><dd>host, OS, architecture, CPU name, uptime</dd>
   </dl>
-  <p>Most of it comes from <a href="https://github.com/giampaolo/psutil">psutil</a>, which answers the same questions on every platform. Though there are some quirks:</p>
+  <p>Most data comes from <a href="https://github.com/giampaolo/psutil">psutil</a>, which provides the same stats on every platform. Though there are some quirks:</p>
   <ul>
     <li><b>NVIDIA cards</b> are read through NVML, the library behind <code>nvidia-smi</code>. Add it with <code>statsbadge[nvidia]</code>.</li>
     <li><b>Linux</b> takes CPU temperatures and fan speeds from the kernel's hwmon sensors, and an AMD card straight from the driver's files under <code>/sys</code>.</li>
@@ -631,7 +697,7 @@ footer {
 <b>statsbadge install</b>                   <i># with the badge on USB</i></code></pre>
   </form>
   <p>Then open <code>http://127.0.0.1:8420/</code> to pick screens, themes and button bindings. No cable? <code>statsbadge pair</code> and the badge finds the host by itself.</p>
-  <p><small>The server itself never runs as root: on macOS it spawns <code>sudo -n powermetrics</code>, so that flag wants a passwordless sudo rule for that one command line and nothing wider. Windows reads its temperatures and fans from <a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases">LibreHardwareMonitor</a>, so leave it running with Options &gt; Remote Web Server &gt; Run. Take it from the project's own releases: the similarly named .com is not theirs.</small></p>
+  <p><small>The server itself never runs as root: on macOS it spawns <code>sudo -n powermetrics</code>, so that flag wants a passwordless sudo rule for that one command line and nothing wider. Windows reads its temperatures and fans from <a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases">LibreHardwareMonitor</a>, so leave it running with Options &gt; Remote Web Server &gt; Run. Take it from the project's releases: the similarly named .com is not theirs.</small></p>
 </section>
 
 <section>
