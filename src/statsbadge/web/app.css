@@ -365,6 +365,22 @@ main section:has(> section) {
 
 main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 
+.badges section {
+  /* What the badge is drawing, laid out on the box's own columns so each term sits under
+     the Name label and each answer under the field. */
+  > dl {
+    grid-template-columns: subgrid; gap: 2px 10px;
+
+    dt { grid-column: 1; }
+    dd { grid-column: 2 / -1; text-align: left; color: var(--ink); }
+    dd code { color: var(--dim); }
+  }
+
+  /* Forget away from Configure, one at each end, since one of them is destructive. */
+  > footer { display: flex; gap: 6px; }
+  > footer .add { margin-left: auto; }
+}
+
 /* -- the accent picker --------------------------------------------------- */
 
 .accents {

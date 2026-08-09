@@ -1593,9 +1593,7 @@ function badgeBox(id) {
                  heading,
                  el("label", { htmlFor: nameId, textContent: "Name" }),
                  name,
-                 el("p", null,
-                    el("code", { textContent: id }),
-                    ` · ${badges[id].configured ? "own layout" : "on the default"}`))
+                 facts(id))
 
   const footer = el("footer", null, forget)
   if (id !== whose) {
@@ -1606,6 +1604,28 @@ function badgeBox(id) {
   }
   box.append(footer)
   return box
+}
+
+/** What a badge is drawing, without opening it: the layout it is on and the headline
+ * settings off it. The id leads, being the thing to quote when a badge misbehaves. */
+function facts(id) {
+  const record = badges[id]
+  const rows = [
+    ["UID", el("code", { textContent: id })],
+    ["Layout", record.configured ? "Its own" : "The default"],
+    ["Pages", `${record.pages}`],
+    ["Theme", themeLabel(record.theme)],
+    ["Refresh", `${record.interval_ms} ms`],
+  ]
+  return el("dl", null, ...rows.flatMap(([term, said]) =>
+    [el("dt", { textContent: term }), el("dd", null, said)]))
+}
+
+/** A theme by the name the picker calls it. An unknown one is a theme this host no longer
+ * ships, which the badge is still drawing, so its stored name shows instead. */
+function themeLabel(name) {
+  const record = (caps.themes || []).find((entry) => entry.name === name)
+  return (record && record.label) || name || "unset"
 }
 
 /** Saved apart from the layout, since what a badge is called is nothing the badge draws,
@@ -1923,6 +1943,9 @@ async function save() {
     // Settings reach the sources on the save, and what a source does with them may be to go and
     // find out what it can offer. Not awaited: the save is done either way.
     refreshCapsSoon().catch(() => {})
+    // Each badge's box shows the settings off its layout, which a save is what moves. Kept
+    // to what is in hand if the fetch fails, the save itself having landed.
+    badges = await api("/api/badges").catch(() => badges)
     renderWhose()
     renderPages()
     renderBadges()

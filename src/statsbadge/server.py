@@ -459,12 +459,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {"pairing": False})
 
         if path == "/api/badges" and method == "GET":
-            # With whether each has a layout of its own, which the badge picker has to say.
+            # With whether each has a layout of its own, which the badge picker has to say,
+            # and the few things off that layout the list shows without opening it. The
+            # layout is the merged one, so a badge on the default reports what it draws.
             configured = set(service.config.configured())
-            return self._json(200, {
-                badge_id: dict(record, configured=badge_id in configured)
-                for badge_id, record in service.badges.list_badges().items()
-            })
+            listed = {}
+            for badge_id, record in service.badges.list_badges().items():
+                block = service.config.layout_for(badge_id)
+                listed[badge_id] = dict(
+                    record,
+                    configured=badge_id in configured,
+                    pages=len(block.get("pages") or ()),
+                    theme=block.get("theme"),
+                    interval_ms=block.get("interval_ms"),
+                )
+            return self._json(200, listed)
 
         if path.startswith("/api/badges/") and method == "PUT":
             badge_id = path[len("/api/badges/"):]

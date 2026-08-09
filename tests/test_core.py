@@ -2954,6 +2954,16 @@ def test_each_badge_has_its_own_layout(h):
         _status, listing = h.raw("GET", "/api/badges")
         assert listing[other]["configured"] is True
         assert listing[h.badge_id]["configured"] is False
+
+        # The list also carries what each is drawing, so a reader need not open it. Read off
+        # the merged layout: a badge on the default reports the default's settings.
+        assert listing[other]["theme"] == "mono", listing[other]
+        assert listing[other]["interval_ms"] == 2000, listing[other]
+        assert listing[h.badge_id]["theme"] == default["theme"], listing[h.badge_id]
+        assert listing[h.badge_id]["interval_ms"] == default["interval_ms"]
+        assert listing[h.badge_id]["pages"] == len(default["pages"])
+        # No secret rides along with any of it.
+        assert "secret" not in listing[other], listing[other]
         _status, edited = h.raw("GET", f"/api/config?badge={other}")
         assert edited["theme"] == "mono"
 
