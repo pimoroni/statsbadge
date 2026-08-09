@@ -1305,6 +1305,45 @@ def test_every_kind_has_a_badge_layout_and_a_ui_shape(_h):
 
 
 @check
+def test_a_full_scale_is_offered_where_it_is_read(_h):
+    """A page carries where full is, and the UI has to offer that for exactly the kinds whose
+    renderer looks at it. Offered too widely it is a control that does nothing; too narrowly
+    and a page of counts is stuck being scaled by the busiest reading the host has seen."""
+    app = pathlib.Path(install.app_source_dir())
+    pages_source = (app / "pages.py").read_text()
+    ui_source = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
+                 / "app.js").read_text()
+
+    # fraction_of reads the page's max for its caller, so those kinds count too.
+    reads = set()
+    for kind in layout.KINDS:
+        start = pages_source.find(f"def _{kind}(")
+        if start < 0:
+            continue
+        end = pages_source.find("\ndef ", start + 1)
+        body = pages_source[start:end if end > 0 else len(pages_source)]
+        if 'page.get("max")' in body or 'page["max"]' in body:
+            reads.add(kind)
+        elif "fraction_of(ref, value, page, frame)" in body:
+            reads.add(kind)
+
+    offered = ui_source[ui_source.index("const SCALED"):]
+    offered = set(re.findall(r'"([a-z]+)"', offered[:offered.index(")")]))
+    assert offered == reads, f"UI offers {sorted(offered)}, renderers read {sorted(reads)}"
+
+    def scaled(value):
+        stored = layout.validate({**layout.DEFAULT_CONFIG,
+                                  "pages": [{"id": "b", "kind": "bars",
+                                             "field": "cpu.cores", "max": value}]})
+        return stored["pages"][0].get("max")
+
+    assert scaled(1200) == 1200.0
+    assert scaled("250") == 250.0
+    assert scaled(0) is None and scaled(-5) is None, "a full scale of nothing was stored"
+    assert scaled("nonsense") is None and scaled(None) is None
+
+
+@check
 def test_caselights_take_a_field_or_a_flag(_h):
     """Three settings in one value: off, the backlight's level, or a reading to follow."""
     base = dict(layout.DEFAULT_CONFIG)

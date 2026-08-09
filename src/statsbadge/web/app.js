@@ -308,6 +308,14 @@ function singular(label) {
   return label.endsWith("s") ? label.slice(0, -1) : label
 }
 
+// Kinds whose renderer reads a page's full scale, held to the renderers by a test.
+const SCALED = new Set(["dial", "dials", "rings", "radar", "trend", "bars", "graph",
+                        "waterfall"])
+
+// Without it a reading is scaled by the busiest the host has seen: wrong for a count.
+const MAX_SETTING = { key: "max", label: "Full scale", type: "number", min: 0, step: "any",
+                      placeholder: "automatic" }
+
 function pageCard(page, index) {
   const shape = shapeFor(page.kind)
   const open = expanded.has(page.id)
@@ -357,12 +365,14 @@ function pageCard(page, index) {
   if (open) {
     item.append(el("label", { htmlFor: titleId, textContent: "Title" }), title,
                 slotList(page, shape),
+                ...(SCALED.has(page.kind) ? settingRow(page, MAX_SETTING) : []),
                 ...settings.flatMap((setting) => settingRow(page, setting)),
                 el("footer", null, moveButtons(index), addSlot(page, shape)))
   } else {
     const refs = shape.one ? [page[shape.one]] : (page[shape.many] || [])
     const named = refs.filter(Boolean).map(fieldLabel)
     const extra = settings.map((setting) => page[setting.key]).filter(Boolean)
+    if (SCALED.has(page.kind) && page.max) extra.push(`full scale ${page.max}`)
     item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
   }
 
@@ -653,7 +663,7 @@ function settingRow(stored, setting, options) {
     // The bounds are the browser's to enforce while it is being typed; the host clamps what
     // arrives, a typed value being able to leave the field out of range.
     input = el("input", { type: "number", id, min: setting.min, max: setting.max,
-                          step: setting.step,
+                          step: setting.step, placeholder: setting.placeholder,
                           value: current === null || current === undefined ? "" : current })
     input.oninput = () => {
       stored[setting.key] = input.value === "" ? null : Number(input.value)
