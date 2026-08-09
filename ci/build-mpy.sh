@@ -13,9 +13,8 @@
 #   BOARD_REF    default main, which pins bw-1.27.0. A board on bw-1.28.0-3 needs
 #                BOARD_REF=feature/align-v3 until that lands on main
 #   EXPECT_MPY   assert the emitted bytecode matches this sys.implementation._mpy
-#   ENTRY_MPY    compile __init__.py too. Off by default: the launcher reads __init__.py
-#                to decide a directory is an app, so a bytecode-only entry point is
-#                invisible to it. Source costs about 40ms of the saving
+#   ENTRY_SRC    leave __init__.py as source. For a launcher too old to recognise
+#                __init__.mpy, which costs about 40ms of the saving
 #   MPY_CROSS    a prebuilt mpy-cross, skips the clone and build entirely
 #   WORK_DIR     where to clone and build, default build/micropython
 set -euo pipefail
@@ -80,8 +79,8 @@ mkdir -p "$OUT_DIR"
 compiled=0
 for source in "$APP_DIR"/*.py; do
     name=$(basename "$source" .py)
-    if [ "$name" = "__init__" ] && [ -z "${ENTRY_MPY:-}" ]; then
-        # The entry point stays source for the launcher to recognise an app here.
+    if [ "$name" = "__init__" ] && [ -n "${ENTRY_SRC:-}" ]; then
+        # Asked for: an older launcher reads __init__.py to recognise an app here.
         cp "$source" "$OUT_DIR/__init__.py"
         continue
     fi
@@ -101,9 +100,8 @@ done
     cp "$APP_DIR/$file" "$OUT_DIR/$file"
 done
 
-if [ -z "${ENTRY_MPY:-}" ]; then
-    echo "note: __init__.py left as source for the launcher; set ENTRY_MPY=1 once it"
-    echo "      recognises __init__.mpy"
+if [ -n "${ENTRY_SRC:-}" ]; then
+    echo "note: __init__.py left as source, which the launcher no longer needs"
 fi
 
 # -- verify ------------------------------------------------------------------

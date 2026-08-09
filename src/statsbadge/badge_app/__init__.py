@@ -11,8 +11,7 @@ The host settles what the pages are; this fetches them and draws them. Polling i
 generator advanced from the draw loop, and a slow reply costs latency and never a frame.
 
 The heap, panel and light sensor settings below are measured; DEVELOPMENT.md has the
-numbers. This module is shipped as source even in a precompiled build, so it is the one
-file here whose comments cost launch time.
+numbers.
 """
 
 import builtins

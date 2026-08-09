@@ -59,7 +59,7 @@ jobs:
           cp micropython/mpy-cross/build/mpy-cross mpy-cross/
 
       - name: Compile the app into the package
-        run: MPY_CROSS=mpy-cross/mpy-cross ENTRY_MPY=1
+        run: MPY_CROSS=mpy-cross/mpy-cross
              ci/build-mpy.sh src/statsbadge/badge_app src/statsbadge/badge_app/mpy
 
       - run: uv build
