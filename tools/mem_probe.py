@@ -116,10 +116,11 @@ def frame_at(tick):
     }
 
 
-HISTORY = {"v": 2, "every_ms": 1000, "age_ms": 0,
-           "series": {ref: [20.0 + (i * 13) % 70 for i in range(48)]
-                      for ref in ("cpu.pct", "cpu.temp", "gpu.temp", "net.down_bps",
-                                  "net.up_bps", "mem.pct", "disk.pct")}}
+# The series alone, as render() is handed them. The whole reply left every plot falling back
+# to two points of the live value, and the figures for them were a flat line's.
+HISTORY = {ref: [20.0 + (i * 13) % 70 for i in range(48)]
+           for ref in ("cpu.pct", "cpu.temp", "gpu.temp", "net.down_bps",
+                       "net.up_bps", "mem.pct", "disk.pct")}
 
 PAGES = (
     # The control: build the frame, composite, draw nothing. Every row below carries this, since
@@ -138,6 +139,9 @@ PAGES = (
                "fields": ["cpu.pct", "cpu.temp", "mem.pct", "disk.pct"]}, 300),
     ("graph", {"id": "net", "kind": "graph", "title": "Network",
                "fields": ["net.down_bps", "net.up_bps"]}, 300),
+    # In pages.ANIMATED, so this is the one kind whose figure is per frame and not per poll.
+    ("waterfall", {"id": "cores", "kind": "waterfall", "title": "Cores",
+                   "field": "cpu.cores"}, 300),
     ("badge", {"id": "badge", "kind": "badge", "title": "Badge"}, 400),
     ("quakemap", {"id": "quakes", "kind": "quakemap", "title": "Quakes", "hold": 6}, 200),
     ("issmap", {"id": "iss", "kind": "issmap", "title": "ISS"}, 150),
