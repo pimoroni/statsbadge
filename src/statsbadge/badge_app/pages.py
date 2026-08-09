@@ -345,7 +345,9 @@ def _graph(page, frame, history, theme):
             value = value_of(frame, ref)
             if value is not None:
                 series[i] = [value, value]
-    labels = [(name_for(ref), ref.split(".")[-1]) for ref in refs]
+    # names_for and not name_for: two domains' requests are both REQUESTS by field name,
+    # so a key built from the field alone gives both series one label.
+    labels = list(zip(names_for(refs), [ref.split(".")[-1] for ref in refs]))
     field = refs[0].split(".")[-1] if refs else "pct"
     maximum = float(page["max"]) if page.get("max") else (
         100.0 if is_percent(field) else None)
