@@ -4814,6 +4814,80 @@ def test_an_upgrade_that_dropped_the_extensions_is_put_right_by_adding_one(_h):
 
 
 @check
+def test_adding_an_extension_that_is_already_there_records_it(_h):
+    """Not every statsbadge is a uv tool: a checkout runs from a virtualenv, where an
+    extension is pip installed and discovered by its entry point with nothing to rebuild.
+
+    `ext add` consulted the list before the environment, so an extension that was installed
+    and loading was told there was nothing to rebuild and handed the command to install what
+    it already had. It is now reported as present and written down, so a later `ext sync`
+    from a tool install still asks for it.
+    """
+    from statsbadge import __main__ as cli
+    from statsbadge import tooling
+
+    work = tempfile.mkdtemp(prefix="statsbadge-add-")
+    try:
+        class Args:
+            names = ["bluesky"]
+            config_dir = work
+            verbose = False
+
+        was = (cli.tooling.as_uv_tool, cli.extensions.describe, cli.tooling.on_index)
+        try:
+            cli.tooling.as_uv_tool = lambda *_a, **_k: None      # a venv, not a tool
+            cli.tooling.on_index = lambda *_a, **_k: True
+
+            # Installed, with nothing on the list: it has never been written.
+            cli.extensions.describe = lambda: [{"name": "bluesky"}]
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
+            assert "already installed" in said.getvalue(), said.getvalue()
+            assert "nothing here to rebuild" not in said.getvalue(), said.getvalue()
+            assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
+
+            # Asking again is quiet, and does not write it twice.
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
+            assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
+
+            # Absent, with no tool to build one.
+            cli.extensions.describe = list
+            tooling.forget_wanted(work)
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                assert cli._change_extensions(Args, "add") == 1  # noqa: SLF001
+            assert "uv pip install statsbadge-bluesky" in said.getvalue(), said.getvalue()
+            # Command first, packaging after.
+            assert said.getvalue().startswith("install these into"), said.getvalue()
+            assert tooling.read_wanted(work) == []
+
+            # `sync` names nothing, so it works out what is missing.
+            tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-bluesky"])
+            cli.extensions.describe = lambda: [{"name": "clock"}]
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                assert cli._change_extensions(Args, "sync") == 1  # noqa: SLF001
+            spoken = said.getvalue()
+            assert "uv pip install statsbadge-bluesky" in spoken, spoken
+            assert "statsbadge-clock" not in spoken, "it offered to install what is there"
+
+            # A sync with nothing adrift is the quiet one.
+            cli.extensions.describe = lambda: [{"name": "clock"}, {"name": "bluesky"}]
+            said = io.StringIO()
+            with contextlib.redirect_stdout(said):
+                assert cli._change_extensions(Args, "sync") == 0  # noqa: SLF001
+            assert said.getvalue() == "", said.getvalue()
+        finally:
+            (cli.tooling.as_uv_tool, cli.extensions.describe,
+             cli.tooling.on_index) = was
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@check
 def test_asking_for_powermetrics_without_the_rule_says_so(_h):
     """--powermetrics needs one sudoers rule.
 

@@ -169,6 +169,8 @@ def cmd_serve(args):
     if missing:
         print("  not installed:     {} - run `statsbadge ext sync`".format(
             ", ".join(missing)))
+        # Which venv, it need not be the one the reader is standing in.
+        print(f"  running from:      {sys.prefix}")
     paired = _badge_names(service.badges.list_badges())
     print("  paired badges:     %s" % (", ".join(paired) if paired else
                                        "none yet, run 'statsbadge pair'"))
@@ -571,16 +573,22 @@ def _change_extensions(args, verb):
         # otherwise reinstall naming only the new one, dropping everything already there.
         wanted = tooling.installed_beside(receipt)
 
-    changed = []
+    # `recorded` is installed already and only needs listing, or `ext sync` drops it.
+    changed, recorded = [], []
     if verb == "add":
         present = {record["name"] for record in extensions.describe()}
         for name in args.names:
             requirement = tooling.as_requirement(name)
             short = tooling.short_name(requirement)
-            if short in tooling.names(wanted):
-                if short in present:
-                    print(f"already installed: {short}")
-                    continue
+            listed = short in tooling.names(wanted)
+            if short in present:
+                # Here already: pip installed into a virtualenv, or an editable checkout.
+                print(f"already installed: {short}")
+                if not listed:
+                    wanted.append(requirement)
+                    recorded.append(requirement)
+                continue
+            if listed:
                 # On the list but absent from the environment, which is what a `uv tool
                 # install` of statsbadge itself leaves behind. Asking for it is asking for
                 # it back, so rebuild instead of reporting an install nothing can see.
@@ -609,17 +617,25 @@ def _change_extensions(args, verb):
             for match in matches:
                 wanted.remove(match)
                 changed.append(match)
-    if verb != "sync" and not changed:
+    if verb != "sync" and not changed and not recorded:
         return 0
 
     base = tooling.base_requirement(receipt) if receipt else None
     if base is None:
-        # Not a uv tool, or a receipt this cannot read. Say what to run instead, and
-        # leave the list as it was, an install having taken place nowhere.
-        print("statsbadge is not installed as a uv tool, so there is nothing here to rebuild.")
-        for requirement in (changed or wanted):
-            print(f"  uv pip install {requirement}")
-        return 0
+        # Not a uv tool, or a receipt this cannot read: nothing here builds an environment.
+        # Listed anyway, for a later `ext sync` from a tool install.
+        if recorded:
+            tooling.write_wanted(directory, wanted)
+        # `sync` names nothing, so fall back to what is adrift.
+        absent = changed or tooling.adrift(
+            directory, (record["name"] for record in extensions.describe()))
+        if not absent:
+            return 0
+        print(f"install these into {sys.prefix}:")
+        for requirement in absent:
+            print(f"    uv pip install {requirement}")
+        print(f"`ext {verb}` requires a uv tool install.")
+        return 1
 
     tooling.write_wanted(directory, wanted)
     doing = "installing" if verb != "remove" else "removing"
