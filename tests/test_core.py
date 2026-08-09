@@ -4874,12 +4874,12 @@ def test_adding_an_extension_that_is_already_there_records_it(_h):
             assert "uv pip install statsbadge-bluesky" in spoken, spoken
             assert "statsbadge-clock" not in spoken, "it offered to install what is there"
 
-            # A sync with nothing adrift is the quiet one.
+            # A sync with nothing missing still speaks.
             cli.extensions.describe = lambda: [{"name": "clock"}, {"name": "bluesky"}]
             said = io.StringIO()
             with contextlib.redirect_stdout(said):
                 assert cli._change_extensions(Args, "sync") == 0  # noqa: SLF001
-            assert said.getvalue() == "", said.getvalue()
+            assert said.getvalue().strip() == "nothing to do", said.getvalue()
         finally:
             (cli.tooling.as_uv_tool, cli.extensions.describe,
              cli.tooling.on_index) = was

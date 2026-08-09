@@ -630,6 +630,7 @@ def _change_extensions(args, verb):
         absent = changed or tooling.adrift(
             directory, (record["name"] for record in extensions.describe()))
         if not absent:
+            print("nothing to do")
             return 0
         print(f"install these into {sys.prefix}:")
         for requirement in absent:
