@@ -3649,6 +3649,20 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
             _first, last = ends(lead * tenth / 10.0, lead)
             assert last >= 310 - 0.01, (lead, tenth, last)
 
+    # A series too short to walk is drawn where it stands. `_graph` plots a field it has no
+    # ring for as its live reading twice, and a step is the box over the samples on it: two
+    # of them put a whole plot width in one reading, which swept a slab across the page and
+    # off the side of it every poll.
+    for samples in range(2, draw.WALK_MIN):
+        held = [50.0] * samples
+        written = draw._lay_out(60, 40, 250, 150, held, 100.0, 0.75)
+        assert abs(draw._points[0] - 60) < 0.01, (samples, draw._points[0])
+        assert abs(draw._points[written - 2] - 310) < 0.01, (samples,
+                                                             draw._points[written - 2])
+    walked = draw._lay_out(60, 40, 250, 150, [50.0] * draw.WALK_MIN, 100.0, 0.75)
+    assert draw._points[0] < 60 - 0.01, "a series long enough to walk is standing still"
+    assert walked
+
     # A sparkline is drawn still whatever the setting says. 22px tall with a sample every
     # 5px, it has nowhere to scroll, and interpolating at fixed x is a translation
     # whatever it is called, which shows as a jump and not as points settling.
@@ -3666,9 +3680,27 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
     # Every page that draws a series asks for one, not only the graph pages: a sparkline was
     # plotting the live value twice, a flat line whatever the machine was doing.
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    refs = app[app.index("    def _plot_refs(self"):]
+    refs = refs[:refs.index("\n    def ", 1)]
+    assert "pages_module.PLOTS" in refs, "only the graph pages ask for a series"
+
+    # One poll cannot ask for every ref a layout plots, and the ones it does ask for start
+    # at the page on screen. In page order the refs at the end were never fetched at all,
+    # and the page holding them drew its live reading twice instead of its history.
     keys = app[app.index("    def _graph_keys(self):"):]
     keys = keys[:keys.index("\n    def ", 1)]
-    assert "pages_module.PLOTS" in keys, "only the graph pages ask for a series"
+    assert "self._plot_refs(self.page_index)" in keys, "the ask does not follow the reader"
+    assert "[:GRAPH_KEYS]" in keys, "the ask is unbounded"
+    plotted = {ref for page in layout.DEFAULT_PAGES if page.get("kind") in pages.PLOTS
+               for ref in page.get("fields", []) + [page.get("field")] if ref}
+    cap = int(re.search(r"^GRAPH_KEYS = (\d+)", app, re.M).group(1))
+    assert cap >= len(plotted), (cap, sorted(plotted))
+    # Merged into what is held, or turning a page drops the rings the last ask covered and
+    # every plot on the new one falls back to a pair until the next poll lands.
+    landed = app[app.index('elif what == "history":'):]
+    landed = landed[:landed.index("\n        self.dirty", 1)]
+    assert "self.history.update(" in landed, "a reply replaces the rings it did not carry"
+    assert "self._plot_refs()" in landed, "nothing drops a ring the layout stopped plotting"
     # It comes with its age, every poll, on the stats' schedule. v=3, since
     # a source may answer for a ring that is not on the host's clock.
     assert "&v=3" in app, "the series is fetched without the times it needs"

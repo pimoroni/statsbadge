@@ -852,6 +852,12 @@ _points = array("f", b"")
 # would resize the plot every frame.
 WALK_LEAD = 2
 
+# The fewest samples worth walking. A step is the box divided by the samples on it, so two
+# of them step a whole plot width and one reading slides the picture off the side. That is
+# what a field with no ring is: `pages._graph` plots its live reading twice so a cold field
+# still draws, and a pair is a placeholder, not a series on the sample clock.
+WALK_MIN = 8
+
 
 def _lay_out(left, top, width, height, values, peak, shift):
     """`values` scaled against `peak` and laid across the box, in the shared float buffer.
@@ -892,7 +898,7 @@ def _lay_out(left, top, width, height, values, peak, shift):
     # than a plot squeezed into a corner.
     if lead > count // 4:
         lead = count // 4
-    walking = shift is not None
+    walking = shift is not None and samples >= WALK_MIN
     span = count - 1 - lead if walking and count > lead + 1 else count - 1
     step = width / float(span)
     scale = height / float(peak or 1.0)
@@ -1021,8 +1027,9 @@ def graph(theme, series, labels, maximum=None, shift=None):
         screen.hspan(left, y, width)
 
     # Where the series ran out. Drawn and not papered over: a stalled host and an idle
-    # machine are otherwise the same flat line.
-    if shift is not None and shift > WALK_LEAD:
+    # machine are otherwise the same flat line. Only where the plot is walking, or a series
+    # too short to move is marked as having run out; see WALK_MIN.
+    if shift is not None and shift > WALK_LEAD and series and len(series[0]) >= WALK_MIN:
         stale = min(width, int((shift - WALK_LEAD) * width / float(len(series[0]) or 1)))
         if stale > 1:
             screen.pen = theme.grid

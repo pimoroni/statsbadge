@@ -99,6 +99,11 @@ BINDABLE = (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C))
 GC_THRESHOLD = 256 * 1024
 COLLECT_EVERY_MS = 1000
 
+# How many series one poll asks for. The ask is a query string and the reply is that many
+# rings held here, so a layout with a dozen plotted pages does not fetch the lot; what it
+# does fetch starts at the page on screen. Twelve covers every built-in layout twice over.
+GRAPH_KEYS = 12
+
 # A revision nothing has, so the first poll asks the host for everything.
 NO_REV = -1
 # Failed polls before the badge listens for the host at another address. It is a scan a
@@ -537,7 +542,14 @@ class App:
             # apart the points are, and how old the newest was when the host answered. v=3
             # adds a pair for any ring a source answers for itself, those being on
             # whatever clock the readings are really on - an hour, for a domain's traffic.
-            self.history = payload.get("series", payload)
+            # Merged, not replaced: the ask is capped and starts at the page on screen, so
+            # a ring fetched a poll ago for a page further along is still the newest thing
+            # there is for it. What the layout has stopped plotting is dropped, or a
+            # retired page's series is held for as long as the app runs.
+            self.history.update(payload.get("series", payload) or {})
+            plotted = self._plot_refs()
+            for ref in [ref for ref in self.history if ref not in plotted]:
+                del self.history[ref]
             self._series_age = int(payload.get("age_ms", 0) or 0)
             self._series_at = time.ticks_ms()
             pages_module.note_spacing(payload.get("every_ms", 1000),
@@ -545,21 +557,33 @@ class App:
             pages_module.note_series_spacing(payload.get("spacing"))
         self.dirty = True
 
-    def _graph_keys(self):
-        """Every field a page draws a series of, which is not only the graph pages.
+    def _plot_refs(self, first=0):
+        """Every field a page draws a series of, walking the pages from `first`.
 
-        A sparkline and a trend draw one too, and asking only for the graphs' fields left
-        those pages plotting the live value twice - a flat line whatever the machine was
-        doing.
+        Which is not only the graph pages: a sparkline and a trend draw one too, and asking
+        only for the graphs' fields left those plotting the live value twice - a flat line
+        whatever the machine was doing.
         """
         keys = []
-        for page in self.page_list:
+        total = len(self.page_list)
+        for step in range(total):
+            page = self.page_list[(first + step) % total]
             if page.get("kind") not in pages_module.PLOTS:
                 continue
             for ref in page.get("fields", []) + [page.get("field")]:
                 if ref and ref not in keys:
                     keys.append(ref)
-        return keys[:6]
+        return keys
+
+    def _graph_keys(self):
+        """The refs this poll asks for: what GRAPH_KEYS has room for, nearest page first.
+
+        From the page on screen and wrapped, so what is being looked at is always in the
+        ask. Taken in page order, a layout plotting more refs than that left the ones at
+        the end without a ring at all, and `_graph` draws a field it has no history for as
+        its live reading twice.
+        """
+        return self._plot_refs(self.page_index)[:GRAPH_KEYS]
 
     def apply_layout(self):
         theme_name = self.setting("theme", look.DEFAULT)
