@@ -3187,6 +3187,33 @@ def test_the_big_gauge_can_show_the_whole_ramp(_h):
 
 
 @check
+def test_a_hint_beside_a_secret_leaves_room_for_the_field(_h):
+    """An extension's API key sits in a two-column grid whose first column is max-content.
+
+    A hint left in that column sets the track to the width of the paragraph unwrapped, and
+    the field beside it collapses: an octopus key with a one-line hint measured 16px. Every
+    block of prose in the settings grids spans both columns for this reason.
+    """
+    import re
+
+    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text()
+    block = sheet[sheet.index(".secrets {"):]
+    block = block[:block.index("\n}")]
+    assert "max-content" in block, "the first column no longer sizes to its content"
+    spans = re.search(r"\n\s*p \{([^}]*)\}", block)
+    assert spans, "a hint in the secrets block has no rule of its own"
+    assert "grid-column: 1 / -1" in spans.group(1), spans.group(1)
+
+    # The block builds a label, a field and a hint per secret, so all three need a column.
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    built = script[script.index("function secretsBlock"):]
+    built = built[:built.index("\n}")]
+    assert 'el("p"' in built, "the hint is no longer drawn here"
+    for ruled in ("label {", 'input[type="text"] {', "p {", "button {"):
+        assert ruled in block, f"{ruled} has no column in .secrets"
+
+
+@check
 def test_the_theme_box_spans_the_panels_beside_it(_h):
     """The theme box stands beside the settings panels, which it does by spanning their
     rows. The span is a count, so it has to match how many there are."""

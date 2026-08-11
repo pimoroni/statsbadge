@@ -330,7 +330,12 @@ p.bad { color: var(--bad); }
   display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
   gap: 6px 10px; align-items: center;
 
+  label { grid-column: 1; }
   input[type="text"] { grid-column: 2; }
+
+  /* Across both, like every other block of prose here. Left in column one it sets the
+     width of a max-content track, and a hint of any length puts the field off the card. */
+  p { grid-column: 1 / -1; margin: 0; color: var(--dim); font-size: var(--text-sm); }
   button { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
   dl { grid-column: 1 / -1; }
   dd { font-family: ui-monospace, monospace; color: var(--dim); }
