@@ -42,17 +42,31 @@ EASE_MS = 420
 MAG_LOW = 3.0
 MAG_HIGH = 7.0
 
-# The reticle: rings a third of a turn apart, each fading as it grows, reaching this many
-# degrees so a closed-in map draws a bigger one.
+# The reticle: rings a third of a turn apart, each fading as it grows.
 RING_MS = 2000
 RINGS = 3
-RING_SPAN = 20.0
+# How far one reaches, from the low magnitude to the high, in pixels. A marker and not the
+# ground that shook: a magnitude 5 is strongly felt for some 60km, half a pixel here.
+RING_PX_LOW = 3.0
+RING_PX_HIGH = 8.0
 # Below this a ring is a blob on top of the epicentre rather than a ring around it.
-RING_MIN_PX = 4.0
+RING_MIN_PX = 1.0
+
+# The epicentre, from the low magnitude to the high. The same size wherever it is drawn, so
+# the active event and the rest of the feed can be compared.
+DOT_PX_LOW = 1.0
+DOT_PX_HIGH = 2.5
+# How much the active one breathes, which marks it as something happening.
+DOT_PULSE_PX = 0.5
 
 # Where each page is looking and which event it is on, keyed by page id: two map pages hold
 # their own places rather than fighting over one.
 _state = {}
+
+
+def _dot_px(mag):
+    """How wide an epicentre is drawn, by magnitude."""
+    return DOT_PX_LOW + (DOT_PX_HIGH - DOT_PX_LOW) * _mag_fraction(mag)
 
 
 def _mag_fraction(mag):
@@ -96,7 +110,7 @@ def _others(theme, view, events, active):
         x, y = view.at(event["lon"], event["lat"])
         if not view.holds(x, y):
             continue
-        screen.shape(shape.circle(vec2(x, y), 1.5 + _mag_fraction(event["mag"]) * 2.0))
+        screen.shape(shape.circle(vec2(x, y), _dot_px(event["mag"])))
     screen.clip = was
 
 
@@ -105,8 +119,9 @@ def _reticle(theme, view, event):
     x, y = view.at(event["lon"], event["lat"])
     pen = theme.at(_mag_fraction(event["mag"]))
     now = time.ticks_ms()
-    reach = RING_SPAN * view.scale
-    width = max(2, int(2.0 * view.scale))
+    reach = RING_PX_LOW + (RING_PX_HIGH - RING_PX_LOW) * _mag_fraction(event["mag"])
+    # One pixel: a ring eight across takes a hairline, where three would be a disc.
+    width = 1
     was = screen.clip
     screen.clip = view.box
     for ring in range(RINGS):
@@ -117,12 +132,13 @@ def _reticle(theme, view, event):
         # Squared, so a ring is bright where it leaves and gone well before the edge.
         screen.pen = pen.with_alpha(int((1.0 - progress) ** 2 * 255))
         screen.shape(shape.circle(vec2(x, y), radius).stroke(width))
-    # The epicentre pulses, which marks it as something happening and not a printed dot.
-    pulse = 2.5 + math.sin(now / 1000.0 * math.pi * 2.0)
+    # The epicentre pulses, which marks it as something happening and not a printed dot. The
+    # same size as it has in the rest of the feed, give or take the breath.
+    dot = _dot_px(event["mag"]) + DOT_PULSE_PX * math.sin(now / 1000.0 * math.pi * 2.0)
     screen.pen = pen
-    screen.shape(shape.circle(vec2(x, y), max(3.0, pulse * min(view.scale, 2.0))))
+    screen.shape(shape.circle(vec2(x, y), dot + 1.0))
     screen.pen = theme.ink
-    screen.shape(shape.circle(vec2(x, y), 1.5))
+    screen.shape(shape.circle(vec2(x, y), dot * 0.5))
     screen.clip = was
 
 

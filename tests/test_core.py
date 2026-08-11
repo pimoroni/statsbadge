@@ -5337,6 +5337,49 @@ def test_the_iss_page_agrees_with_its_source(_h):
 
 
 @check
+def test_a_quake_marker_is_a_marker_and_not_a_footprint(_h):
+    """The reticle reached twenty degrees, which is a 2200km radius: twice Australia.
+
+    It did that for a magnitude 3 as readily as a 7, and being in degrees it covered the same
+    ground however far in the camera was. No ring here can be a footprint - a magnitude 5 is
+    strongly felt for about 60km, half a pixel at this scale - so it is a marker, sized in
+    pixels and ordered by magnitude.
+    """
+    import ast
+
+    page = pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge"
+                        "/quakemap.py").read_text()
+    assert "RING_SPAN" not in page, "the reticle is still measured in degrees"
+
+    tree = ast.parse(page)
+    names = ("MAG_LOW", "MAG_HIGH", "RING_PX_LOW", "RING_PX_HIGH",
+             "DOT_PX_LOW", "DOT_PX_HIGH", "RING_MIN_PX")
+    consts = [node for node in tree.body if isinstance(node, ast.Assign)
+              and getattr(node.targets[0], "id", "") in names]
+    fns = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+           and node.name in {"_dot_px", "_mag_fraction"}]
+    env = {}
+    exec(compile(ast.Module(body=consts + fns, type_ignores=[]),  # noqa: S102
+                 "quakemap", "exec"), env)
+    assert len(consts) == len(names), [node.targets[0].id for node in consts]
+
+    # Small: a ring of eight pixels at the top of the scale, against twenty-one before.
+    assert env["RING_PX_HIGH"] <= 10.0, env["RING_PX_HIGH"]
+    assert env["DOT_PX_HIGH"] <= 3.0, env["DOT_PX_HIGH"]
+    # Ordered as well, so two events can be ranked by eye.
+    assert env["RING_PX_LOW"] < env["RING_PX_HIGH"]
+    low, high = env["_dot_px"](env["MAG_LOW"]), env["_dot_px"](env["MAG_HIGH"])
+    assert low < high, (low, high)
+    # A ring has to clear the dot it sits around, or it is a disc.
+    assert env["RING_PX_LOW"] > high, (env["RING_PX_LOW"], high)
+    # The smallest ring drawn still reads as one.
+    assert env["RING_MIN_PX"] < env["RING_PX_LOW"], env["RING_MIN_PX"]
+
+    # One size for an epicentre, so the selected event and the rest of the feed agree.
+    assert page.count("_dot_px(") >= 3, "the active marker is sized on its own again"
+
+
+@check
 def test_the_quake_page_agrees_with_its_source(_h):
     """The events are host side and the drawing is badge side, so a name that moved on one
     is a page that draws blank and leaves the reader guessing."""
