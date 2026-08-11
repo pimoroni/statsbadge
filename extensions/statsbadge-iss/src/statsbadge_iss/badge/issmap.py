@@ -72,10 +72,50 @@ def _page_state(page):
     return state
 
 
-def _marker(theme, view, where):
+# How much of the gap to the track's position is closed each draw, so a new prediction is a
+# few slightly fast seconds and not a hop. The lag left is a quarter of a pixel.
+CATCH_UP = 0.25
+# Past this the gap is a different place and not drift: a first draw, or a page come back to
+# after an orbit.
+CATCH_UP_MAX = 5.0
+
+
+def eased(held, target):
+    """`held` moved a share of the way to `target`, the short way round the date line."""
+    if held is None:
+        return target
+    lon = worldmap.shortest(target[0] - held[0])
+    if abs(lon) > CATCH_UP_MAX or abs(target[1] - held[1]) > CATCH_UP_MAX:
+        return target
+    return ((held[0] + lon * CATCH_UP + 180.0) % 360.0 - 180.0,
+            held[1] + (target[1] - held[1]) * CATCH_UP,
+            target[2])
+
+
+def flown_at(dense, flown):
+    """Where along the track `flown` falls, as (lon, lat, sunlit).
+
+    The host sends a prediction and says where now sits in it, so the station's position is
+    already here: asking the feed for it again says what this can work out. Between two
+    dense points, which are a quarter of a five minute step apart, so a straight line
+    between them is under a pixel of the curve they came from.
+
+    Longitude comes back unwrapped, as the spline needed it, and is put back in range.
+    """
+    if not dense:
+        return None
+    at = flown * TRACK_STEPS
+    first = max(0, min(len(dense) - 1, int(at)))
+    second = min(len(dense) - 1, first + 1)
+    part = at - int(at)
+    lon = dense[first][0] + (dense[second][0] - dense[first][0]) * part
+    lat = dense[first][1] + (dense[second][1] - dense[first][1]) * part
+    return ((lon + 180.0) % 360.0 - 180.0, lat, dense[first][2])
+
+
+def _marker(theme, view, lon, lat, sunlit):
     """The station: a lit marker in sunlight, a quiet one in shadow, over a soft halo."""
-    x, y = view.at(where["lon"], where["lat"])
-    sunlit = where.get("sunlit", True)
+    x, y = view.at(lon, lat)
     pen = theme.accent if sunlit else theme.dim
     was = screen.clip
     screen.clip = view.box
@@ -134,6 +174,14 @@ def _smoothed(points):
             for index in range(len(dense_lon))]
 
 
+def _curve(state, points):
+    """The smoothed track, rebuilt only when the host sends a new run."""
+    key = (len(points), points[0], points[-1])
+    if state.get("curve_for") != key:
+        state["curve_for"] = key
+        state["curve"] = _smoothed(points)
+
+
 def _track(theme, view, state, points, flown):
     """The ground track, an orbit of it, with the part already flown left behind.
 
@@ -145,11 +193,7 @@ def _track(theme, view, state, points, flown):
     """
     if len(points) < 2:
         return
-    # The curve only changes when the host sends a new run, which is every two minutes.
-    key = (len(points), points[0], points[-1])
-    if state.get("curve_for") != key:
-        state["curve_for"] = key
-        state["curve"] = _smoothed(points)
+    _curve(state, points)
     dense = state["curve"]
     cut = max(0, min(len(dense) - 1, int(flown * TRACK_STEPS)))
 
@@ -223,7 +267,7 @@ def _project(view, dense, cut):
     return runs
 
 
-def _band(theme, where, aboard, note="waiting for the feed"):
+def _band(theme, where, aboard, at=None, note="waiting for the feed"):
     """The strip under the map: how high, how fast, in sun or shadow, and who is aboard."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
@@ -242,12 +286,13 @@ def _band(theme, where, aboard, note="waiting for the feed"):
 
     # Sunlight is the one state here among the numbers, so it takes the
     # accent when it is on and the dim when it is not.
-    sunlit = where.get("sunlit", True)
+    sunlit = at[2] if at else where.get("sunlit", True)
     lit = "in sunlight" if sunlit else "in shadow"
     pen = draw.readable(theme.accent, theme.panel, theme.ink) if sunlit else theme.dim
     draw.blit_label(lit, look.SIZE_SMALL, pen, look.W - look.PAD, BAND_TOP + 4, align=2)
 
-    draw.blit_label(_where_text(where), look.SIZE_LABEL, theme.ink, left, BAND_TOP + 3)
+    draw.blit_label(_where_text(at[1], at[0]) if at else _where_text(None, None),
+                    look.SIZE_LABEL, theme.ink, left, BAND_TOP + 3)
 
     detail = []
     if where.get("speed"):
@@ -268,9 +313,8 @@ def _grouped(value):
     return digits + out
 
 
-def _where_text(where):
+def _where_text(lat, lon):
     """"51.6N 30.2E", which is the headline: everything else about the station is constant."""
-    lat, lon = where.get("lat"), where.get("lon")
     if lat is None or lon is None:
         return "position unknown"
     return (f"{abs(lat):.1f}{'N' if lat >= 0 else 'S'} "
@@ -288,19 +332,31 @@ def render(page, frame, _history, theme):
 
     state = _page_state(page)
     view = state["view"]
+    track = iss.get("track") or ()
+    flown = iss.get("flown") or 0
 
-    if (page or {}).get("follow") == "follow" and where:
-        view.jump_to(where["lon"], where["lat"], SCALE_FOLLOW)
+    # Where the station is, off the track the host already sent. The feed is asked for its
+    # position every few minutes and this moves every draw, so the marker walks instead of
+    # hopping. Without a track there is only what the feed last said.
+    if len(track) >= 2:
+        _curve(state, track)
+        state["at"] = eased(state.get("at"), flown_at(state["curve"], flown))
+    elif where.get("lon") is not None:
+        state["at"] = (where["lon"], where["lat"], where.get("sunlit", True))
+    at = state.get("at")
+
+    if (page or {}).get("follow") == "follow" and at:
+        view.jump_to(at[0], at[1], SCALE_FOLLOW)
     else:
         view.jump_to(0.0, 0.0, SCALE_WORLD)
 
     view.land(theme)
     if where.get("solar_lon") is not None:
         view.night(theme, where["solar_lon"], where["solar_lat"])
-    _track(theme, view, state, iss.get("track") or (), iss.get("flown") or 0)
-    if where:
-        _marker(theme, view, where)
-    _band(theme, where, iss.get("aboard"))
+    _track(theme, view, state, track, flown)
+    if at:
+        _marker(theme, view, at[0], at[1], at[2])
+    _band(theme, where, iss.get("aboard"), at)
 
 
 pages.EXTRA["issmap"] = render

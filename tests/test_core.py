@@ -5250,6 +5250,63 @@ def test_a_map_page_stays_inside_its_own_band(_h):
 
 
 @check
+def test_the_station_rides_the_track_it_is_already_drawing(_h):
+    """The position feed was asked for every five seconds, at 720 requests an hour.
+
+    The station covers 0.065 degrees a second, which is a pixel of a whole-world map every
+    seventeen seconds, so four in five of those replies moved the marker nowhere. The run of
+    predictions already carries the position, and `flown` says where now sits in it.
+    """
+    import ast
+    import math
+
+    ext = pathlib.Path("extensions/statsbadge-iss/src/statsbadge_iss")
+    source = (ext / "__init__.py").read_text()
+    assert "POSITION_EVERY = 300.0" in source, "the feed is still asked for every few seconds"
+
+    # The two that place the marker, run without the firmware behind them.
+    page = (ext / "badge" / "issmap.py").read_text()
+    tree = ast.parse(page)
+    wanted = {"eased", "flown_at"}
+    picked = [node for node in tree.body
+              if isinstance(node, ast.FunctionDef) and node.name in wanted]
+    consts = [node for node in tree.body
+              if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") in
+              ("CATCH_UP", "CATCH_UP_MAX", "TRACK_STEPS")]
+    assert len(picked) == len(wanted), [node.name for node in picked]
+
+    class Wrapping:
+        shortest = staticmethod(lambda d: d - 360.0 * math.floor(d / 360.0 + 0.5))
+
+    env = {"worldmap": Wrapping}
+    exec(compile(ast.Module(body=consts + picked, type_ignores=[]),  # noqa: S102
+                 "issmap", "exec"), env)
+    steps = env["TRACK_STEPS"]
+
+    # Halfway between two dense points is halfway along the line between them.
+    dense = [(10.0, 40.0, 1), (20.0, 44.0, 1), (30.0, 46.0, 0)]
+    lon, lat, lit = env["flown_at"](dense, 0.5 / steps)
+    assert abs(lon - 15.0) < 1e-6 and abs(lat - 42.0) < 1e-6, (lon, lat)
+    assert lit == 1
+    # An unwrapped longitude comes back in range, the spline having been given turns.
+    assert -180.0 <= env["flown_at"]([(190.0, 0.0, 1)], 0.0)[0] <= 180.0
+    assert env["flown_at"]([], 0.0) is None
+
+    # A new prediction a little off the last is eased across, not hopped.
+    held = (0.0, 40.0, 1)
+    moved = env["eased"](held, (2.0, 40.0, 1))
+    assert 0.0 < moved[0] < 2.0, moved
+    # Past the ceiling it is a different place, so it goes straight there.
+    far = env["eased"](held, (40.0, 40.0, 1))
+    assert far == (40.0, 40.0, 1), far
+
+    # The marker takes the eased position and the band prints it, so neither shows a
+    # position the other does not.
+    assert "_marker(theme, view, at[0], at[1], at[2])" in page
+    assert '_band(theme, where, iss.get("aboard"), at)' in page
+
+
+@check
 def test_the_iss_page_agrees_with_its_source(_h):
     """The station is host side and the drawing is badge side. The terminator is the one that
     would fail quietly: the sub-solar point arrives with the position, and a page reading a

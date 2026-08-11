@@ -11,6 +11,9 @@ The ground track is asked for and never integrated. The same endpoint answers a 
 timestamps, so forty-five minutes either side of now comes back as twenty positions and the
 badge has a track to draw the moment it turns the page.
 
+The run is also where the station is. `flown` says where now sits in it, so the badge reads
+the position off the curve it is already drawing and asks the feed for little else.
+
 Keeping a trail of observed positions instead draws nothing until the app has been up for
 most of an orbit.
 """
@@ -28,12 +31,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WHERE = "https://api.wheretheiss.at/v1/satellites/25544"
 CREW = "http://api.open-notify.org/astros.json"
 
-# How often each thing is asked for. The station covers 0.066 degrees a second, so five
-# seconds is a pixel of movement on a whole-world map: enough to be live, and nothing like
-# wheretheiss.at's one request a second.
-POSITION_EVERY = 5.0
-# The track is a prediction from now, so it goes stale as now moves on.
-TRACK_EVERY = 120.0
+# The station covers 0.065 degrees a second: a pixel of a whole-world map every seventeen
+# seconds, and one of the followed camera every ten.
+
+# The track carries the position, so this feed is left with the altitude, the speed and the
+# sub-solar point. None of those moves far in five minutes.
+POSITION_EVERY = 300.0
+# The run reaches an orbit either way, so ten minutes of it going stale still leaves `now`
+# well inside. Two requests, the endpoint taking ten timestamps at a time.
+TRACK_EVERY = 600.0
 CREW_EVERY = 3600.0
 # A failure waits this long, and neither the whole interval nor forever.
 RETRY_AFTER = 30.0
