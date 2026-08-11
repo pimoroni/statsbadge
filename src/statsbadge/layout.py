@@ -307,9 +307,38 @@ class Config:
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
             data["labels"] = group_labels(data["pages"], capabilities)
+            data["units"] = field_units(data["pages"], capabilities)
         data["palette"] = palette_for(data.get("theme"), data["tint"],
                                       data.get("accent_b", "same"))
         return data
+
+
+def field_units(pages, capabilities):
+    """What an extension called the units of the fields these pages draw.
+
+    A field the badge cannot place gets no unit at all, and a graph of kWh is then a picture
+    of a number.
+
+    Everything declared, the model's included: the badge answers for the families it
+    rescales itself and reads this for the rest, so a fan's rpm arrives here rather than
+    being a bare number on the page.
+    """
+    declared = capabilities.get("units") or {}
+    return {field: declared[field] for _group, field in _refs_of(pages)
+            if declared.get(field)}
+
+
+def _refs_of(pages):
+    """Every (group, field) a page draws, from whichever key holds its refs."""
+    for page in pages or ():
+        refs = list(page.get("fields") or ())
+        for key in ("field", "readouts"):
+            value = page.get(key)
+            refs += value if isinstance(value, list) else ([value] if value else [])
+        for ref in refs:
+            if isinstance(ref, str) and "." in ref:
+                group, _dot, field = ref.partition(".")
+                yield group, field
 
 
 def group_labels(pages, capabilities):

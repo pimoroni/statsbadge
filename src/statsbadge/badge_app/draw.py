@@ -370,11 +370,31 @@ def _duration(seconds):
     return f"{seconds // 60}m"
 
 
+# What the host said a field is measured in, keyed by field name, off the layout. For a
+# field this module has no opinion on: an extension can invent one, and kWh is nothing a
+# suffix betrays.
+UNITS = {}
+
+
+def use_units(units):
+    """Take the units the layout carried.
+
+    The readings cache keys on the field and bakes the suffix into the string, so it goes
+    when the table changes.
+    """
+    global UNITS
+    UNITS = units or {}
+    _readings.clear()
+
+
 def short_unit(field):
     """What follows the number.
 
-    `fmt` leaves the prefix on the number, so this is only the base: 11.4M and MB/s make
-    11.4MB/s at any size.
+    This pairs with what `fmt` printed, so the families it rescales are answered here and
+    not from the host. `_mb` prints as 11.4G, which takes a B and not the MB the value
+    arrived in, and a duration prints as 3d4h and takes nothing.
+
+    Anything with no answer here takes what the host sent.
     """
     if field.endswith("_bps"):
         return "B/s"
@@ -388,7 +408,9 @@ def short_unit(field):
         return "MHz"
     if field.endswith("_mb"):
         return "B"
-    return ""
+    if field in ("uptime_s", "secs_left"):
+        return ""
+    return UNITS.get(field, "")
 
 
 # What a value came out as. Formatting one is 305us against 21us to look it up, and

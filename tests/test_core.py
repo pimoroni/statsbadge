@@ -3187,6 +3187,67 @@ def test_the_big_gauge_can_show_the_whole_ramp(_h):
 
 
 @check
+def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
+    """A field named kwh has no suffix to read a unit off, so a graph of it had none.
+
+    The badge answers for the families `fmt` rescales, the suffix pairing with what it
+    printed: `_mb` shows as 11.1G, which takes a B and not the MB it arrived in.
+    Everything else takes what the host sent.
+    """
+    import ast
+
+    from statsbadge.sources.base import Source
+
+    class Meter(Source):
+        name = "meter"
+        provides = ("energy",)
+        groups = {"energy": {"label": "Energy", "fields": {
+            "kwh": {"label": "Newest half hour", "unit": "kWh"},
+            "spend_p": {"label": "Cost", "unit": "p"}}}}
+
+        def sample(self, frame, _dt):
+            frame["energy"] = {"kwh": 0.25, "spend_p": 316.8}
+
+    source = Meter({})
+    collector = h.service.collector
+    collector.extensions.append(source)
+    try:
+        collector.sample_once()
+        caps = collector.capabilities()
+        pages = [{"id": "e", "kind": "graph", "title": "Energy",
+                  "fields": ["energy.kwh"]},
+                 {"id": "m", "kind": "grid", "title": "Mem",
+                  "fields": ["mem.used_mb", "sys.uptime_s", "fans.rpm"]}]
+        units = layout.field_units(pages, caps)
+        assert units.get("kwh") == "kWh", units
+        # The model's travel too: a fan's rpm was a bare number on the page.
+        assert units.get("rpm") == "rpm", units
+        # A field no page draws is not sent.
+        assert "spend_p" not in units, units
+    finally:
+        collector.extensions.remove(source)
+
+    # The badge keeps the rescaled families to itself, or 11.1G would print as 11.1GMB.
+    src = pathlib.Path(install.app_source_dir(), "draw.py").read_text()
+    tree = ast.parse(src)
+    wanted = {"fmt", "_several", "_rate", "_size", "_duration", "short_unit", "use_units"}
+    picked = [n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name in wanted]
+    env = {"SEVERAL": 3, "UNITS": {}, "_readings": {}}
+    exec(compile(ast.Module(body=picked, type_ignores=[]), "draw", "exec"), env)  # noqa: S102
+    env["use_units"]({"used_mb": "MB", "uptime_s": "s", "rpm": "rpm", "kwh": "kWh"})
+    shown = {field: env["fmt"](value, field) + env["short_unit"](field)
+             for field, value in (("used_mb", 11400.0), ("uptime_s", 273600),
+                                  ("rpm", 2200.0), ("kwh", 0.25))}
+    assert shown == {"used_mb": "11.1GB", "uptime_s": "3d4h",
+                     "rpm": "2200rpm", "kwh": "0.2kWh"}, shown
+
+    # The app takes them where it takes the group names.
+    app = pathlib.Path(install.app_source_dir(), "__init__.py").read_text()
+    assert 'draw.use_units(self.setting("units"))' in app
+
+
+@check
 def test_a_hint_beside_a_secret_leaves_room_for_the_field(_h):
     """An extension's API key sits in a two-column grid whose first column is max-content.
 

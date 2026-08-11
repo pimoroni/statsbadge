@@ -582,6 +582,8 @@ class App:
         # What the host calls the groups an extension declared. Replaced and not
         # updated: a group dropped from every page should stop being named.
         pages_module.LABELS = self.setting("labels") or {}
+        # With what it measures their fields in, for the ones no suffix betrays.
+        draw.use_units(self.setting("units"))
         # Names and fields worked out from the old layout's refs, and read off LABELS.
         pages_module.forget_layout()
         animate = bool(self.setting("animate", False))
