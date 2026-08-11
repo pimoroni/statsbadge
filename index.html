@@ -10,8 +10,6 @@
 <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
 <link rel="canonical" href="https://pimoroni.github.io/statsbadge/">
 
-<!-- The app's splash mark, at the proportions and angles src/statsbadge/badge_app/splash.py
-     draws it with and the colours of the badge's default dark theme. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%2312141c'/%3E%3Cpath fill='%232c3346' d='M3.868 20.132A11.5 11.5 0 1 1 20.132 20.132L17.902 17.902A8.347 8.347 0 1 0 6.098 17.902Z'/%3E%3Cpath fill='%2338e8d1' d='M3.868 20.132A11.5 11.5 0 1 1 21.304 5.240L18.753 7.094A8.347 8.347 0 1 0 6.098 17.902Z'/%3E%3Cg fill='%23f2f5ff'%3E%3Crect x='7.64' y='11.44' width='2.04' height='3.15'/%3E%3Crect x='10.98' y='9.03' width='2.04' height='5.56'/%3E%3Crect x='14.32' y='10.33' width='2.04' height='4.27'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
 
 <meta property="og:type" content="website">
@@ -33,7 +31,6 @@
 :root {
   color-scheme: light dark;
 
-  /* statsbadge's Default Light and Default Dark, from src/statsbadge/themes.toml */
   --bg: light-dark(#faf7f2, #12141c);
   --panel: light-dark(#f0ece4, #1a1e2b);
   --ink: light-dark(#1e1a14, #f2f5ff);
@@ -41,7 +38,6 @@
   --accent: light-dark(#10919d, #38e8d1);
   --grid: light-dark(#d8d1c3, #2c3346);
 
-  /* The ramp a gauge fills with, cold to hot */
   --ramp-0: light-dark(#10919d, #38e8d1);
   --ramp-1: light-dark(#51924a, #7ed375);
   --ramp-2: light-dark(#bc670c, #ec9f07);
@@ -105,8 +101,6 @@ header {
     color: transparent;
     width: fit-content;
 
-    /* The app's splash mark, drawn at the size of the word beside it and nudged down to
-       sit on the same optical centre. */
     svg {
       width: 0.9em;
       height: 0.9em;
@@ -131,7 +125,6 @@ header {
   small { font-size: 0.8rem; }
 }
 
-/* Wide enough for the links to sit beside the wordmark; below it before that. */
 @media (width >= 40rem) {
   header {
     grid-template-columns: 1fr auto;
@@ -158,7 +151,6 @@ nav a {
 }
 nav a:hover { color: var(--accent); }
 
-/* The one link that is a thing to do, not a thing to read. */
 nav a[href^="https://badgewa.re"] {
   padding: 0.3em 1.1em;
   border-radius: 100px;
@@ -191,7 +183,7 @@ pre {
   background: var(--panel);
   line-height: 1.8;
 }
-/* The install recipes: one radio a platform, the matching pre shown by :checked. */
+
 form {
   display: flex;
   flex-wrap: wrap;
@@ -231,9 +223,6 @@ pre code { color: var(--ink); }
 pre b { font-weight: 400; color: var(--accent); }
 pre i { font-style: normal; color: var(--dim); }
 
-/* Screens are 320x240 framebuffer dumps of antialiased vector renders, not pixel art, and
-   a column here can be narrower than 320. Left to the browser's smoothing, which downscales
-   without aliasing the thin rules and the dot pips. */
 figure {
   margin: 0;
 
@@ -265,7 +254,6 @@ section > ul:not(:has(figure)) {
   ::marker { color: var(--grid); }
 }
 
-/* Every gallery: one column on a phone, filling out as the page widens. */
 section > ul:has(figure) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
@@ -377,7 +365,7 @@ footer {
     <li>
       <figure>
         <img src="shots/cpu.png" alt="Processor page: load percentage, temperature, clock and a history graph." width="320" height="240" loading="lazy">
-        <figcaption><b>dial</b> - one reading as a gauge, with the rest read out beside it.</figcaption>
+        <figcaption><b>dial</b> - one reading as a gauge, with optional bars to the right.</figcaption>
       </figure>
     </li>
     <li>
@@ -389,7 +377,7 @@ footer {
     <li>
       <figure>
         <img src="shots/gauges.png" alt="Four gauges side by side, each with an icon and a percentage." width="320" height="240" loading="lazy">
-        <figcaption><b>dials</b> - up to four readings as gauges at once.</figcaption>
+        <figcaption><b>dials</b> - up to four simultaneous gauges.</figcaption>
       </figure>
     </li>
     <li>
@@ -451,7 +439,7 @@ footer {
 
 <section>
   <h2>Statsbadge badge stats</h2>
-  <p>Two pages report info about your system and the badge.</p>
+  <p>Two pages report info about your system and your badge.</p>
   <ul>
     <li>
       <figure>
@@ -462,7 +450,7 @@ footer {
     <li>
       <figure>
         <img src="shots/badge.png" alt="The badge's battery, memory, flash use, ambient light, clock speed and screen size." width="320" height="240" loading="lazy">
-        <figcaption><b>badge</b> - the badge: battery, memory, flash, ambient light and what it is running.</figcaption>
+        <figcaption><b>badge</b> - the badge: battery, memory, flash, ambient light and what build it is running.</figcaption>
       </figure>
     </li>
   </ul>
@@ -509,7 +497,7 @@ footer {
       </figure>
     </li>
   </ul>
-  <p>Or from six you can tint to your preference, picking one of forty-eight accents:</p>
+  <p>Or from six you can tint with one of forty-eight accents:</p>
   <ul>
     <li>
       <figure>
@@ -534,7 +522,7 @@ footer {
 
 <section>
   <h2>Extensions</h2>
-  <p>Manage and install extensions with ease. We've built a beautiful clock as an example: a Swiss railway face whose second hand sweeps at the badge's frame rate. It's joined by dots, squircle, digital and seven-segment LCD faces, all with weather from Open-Meteo.</p>
+  <p>Manage and install extensions with ease. We've built a clock extension as an example: a Swiss railway face, joined by dots, squircle, digital and seven-segment LCD faces, all with weather from Open-Meteo.</p>
   <ul>
     <li>
       <figure>
@@ -575,7 +563,7 @@ footer {
 
 <section>
   <h2>Something to look at</h2>
-  <p>Two more extensions draw the ISS transit and recent earthquakes over crisp, colour-themed world maps. Both take open feeds, so there is no key and no account to set up.</p>
+  <p>Two more extensions draw the ISS transit and recent earthquakes over crisp, colour-themed world maps. Both take open feeds; with no API key nor account needed.</p>
   <ul>
     <li>
       <figure>
@@ -609,7 +597,7 @@ footer {
 
 <section>
   <h2>Extension ecosystem</h2>
-  <p>Build your own extensions or explore those built by others. Extension sources are added to the same pickers as your stats. One page can hold, for example, a follower count, a domain's traffic and a temperature.</p>
+  <p>Build your own extensions or explore those built by others. Extension data sources are added to the same pickers as your stats. One page can hold, for example, a follower count, a domain's traffic and a temperature.</p>
   <ul>
     <li>
       <figure>
