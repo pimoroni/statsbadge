@@ -3248,6 +3248,44 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
 
 
 @check
+def test_a_figure_carries_its_unit_or_is_handed_one(_h):
+    """A battery read 86 on the host page, where every other page says 86%.
+
+    `fmt` prints the number and `short_unit` what follows it. A slot with somewhere to put
+    the unit passes them separately - a dial has the line under the needle, a trend the
+    space beside the big reading. A row that is only a name and a figure has neither, and
+    has to ask for the two together."""
+    import ast
+    import sys
+
+    sys.path.insert(0, install.app_source_dir())
+    import draw
+    import pages
+
+    rows = []
+    was = draw.lines
+    draw.lines = lambda _theme, entries: rows.extend(entries)
+    try:
+        pages._text({"fields": ["power.battery_pct", "sys.uptime_s", "sys.host"]},  # noqa: SLF001
+                    {"power": {"battery_pct": 86.0},
+                     "sys": {"uptime_s": 273600, "host": "workshop-pc"}}, None, None)
+    finally:
+        draw.lines = was
+    # A duration prints its own units and takes none, and a string is not a reading at all.
+    assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
+
+    # Nowhere else either: a page kind printing a figure has to place the unit somewhere.
+    source = pathlib.Path(install.app_source_dir(), "pages.py").read_text()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        calls = {ast.unparse(call.func) for call in ast.walk(node)
+                 if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)}
+        if "draw.fmt" in calls:
+            assert "draw.short_unit" in calls, f"{node.name} prints a figure with no unit"
+
+
+@check
 def test_a_hint_beside_a_secret_leaves_room_for_the_field(_h):
     """An extension's API key sits in a two-column grid whose first column is max-content.
 

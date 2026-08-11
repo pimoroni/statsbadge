@@ -438,10 +438,12 @@ def _dials(page, frame, _history, theme):
 
 
 def _text(page, frame, _history, theme):
+    # `reading` and not `fmt`: a row here is a name and a figure, with nowhere to put a unit
+    # of its own the way a gauge puts one under the needle. A battery read 86 and not 86%.
     entries = []
     for ref in page.get("fields", [])[:7]:
         value = value_of(frame, ref)
-        entries.append((name_for(ref), draw.fmt(value, field_of(ref))))
+        entries.append((name_for(ref), draw.reading(value, field_of(ref))))
     draw.lines(theme, entries)
 
 
@@ -458,7 +460,7 @@ def _notify(page, frame, _history, theme):
             items.append(value)
         elif value is not None or not items:
             # An empty counter still gets its label, so a page of them says what it is for.
-            counters.append((name_for(ref), draw.fmt(value, field_of(ref))))
+            counters.append((name_for(ref), draw.reading(value, field_of(ref))))
     draw.notification(theme, items[:3], counters)
 
 
