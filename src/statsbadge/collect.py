@@ -70,6 +70,24 @@ class Collector:
             except Exception:
                 pass
 
+    def reconfigure(self):
+        """Hand the host config back to any source that takes one live.
+
+        The built-in sources are constructed once at startup, so a Windows sensor URL
+        typed in the browser would otherwise wait for a restart.
+        """
+        told = []
+        for source in list(self.sources):
+            handler = getattr(source, "reconfigure", None)
+            if handler is None:
+                continue
+            try:
+                handler(self.config)
+            except Exception:
+                continue
+            told.append(getattr(source, "name", "source"))
+        return told
+
     def reload_extensions(self):
         """Pick up whatever is installed now. Returns the names loaded.
 

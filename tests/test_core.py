@@ -5874,6 +5874,60 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
 
 
 @check
+def test_the_help_tab_is_told_what_this_platform_needs(h):
+    """Every platform hides its sensors somewhere else, and two of them need a human."""
+    status, block = h.raw("GET", "/api/help")
+    assert status == 200, (status, block)
+    assert block["platform"] in ("Darwin", "Windows", "Linux"), block
+    assert block["sources"], "reading nothing at all"
+
+    if block["platform"] == "Darwin":
+        # The rule names this user and the path to the command, since sudoers matches on
+        # the whole line.
+        assert "NOPASSWD:" in block["powermetrics"]["sudoers"]
+    if block["platform"] == "Windows":
+        assert block["lhm"]["url"].startswith("http")
+
+
+@check
+def test_a_sensor_url_typed_in_the_browser_is_kept_and_read(_h):
+    """A Windows host reads its temperatures from LibreHardwareMonitor, which need not be
+    on the usual port. Stored beside the layout, and handed to the source where it stands
+    rather than at the next start."""
+    from statsbadge import server as server_module
+
+    with tempfile.TemporaryDirectory() as directory:
+        service = server_module.Service(directory, interval=5.0)
+        try:
+            told = []
+
+            class Fake:
+                name = "librehardwaremonitor"
+
+                def reconfigure(self, config):
+                    told.append(config.get("lhm_url"))
+
+            service.collector.sources = [Fake()]
+            service.set_host_settings({"lhm_url": " http://10.0.0.5:9000/data.json "})
+            assert told == ["http://10.0.0.5:9000/data.json"], told
+
+            # Kept where the next start will find it, under a name of its own so a
+            # layout save cannot tread on it.
+            stored = service.config.snapshot()["settings"][server_module.HOST]
+            assert stored == {"lhm_url": "http://10.0.0.5:9000/data.json"}, stored
+            again = server_module.Service(directory, interval=5.0)
+            assert again.collector.config["lhm_url"] == stored["lhm_url"]
+            again.stop()
+
+            # Nothing else a browser sends is kept: the block reaches the sources.
+            service.set_host_settings({"powermetrics": True, "lhm_url": ""})
+            assert "powermetrics" not in service.config.snapshot()["settings"][
+                server_module.HOST]
+        finally:
+            service.stop()
+
+
+@check
 def test_powermetrics_is_tried_and_says_nothing_when_refused(_h):
     """`sudo -n` prompts for nothing, so the cost of asking is a refusal. A Mac without
     the rule is the ordinary case and not worth colouring the Stats tab red over, but a
