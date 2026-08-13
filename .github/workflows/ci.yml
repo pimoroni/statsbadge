@@ -70,7 +70,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
 
-      - run: uv sync --extra tray
+      - run: uv sync
 
       - name: Report what the tray would need
         run: uv run statsbadge tray --check

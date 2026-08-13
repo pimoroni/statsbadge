@@ -13,14 +13,13 @@ Build your stats overview from a selection of pages - bar graphs and waterfalls 
 Uses [uv](https://docs.astral.sh/uv/). As a tool, so it lands on your PATH and keeps a separate environment:
 
 ```bash
-uv tool install "statsbadge[tray]"
+uv tool install statsbadge
 statsbadge tray
 ```
 
 That puts an icon in your menu bar or notification area and serves from there, so there is
 no terminal to leave open. The menu opens the config UI, approves a badge asking to pair,
-and switches on **Start at login**. `statsbadge serve` is the same server without the icon,
-and `uv tool install statsbadge` without the extra is all a headless host needs.
+and switches on **Start at login**. `statsbadge serve` is the same server without the icon.
 
 On Linux the tray needs GTK bindings from your distribution, which pip cannot supply, and
 GNOME hosts no tray at all without the [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
@@ -30,7 +29,7 @@ anyway.
 Working on a checkout instead:
 
 ```bash
-uv sync --extra tray
+uv sync
 uv pip install --no-deps ./extensions/statsbadge-clock   # optional
 uv run statsbadge tray
 ```
@@ -42,7 +41,7 @@ uv pip install statsbadge      # or from a checkout: uv pip install .
 pip install statsbadge         # plain pip works too
 ```
 
-Two extras: `statsbadge[tray]` for the icon, and `statsbadge[nvidia]` for NVIDIA cards via NVML. Take both with `statsbadge[tray,nvidia]`. Pushing the app to a badge over USB needs nothing added.
+One extra, if you want it: `statsbadge[nvidia]` for NVIDIA cards via NVML. Pushing the app to a badge over USB needs nothing added.
 
 With the badge on USB, in another terminal:
 

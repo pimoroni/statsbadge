@@ -1,7 +1,7 @@
 """Talking to pystray, and working out whether there is anything to talk to.
 
-pystray is imported inside functions. `statsbadge tray --check` runs where the extra is
-missing, and `serve` must not care either way.
+pystray is imported inside functions. It brings in a toolkit, and on Linux it raises at
+import where no desktop hosts a tray, so `serve` should never touch it.
 """
 
 import collections
@@ -19,8 +19,8 @@ Item = collections.namedtuple(
     "Item", "label action checked enabled default submenu",
     defaults=(None, None, True, False, None))
 
-INSTALL = ("pystray is not installed. Add the tray extra:\n"
-           "  uv tool install --force 'statsbadge[tray]'")
+INSTALL = ("pystray is missing, though statsbadge depends on it. Reinstall:\n"
+           "  uv tool install --force statsbadge")
 
 LINUX = (
     "The tray needs the desktop's own bits, which pip cannot supply:\n"
