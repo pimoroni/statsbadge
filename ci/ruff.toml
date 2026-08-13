@@ -146,8 +146,9 @@ lint.extend-select = ["UP"]
 "src/statsbadge/server.py" = ["BLE001"]
 "extensions/*/src/statsbadge_*/__init__.py" = ["BLE001", "ARG002"]
 
-# The CLI reports the addresses a badge should use, which the server module works out.
+# The addresses a badge should use, which the server module works out.
 "src/statsbadge/__main__.py" = ["SLF001"]
+"src/statsbadge/runner.py" = ["SLF001"]
 
 # The test harness prints its results itself, and reaches into internals to do it.
 "tests/*.py" = ["BLE001", "SLF001"]

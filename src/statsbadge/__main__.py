@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 
-from . import auth, beacon, collect, extensions, install, layout, server, tooling
+from . import auth, beacon, collect, extensions, install, layout, runner, server, tooling
 # Named apart from the `version` locals in this module, which are extensions' own.
 from . import version as package_version
 
@@ -143,18 +143,15 @@ def _badge_names(paired):
 
 def cmd_serve(args):
     service = build_service(args)
-    service.start()
-    httpd = server.make_server(service, args.host, args.port, args.verbose)
-
-    announcer = None
-    if not args.no_beacon:
-        announcer = beacon.Beacon(args.port, service.identity["name"],
-                                  service.identity["id"])
-        announcer.start()
+    try:
+        stack = runner.Stack.start(service, args.host, args.port, args.verbose,
+                                   announce=not args.no_beacon)
+    except runner.AddressInUse as exc:
+        return _report_in_use(exc)
 
     caps = service.capabilities()
     print(f"statsbadge serving on http://{args.host}:{args.port}")
-    for address in server._local_addresses():
+    for address in stack.addresses():
         print(f"  badge should use:  {address}:{args.port}")
     print(f"  config UI:         http://127.0.0.1:{args.port}/")
     sources = ", ".join(source["name"] for source in caps["sources"])
@@ -174,19 +171,26 @@ def cmd_serve(args):
     paired = _badge_names(service.badges.list_badges())
     print("  paired badges:     %s" % (", ".join(paired) if paired else
                                        "none yet, run 'statsbadge pair'"))
-    if announcer:
+    if stack.announcer:
         print(f"  beacon:            broadcasting on udp/{beacon.PORT}")
 
     try:
-        httpd.serve_forever()
+        stack.serve_forever()
     except KeyboardInterrupt:
         print("\nstopping")
     finally:
-        httpd.server_close()
-        if announcer:
-            announcer.stop()
-        service.stop()
+        stack.stop()
     return 0
+
+
+def _report_in_use(exc):
+    print(f"statsbadge: {exc}", file=sys.stderr)
+    if exc.by:
+        name = exc.by.get("name") or exc.by.get("id") or "another statsbadge"
+        print(f"  {name} is already serving there.", file=sys.stderr)
+    else:
+        print(f"  try --port {exc.port + 1}", file=sys.stderr)
+    return 2
 
 
 # -- pair -------------------------------------------------------------------
@@ -198,16 +202,14 @@ def cmd_pair(args):
     has gone away.
     """
     service = build_service(args)
-    service.start()
-    httpd = server.make_server(service, args.host, args.port, args.verbose)
-    announcer = None
-    if not args.no_beacon:
-        announcer = beacon.Beacon(args.port, service.identity["name"],
-                                  service.identity["id"])
-        announcer.start()
+    try:
+        stack = runner.Stack.start(service, args.host, args.port, args.verbose,
+                                   announce=not args.no_beacon)
+    except runner.AddressInUse as exc:
+        return _report_in_use(exc)
 
     service.badges.begin_pairing(ttl=args.ttl)
-    addresses = server._local_addresses()
+    addresses = stack.addresses()
     print(f"Pairing is open for {args.ttl} seconds, and this keeps serving afterwards.")
     print()
     print("  On the badge: launch Stats, press B to set up, and pick this host")
@@ -222,14 +224,11 @@ def cmd_pair(args):
     threading.Thread(target=_approve_loop, args=(service, args.yes), daemon=True).start()
 
     try:
-        httpd.serve_forever()
+        stack.serve_forever()
     except KeyboardInterrupt:
         print("\nstopping")
     finally:
-        httpd.server_close()
-        if announcer:
-            announcer.stop()
-        service.stop()
+        stack.stop()
     return 0
 
 
