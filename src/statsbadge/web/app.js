@@ -537,7 +537,7 @@ async function refreshPruned() {
     const shown = await api(configPath("/api/preview"))
     const kept = new Set(shown.pages.map((page) => page.id))
     const dropped = config.pages.filter((page) => !kept.has(page.id)).map((page) => page.title)
-    const node = pick('main p[role="status"]')
+    const node = pick('section[aria-label="Pages"] p[role="status"]')
     node.textContent = "Not shown on the badge, because this host reports no data for "
       + `them: ${dropped.join(", ")}`
     node.hidden = !dropped.length
