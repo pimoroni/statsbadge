@@ -110,7 +110,10 @@ url = "https://github.com/pimoroni/statsbadge"
 # still travel in the wheel installed inside the bundle, which carries its own.
 license = "MIT"
 license-files = ["LICENSE"]
-author = "Philip Howard"
+# The publisher, and not the author of the code: the Windows installer puts the app in
+# Program Files under this name, and macOS shows it as the one behind the bundle.
+# `[project] authors` is who wrote it, and stays.
+author = "Pimoroni"
 author_email = "phil@pimoroni.com"
 
 [tool.briefcase.app.statsbadge-tray]
