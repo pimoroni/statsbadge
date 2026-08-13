@@ -216,6 +216,27 @@ def test_windows_keeps_its_entry_in_the_registry():
 
 
 @check
+def test_the_gui_entry_point_still_takes_a_command():
+    """A packaged app has this as its only entry point, so a bare word has to reach the
+    command it names: `ext` and `status` are how CI asks the built app whether it works.
+    A flag is the tray's, which is what a login entry passes."""
+    from statsbadge import PIP_VERB, __main__ as cli
+
+    ran = []
+    was_main = cli.main
+    try:
+        cli.main = ran.append
+        cli.tray_main([])
+        cli.tray_main(["--config-dir", "/tmp/x"])
+        cli.tray_main(["ext", "outdated"])
+        cli.tray_main([PIP_VERB, "--version"])
+    finally:
+        cli.main = was_main
+    assert ran == [["tray"], ["tray", "--config-dir", "/tmp/x"],
+                   ["ext", "outdated"], [PIP_VERB, "--version"]], ran
+
+
+@check
 def test_the_packaged_app_names_files_that_are_there():
     """Briefcase falls back to its own mascot for an icon it cannot find, and says so in
     one line among hundreds of them."""

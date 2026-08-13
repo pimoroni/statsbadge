@@ -272,12 +272,14 @@ jobs:
         include:
           - os: macos-latest
             platform: macOS
+            built: build/statsbadge-tray/macos/app/statsbadge.app/Contents/MacOS/statsbadge
             # Ad-hoc signed, there being no Apple Developer account behind this. The .app
             # runs, but the first launch needs Open from the context menu: Gatekeeper
             # refuses a double-click on anything unnotarised.
             sign: "--adhoc-sign"
           - os: windows-latest
             platform: windows
+            built: build\\statsbadge-tray\\windows\\app\\statsbadge.exe
             # Unsigned, so SmartScreen warns the first time. Briefcase fetches WiX itself.
             sign: ""
 
@@ -311,7 +313,20 @@ jobs:
         run: |
           uv run briefcase create ${{ matrix.platform }} app --no-input
           uv run briefcase build ${{ matrix.platform }} app --no-input
-          uv run briefcase package ${{ matrix.platform }} app --no-input ${{ matrix.sign }}
+
+      # What the app is, run as the app. A bundle carries the Python it runs, and all
+      # three faults found in one so far were invisible to every other job here.
+      # `--check` reports the tray, the certificates it can verify against and what it
+      # installs with; `ext` reads the metadata it ships; `--be-pip` is what it spawns to
+      # install one.
+      - name: Ask the built app what it has
+        run: |
+          "${{ matrix.built }}" --check
+          "${{ matrix.built }}" ext
+          "${{ matrix.built }}" --be-pip --version
+
+      - name: Package it
+        run: uv run briefcase package ${{ matrix.platform }} app --no-input ${{ matrix.sign }}
 
       - uses: actions/upload-artifact@v7
         with:

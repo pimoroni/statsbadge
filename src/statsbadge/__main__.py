@@ -623,8 +623,19 @@ def cmd_tray(args):
     from .tray import backend
 
     if args.check:
+        import ssl
         stopped = backend.why_not()
         print(stopped or f"tray backend: {backend.name()}")
+        # What an extension can verify a certificate against. A packaged app has no roots
+        # of its own, and this is the line that says whether it was given some.
+        given = trust_store()
+        paths = ssl.get_default_verify_paths()
+        print("certificates: {} from {}".format(
+            ssl.create_default_context().cert_store_stats()["x509_ca"],
+            given or paths.cafile or paths.capath or "nowhere"))
+        found = library.tool()
+        print("extensions:  {}".format(
+            "installed with " + found[0] if found else "nothing here to install with"))
         return 0
 
     directory = config_dir(args.config_dir)
@@ -905,10 +916,14 @@ def trust_store():
 
 
 def tray_main(argv=None):
-    """The gui-scripts entry point. Defaults to the tray, and takes its flags."""
+    """The gui-scripts entry point. The tray, unless another command was named.
+
+    A flag is the tray's; a word is a command of its own. That is what lets a packaged
+    app, whose only entry point is this, still be asked for `ext` or `status`. The pip
+    verb is a flag and neither, being how the app spawns itself.
+    """
     asked = list(sys.argv[1:] if argv is None else argv)
-    # Whatever the app was started as, this one is not a tray.
-    if asked and asked[0] == PIP_VERB:
+    if asked and (asked[0] == PIP_VERB or not asked[0].startswith("-")):
         return main(asked)
     return main(["tray", *asked])
 
