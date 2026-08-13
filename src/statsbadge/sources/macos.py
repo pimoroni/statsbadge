@@ -79,7 +79,7 @@ class MacIOKit(Source):
     provides = ("gpu", "cpu")
 
     @classmethod
-    def available(cls):
+    def available(cls, _config=None):
         return shutil.which("ioreg") is not None
 
     def __init__(self, config):
@@ -156,7 +156,7 @@ class MacPowermetrics(Source):
     provides = ("cpu", "gpu", "power", "fans")
 
     @classmethod
-    def available(cls):
+    def available(cls, _config=None):
         return shutil.which("powermetrics") is not None
 
     def __init__(self, config):

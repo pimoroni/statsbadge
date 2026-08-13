@@ -5890,6 +5890,50 @@ def test_the_help_tab_is_told_what_this_platform_needs(h):
 
 
 @check
+def test_a_source_that_can_run_now_is_taken_up_without_a_restart(_h):
+    """`available()` is asked once, at startup. LibreHardwareMonitor answers no while its
+    server is down or on another port, so a URL typed in the browser reached a source that
+    was never built and nothing read it until statsbadge was started again."""
+    from statsbadge import collect
+
+    class Late:
+        name = "late"
+
+        def __init__(self, config):
+            self.config = config
+            self.started = 0
+
+        @classmethod
+        def available(cls, config=None):
+            return bool((config or {}).get("lhm_url"))
+
+        def start(self):
+            self.started += 1
+
+        def stop(self):
+            pass
+
+    was = collect.discover
+    collect.discover = lambda config=None: (
+        [Late(config)] if Late.available(config) else [])
+    try:
+        collector = collect.Collector(interval=5.0)      # not started: no sampling wanted
+        assert collector.sources == [], "it was there before it could be"
+
+        collector.config["lhm_url"] = "http://10.0.0.5:9000/data.json"
+        assert collector.reconfigure() == ["late"]
+        assert [type(source) for source in collector.sources] == [Late]
+        # Not started, since nothing is sampling: `Collector.start` does that for all.
+        assert collector.sources[0].started == 0
+
+        # Asked again, it is not taken up twice.
+        assert collector.reconfigure() == []
+        assert len(collector.sources) == 1
+    finally:
+        collect.discover = was
+
+
+@check
 def test_a_sensor_url_typed_in_the_browser_is_kept_and_read(_h):
     """A Windows host reads its temperatures from LibreHardwareMonitor, which need not be
     on the usual port. Stored beside the layout, and handed to the source where it stands

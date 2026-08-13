@@ -71,10 +71,12 @@ class Collector:
                 pass
 
     def reconfigure(self):
-        """Hand the host config back to any source that takes one live.
+        """Hand the host config to the sources, and take up any that can run now.
 
-        The built-in sources are constructed once at startup, so a Windows sensor URL
-        typed in the browser would otherwise wait for a restart.
+        Two halves, and the second is the one that bites: `available()` is asked once, at
+        startup, so LibreHardwareMonitor answers no while its server is down or on another
+        port. A URL typed in the browser then reaches a source that was never built, and
+        nothing reads it until statsbadge is started again.
         """
         told = []
         for source in list(self.sources):
@@ -83,9 +85,25 @@ class Collector:
                 continue
             try:
                 handler(self.config)
-            except Exception:
+            except Exception as exc:
+                source.note_fault(exc)
                 continue
             told.append(getattr(source, "name", "source"))
+
+        have = {type(source) for source in self.sources}
+        fresh = [source for source in discover(self.config) if type(source) not in have]
+        running = self._thread is not None and self._thread.is_alive()
+        for source in fresh:
+            if running:
+                try:
+                    source.start()
+                except Exception as exc:
+                    source.note_fault(exc)
+            told.append(getattr(source, "name", "source"))
+        if fresh:
+            # Rebound rather than appended to: a sample walking the list finishes on the
+            # one it started with.
+            self.sources = self.sources + fresh
         return told
 
     def reload_extensions(self):

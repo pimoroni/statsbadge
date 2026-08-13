@@ -95,6 +95,9 @@ function showSheet(wanted) {
     else tab.removeAttribute("aria-current")
     sheets[index].hidden = index !== wanted
   })
+  // Here rather than on the click, so the tab a reload lands on is drawn too. It is
+  // fetched on being shown and not polled: it puts a question to sudo.
+  if (tabs[wanted] && tabs[wanted].textContent === "Help") renderHelp().catch(() => {})
   try {
     window.localStorage.setItem(REMEMBERED_TAB, wanted)
   } catch (error) {
@@ -104,14 +107,7 @@ function showSheet(wanted) {
 
 function bindTabs() {
   const tabs = all("header nav button")
-  tabs.forEach((tab, index) => {
-    tab.onclick = () => {
-      showSheet(index)
-      // Asked for when it is opened. It puts a question to sudo, so it is no good in
-      // the poll that keeps the rest of the page fresh.
-      if (tab.textContent === "Help") renderHelp().catch(() => {})
-    }
-  })
+  tabs.forEach((tab, index) => { tab.onclick = () => showSheet(index) })
   let opening = 0
   try {
     opening = Number(window.localStorage.getItem(REMEMBERED_TAB))
