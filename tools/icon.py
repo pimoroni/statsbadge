@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / "src" / "statsbadge" / "badge_app"
 WEB = ROOT / "src" / "statsbadge" / "web"
+TRAY = ROOT / "src" / "statsbadge" / "tray" / "assets"
 sys.path.insert(0, str(APP))
 
 
@@ -71,6 +72,14 @@ SUPERSAMPLE = 16
 CORNER = 5
 COLOURS = 32                      # 16 also reads fine at this size; 32 leaves margin
 
+TRAY_SIZE = 44                    # every tray scales down from one square
+ICO_SIZES = ((16, 16), (24, 24), (32, 32), (48, 48), (256, 256))
+CLEAR = (0, 0, 0, 0)
+MONO_INK = (0, 0, 0, 255)
+MONO_GRID = (0, 0, 0, 90)         # a template carries shading in its alpha
+DOT_R = 0.19                      # of the icon's width
+DOT_RING = 0.055
+
 OUTER = 11.5                      # leaves a pixel of margin inside the icon
 SCALE = OUTER / splash.OUTER
 
@@ -93,25 +102,24 @@ def _box(centre, radius):
     return [(x - radius, y - radius), (x + radius, y + radius)]
 
 
-def main():
-    theme = look.get(look.DEFAULT)
-    size = SIZE * SUPERSAMPLE
-    scale = SCALE * SUPERSAMPLE
-    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+def render(px, grid, accent, ink, plate=None, dot=None, ring=None, supersample=SUPERSAMPLE):
+    """The mark at px, drawn large and reduced."""
+    size = SIZE * supersample
+    scale = SCALE * supersample
+    icon = Image.new("RGBA", (size, size), CLEAR)
     draw = ImageDraw.Draw(icon)
 
     # A plate in the app's own background, so the dial reads against the launcher's brown
     # the same way it does on the badge.
-    draw.rounded_rectangle([(0, 0), (size - 1, size - 1)],
-                           radius=CORNER * SUPERSAMPLE, fill=theme.bg + (255,))
+    if plate:
+        draw.rounded_rectangle([(0, 0), (size - 1, size - 1)],
+                               radius=CORNER * supersample, fill=plate)
 
     centre = (size / 2, size / 2)
     start = look.DIAL_FROM + PIL_OFFSET
     end = look.DIAL_TO + PIL_OFFSET
-    sector(icon, theme.grid + (255,), start, end,
-           splash.OUTER * scale, splash.INNER * scale, centre)
-    sector(icon, theme.accent + (255,), start,
-           start + (end - start) * splash.SWEEP,
+    sector(icon, grid, start, end, splash.OUTER * scale, splash.INNER * scale, centre)
+    sector(icon, accent, start, start + (end - start) * splash.SWEEP,
            splash.OUTER * scale, splash.INNER * scale, centre)
 
     bar_w = splash.BAR_W * scale
@@ -120,14 +128,51 @@ def main():
     base = centre[1] + splash.BASE_BELOW_CENTRE * scale
     for i, height in enumerate(splash.BAR_HEIGHTS):
         x = left + i * (bar_w + gap)
-        draw.rectangle([(x, base - height * scale), (x + bar_w, base)],
-                       fill=theme.ink + (255,))
+        draw.rectangle([(x, base - height * scale), (x + bar_w, base)], fill=ink)
 
-    for out, size in ((APP / "icon.png", SIZE), (WEB / "icon.png", WEB_SIZE)):
-        small = icon.resize((size, size), Image.LANCZOS)
+    if dot:
+        _dot(draw, size, dot, ring)
+    return icon.resize((px, px), Image.LANCZOS)
+
+
+def _dot(draw, size, fill, ring):
+    """A badge is waiting. Cut clear of the dial under it, to read at menu bar size."""
+    radius = size * DOT_R
+    edge = size * DOT_RING
+    centre = (size - radius - edge, radius + edge)
+    if ring is not None:
+        draw.ellipse(_box(centre, radius + edge), fill=ring)
+    draw.ellipse(_box(centre, radius), fill=fill)
+
+
+def main():
+    theme = look.get(look.DEFAULT)
+    plate = theme.bg + (255,)
+    colours = (theme.grid + (255,), theme.accent + (255,), theme.ink + (255,))
+
+    for out, px in ((APP / "icon.png", SIZE), (WEB / "icon.png", WEB_SIZE)):
+        small = render(px, *colours, plate=plate)
         small.save(out, compress_level=9)
         print(f"wrote {out.relative_to(ROOT)}, {out.stat().st_size} bytes")
         _shrink(out, small)
+
+    TRAY.mkdir(parents=True, exist_ok=True)
+    for name, dot in (("tray", None), ("tray-attention", theme.accent + (255,))):
+        _write(TRAY / f"{name}.png",
+               render(TRAY_SIZE, *colours, plate=plate, dot=dot, ring=plate))
+    for name, dot in (("tray-template", None), ("tray-template-attention", MONO_INK)):
+        _write(TRAY / f"{name}.png",
+               render(TRAY_SIZE, MONO_GRID, MONO_INK, MONO_INK, dot=dot, ring=CLEAR))
+
+    out = TRAY / "statsbadge.ico"
+    render(ICO_SIZES[-1][0], *colours, plate=plate, supersample=SUPERSAMPLE * 2).save(
+        out, sizes=ICO_SIZES)
+    print(f"wrote {out.relative_to(ROOT)}, {out.stat().st_size} bytes")
+
+
+def _write(out, image):
+    image.save(out, compress_level=9)
+    print(f"wrote {out.relative_to(ROOT)}, {out.stat().st_size} bytes")
 
 
 def _shrink(out, unquantised):

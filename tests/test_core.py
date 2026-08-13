@@ -5139,6 +5139,20 @@ def test_the_mark_is_the_same_one_everywhere(h):
     assert abs(radii[0] / scale - numbers["INNER"]) < 0.5, radii
     assert abs(radii[-1] / scale - numbers["OUTER"]) < 0.5, radii
 
+    # And the tray's, off the same generator. A template is shape in the alpha alone:
+    # AppKit paints it to suit the menu bar, and any colour left in it is ignored.
+    from PIL import Image
+    assets = pathlib.Path("src/statsbadge/tray/assets")
+    for name in ("tray", "tray-attention", "tray-template", "tray-template-attention"):
+        with Image.open(assets / f"{name}.png") as art:
+            assert art.size[0] == art.size[1], (name, art.size)
+            if "template" not in name:
+                continue
+            coloured = [rgba for _count, rgba in art.convert("RGBA").getcolors(1 << 20)
+                        if rgba[3] and rgba[:3] != (0, 0, 0)]
+            assert not coloured, (name, coloured[:4])
+    assert (assets / "statsbadge.ico").is_file(), "the Windows installer wants an .ico"
+
 
 @check
 def test_a_brightness_the_ui_offers_stays_a_fraction(_h):
