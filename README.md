@@ -56,6 +56,8 @@ Run it again whenever you have upgraded the package or installed an extension. I
 
 `--ssid` sets the WiFi details in the badge's `secrets.py` while that volume is mounted, so a new badge goes from unboxed to showing stats in one command. It prompts for the password, so the password stays out of your shell history; `--pass` takes it directly and an empty string means an open network. `--region` and `--timezone` set those too. Details the badge already has are left alone unless you pass `--force-secrets`.
 
+The config UI does the same job without a terminal. **Update badge** in the header pushes the app to whichever badge is plugged in and pairs it with this host, showing what it copies as it goes. WiFi details are only touched if you tick **Set the WiFi network**, so updating a badge does not cost it the network it is on. A badge last seen running an older app says so in a line above the tabs; that is a guess from what this host last put there, and connecting the badge is what settles it.
+
 No cable? Run `statsbadge pair`, or open the config UI and press **Pair a badge**. Launch **Stats** on the badge and press **B** to set up; it finds the host by itself and shows a six-character code. Check that code matches the one the host shows, and approve it there. Nothing is typed on the badge.
 
 A server is not in pairing mode until you put it there, and the window closes after five minutes or when you press **Stop pairing**. Requests are rate limited and capped. One only pairs a badge once you approve it.
@@ -216,9 +218,7 @@ restart, and it says that too.
 
 The tab offers whatever [`catalogue.toml`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/catalogue.toml) names, which is every extension this project publishes. That list is a convenience. Any pip requirement works, whether from PyPI, a URL or a path.
 
-Installing from the UI needs a `uv tool install`, the one layout that can rebuild itself. Anywhere else the tab still lists what is installed and prints the `uv pip install` line to run.
-
-Installing needs either `uv` or `pip` on the machine.
+Installing needs either `uv` or `pip` on the machine. Without one the tab still lists what is installed, and says so instead of offering to change it.
 
 Three extensions are vendored here: [statsbadge-clock](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's world map, so running both costs one copy of the coastlines and no geometry crosses the network.
 

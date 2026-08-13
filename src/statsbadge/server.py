@@ -18,10 +18,11 @@ import socket
 import socketserver
 import sys
 import threading
+import time
 import traceback
 
-from . import (auth, commands, derive, extensions, identity, layout, library, themes,
-               tooling)
+from . import (auth, commands, derive, extensions, identity, install, layout, library,
+               push, pushed, themes, tooling)
 from .collect import Collector
 
 # Normalised and absolute: `_static` compares a normalised target against this, so a `..`
@@ -30,10 +31,13 @@ STATIC_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__fil
 
 REASONS = {
     200: "OK", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
-    404: "Not Found", 405: "Method Not Allowed", 413: "Payload Too Large",
-    429: "Too Many Requests",
+    404: "Not Found", 405: "Method Not Allowed", 409: "Conflict",
+    413: "Payload Too Large", 429: "Too Many Requests",
     500: "Internal Server Error",
 }
+
+# Lines of install progress kept for the UI to poll.
+INSTALL_LOG = 400
 
 TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -65,6 +69,8 @@ class Service:
                                    state_dir=os.path.join(config_dir, "extensions"))
         self.started = threading.Event()
         self._installing = threading.Lock()
+        self._usb = threading.Lock()
+        self._job = None
 
     def start(self):
         self.announce_pages()
@@ -208,6 +214,71 @@ class Service:
         # badge's, since it fetches for all of them at once.
         extensions.configure_pages(self.collector.extensions, self.config.all_pages())
         return rev
+
+
+    # -- over USB -----------------------------------------------------------
+
+    def badge_modules(self):
+        return extensions.badge_modules(self.collector.extensions)
+
+    def app_state(self, badge_id):
+        """Whether a badge is behind what an install would put on it, or None."""
+        return pushed.behind(self.config_dir, badge_id, self.badge_modules())
+
+    def install_options(self, asked, http_port):
+        """What the browser is allowed to set, with the rest from this host."""
+        options = {}
+        for key in ("name", "ssid", "password", "region", "port_dev"):
+            if asked.get(key) is not None:
+                options[key] = str(asked[key])
+        for key in ("force_secrets", "force_app", "new_secret"):
+            options[key] = bool(asked.get(key))
+        if asked.get("timezone") is not None:
+            options["timezone"] = int(asked["timezone"])
+        options["config_dir"] = self.config_dir
+        options["host"] = (_local_addresses() or ["127.0.0.1"])[0]
+        options["port"] = http_port
+        # The browser asked for this, having been told what it costs. There is nobody
+        # here to prompt.
+        options["yes"] = True
+        return options
+
+    def install_state(self):
+        """The install running now, or the last one, and whether a badge is plugged in."""
+        job = self._job
+        return {
+            "running": bool(job and job["running"]),
+            "started": job["started"] if job else None,
+            "log": list(job["log"]) if job else [],
+            "result": job["result"] if job else None,
+            "ports": install.find_ports(),
+        }
+
+    def start_install(self, options):
+        """Push to a connected badge on a thread. False where one is already running."""
+        with self._usb:
+            if self._job and self._job["running"]:
+                return False
+            self._job = {"running": True, "started": time.time(), "log": [],
+                         "result": None}
+            job = self._job
+        threading.Thread(target=self._install, args=(job, options),
+                         name="statsbadge-install", daemon=True).start()
+        return True
+
+    def _install(self, job, options):
+        def say(text):
+            job["log"].append(text)
+            del job["log"][:-INSTALL_LOG]
+
+        try:
+            job["result"] = push.push(options, badges=self.badges,
+                                      identity=self.identity,
+                                      modules=self.badge_modules(), say=say)
+        except Exception as exc:
+            job["result"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        finally:
+            job["running"] = False
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -538,6 +609,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     pages=len(block.get("pages") or ()),
                     theme=block.get("theme"),
                     interval_ms=block.get("interval_ms"),
+                    # What was last seen on it against what an install would put there.
+                    # None where nothing has been recorded for this badge yet.
+                    app=service.app_state(badge_id),
                 )
             return self._json(200, listed)
 
@@ -551,8 +625,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path.startswith("/api/badges/") and method == "DELETE":
             badge_id = path[len("/api/badges/"):]
             # Its layout too, or it sits in the file naming an unreachable badge and is handed
-            # to whatever next holds that id.
+            # to whatever next holds that id. Same for what it was last seen holding.
             service.config.forget(badge_id)
+            pushed.forget(service.config_dir, badge_id)
             return self._json(200, {"forgotten": service.badges.forget(badge_id)})
 
         if path == "/api/extensions" and method == "GET":
@@ -577,6 +652,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # One of the pool's threads waits on it; the badge keeps being served on
             # another.
             return self._json(200, service.change_extensions(verb, asking))
+
+        # Polled while an install runs, and to tell whether a badge is plugged in.
+        if path == "/api/install" and method == "GET":
+            return self._json(200, service.install_state())
+
+        # Writes WiFi credentials and can mint a pairing secret, both of which the
+        # loopback-only rule above is what stands between this and the network.
+        if path == "/api/install" and method == "POST":
+            options = service.install_options(json.loads(body or b"{}"),
+                                              self.server.server_address[1])
+            if not service.start_install(options):
+                return self._fail(409, "an install is already running")
+            return self._json(200, service.install_state())
 
         return self._fail(404, "no such endpoint")
 

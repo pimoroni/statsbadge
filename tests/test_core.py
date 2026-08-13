@@ -5683,6 +5683,75 @@ def test_an_extension_installed_since_start_is_taken_up_without_a_restart(_h):
         ext._entries = was
 
 
+@check
+def test_a_badge_is_called_behind_from_what_it_was_last_seen_holding(_h):
+    """The comparison is local, so it can be made with no badge connected."""
+    from statsbadge import pushed
+
+    desired = install.desired_hashes()
+    missing = sorted(desired)[0]
+    with tempfile.TemporaryDirectory() as directory:
+        # Nothing recorded is not the same as up to date, and says so.
+        assert pushed.behind(directory, "badge1") is None
+
+        held = {name: digest for name, digest in desired.items() if name != missing}
+        pushed.record(directory, "badge1", held)
+        state = pushed.behind(directory, "badge1")
+        assert state["behind"] and state["added"] == [missing], state
+
+        pushed.record(directory, "badge1", desired)
+        assert pushed.behind(directory, "badge1")["behind"] is False
+
+        # Bytecode and sources hash differently, so a build this package cannot find
+        # again is left uncompared instead of read as a badge full of changes.
+        pushed.record(directory, "badge2", desired, source="/nowhere/mpy")
+        assert pushed.behind(directory, "badge2") is None
+
+        assert pushed.forget(directory, "badge1")
+        assert pushed.behind(directory, "badge1") is None
+
+
+@check
+def test_wifi_details_are_kept_unless_replacing_them_was_asked_for(_h):
+    """An update must not be a way to lose the network the badge is already on."""
+    from statsbadge import push
+
+    said = []
+    with tempfile.TemporaryDirectory() as volume:
+        os.mkdir(os.path.join(volume, "system"))
+        with open(os.path.join(volume, "system", "secrets.py"), "w") as handle:
+            handle.write('WIFI_SSID = "Already Here"\nWIFI_PASSWORD = "old"\n')
+
+        kept = push._set_wifi({"password": "new"}, volume, "Other", said.append)
+        assert kept == "kept", kept
+        assert install.wifi_network_on(volume) == "Already Here"
+
+        set_it = push._set_wifi({"password": "new", "force_secrets": True}, volume,
+                                "Other", said.append)
+        assert set_it == "set", set_it
+        assert install.wifi_network_on(volume) == "Other"
+
+
+@check
+def test_the_install_endpoint_runs_one_and_reports_what_it_did(h):
+    """Driven with a port that is not there: a test must never touch a real badge."""
+    status, body = h.raw("GET", "/api/install")
+    assert status == 200 and body["running"] is False, (status, body)
+    assert body["result"] is None and body["log"] == [], body
+
+    status, body = h.raw("POST", "/api/install",
+                         json.dumps({"port_dev": "/dev/statsbadge-not-a-port"}).encode(),
+                         {"Content-Type": "application/json"})
+    assert status == 200, (status, body)
+    for _ in range(100):
+        status, body = h.raw("GET", "/api/install")
+        if not body["running"]:
+            break
+        time.sleep(0.1)
+    assert body["result"]["ok"] is False, body
+    assert body["result"]["error"], "a failed install said nothing about why"
+
+
 def _source_of(fn):
     import inspect
     return inspect.getsource(fn)

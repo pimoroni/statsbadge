@@ -144,6 +144,48 @@ dialog {
   li div { grid-column: 1 / -1; display: flex; gap: 6px; }
 }
 
+/* -- updating a badge over USB ------------------------------------------- */
+
+dialog.installer {
+  width: 400px;
+  /* Panel, not panel2, which is what the fields inside it are drawn in. */
+  background: var(--panel);
+
+  p { text-align: left; }
+  p.note { margin-bottom: 10px; }
+
+  label.check {
+    color: var(--ink); font-size: var(--text-md);
+    text-transform: none; letter-spacing: 0; margin-bottom: 10px;
+  }
+
+  .fields {
+    display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 10px;
+    align-items: center; margin-bottom: 10px;
+  }
+
+  .fields[hidden] { display: none; }
+
+  menu { display: flex; gap: 8px; margin: 0; padding: 0; }
+
+  pre {
+    margin: 10px 0 0; max-height: 200px; overflow: auto; white-space: pre-wrap;
+    background: var(--bg); padding: 8px 10px;
+    color: var(--dim); font-size: var(--text-sm);
+  }
+}
+
+/* Sits above the tabs, so it is seen whichever one is open. */
+p.stale {
+  flex-basis: 100%;
+  display: flex; align-items: center; gap: 10px; margin: 0;
+  color: var(--accent);
+  background: var(--bg); border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+}
+
+p.stale[hidden] { display: none; }
+
 /* -- the sheet a tab shows ----------------------------------------------- */
 
 main > section {
@@ -209,7 +251,7 @@ button {
   &.danger:hover { background: var(--bad); color: #fff; }
 }
 
-select, input[type="text"], input[type="number"] {
+select, input[type="text"], input[type="number"], input[type="password"] {
   background: var(--panel2); color: var(--ink); border: 0;
   padding: 6px 8px; font: inherit; min-width: 0;
 }

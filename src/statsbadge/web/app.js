@@ -537,7 +537,7 @@ async function refreshPruned() {
     const shown = await api(configPath("/api/preview"))
     const kept = new Set(shown.pages.map((page) => page.id))
     const dropped = config.pages.filter((page) => !kept.has(page.id)).map((page) => page.title)
-    const node = pick('p[role="status"]')
+    const node = pick('main p[role="status"]')
     node.textContent = "Not shown on the badge, because this host reports no data for "
       + `them: ${dropped.join(", ")}`
     node.hidden = !dropped.length
@@ -1778,12 +1778,13 @@ function ownIds(pages, badgeId) {
 function renderBadges() {
   const ids = Object.keys(badges)
   const node = $("badges")
-  if (!ids.length) {
+  if (ids.length) {
+    node.replaceChildren(node.querySelector("h2"), ...ids.map(badgeBox))
+  } else {
     node.replaceChildren(node.querySelector("h2"), el("section", null, el("p", {
       textContent: "None paired. Use the USB installer, or pair over the network." })))
-    return
   }
-  node.replaceChildren(node.querySelector("h2"), ...ids.map(badgeBox))
+  renderStale()
 }
 
 /** One box per paired badge: what to call it, what it is, and the two things that can be
@@ -1847,9 +1848,19 @@ function facts(id) {
     ["Pages", `${record.pages}`],
     ["Theme", themeLabel(record.theme)],
     ["Refresh", `${record.interval_ms} ms`],
+    ["App", appLabel(record.app)],
   ]
   return el("dl", null, ...rows.flatMap(([term, said]) =>
     [el("dt", { textContent: term }), el("dd", null, said)]))
+}
+
+/** What the badge is running, from what it was last seen holding. Nothing recorded means
+ * it was paired over the network and never installed to from here. */
+function appLabel(state) {
+  if (!state) return "Not installed from here"
+  const changes = state.added.length + state.changed.length + state.removed.length
+  if (!changes) return "Up to date"
+  return `${changes} file${changes === 1 ? "" : "s"} behind`
 }
 
 /** A theme by the name the picker calls it. An unknown one is a theme this host no longer
@@ -1929,7 +1940,7 @@ async function watchPairing(announce) {
     clearInterval(pairingPoll)
     pairingPoll = null
   }
-  const panel = pick("dialog")
+  const panel = $("pairing")
   const button = $("pair")
 
   const paint = (state, pending) => {
@@ -1969,6 +1980,162 @@ async function watchPairing(announce) {
       pairingPoll = null
     }
   }, 1000)
+}
+
+// -- over USB --------------------------------------------------------------
+//
+// The app and the badge's WiFi details only travel over USB: /v1 carries readings and a
+// layout, never code. This drives the install `statsbadge install` does, against whichever
+// badge is plugged in, which need not be the one the picker is on.
+
+let installPoll = null
+let installer = null
+// Whether the last poll saw one running, which is what turns finishing into an event.
+let installRan = false
+
+function openInstaller() {
+  const panel = $("installer")
+  if (panel.open) {
+    closeInstaller()
+    return
+  }
+  panel.replaceChildren(...installerBox())
+  panel.show()
+  watchInstall()
+}
+
+function closeInstaller() {
+  $("installer").close()
+  installer = null
+  if (installPoll) {
+    clearInterval(installPoll)
+    installPoll = null
+  }
+}
+
+/** The panel: what is plugged in, the WiFi details if any are wanted, and the log.
+ *
+ * WiFi is off unless it is asked for. Sending a network replaces whatever the badge has,
+ * and an update should not be a way to lose the one it is already on. */
+function installerBox() {
+  const status = el("p", { className: "found", textContent: "Looking for a badge…" })
+  const ssid = el("input", { type: "text", id: "ssid", placeholder: "Network name" })
+  const password = el("input", { type: "password", id: "wifipass" })
+  const region = el("input", { type: "text", id: "region", placeholder: "us" })
+  const zone = el("input", { type: "number", id: "zone", min: -12, max: 14, step: 1,
+                             placeholder: "0" })
+  const wifi = el("input", { type: "checkbox", id: "setwifi" })
+  const fields = el("div", { className: "fields", hidden: true },
+                    el("label", { htmlFor: "ssid", textContent: "Network" }), ssid,
+                    el("label", { htmlFor: "wifipass", textContent: "Password" }), password,
+                    el("label", { htmlFor: "region", textContent: "Region" }), region,
+                    el("label", { htmlFor: "zone", textContent: "GMT offset" }), zone)
+  wifi.onchange = () => { fields.hidden = !wifi.checked }
+
+  const go = el("button", { type: "button", className: "primary", textContent: "Update" })
+  go.onclick = () => startInstall().catch((error) => {
+    toast(error.message, true)
+    go.disabled = false
+  })
+  const cancel = el("button", { type: "button", textContent: "Close" })
+  cancel.onclick = closeInstaller
+  const log = el("pre", { hidden: true })
+
+  installer = { status, wifi, ssid, password, region, zone, go, log }
+  return [
+    status,
+    el("label", { htmlFor: "setwifi", className: "check" }, wifi, "Set the WiFi network"),
+    fields,
+    el("p", { className: "note",
+              textContent: "The badge resets into USB storage while this runs." }),
+    el("menu", null, go, cancel),
+    log,
+  ]
+}
+
+async function startInstall() {
+  const asking = {}
+  if (installer.wifi.checked) {
+    const network = installer.ssid.value.trim()
+    if (!network) {
+      toast("Name the network first", true)
+      return
+    }
+    asking.ssid = network
+    asking.password = installer.password.value
+    // Named here, so it replaces whatever the badge was set to.
+    asking.force_secrets = true
+    if (installer.region.value.trim()) asking.region = installer.region.value.trim()
+    if (installer.zone.value !== "") asking.timezone = Number(installer.zone.value)
+  }
+  installer.go.disabled = true
+  await api("/api/install", { method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(asking) })
+  watchInstall()
+}
+
+function watchInstall() {
+  if (installPoll) clearInterval(installPoll)
+  const tick = () => api("/api/install").then(paintInstall).catch(closeInstaller)
+  tick()
+  installPoll = setInterval(tick, 1000)
+}
+
+function paintInstall(state) {
+  if (!installer) return
+  const port = (state.ports || [])[0]
+  installer.status.textContent = state.running
+    ? "Working…"
+    : (port ? `Badge on ${port}` : "No badge connected. Plug one in by USB.")
+  installer.go.disabled = state.running || !port
+  const said = (state.log || []).join("\n")
+  installer.log.hidden = !said
+  installer.log.textContent = said
+  installer.log.scrollTop = installer.log.scrollHeight
+  if (installRan && !state.running) finishedInstall(state.result)
+  installRan = state.running
+}
+
+async function finishedInstall(result) {
+  if (!result) return
+  if (result.error) toast(result.error, true)
+  else if (result.cancelled) toast("Nothing was changed")
+  else toast(installSummary(result))
+  badges = await api("/api/badges").catch(() => badges)
+  renderWhose()
+  renderBadges()
+}
+
+function installSummary(result) {
+  const copied = (result.copied || []).length
+  const parts = [copied
+    ? `${copied} file${copied === 1 ? "" : "s"} copied`
+    : "already up to date"]
+  if (result.wifi === "set") parts.push("WiFi set")
+  if (result.credentials) parts.push("paired")
+  return parts.join(", ")
+}
+
+/** One line when a badge is behind what this host would install.
+ *
+ * A guess, from what the badge was last seen holding: another machine can have installed
+ * something else since, and the answer is only ever a reason to plug it in and look. */
+function renderStale() {
+  const names = Object.keys(badges)
+    .filter((id) => badges[id].app && badges[id].app.behind)
+    .map(badgeName)
+  const node = $("stale")
+  node.hidden = !names.length
+  if (!names.length) return
+  const one = names.length === 1
+  const button = el("button", { type: "button", className: "small",
+                                textContent: "Update…" })
+  button.onclick = openInstaller
+  node.replaceChildren(
+    `${names.join(", ")} ${one ? "was" : "were"} last seen running an older app. `
+    + `Connect ${one ? "it" : "them"} by USB to update.`,
+    button)
 }
 
 // -- live ------------------------------------------------------------------
@@ -2208,6 +2375,7 @@ async function boot() {
   refreshCatalogue().then(refreshOutdated).catch(() => {})
 
   $("save").onclick = save
+  $("usb").onclick = openInstaller
   const form = pick("main form")
   form.onsubmit = (event) => {
     event.preventDefault()
