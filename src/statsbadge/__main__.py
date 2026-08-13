@@ -858,17 +858,21 @@ def main(argv=None):
 def trust_store():
     """Point OpenSSL at a bundle of roots where it has none. Returns the file, or None.
 
-    A packaged app carries a Python built somewhere else, and inside the bundle there is
-    no trust store: `get_default_verify_paths()` answers None to both, and every HTTPS
-    request an extension makes comes back unable to find an issuer. certifi travels in
-    the app for this, and anywhere else this does nothing.
+    A packaged app carries a Python built somewhere else, and inside the bundle there are
+    no roots at all: every HTTPS request an extension makes comes back unable to find an
+    issuer. certifi travels in the app for this, and anywhere else this does nothing.
+
+    Asked of a context rather than of the paths. Windows names no file, loading its roots
+    from the system store, and a machine with roots of its own must not be handed certifi
+    in place of them.
     """
     import ssl
     if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
         return None
-    paths = ssl.get_default_verify_paths()
-    if ((paths.cafile and os.path.exists(paths.cafile))
-            or (paths.capath and os.path.isdir(paths.capath))):
+    try:
+        if ssl.create_default_context().cert_store_stats().get("x509_ca"):
+            return None
+    except (OSError, ValueError):
         return None
     try:
         import certifi
