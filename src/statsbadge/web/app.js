@@ -570,10 +570,21 @@ function renderSettings() {
 // is then a list of what is installed, and not a wall of every setting at once.
 const openExtensions = new Set()
 
+/** What the catalogue says about an extension, where it lists one. */
+function catalogued(name) {
+  return ((catalogue && catalogue.offered) || []).find((entry) => entry.name === name)
+}
+
 /** What the catalogue calls it, since a package name is not a heading. */
 function displayName(name) {
-  const listed = ((catalogue && catalogue.offered) || []).find((e) => e.name === name)
+  const listed = catalogued(name)
   return (listed && listed.title) || name
+}
+
+/** What an extension has to be told before it reports anything, beside its name. Worth
+ * the heading: an extension waiting on a token looks the same as one that is working. */
+function wants(needs) {
+  return needs ? el("span", { className: "wants", textContent: `needs ${needs}` }) : null
 }
 
 /** Under the title, not in it: what you would type, and which release is here. */
@@ -638,7 +649,6 @@ function catalogueBox() {
 
 function offerRow(entry) {
   const notes = [givenName(entry.name, entry.version)]
-  if (entry.needs) notes.push(`needs ${entry.needs}`)
   // The badge gets code over USB alone; /v1 carries readings and a layout.
   if (entry.page) notes.push("includes badge page")
   if (entry.installed && !entry.managed) notes.push("installed by the environment")
@@ -653,6 +663,7 @@ function offerRow(entry) {
   return el("li", null,
             el("div", null,
                el("strong", { textContent: entry.title || entry.name }),
+               wants(entry.needs),
                ...summary.map((text) => el("small", { textContent: text }))),
             el("div", null,
                ...(behind[entry.name] && entry.managed ? [updateButton(entry)] : []),
@@ -780,8 +791,10 @@ function extensionBox(extension, settings) {
   }
 
   const open = openExtensions.has(extension.name)
+  const listed = catalogued(extension.name)
   const head = el("h3", null,
-                  el("span", { textContent: displayName(extension.name) }))
+                  el("span", { textContent: displayName(extension.name) }),
+                  wants(listed && listed.needs))
   const box = el("section", null, el("header", null, head), state)
   if (!settings.length) return box
 
