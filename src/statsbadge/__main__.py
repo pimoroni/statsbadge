@@ -500,6 +500,8 @@ def _badge_status(args, port):
 def cmd_extensions(args):
     """List the extensions on this host, or change which ones are installed."""
     verb = getattr(args, "verb", None) or "list"
+    if verb == "outdated":
+        return _report_outdated(args)
     if verb != "list":
         return _change_extensions(args, verb)
 
@@ -541,6 +543,23 @@ def _how_to_add(name):
     return f"try: statsbadge ext add {name}"
 
 
+def _report_outdated(args):
+    directory = config_dir(args.config_dir)
+    behind = library.outdated(directory)
+    if not behind:
+        print("nothing to update" if tooling.read_wanted(directory)
+              else "no extensions installed")
+        return 0
+    held = tooling.pinned(tooling.read_wanted(directory))
+    for entry in behind:
+        short = tooling.short_name(entry["name"])
+        note = "   (pinned, so name it to move it)" if short in held else ""
+        print(f"{short}  {entry['version']} -> {entry['latest']}{note}")
+    print()
+    print("run: statsbadge ext upgrade" + (" NAME" if held else ""))
+    return 0
+
+
 def _change_extensions(args, verb):
     """add, remove or sync: keep `extensions.txt` and the tool environment in step."""
     directory = config_dir(args.config_dir)
@@ -557,6 +576,8 @@ def _change_extensions(args, verb):
         print(f"{short} is asked for but not installed: putting it back.")
     for short in done["absent"]:
         print(f"not installed: {short}")
+    for note in done["unpinned"]:
+        print(note)
     if done["unknown"]:
         print(f"no such extension: {done['unknown']}", file=sys.stderr)
         print(f"  nothing on PyPI is called that. {tooling.WANTED} is unchanged.",
@@ -863,16 +884,21 @@ def main(argv=None):
     exts = subs.add_parser("extensions", parents=[common], aliases=["ext"],
                            help="list extensions, or add and remove them")
     exts.set_defaults(func=cmd_extensions, verb="list", names=[])
-    verbs = exts.add_subparsers(dest="verb", metavar="add|remove|sync")
+    verbs = exts.add_subparsers(dest="verb",
+                                metavar="add|remove|upgrade|outdated|sync")
     for verb, what in (("add", "install an extension and remember it"),
                        ("remove", "uninstall an extension and forget it"),
-                       ("sync", ("reinstall whatever the list names, after an upgrade "
-                                 "of statsbadge itself has replaced the environment"))):
+                       ("upgrade", "take newer releases, of one extension or of all"),
+                       ("outdated", "ask the index which of them have moved on"),
+                       ("sync", "build the library again from whatever the list names")):
         step = verbs.add_parser(verb, parents=[common], help=what)
         step.set_defaults(func=cmd_extensions, verb=verb, names=[])
-        if verb != "sync":
+        if verb in ("add", "remove"):
             step.add_argument("names", nargs="+", metavar="NAME",
                               help="a short name like clock, or any pip requirement")
+        elif verb == "upgrade":
+            step.add_argument("names", nargs="*", metavar="NAME",
+                              help="which to move, or none for all of them")
 
     badges = subs.add_parser("badges", help="list or forget paired badges")
     badges.add_argument("--forget", metavar="BADGE_ID")

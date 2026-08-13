@@ -577,6 +577,24 @@ async function refreshCatalogue() {
   renderSettings()
 }
 
+// What has a newer release, by short name. Kept apart from the catalogue: asking an index
+// takes seconds, and the list draws without it.
+let behind = {}
+
+async function refreshOutdated() {
+  let found
+  try {
+    found = await api("/api/extensions/outdated")
+  } catch (error) {
+    return
+  }
+  behind = {}
+  for (const entry of found.outdated || []) {
+    behind[entry.name.replace(/^statsbadge-/, "")] = entry.latest
+  }
+  renderSettings()
+}
+
 /** The published extensions, each with the one button that applies to it.
  *
  * A fixed list: PyPI cannot be asked which packages are statsbadge extensions. The box
@@ -605,13 +623,26 @@ function offerRow(entry) {
   if (entry.page) notes.push("draws its own page, so it needs statsbadge install over USB")
   if (entry.installed && !entry.asked) notes.push("installed, but not on the list")
   if (entry.asked && !entry.installed) notes.push("asked for, but not installed")
+  if (behind[entry.name]) notes.push(`${behind[entry.name]} is out`)
 
   const summary = [entry.summary, notes.join(" · ")].filter(Boolean)
   // The name as the package spells it, matching the settings box below and `ext add`.
   return el("li", null,
             el("span", { textContent: entry.name }),
             ...summary.map((text) => el("small", { textContent: text })),
+            ...(behind[entry.name] ? [updateButton(entry)] : []),
             offerButton(entry))
+}
+
+function updateButton(entry) {
+  const busy = installing.has(entry.name)
+  return el("button", {
+    type: "button",
+    className: "primary",
+    textContent: busy ? "Working..." : `Update to ${behind[entry.name]}`,
+    disabled: busy || !catalogue.manageable,
+    onclick: () => changeExtension("upgrade", entry.name),
+  })
 }
 
 function offerButton(entry) {
@@ -666,17 +697,24 @@ async function changeExtension(verb, name) {
   if (!done.ok) {
     toast(done.why || "could not do that", true)
   } else {
-    toast(verb === "add" ? `Installed ${name}` : `Removed ${name}`)
+    toast({ add: `Installed ${name}`, remove: `Removed ${name}`,
+            upgrade: `Updated ${name}` }[verb])
+    for (const note of done.unpinned || []) toast(note)
+    // Already imported code stays imported until the process goes round again.
+    for (const name of done.restart || []) {
+      toast(`Restart statsbadge to run the new ${name}`)
+    }
     // Installed into the environment itself, where a build beside the config cannot
     // reach it.
     for (const stuck of done.stuck || []) {
       toast(`${stuck} is installed in statsbadge itself, so it is still here`, true)
     }
-    if (verb === "add" && (done.needs_usb || []).includes(name)) {
+    if (verb !== "remove" && (done.needs_usb || []).includes(name)) {
       toast("Run statsbadge install to push its page to the badge")
     }
   }
   await refreshCatalogue()
+  await refreshOutdated()
   await refreshCaps()
 }
 
@@ -2098,7 +2136,7 @@ async function boot() {
   renderBadges()
   renderLive()
   // After the first paint, since the list is a nicety and the page draws without it.
-  refreshCatalogue().catch(() => {})
+  refreshCatalogue().then(refreshOutdated).catch(() => {})
 
   $("save").onclick = save
   const form = pick("main form")

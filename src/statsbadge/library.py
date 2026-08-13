@@ -17,6 +17,7 @@ start instead, before anything has imported from it.
 import csv
 import importlib
 import importlib.metadata
+import json
 import os
 import platform
 import shutil
@@ -62,11 +63,20 @@ def activate(config_dir):
 
     Appended, which leaves anything the environment already has winning the import. A
     generation is pruned of duplicates, but an older one need not be.
+
+    Code already imported stays imported: this settles what a later import finds, so a
+    newer release of something already running reaches the process at the next start.
     """
     where = current(config_dir)
+    inside = os.path.normpath(root(config_dir)) + os.sep
+    # Any generation a build replaced comes off first. Left where it is, earlier in
+    # sys.path, it would go on answering the import.
+    for entry in list(sys.path):
+        if entry != where and (os.path.normpath(entry) + os.sep).startswith(inside):
+            sys.path.remove(entry)
     if where and where not in sys.path:
         sys.path.append(where)
-        importlib.invalidate_caches()
+    importlib.invalidate_caches()
     return where
 
 
@@ -87,20 +97,61 @@ def sweep(config_dir):
     return dropped
 
 
-def installer():
-    """What to install with, or None if there is nothing here that can.
+def tool():
+    """(which one, the argv up to its verb) for what can install here, or None.
 
     uv first, since a uv-made virtualenv usually carries no pip at all.
     """
     found = shutil.which("uv")
     if found:
-        return [found, "pip", "install", "--python", sys.executable]
+        return "uv", [found, "pip"]
     try:
         subprocess.run([sys.executable, "-m", "pip", "--version"],
                        capture_output=True, check=True)
     except (OSError, subprocess.CalledProcessError):
         return None
-    return [sys.executable, "-m", "pip", "install"]
+    return "pip", [sys.executable, "-m", "pip"]
+
+
+def installer():
+    """What installs into a target directory, or None if there is nothing here that can."""
+    found = tool()
+    if found is None:
+        return None
+    kind, argv = found
+    argv = [*argv, "install"]
+    # uv installs into the environment it is pointed at, and picks none by itself.
+    return [*argv, "--python", sys.executable] if kind == "uv" else argv
+
+
+def outdated(config_dir, timeout=60):
+    """What the library holds that has a newer release, as name, version and latest.
+
+    This asks an index, over the network, and can take a moment. Anything that cannot be
+    told comes back empty: not knowing is a different thing from up to date, and the
+    caller has nothing to show either way.
+    """
+    where = current(config_dir)
+    found = tool()
+    if not where or found is None:
+        return []
+    kind, argv = found
+    argv = [*argv, "list", "--outdated", "--format", "json",
+            "--target" if kind == "uv" else "--path", where]
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, check=False,
+                              timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if done.returncode != 0:
+        return []
+    try:
+        listed = json.loads(done.stdout or "[]")
+    except ValueError:
+        return []
+    return [{"name": entry.get("name", ""), "version": entry.get("version"),
+             "latest": entry.get("latest_version")}
+            for entry in listed if entry.get("name") and entry.get("latest_version")]
 
 
 def build(config_dir, requirements, verbose=False):
@@ -144,6 +195,17 @@ def build(config_dir, requirements, verbose=False):
 
     os.rename(target, final)
     return final, None
+
+
+def installed(where):
+    """Every distribution a generation carries, version by name."""
+    found = {}
+    for entry in os.listdir(where):
+        if not entry.endswith(".dist-info"):
+            continue
+        name, _, version = entry[:-len(".dist-info")].rpartition("-")
+        found[name.lower().replace("_", "-")] = version
+    return found
 
 
 def holds(where, short_name):

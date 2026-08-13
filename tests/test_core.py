@@ -5428,6 +5428,71 @@ def test_a_map_page_only_uses_names_the_badge_has(_h):
 
 
 @check
+def test_upgrading_one_extension_leaves_the_others_where_they_are(_h):
+    """A build resolves every unpinned name to its latest, so naming one to upgrade would
+    carry the whole list up with it. The rest are pinned to what the library holds.
+
+    Naming one is asking for it to move, so a version it was pinned to stops being the
+    answer, and the list records that. A bare upgrade leaves every pin alone.
+    """
+    from statsbadge import tooling
+
+    assert tooling.without_pin("statsbadge-clock==1.1.0") == "statsbadge-clock"
+    assert tooling.without_pin("statsbadge-iss>=2") == "statsbadge-iss"
+    assert tooling.without_pin("statsbadge-clock") == "statsbadge-clock"
+    # A path resolves to whatever is in it, so there is no pin to take off.
+    assert tooling.without_pin("/src/statsbadge-clock") == "/src/statsbadge-clock"
+    assert tooling.pinned(["statsbadge-clock==1.1.0", "statsbadge-iss"]) == {"clock"}
+
+    work = tempfile.mkdtemp(prefix="statsbadge-upgrade-")
+    try:
+        # Everything but the one named is held at the version the library carries.
+        where = os.path.join(work, "lib", f"{library.tag()}-0001")
+        os.makedirs(os.path.join(where, "statsbadge_iss-1.0.3.dist-info"))
+        os.makedirs(os.path.join(where, "statsbadge_clock-1.1.0.dist-info"))
+        building = tooling.holding(work, ["statsbadge-clock", "statsbadge-iss"], {"clock"})
+        assert building == ["statsbadge-clock", "statsbadge-iss==1.0.3"], building
+
+        # Naming a pinned one takes the pin off, and says so.
+        done = tooling.plan("upgrade", ["clock"], ["statsbadge-clock==1.1.0"], set())
+        assert done["wanted"] == ["statsbadge-clock"], done["wanted"]
+        assert done["changed"] == ["statsbadge-clock"], done["changed"]
+        assert done["unpinned"] and "1.1.0" in done["unpinned"][0], done["unpinned"]
+
+        # Naming nothing means all of them, and touches no pin.
+        done = tooling.plan("upgrade", [], ["statsbadge-clock==1.1.0"], set())
+        assert done["changed"] == ["statsbadge-clock==1.1.0"], done["changed"]
+        assert done["unpinned"] == [], done["unpinned"]
+        # One that was never asked for cannot be upgraded.
+        assert tooling.plan("upgrade", ["nope"], [], set())["absent"] == ["nope"]
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@check
+def test_the_generation_a_build_replaced_comes_off_the_path(_h):
+    """Appending the new one is not enough: the old one is earlier in sys.path and would
+    go on answering the import."""
+    work = tempfile.mkdtemp(prefix="statsbadge-path-")
+    try:
+        first = os.path.join(work, "lib", f"{library.tag()}-0001")
+        second = os.path.join(work, "lib", f"{library.tag()}-0002")
+        os.makedirs(first)
+        assert library.activate(work) == first
+        assert first in sys.path
+
+        os.makedirs(second)
+        assert library.activate(work) == second
+        assert first not in sys.path, "the replaced generation stayed on the path"
+        assert second in sys.path
+    finally:
+        for entry in (first, second):
+            if entry in sys.path:
+                sys.path.remove(entry)
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@check
 def test_a_rebuild_does_not_prune_away_what_it_is_installing(_h):
     """The generation being replaced is on sys.path, and every build resolves against an
     empty directory and prunes what this environment already has.

@@ -101,7 +101,8 @@ class Service:
             done = tooling.apply(self.config_dir, verb, asking,
                                  {record["name"] for record in extensions.describe()})
             answer = {key: done[key] for key in
-                      ("ok", "why", "already", "restored", "absent", "unknown", "stuck")}
+                      ("ok", "why", "already", "restored", "absent", "unknown", "stuck",
+                       "unpinned")}
             answer["changed"] = [tooling.short_name(r) for r in done["changed"]]
             if done["unknown"]:
                 answer["why"] = f"nothing on PyPI is called {done['unknown']}"
@@ -109,9 +110,14 @@ class Service:
                 answer["loaded"] = self.reload_extensions()
                 # Only what the badge cannot be given over the wire: /v1 carries readings
                 # and a layout, never code.
-                answer["needs_usb"] = sorted(
+                answer["needs_usb"] = sorted({
                     name for name, _path in extensions.badge_modules(
-                        self.collector.extensions))
+                        self.collector.extensions)})
+                # Already imported code stays imported, so a newer release of something
+                # running is on disk and not yet in this process.
+                answer["restart"] = sorted(
+                    set(answer["changed"]) & set(answer["loaded"])
+                ) if verb == "upgrade" else []
             return answer
 
     def extension_kinds(self):
@@ -534,12 +540,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/extensions" and method == "GET":
             return self._json(200, service.extension_catalogue())
 
+        # Asks an index, so it is its own request: the tab draws without waiting on it.
+        if path == "/api/extensions/outdated" and method == "GET":
+            return self._json(200, {"outdated": library.outdated(service.config_dir)})
+
         if path == "/api/extensions" and method == "POST":
             payload = json.loads(body or b"{}")
-            verb = "remove" if payload.get("remove") else "add"
+            verb = next((v for v in ("remove", "upgrade") if v in payload), "add")
             asking = [str(name).strip()
                       for name in (payload.get(verb) or []) if str(name).strip()]
-            if not asking:
+            # Naming nothing upgrades all of them; the others need a name.
+            if not asking and verb != "upgrade":
                 return self._fail(400, "name an extension to add or remove")
             # Minutes, in the worst case: uv resolves and downloads the whole environment.
             # One of the pool's threads waits on it; the badge keeps being served on
