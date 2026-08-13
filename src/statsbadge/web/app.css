@@ -422,6 +422,13 @@ main ul {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* What an extension has to be told, beside the name: a note against a heading, so it is
+   neither uppercase nor in the accent. */
+.wants {
+  color: var(--dim); text-transform: none; letter-spacing: normal; font-weight: 400;
+  font-size: var(--text-sm); white-space: nowrap;
+}
+
 @media (width >= 64rem) {
   .extensions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .extensions > .configured { grid-column: 1 / 3; }
@@ -442,7 +449,7 @@ main ul {
   li > div:first-child { flex: 1; min-width: 0; }
   li > div:last-child { display: flex; gap: 6px; flex-shrink: 0; }
   strong { color: var(--ink); font-size: var(--text-md); font-weight: 600; }
-  .given { margin-left: 6px; }
+  .wants { margin-left: 6px; }
 }
 
 main section:has(> section) {
