@@ -4,33 +4,41 @@
 # and a name typed into the free-form box installs just as well. Anything here that has
 # been taken off PyPI fails to install, and says so.
 #
+#   title     what the UI calls it, since a package name is not a heading
 #   summary   one line, in the UI's own words
 #   page      ships badge-side code, so its page needs `statsbadge install` over USB
 #   needs     what it has to be told before it reports anything
 
 [clock]
+title = "Clock"
 summary = "A Swiss railway clock, with the weather where you are"
 page = true
 
 [iss]
+title = "ISS"
 summary = "Where the space station is, on a world map"
 page = true
 
 [quakes]
+title = "Quakes"
 summary = "Recent earthquakes on a world map"
 page = true
 
 [mastodon]
+title = "Mastodon"
 summary = "Your Mastodon timeline, and what your account is doing"
 needs = "an access token"
 
 [bluesky]
+title = "Bluesky"
 summary = "A Bluesky account, its posts and a feed"
 
 [cloudflare]
+title = "Cloudflare"
 summary = "Cloudflare web traffic, a group per domain"
 needs = "an API token"
 
 [octopus]
+title = "Octopus Energy"
 summary = "Octopus Energy half-hourly prices and meter readings"
 needs = "an API key"

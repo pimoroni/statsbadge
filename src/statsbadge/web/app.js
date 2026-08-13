@@ -558,8 +558,27 @@ function renderSettings() {
   const installed = caps.extensions || []
   config.settings = config.settings || {}
   $("extensions").replaceChildren(
-    catalogueBox(),
-    ...installed.map((extension) => extensionBox(extension, schema[extension.name] || [])))
+    el("div", { className: "configured" },
+       ...installed.map((extension) => extensionBox(extension, schema[extension.name] || []))),
+    catalogueBox())
+}
+
+// Which extension boxes are open. Collapsed to start with, as a page card is: the column
+// is then a list of what is installed, and not a wall of every setting at once.
+const openExtensions = new Set()
+
+/** What the catalogue calls it, since a package name is not a heading. */
+function displayName(name) {
+  const listed = ((catalogue && catalogue.offered) || []).find((e) => e.name === name)
+  return (listed && listed.title) || name
+}
+
+/** The name to type, where the title does not already say it. "Octopus Energy" is worth
+ * `octopus` beside it; "Clock" is not worth `clock`. */
+function alsoCalled(title, name) {
+  return title.toLowerCase() === name.toLowerCase()
+    ? []
+    : [el("code", { textContent: name })]
 }
 
 // What /api/extensions last said: the published list, each entry's state, and whether
@@ -600,7 +619,8 @@ async function refreshOutdated() {
  * A fixed list: PyPI cannot be asked which packages are statsbadge extensions. The box
  * below takes any requirement, so a third-party one goes in there. */
 function catalogueBox() {
-  const box = el("section", null, el("h3", { textContent: "Extensions" }))
+  const box = el("section", { className: "offer" },
+                 el("h3", { textContent: "Extensions" }))
   if (!catalogue) {
     box.append(el("p", { textContent: "Could not read the list of extensions." }))
     return box
@@ -610,7 +630,7 @@ function catalogueBox() {
       `Installing from here needs a uv tool install. This one runs from ${catalogue.prefix},`
       + " so add them with uv pip install instead." }))
   }
-  box.append(el("ul", null, ...catalogue.offered.map(offerRow)))
+  box.append(el("ul", { className: "catalogue" }, ...catalogue.offered.map(offerRow)))
   box.append(freeformForm())
   return box
 }
@@ -626,12 +646,17 @@ function offerRow(entry) {
   if (behind[entry.name]) notes.push(`${behind[entry.name]} is out`)
 
   const summary = [entry.summary, notes.join(" · ")].filter(Boolean)
-  // The name as the package spells it, matching the settings box below and `ext add`.
+  // The title the catalogue gives it, and the name `ext add` takes beside it: one is a
+  // heading, the other is what you would type.
+  const shown = entry.title || entry.name
   return el("li", null,
-            el("span", { textContent: entry.name }),
-            ...summary.map((text) => el("small", { textContent: text })),
-            ...(behind[entry.name] ? [updateButton(entry)] : []),
-            offerButton(entry))
+            el("div", null,
+               el("strong", { textContent: shown }),
+               ...alsoCalled(shown, entry.name),
+               ...summary.map((text) => el("small", { textContent: text }))),
+            el("div", null,
+               ...(behind[entry.name] ? [updateButton(entry)] : []),
+               offerButton(entry)))
 }
 
 function updateButton(entry) {
@@ -697,8 +722,12 @@ async function changeExtension(verb, name) {
   if (!done.ok) {
     toast(done.why || "could not do that", true)
   } else {
-    toast({ add: `Installed ${name}`, remove: `Removed ${name}`,
-            upgrade: `Updated ${name}` }[verb])
+    // Only where it took: a copy in statsbadge's own environment survives a build, and
+    // saying "Removed" over the top of that is a plain lie.
+    if (!(done.stuck || []).length) {
+      toast({ add: `Installed ${name}`, remove: `Removed ${name}`,
+              upgrade: `Updated ${name}` }[verb])
+    }
     for (const note of done.unpinned || []) toast(note)
     // Already imported code stays imported until the process goes round again.
     for (const name of done.restart || []) {
@@ -706,8 +735,13 @@ async function changeExtension(verb, name) {
     }
     // Installed into the environment itself, where a build beside the config cannot
     // reach it.
-    for (const stuck of done.stuck || []) {
-      toast(`${stuck} is installed in statsbadge itself, so it is still here`, true)
+    for (const entry of done.stuck || []) {
+      toast(`Unable to uninstall ${entry.name}. It is installed in statsbadge's own `
+            + "environment, so whatever put it there has to take it out.", true)
+    }
+    for (const entry of done.shadowed || []) {
+      toast(`${entry.name} is already installed in statsbadge's own environment. `
+            + "That copy is the one that runs.")
     }
     if (verb !== "remove" && (done.needs_usb || []).includes(name)) {
       toast("Run statsbadge install to push its page to the badge")
@@ -733,8 +767,23 @@ function extensionBox(extension, settings) {
     state.textContent = parts.join(" · ")
   }
 
-  const box = el("section", null, el("h3", { textContent: extension.name }), state)
+  const open = openExtensions.has(extension.name)
+  const shown = displayName(extension.name)
+  const head = el("h3", null, el("span", { textContent: shown }),
+                  ...alsoCalled(shown, extension.name))
+  const box = el("section", null, el("header", null, head), state)
   if (!settings.length) return box
+
+  const toggle = el("button", { type: "button", textContent: open ? "▾" : "▸",
+                                title: open ? "Collapse" : "Configure",
+                                "aria-expanded": String(open) })
+  toggle.onclick = () => {
+    if (open) openExtensions.delete(extension.name)
+    else openExtensions.add(extension.name)
+    renderSettings()             // not markDirty: opening a box changes nothing
+  }
+  box.firstChild.append(toggle)
+  if (!open) return box
 
   config.settings[extension.name] = config.settings[extension.name] || {}
   const stored = config.settings[extension.name]

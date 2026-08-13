@@ -353,6 +353,48 @@ main ul {
   li small { display: block; color: inherit; }
 }
 
+/* What is installed fills the left, what could be installed sits down the right. Narrow
+   enough and they stack instead, the offer being the wordier of the two. */
+.configured, .offer { grid-column: 1 / -1; }
+
+.configured {
+  display: grid; gap: 10px; align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+.configured section > header {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.configured section > header h3 { flex: 1; display: flex; align-items: baseline; gap: 6px; }
+.configured section > header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
+
+@media (width >= 64rem) {
+  .extensions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .extensions > .configured { grid-column: 1 / 3; }
+  .extensions > .offer { grid-column: 3; }
+}
+
+/* The card is a three column grid, and it places no form, so one would sit in the
+   narrow first column. */
+.offer > form { grid-column: 1 / -1; margin-top: 4px; }
+.offer > form input { flex: 1; min-width: 0; }
+
+.catalogue {
+  li {
+    display: flex; align-items: flex-start; gap: var(--gap);
+    padding: 8px 0; border-top: 1px solid var(--line);
+  }
+  li:first-child { border-top: 0; padding-top: 0; }
+  li > div:first-child { flex: 1; min-width: 0; }
+  li > div:last-child { display: flex; gap: 6px; flex-shrink: 0; }
+  strong { color: var(--ink); font-size: var(--text-md); font-weight: 600; }
+
+  /* The name to type, beside the name to read. */
+  code { margin-left: 6px; }
+}
+
 main section:has(> section) {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
   gap: 10px; align-items: start;
