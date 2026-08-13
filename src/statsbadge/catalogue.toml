@@ -11,12 +11,12 @@
 
 [clock]
 title = "Clock"
-summary = "A Swiss railway clock, with the weather where you are"
+summary = "A configurable clock with local weather."
 page = true
 
 [iss]
 title = "ISS"
-summary = "Where the space station is, on a world map"
+summary = "The Space Station location, on a world map."
 page = true
 
 [quakes]
@@ -26,7 +26,7 @@ page = true
 
 [mastodon]
 title = "Mastodon"
-summary = "Your Mastodon timeline, and what your account is doing"
+summary = "Your Mastodon timeline and account."
 needs = "an access token"
 
 [bluesky]
