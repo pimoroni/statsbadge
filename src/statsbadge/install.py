@@ -652,9 +652,37 @@ def copy_app(volume, source=None, extra_modules=()):
     for name, path in files:
         destination = os.path.join(target, *name.split("/"))
         os.makedirs(os.path.dirname(destination), exist_ok=True)
-        shutil.copy2(path, destination)
+        _copy(path, destination)
     removed = prune_app(target, {name for name, _ in files})
     return target, [name for name, _ in files], removed
+
+
+# How many goes a single file gets, and how long to leave between them.
+COPY_TRIES = 3
+COPY_WAIT = 0.5
+
+
+def _copy(path, destination):
+    """Copy one file onto the badge, and check it arrived whole.
+
+    The first write to a volume that has only just mounted comes back as ENXIO, and what
+    is left behind is an empty file rather than an error: an app whose `__init__.py` is
+    zero bytes starts and does nothing at all.
+    """
+    wrong = None
+    for attempt in range(COPY_TRIES):
+        if attempt:
+            time.sleep(COPY_WAIT)
+        try:
+            shutil.copy2(path, destination)
+        except OSError as exc:
+            wrong = str(exc)
+            continue
+        if os.path.getsize(destination) == os.path.getsize(path):
+            return
+        wrong = "it arrived short"
+    raise InstallError(f"could not write {os.path.basename(destination)} "
+                       f"to the badge: {wrong}")
 
 
 # Only these are the installer's to delete. Anything else came from elsewhere and stays.
