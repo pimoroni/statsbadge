@@ -8,10 +8,12 @@ Needs no server, no display and no pystray, so it runs on a headless CI box.
 import configparser
 import io
 import os
+import pathlib
 import plistlib
 import socket
 import sys
 import tempfile
+import tomllib
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -211,6 +213,39 @@ def test_windows_keeps_its_entry_in_the_registry():
     finally:
         if was:
             entry.enable(ARGV)
+
+
+@check
+def test_the_packaged_app_names_files_that_are_there():
+    """Briefcase falls back to its own mascot for an icon it cannot find, and says so in
+    one line among hundreds of them."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    with open(root / "pyproject.toml", "rb") as handle:
+        config = tomllib.load(handle)["tool"]["briefcase"]
+    app = config["app"]["statsbadge-tray"]
+
+    for source in app["sources"]:
+        assert (root / source / "__main__.py").is_file(), source
+    for suffix in (".icns", ".ico"):
+        icon = (root / app["icon"]).with_suffix(suffix)
+        assert icon.is_file(), f"{icon} is what the bundle would fall back from"
+    # statsbadge goes in as a wheel and not as copied sources. Without its .dist-info the
+    # bundle can report no version and find no extensions.
+    assert "." in app["requires"], app["requires"]
+
+
+@check
+def test_a_packaged_app_runs_itself_at_login():
+    """A bundle's sys.executable is the app, which takes no `-m`, and a statsbadge-tray
+    found on PATH beside it would be another install of it entirely."""
+    was = sys.executable
+    try:
+        sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
+                                      "Contents", "MacOS", "statsbadge")
+        assert autostart.command() == [sys.executable]
+        assert autostart.command(port=8420)[0] == sys.executable
+    finally:
+        sys.executable = was
 
 
 @check
