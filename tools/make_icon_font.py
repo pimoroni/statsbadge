@@ -343,7 +343,8 @@ def out_of_range(glyphs, wide=False):
 def read_corpus(path):
     """`name codepoint [ascii]` per line. Blank lines and # comments are skipped."""
     entries = []
-    for number, line in enumerate(pathlib.Path(path).read_text().splitlines(), 1):
+    for number, line in enumerate(
+            pathlib.Path(path).read_text(encoding="utf-8").splitlines(), 1):
         line = line.split("#", 1)[0].strip()
         if not line:
             continue

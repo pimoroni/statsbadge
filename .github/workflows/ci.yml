@@ -39,7 +39,7 @@ jobs:
         run: uv run python tools/check_app.py
 
       - name: Lint
-        run: uv run ruff check --config ci/ruff.toml src tools tests extensions
+        run: uv run ruff check --config ci/ruff.toml src tools tests extensions packaging
 
       # Catches a source that cannot even be imported on a clean machine.
       - name: Probe this host

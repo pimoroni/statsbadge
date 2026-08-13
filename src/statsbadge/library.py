@@ -146,7 +146,7 @@ def outdated(config_dir, timeout=60):
             "--target" if kind == "uv" else "--path", where]
     try:
         done = subprocess.run(argv, capture_output=True, text=True, check=False,
-                              timeout=timeout)
+                              encoding="utf-8", errors="replace", timeout=timeout)
     except (OSError, subprocess.SubprocessError):
         return []
     if done.returncode != 0:
@@ -184,7 +184,8 @@ def build(config_dir, requirements, verbose=False):
         if not verbose:
             argv.append("--quiet")
         try:
-            done = subprocess.run(argv, capture_output=not verbose, text=True, check=False)
+            done = subprocess.run(argv, capture_output=not verbose, text=True,
+                                  encoding="utf-8", errors="replace", check=False)
         except OSError as exc:
             shutil.rmtree(target, ignore_errors=True)
             return None, f"could not run the installer: {exc}"
@@ -320,7 +321,7 @@ def _remove_recorded(target, dist_info):
     """Take away every file a distribution's RECORD names."""  # noqa: D401
     inside = os.path.normpath(target) + os.sep
     try:
-        with open(os.path.join(dist_info, "RECORD"), newline="") as handle:
+        with open(os.path.join(dist_info, "RECORD"), newline="", encoding="utf-8") as handle:
             paths = [row[0] for row in csv.reader(handle) if row]
     except OSError:
         paths = []

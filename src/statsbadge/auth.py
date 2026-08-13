@@ -84,7 +84,7 @@ class Store:
         # the real pairings with it. Happens after the server has been run with sudo.
         self.unreadable = None
         try:
-            with open(self.path) as handle:
+            with open(self.path, encoding="utf-8") as handle:
                 data = json.load(handle)
             self._mtime = os.path.getmtime(self.path)
         except FileNotFoundError:
@@ -112,7 +112,7 @@ class Store:
         if mtime == self._mtime:
             return
         try:
-            with open(self.path) as handle:
+            with open(self.path, encoding="utf-8") as handle:
                 data = json.load(handle)
         except (OSError, ValueError):
             return
@@ -135,7 +135,7 @@ class Store:
         if directory:
             os.makedirs(directory, exist_ok=True)
         tmp = self.path + ".tmp"
-        with open(tmp, "w") as handle:
+        with open(tmp, "w", encoding="utf-8") as handle:
             json.dump({"badges": self.badges}, handle, indent=2)
         os.replace(tmp, self.path)
         try:

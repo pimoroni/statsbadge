@@ -35,7 +35,7 @@ def wanted_path(config_dir):
 def read_wanted(config_dir):
     """The extensions this host asks for, in the order they were added."""
     try:
-        with open(wanted_path(config_dir)) as handle:
+        with open(wanted_path(config_dir), encoding="utf-8") as handle:
             lines = handle.read().splitlines()
     except OSError:
         return []
@@ -50,7 +50,7 @@ def disabled_path(config_dir):
 def read_disabled(config_dir):
     """The extensions switched off here, by short name."""
     try:
-        with open(disabled_path(config_dir)) as handle:
+        with open(disabled_path(config_dir), encoding="utf-8") as handle:
             lines = handle.read().splitlines()
     except OSError:
         return []
@@ -60,7 +60,7 @@ def read_disabled(config_dir):
 
 def write_disabled(config_dir, wanted):
     os.makedirs(config_dir, exist_ok=True)
-    with open(disabled_path(config_dir), "w") as handle:
+    with open(disabled_path(config_dir), "w", encoding="utf-8") as handle:
         handle.write("# Extensions statsbadge leaves unloaded, one short name a line.\n")
         for name in sorted(set(wanted)):
             handle.write(f"{name}\n")
@@ -90,7 +90,7 @@ def adrift(config_dir, installed):
 
 def write_wanted(config_dir, requirements):
     os.makedirs(config_dir, exist_ok=True)
-    with open(wanted_path(config_dir), "w") as handle:
+    with open(wanted_path(config_dir), "w", encoding="utf-8") as handle:
         handle.write("# Extensions statsbadge is installed with, one requirement a line.\n")
         handle.write("# Edit by hand or with `statsbadge ext add`, then run `statsbadge ext"
                      " sync`.\n")

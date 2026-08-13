@@ -30,7 +30,7 @@ def path(config_dir):
 
 def read(config_dir):
     try:
-        with open(path(config_dir)) as handle:
+        with open(path(config_dir), encoding="utf-8") as handle:
             found = json.load(handle)
     except (OSError, ValueError):
         return {}
@@ -58,7 +58,7 @@ def _write(config_dir, found):
     os.makedirs(config_dir, exist_ok=True)
     where = path(config_dir)
     tmp = where + ".tmp"
-    with open(tmp, "w") as handle:
+    with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(found, handle, indent=2, sort_keys=True)
     os.replace(tmp, where)
 

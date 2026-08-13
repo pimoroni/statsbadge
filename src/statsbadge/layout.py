@@ -153,7 +153,7 @@ class Config:
 
     def load(self):
         try:
-            with open(self.path) as handle:
+            with open(self.path, encoding="utf-8") as handle:
                 stored = json.load(handle)
         except (OSError, ValueError):
             return
@@ -184,7 +184,7 @@ class Config:
         tmp = self.path + ".tmp"
         with self._lock:
             payload = json.dumps(self.data, indent=2)
-        with open(tmp, "w") as handle:
+        with open(tmp, "w", encoding="utf-8") as handle:
             handle.write(payload)
         os.replace(tmp, self.path)
 

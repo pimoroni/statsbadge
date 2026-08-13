@@ -88,7 +88,7 @@ def _safe(name):
 
 def _read(path):
     try:
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             stored = json.load(handle)
     except (OSError, ValueError):
         return {}
@@ -100,6 +100,6 @@ def _write(path, payload):
     if directory:
         os.makedirs(directory, exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w") as handle:
+    with open(tmp, "w", encoding="utf-8") as handle:
         handle.write(payload)
     os.replace(tmp, path)

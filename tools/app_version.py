@@ -49,14 +49,14 @@ def current():
 
 def main(argv):
     wanted = release(argv[0] if argv else current())
-    text = PYPROJECT.read_text()
+    text = PYPROJECT.read_text(encoding="utf-8")
     head, marker, rest = text.partition("[tool.briefcase]")
     if not marker:
         raise SystemExit("no [tool.briefcase] table in pyproject.toml")
     replaced, count = LINE.subn(rf'\g<1>"{wanted}"', rest, count=1)
     if not count:
         raise SystemExit("no version to set in the briefcase table")
-    PYPROJECT.write_text(head + marker + replaced)
+    PYPROJECT.write_text(head + marker + replaced, encoding="utf-8")
     print(f"packaging as {wanted}")
     return 0
 
