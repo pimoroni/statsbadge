@@ -29,9 +29,9 @@ PIP_VERB = "--be-pip"
 
 
 def bundled():
-    """Whether this is a packaged app, where `sys.executable` is the app's own binary.
+    """Whether this is a packaged app, where `sys.executable` is the app binary.
 
-    A briefcase bundle leaves no marker of its own, so the tell is the executable: a
+    A briefcase bundle leaves no marker, so the tell is the executable: a
     Python, or something else. It matters twice. Running it with `-m pip` starts a second
     copy of the app, and a login entry has to name the app itself.
     """
