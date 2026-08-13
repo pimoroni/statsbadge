@@ -4060,6 +4060,26 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(_h):
     assert abs(eight["bbox_h"] / lcd["units_per_em"] - draw.CAP) < 0.01, (
         eight["bbox_h"], lcd["units_per_em"], draw.CAP)
 
+    # The other digital face draws its colon as two circles, at the positions this one's
+    # glyph puts them: paging between the faces should leave the colon where it was. The
+    # pair sits a little low and is not symmetric about the digits, which is why the
+    # numbers are measured here and not chosen.
+    clockface = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge"
+                             "/clockface.py").read_text(encoding="utf-8")
+    at = re.search(r"^COLON_AT = \(([\d.]+), ([\d.]+)\)", clockface, re.M)
+    radius = re.search(r"^COLON_W, COLON_DOT = [\d.]+, ([\d.]+)", clockface, re.M)
+    assert at and radius, "the dot colon is not measured in fractions of the digit height"
+
+    colon = next(g for g in lcd["glyphs"] if g["codepoint"] == ord(":"))
+    up = [-y for y in colon["points"][1::2]]      # points run down from the baseline
+    span = eight["bbox_h"]
+    halfway = (min(up) + max(up)) / 2.0
+    for drawn, dot in zip(at.groups(), ([y for y in up if y > halfway],
+                                        [y for y in up if y < halfway]), strict=True):
+        centre = (min(dot) + max(dot)) / 2.0
+        assert abs((span - centre) / span - float(drawn)) < 0.005, (drawn, centre, span)
+        assert abs((max(dot) - min(dot)) / 2.0 / span - float(radius.group(1))) < 0.005, dot
+
     # The digital face's digits are the app's face at a finer grid, so they have to agree
     # with it on both counts: the cap it is sized from and the width it is placed by. A
     # mismatch draws a time that is the wrong height or does not sit in its column.
