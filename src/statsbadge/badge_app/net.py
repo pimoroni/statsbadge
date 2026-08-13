@@ -14,6 +14,7 @@ captured command cannot be replayed.
 import binascii
 import hashlib
 import json
+import select
 import socket
 import time
 
@@ -42,6 +43,8 @@ IDLE, BUSY, DONE, FAILED = 0, 1, 2, 3
 # and has nothing to call EAI_NONAME: that arrives from getaddrinfo and is not an errno.
 ECONNABORTED, ECONNRESET, ETIMEDOUT = 103, 104, 110
 ECONNREFUSED, EHOSTUNREACH, ENOENT, EAI_NONAME = 111, 113, 2, -2
+# What a connect that has only been started reports, before it has finished.
+EINPROGRESS, EALREADY = 115, 114
 
 # What this firmware actually reports, checked on the board. Nothing listening comes back
 # as ECONNRESET and not ECONNREFUSED, lwIP surfacing the RST that way. An address with
@@ -310,12 +313,39 @@ class Client:
             self.sock = None
 
     def _connect(self):
+        """Start the connection. `_connecting` is what waits for it.
+
+        A blocking connect to a host that is not there sits in the handshake until lwIP
+        gives up, which is far past the request timeout and cannot be interrupted. The
+        draw loop is inside that call, so the screen holds still and a press on HOME is
+        never sampled: the badge looks hung with no way into the hosts menu.
+        """
         info = socket.getaddrinfo(self.config.host, self.config.port,
                                  0, socket.SOCK_STREAM)[0]
         sock = socket.socket(info[0], info[1], info[2])
-        sock.setblocking(True)
-        sock.connect(info[4])
+        sock.setblocking(False)
+        try:
+            sock.connect(info[4])
+        except OSError as exc:
+            # In progress is the expected answer, the handshake having only been started.
+            if exc.errno not in (EINPROGRESS, EALREADY):
+                sock.close()
+                raise
         self.sock = sock
+
+    def _connecting(self):
+        """Yield until the socket is open. The step's own timeout is what gives up."""
+        poller = select.poll()
+        poller.register(self.sock, select.POLLOUT)
+        while True:
+            yield
+            for _sock, flags in poller.poll(0):
+                # Which failure it was does not come back from a poll, so this is worded
+                # for what it means to somebody looking at the badge.
+                if flags & (select.POLLERR | select.POLLHUP):
+                    raise OSError(ECONNABORTED)
+                if flags & select.POLLOUT:
+                    return
 
     # -- requests -----------------------------------------------------------
 
@@ -336,7 +366,7 @@ class Client:
     def _exchange(self, method, path, body):
         if self.sock is None:
             self._connect()
-            yield
+            yield from self._connecting()
 
         seq = self.config.next_seq()
         signature = sign(self.config.secret, method, path, seq, body)
