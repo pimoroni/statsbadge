@@ -1901,6 +1901,57 @@ def test_setup_waves_through_a_server_already_paired(_h):
 
 
 @check
+def test_a_file_that_did_not_write_is_not_left_on_the_badge(_h):
+    """A volume that has only just mounted can refuse the first write, and what it leaves
+    is an empty file rather than an error. An app whose __init__.py is zero bytes starts
+    and does nothing at all."""
+    import shutil as shutil_module
+
+    with tempfile.TemporaryDirectory() as work:
+        source = os.path.join(work, "app.py")
+        with open(source, "w", encoding="utf-8") as handle:
+            handle.write("print('hello')\n")
+        destination = os.path.join(work, "copy.py")
+
+        real = shutil_module.copy2
+        tries = []
+
+        def flaky(src, dst, **kwargs):
+            tries.append(dst)
+            if len(tries) == 1:
+                # What macOS reports when the volume is not ready: the file is created
+                # and nothing is written to it.
+                with open(dst, "w", encoding="utf-8"):
+                    pass
+                raise OSError(6, "Device not configured")
+            return real(src, dst, **kwargs)
+
+        was_wait = install.COPY_WAIT
+        install.COPY_WAIT = 0
+        shutil_module.copy2 = flaky
+        try:
+            install._copy(source, destination)
+            assert len(tries) == 2, tries
+            assert os.path.getsize(destination) == os.path.getsize(source)
+
+            # One that never writes in full is an error, not a short file left behind.
+            tries.clear()
+            def short(_src, dst, **_kwargs):
+                open(dst, "w", encoding="utf-8").close()
+
+            shutil_module.copy2 = short
+            try:
+                install._copy(source, destination)
+            except install.InstallError as exc:
+                assert "short" in str(exc), exc
+            else:
+                raise AssertionError("a short copy was called a good one")
+        finally:
+            shutil_module.copy2 = real
+            install.COPY_WAIT = was_wait
+
+
+@check
 def test_a_beacon_goes_out_on_every_interface_it_can_name(_h):
     """Windows reports no broadcast address of its own, so it is worked out here.
 

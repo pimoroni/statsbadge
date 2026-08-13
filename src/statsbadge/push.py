@@ -152,15 +152,22 @@ def _push(options, session, badges, identity, modules, say, confirm, password):
         except install.InstallError as exc:
             return _answer(str(exc), badge=info["uid"], model=info["model"])
         say(f"  volume at {volume}")
-        if copying:
-            target, copied, gone = install.copy_app(volume, source=source,
-                                                    extra_modules=modules)
-            answer["copied"] = copied
-            say(f"  copied {len(copied)} files to {target}")
-            if gone:
-                say(f"  removed {len(gone)}: {', '.join(gone)}")
-        if ssid:
-            answer["wifi"] = _set_wifi(options, volume, ssid, say)
+        try:
+            if copying:
+                target, copied, gone = install.copy_app(volume, source=source,
+                                                        extra_modules=modules)
+                answer["copied"] = copied
+                say(f"  copied {len(copied)} files to {target}")
+                if gone:
+                    say(f"  removed {len(gone)}: {', '.join(gone)}")
+            if ssid:
+                answer["wifi"] = _set_wifi(options, volume, ssid, say)
+        except (install.InstallError, OSError) as exc:
+            # The volume is left mounted. Whatever went wrong, it is halfway through the
+            # app directory, and running this again is what puts it right.
+            install.eject(volume)
+            return _answer(f"{exc}. Run this again once the badge comes back.",
+                           badge=info["uid"], model=info["model"])
         install.eject(volume)
         say("  ejected; waiting for the badge to come back...")
         try:
