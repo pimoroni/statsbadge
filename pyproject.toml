@@ -40,6 +40,12 @@ classifiers = [
 [project.optional-dependencies]
 # NVIDIA cards, via the same library nvidia-smi uses.
 nvidia = ["nvidia-ml-py>=12"]
+# The tray icon. pystray draws from a PIL image, which is already here, and declares its
+# own platform bits: pyobjc on macOS, python-xlib on Linux, ctypes on Windows.
+#
+# Linux also wants the distro's PyGObject and a desktop that hosts a tray, neither of
+# which comes from PyPI. `statsbadge tray --check` reports what is missing.
+tray = ["pystray>=0.19.5"]
 
 [project.urls]
 Homepage = "https://github.com/pimoroni/statsbadge"

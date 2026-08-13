@@ -423,3 +423,16 @@ def fingerprint(secret):
     return base64.b32encode(
         hashlib.sha256(bytes.fromhex(secret)).digest()[:5]
     ).decode().rstrip("=")
+
+
+def display_names(paired):
+    """Each paired badge as the name it was given, with its id alongside where they differ.
+
+    A badge nobody has renamed is recorded under its own id, so one name is all there is to
+    print for it.
+    """
+    shown = []
+    for badge_id, record in (paired or {}).items():
+        name = record.get("name") or badge_id
+        shown.append(name if name == badge_id else f"{name} ({badge_id})")
+    return shown
