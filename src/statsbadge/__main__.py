@@ -9,8 +9,8 @@ import threading
 import time
 import webbrowser
 
-from . import (auth, autostart, beacon, collect, extensions, install, layout, library,
-               logs, runner, server, tooling)
+from . import (auth, autostart, beacon, collect, extensions, identity, install, layout,
+               library, logs, push, pushed, runner, server, tooling)
 # Named apart from the `version` locals in this module, which are extensions' own.
 from . import version as package_version
 
@@ -260,166 +260,63 @@ def _approve_loop(service, auto):
 
 def cmd_install(args):
     """Push the app and credentials to a USB-connected badge."""
-    ports = [args.port_dev] if args.port_dev else install.find_ports()
-    if not ports:
-        print("No badge found. Connect it by USB, or pass --port-dev.", file=sys.stderr)
+    directory = config_dir(args.config_dir)
+    outcome = push.push(
+        install_options(args, directory),
+        # Not for --app-only, which mints nothing: loading them would write a server
+        # identity for a host that is not pairing with anything.
+        badges=None if args.app_only else auth.Store(
+            os.path.join(directory, "badges.json")),
+        identity=None if args.app_only else identity.load(directory),
+        modules=[] if args.state_only else extension_modules(args),
+        say=print,
+        confirm=_confirm_mass_storage,
+        password=lambda ssid: getpass.getpass(f"password for {ssid!r}: "))
+
+    if outcome["error"]:
+        print(f"error: {outcome['error']}", file=sys.stderr)
         return 1
-    # The port is carried in a dict because it changes when the badge is reset, and the
-    # reset on the way out has to use whichever one it ended up on.
-    session = {"port": ports[0]}
-    print("badge on {}".format(session["port"]))
-    try:
-        return _install(args, session)
-    finally:
-        if install.hard_reset(session["port"]):
-            print("The badge has been reset.")
-
-
-def _install(args, session):
-    port = session["port"]
-    try:
-        info = install.badge_info(port)
-    except install.InstallError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-    print("  model {}, uid {}, app {}".format(
-        info["model"], info["uid"],
-        "already installed" if info["app_installed"] else "not installed"))
-
-    # Bytecode is preferred when it matches this badge, and the .py sources are the
-    # fallback: they load on any firmware.
-    source, modules = None, []
-    if not args.state_only:
-        try:
-            source, note = install.choose_app_source(args.mpy, args.source, info["mpy"])
-        except install.InstallError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
-        print(f"  {note}")
-        modules = extension_modules(args)
-        if modules:
-            # One name per extension, however many files it contributes.
-            print("  extensions: {}".format(
-                ", ".join(sorted({name for name, _ in modules}))))
-
-    # What would change, so the mass storage reset is only paid when it buys something.
-    added, changed, removed = [], [], []
-    if not args.state_only:
-        try:
-            added, changed, removed = install.app_changes(
-                install.installed_hashes(port),
-                install.desired_hashes(source, modules))
-        except install.InstallError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 1
-        for label, names in (("new", added), ("changed", changed), ("stale", removed)):
-            if names:
-                print(f"  {label}: {', '.join(names)}")
-        if not (added or changed or removed):
-            print("  the app on the badge is already up to date")
-
-    server_id, server_name = None, None
-    secret, start_seq, write_credentials = None, 0, False
-    if not args.app_only:
-        directory = config_dir(args.config_dir)
-        badges = auth.Store(os.path.join(directory, "badges.json"))
-        if badges.unreadable:
-            print(f"error: {badges.path} cannot be read ({badges.unreadable}).",
-                  file=sys.stderr)
-            print("Running the server with sudo leaves it owned by root. Fix its "
-                  "ownership, or pass --config-dir.", file=sys.stderr)
-            return 1
-        secret = badges.secret_for(info["uid"])
-        service = build_service(args)
-        server_id = service.identity["id"]
-        server_name = service.identity["name"]
-        service.collector.stop()
-        # Credentials the badge already holds for this server are left alone: a repeat
-        # install is then only a code update, with nothing to lose if it is interrupted.
-        held = install.secret_in_state(install.read_state(port), server_id)
-        if args.new_secret or not secret:
-            secret = badges.provision(info["uid"], args.name)
-            print(f"  minted a new secret ({auth.fingerprint(secret)})")
-            write_credentials = True
-        elif held != secret:
-            start_seq = badges.list_badges().get(info["uid"], {}).get("seq", 0)
-            print("  reusing the existing secret for this badge "
-                  f"(counter at {start_seq})")
-            write_credentials = True
-        else:
-            print(f"  already paired with {server_name}; credentials left alone")
-
-    if args.mpy and args.state_only:
-        print("  note: --mpy does nothing with --state-only, which writes credentials only")
-
-    host = args.server_host or (server._local_addresses() or ["127.0.0.1"])[0]
-
-    # The app goes on first, credentials second. Writing /state over the REPL and then
-    # resetting into mass storage loses the write. The reset discards it and the volume
-    # commits whatever was there before, which with --new-secret leaves the badge holding
-    # a secret the host has already replaced.
-    copying = bool(added or changed or removed) or args.force_app
-    if not args.state_only and (copying or args.ssid):
-        if not args.yes:
-            print()
-            print("This needs the badge's USB volume, which means resetting it into")
-            print("mass storage mode.")
-            reply = input("Continue? [y/N] ").strip().lower()
-            if reply not in ("y", "yes"):
-                print("Nothing was changed.")
-                return 0
-        print("  switching to mass storage...")
-        install.enter_mass_storage(port)
-        volume = install.wait_for_volume()
-        print(f"  volume at {volume}")
-        if copying:
-            target, copied, gone = install.copy_app(volume, source=source,
-                                                    extra_modules=modules)
-            print(f"  copied {len(copied)} files to {target}")
-            if gone:
-                print(f"  removed {len(gone)}: {', '.join(gone)}")
-        if args.ssid:
-            if args.password is None:
-                # Prompted for, so it stays out of shell history.
-                args.password = getpass.getpass(f"password for {args.ssid!r}: ")
-            if args.force_secrets or not install.wifi_configured(volume):
-                written = install.write_secrets(volume, args.ssid, args.password,
-                                                args.region, args.timezone)
-                print(f"  set {args.ssid!r} in {os.path.basename(written)}")
-            else:
-                print("  WiFi is already set; --force-secrets to replace it")
-        install.eject(volume)
-        print("  ejected; waiting for the badge to come back...")
-        port = install.wait_for_port(previous=port)
-        session["port"] = port
-        print(f"  back on {port}")
-
+    if outcome["cancelled"]:
+        print("Nothing was changed.")
+        return 0
     if args.app_only:
         print("\nDone. App only; no credentials were written.")
         print("Pair it from the badge: run 'statsbadge pair', then press B on the badge.")
-        return 0
-
-    if write_credentials:
-        install.write_state(port, host, args.port, secret, info["uid"], seq=start_seq,
-                            server_id=server_id, name=server_name)
-        print(f"  wrote {install.STATE_FILE}: {server_name} at {host}:{args.port}")
-
-        # Read it back: this is the write that must have survived.
-        written = install.read_state(port)
-        if install.secret_in_state(written, server_id) != secret:
-            print("error: the credentials did not stick. Try again, or reset the badge.",
-                  file=sys.stderr)
-            return 1
-        others = [k for k in (written.get("hosts") or {}) if k != server_id]
-        if others:
-            names = ", ".join((written["hosts"][k].get("name") or k) for k in others)
-            print(f"  also still paired with: {names}")
-
-    if args.state_only:
+    elif args.state_only:
         print("\nDone. Credentials only; the app itself was not touched.")
-        return 0
-    print("\nDone. Run 'statsbadge serve' and launch Stats on the badge.")
+    else:
+        print("\nDone. Run 'statsbadge serve' and launch Stats on the badge.")
     return 0
+
+
+def install_options(args, directory):
+    """The install flags as the driver takes them."""
+    return {
+        "config_dir": directory,
+        "port_dev": args.port_dev,
+        "host": args.server_host or (server._local_addresses() or ["127.0.0.1"])[0],
+        "port": args.port,
+        "name": args.name,
+        "state_only": args.state_only,
+        "app_only": args.app_only,
+        "force_app": args.force_app,
+        "new_secret": args.new_secret,
+        "source": args.source,
+        "mpy": args.mpy,
+        "ssid": args.ssid,
+        "password": args.password,
+        "region": args.region,
+        "timezone": args.timezone,
+        "force_secrets": args.force_secrets,
+        "yes": args.yes,
+    }
+
+
+def _confirm_mass_storage():
+    print()
+    print("This needs the badge's USB volume, which means resetting it into")
+    print("mass storage mode.")
+    return input("Continue? [y/N] ").strip().lower() in ("y", "yes")
 
 
 # -- status -----------------------------------------------------------------
@@ -453,12 +350,12 @@ def cmd_status(args):
         return 0
     port = ports[0]
     try:
-        return _badge_status(args, port)
+        return _badge_status(args, port, directory)
     finally:
         install.hard_reset(port, settle=False)
 
 
-def _badge_status(args, port):
+def _badge_status(args, port, directory):
     try:
         info = install.badge_info(port)
     except install.InstallError as exc:
@@ -472,9 +369,9 @@ def _badge_status(args, port):
     if info["app_installed"]:
         try:
             source, _note = install.choose_app_source(None, args.source, info["mpy"])
+            desired = install.desired_hashes(source, extension_modules(args))
             added, changed, removed = install.app_changes(
-                install.installed_hashes(port),
-                install.desired_hashes(source, extension_modules(args)))
+                install.installed_hashes(port), desired)
         except install.InstallError as exc:
             print(f"              cannot compare: {exc}")
         else:
@@ -483,6 +380,9 @@ def _badge_status(args, port):
                     ", ".join(added + changed + removed)))
                 print("              run 'statsbadge install' to update it")
             else:
+                # Only where they match, which is the one case this has seen enough to
+                # say what the badge holds.
+                pushed.record(directory, info["uid"], desired, source)
                 print("              up to date with this package")
 
     state = install.read_state(port) or {}
