@@ -37,7 +37,11 @@ class ReplError(Exception):
     """The badge did not answer, or answered with a traceback."""
 
 
-class Busy(ReplError):
+class NotOpened(ReplError):
+    """The port would not open, so nothing on the badge was interrupted."""
+
+
+class Busy(NotOpened):
     """Something else has the port open."""
 
 
@@ -76,7 +80,7 @@ class Repl:
             detail = str(exc).lower()
             if any(word in detail for word in ("busy", "lock", "denied", "in use")):
                 raise Busy(f"{self.port} is already open") from exc
-            raise ReplError(f"could not open {self.port}: {exc}") from exc
+            raise NotOpened(f"could not open {self.port}: {exc}") from exc
         try:
             self._enter_raw()
         except BaseException:

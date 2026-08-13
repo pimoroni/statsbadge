@@ -689,13 +689,13 @@ def hard_reset(port, settle=True):
     Talking over the REPL interrupts whatever the badge was running, leaving it at a bare
     prompt on a blank screen; a reset runs `main.py` again.
 
-    Skipped for a port something else holds, the badge never having been interrupted.
-    Waiting for a port that stayed put costs fifteen seconds before announcing a reset that
-    never happened.
+    Skipped for a port that would not open, whether something else holds it or there is
+    nothing there: the badge was never interrupted. Waiting for a port that stayed put
+    costs fifteen seconds before announcing a reset that never happened.
     """
     try:
         repl.reset(port, timeout=10)
-    except repl.Busy:
+    except repl.NotOpened:
         return False
     except (repl.ReplError, OSError):
         # Expected. The port goes away mid-command, and the reply is lost with it.

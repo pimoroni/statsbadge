@@ -5733,6 +5733,12 @@ def test_wifi_details_are_kept_unless_replacing_them_was_asked_for(_h):
 
 
 @check
+def test_a_port_that_will_not_open_is_not_called_a_reset(_h):
+    """Every command hands the badge back with a reset. One it never reached has none."""
+    assert install.hard_reset("/dev/statsbadge-not-a-port", settle=False) is False
+
+
+@check
 def test_the_install_endpoint_runs_one_and_reports_what_it_did(h):
     """Driven with a port that is not there: a test must never touch a real badge."""
     status, body = h.raw("GET", "/api/install")
