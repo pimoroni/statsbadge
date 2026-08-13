@@ -4928,14 +4928,17 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported(_h):
             verbose = False
 
         was = (cli.tooling.library.build, cli.tooling.library.activate,
-               cli.tooling.library.holds, cli.extensions.describe, cli.tooling.on_index)
+               cli.tooling.library.elsewhere, cli.extensions.describe,
+               cli.tooling.on_index)
         try:
             cli.tooling.library.build = lambda *_a, **_k: ("/lib/gen", None)
             cli.tooling.library.activate = lambda *_a: None
             cli.tooling.on_index = lambda *_a, **_k: True
+            # Installed into the environment, where a build cannot reach it.
+            cli.tooling.library.elsewhere = lambda _dir, short: (
+                "/venv/site-packages" if short == "bluesky" else None)
 
             # Installed, with nothing on the list: it has never been written.
-            cli.tooling.library.holds = lambda *_a: False
             cli.extensions.describe = lambda: [{"name": "bluesky"}]
             said = io.StringIO()
             with contextlib.redirect_stdout(said):
@@ -4949,15 +4952,19 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported(_h):
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
             assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
 
-            # Removing takes it off the list, and the environment's copy stays put.
+            # Removing takes it off the list, and the environment's copy stays put. That
+            # is a removal that did not take, so it says so and fails.
             said, complained = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(said), contextlib.redirect_stderr(complained):
-                assert cli._change_extensions(Args, "remove") == 0  # noqa: SLF001
+                assert cli._change_extensions(Args, "remove") == 1  # noqa: SLF001
             assert tooling.read_wanted(work) == []
-            assert "still here" in complained.getvalue(), complained.getvalue()
+            spoken = complained.getvalue()
+            assert spoken.startswith("Unable to uninstall bluesky."), spoken
+            assert "/venv/site-packages" in spoken, spoken
+            assert "Removed" not in said.getvalue(), said.getvalue()
         finally:
             (cli.tooling.library.build, cli.tooling.library.activate,
-             cli.tooling.library.holds, cli.extensions.describe,
+             cli.tooling.library.elsewhere, cli.extensions.describe,
              cli.tooling.on_index) = was
     finally:
         shutil.rmtree(work, ignore_errors=True)

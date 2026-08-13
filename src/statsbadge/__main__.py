@@ -588,11 +588,20 @@ def _change_extensions(args, verb):
     if done["ok"]:
         if done["nothing"]:
             return 0
-        for short in done["stuck"]:
-            print(f"{short} is installed in the environment itself, so it is still here.",
-                  file=sys.stderr)
-            print(f"  whatever put it in {sys.prefix} has to take it out again.",
-                  file=sys.stderr)
+        for entry in done["shadowed"]:
+            print(f"{entry['name']} is already installed in {entry['where']}.")
+            print("  That copy is the one that runs, so its version is whatever is there.")
+        if done["stuck"]:
+            # The progress line went to stdout, and this goes to stderr.
+            sys.stdout.flush()
+            for entry in done["stuck"]:
+                print(f"Unable to uninstall {entry['name']}.", file=sys.stderr)
+                print(f"  It is installed in {entry['where']}, which is statsbadge's own "
+                      f"environment and not the extensions library.", file=sys.stderr)
+                print("  Whatever put it there has to take it out.", file=sys.stderr)
+            said = ", ".join(entry["name"] for entry in done["stuck"])
+            print(f"{tooling.WANTED} no longer asks for {said}.", file=sys.stderr)
+            return 1
         print("done. Run `statsbadge install` to push any badge-side code they ship.")
         return 0
 

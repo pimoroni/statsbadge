@@ -111,7 +111,8 @@ def catalogue():
     import tomllib
     from importlib import resources
     text = resources.files(__package__).joinpath("catalogue.toml").read_text()
-    return [{"name": name, "summary": entry.get("summary", ""),
+    return [{"name": name, "title": entry.get("title") or name,
+             "summary": entry.get("summary", ""),
              "page": bool(entry.get("page")), "needs": entry.get("needs")}
             for name, entry in tomllib.loads(text).items()]
 
@@ -136,7 +137,8 @@ def offered(installed=None, wanted=()):
                        "error": (found or {}).get("error")})
     # Whatever else is installed, so a third-party one is still listed and removable.
     for name, found in sorted(present.items()):
-        listed.append({"name": name, "summary": "", "page": bool(found.get("badge_module")),
+        listed.append({"name": name, "title": name, "summary": "",
+                       "page": bool(found.get("badge_module")),
                        "needs": None, "installed": True, "asked": name in asked,
                        "version": found.get("version"), "error": found.get("error")})
     return listed

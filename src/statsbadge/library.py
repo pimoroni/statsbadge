@@ -162,7 +162,7 @@ def build(config_dir, requirements, verbose=False):
     """
     argv = installer()
     if argv is None:
-        return None, "no uv and no pip here, so nothing can install anything"
+        return None, "there is no uv and no pip here to install with"
 
     here = root(config_dir)
     os.makedirs(here, exist_ok=True)
@@ -211,6 +211,27 @@ def installed(where):
 def holds(where, short_name):
     """Whether a generation carries that extension, by the name `ext add` takes."""
     return resolved(where, f"statsbadge-{short_name}") is not None
+
+
+def elsewhere(config_dir, short_name):
+    """Where that extension is installed outside the library, or None.
+
+    A build writes the library alone, so a copy in the environment survives one and goes
+    on answering the import. An editable install is the usual way to get one.
+    """
+    inside = os.path.normpath(root(config_dir)) + os.sep
+    wanted = {f"statsbadge-{short_name}".lower(), short_name.lower()}
+    for distribution in importlib.metadata.distributions():
+        name = (distribution.metadata["Name"] or "").lower().replace("_", "-")
+        if name not in wanted:
+            continue
+        try:
+            where = os.path.normpath(os.fspath(distribution.locate_file("")))
+        except (TypeError, ValueError):
+            continue
+        if not (where + os.sep).startswith(inside):
+            return where
+    return None
 
 
 def resolved(target, name):
@@ -285,7 +306,7 @@ def prune(target, ignore=None):
 
 
 def _remove_recorded(target, dist_info):
-    """Take away every file a distribution's RECORD names."""
+    """Take away every file a distribution's RECORD names."""  # noqa: D401
     inside = os.path.normpath(target) + os.sep
     try:
         with open(os.path.join(dist_info, "RECORD"), newline="") as handle:

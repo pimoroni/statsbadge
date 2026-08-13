@@ -209,11 +209,17 @@ def apply(config_dir, verb, asking, present, verbose=False, announce=None):
     had_list = os.path.isfile(wanted_path(config_dir))
 
     done = plan(verb, asking, before, present)
-    done.update({"ok": False, "why": None, "nothing": False, "stuck": []})
+    done.update({"ok": False, "why": None, "nothing": False, "stuck": [], "shadowed": []})
     if done["unknown"]:
         return done
-    if verb != "sync" and not done["changed"] and not done["recorded"]:
-        done["ok"] = done["nothing"] = True
+    if verb != "sync" and not done["changed"]:
+        # Nothing to build. Something already installed is only written down, and a build
+        # would put a copy in the library that the environment's own would answer over.
+        if done["recorded"]:
+            write_wanted(config_dir, done["wanted"])
+            done["shadowed"] = _outside(config_dir, done["recorded"])
+        done["ok"] = True
+        done["nothing"] = not done["recorded"]
         return done
 
     write_wanted(config_dir, done["wanted"])
@@ -237,14 +243,24 @@ def apply(config_dir, verb, asking, present, verbose=False, announce=None):
 
     library.activate(config_dir)
     done["ok"] = True
-    # An extension in the environment itself outlives a build that leaves it out, and
-    # goes on being found. Only whoever installed it there can take it away.
+    # Asked after the build, and after activate has settled sys.path, or every removal
+    # would look like one that did not take.
     if verb == "remove":
-        done["stuck"] = sorted(
-            short_name(requirement) for requirement in done["changed"]
-            if short_name(requirement) in present
-            and not library.holds(where, short_name(requirement)))
+        done["stuck"] = _outside(config_dir, done["changed"])
+    else:
+        done["shadowed"] = _outside(config_dir, done["changed"])
     return done
+
+
+def _outside(config_dir, requirements):
+    """Which of these the environment carries, and where, as the caller has to say so."""
+    found = []
+    for requirement in requirements:
+        short = short_name(requirement)
+        where = library.elsewhere(config_dir, short)
+        if where:
+            found.append({"name": short, "where": where})
+    return sorted(found, key=lambda entry: entry["name"])
 
 
 
