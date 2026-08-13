@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 
+from . import bundled
 from .tooling import quoted
 
 NAME = "statsbadge"
@@ -61,6 +62,10 @@ def launcher():
     Beside sys.executable pins the environment this is running from, which for a uv tool
     is the one holding the extensions.
     """
+    # A packaged app is its own launcher. Its executable takes no `-m`, and a
+    # statsbadge-tray found on PATH would be some other install of it entirely.
+    if bundled():
+        return [sys.executable]
     exe = "statsbadge-tray.exe" if os.name == "nt" else "statsbadge-tray"
     beside = os.path.join(os.path.dirname(sys.executable), exe)
     if os.path.isfile(beside):

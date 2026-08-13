@@ -5770,6 +5770,21 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
 
 
 @check
+def test_a_packaged_app_is_never_asked_to_stand_in_for_pip(_h):
+    """Its sys.executable is the app. `-m pip` there starts a second copy of the app,
+    icon and all, and answers nothing."""
+    was_executable, was_which = sys.executable, shutil.which
+    try:
+        sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
+                                      "Contents", "MacOS", "statsbadge")
+        shutil.which = lambda _name: None          # no uv either
+        assert library.tool() is None
+        assert library.installer() is None
+    finally:
+        sys.executable, shutil.which = was_executable, was_which
+
+
+@check
 def test_a_port_that_will_not_open_is_not_called_a_reset(_h):
     """Every command hands the badge back with a reset. One it never reached has none."""
     assert install.hard_reset("/dev/statsbadge-not-a-port", settle=False) is False

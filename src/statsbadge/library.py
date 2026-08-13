@@ -24,6 +24,8 @@ import shutil
 import subprocess
 import sys
 
+from . import bundled
+
 LIB = "lib"
 PARTIAL = ".partial"
 
@@ -105,6 +107,10 @@ def tool():
     found = shutil.which("uv")
     if found:
         return "uv", [found, "pip"]
+    # A packaged app's executable is the app. Running it with `-m pip` starts a second
+    # copy of it, tray icon and all, instead of asking pip anything.
+    if bundled():
+        return None
     try:
         subprocess.run([sys.executable, "-m", "pip", "--version"],
                        capture_output=True, check=True)
