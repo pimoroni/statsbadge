@@ -9,12 +9,14 @@ import sys
 import threading
 import time
 
-from . import auth, beacon, collect, extensions, install, layout, runner, server, tooling
+from . import (auth, autostart, beacon, collect, extensions, install, layout, runner,
+               server, tooling)
 # Named apart from the `version` locals in this module, which are extensions' own.
 from . import version as package_version
 
 
 LEGACY_CONFIG_DIR = os.path.join(os.path.expanduser("~/.config"), "statsbadge")
+DEFAULT_PORT = 8420
 
 
 def config_dir(explicit=None):
@@ -760,6 +762,29 @@ def cmd_badges(args):
     return 0
 
 
+# -- autostart --------------------------------------------------------------
+
+def cmd_autostart(args):
+    directory = config_dir(args.config_dir)
+    # Only what was asked for, or a login start would pin this run's defaults.
+    kept = directory if args.config_dir else None
+    port = args.port if args.port != DEFAULT_PORT else None
+
+    if args.verb == "enable":
+        print(f"starting at login, from {autostart.enable(config_dir=kept, port=port)}")
+        return 0
+    if args.verb == "disable":
+        print("no longer starting at login" if autostart.disable()
+              else "was not starting at login")
+        return 0
+
+    state = autostart.describe(config_dir=kept, port=port)
+    print("starts at login" if state["enabled"] else "does not start at login")
+    print(f"  entry:   {state['where']}")
+    print(f"  runs:    {tooling.quoted(state['command'])}")
+    return 0
+
+
 # -- argument parsing -------------------------------------------------------
 
 INSTALL_EXAMPLES = """
@@ -788,7 +813,7 @@ def main(argv=None):
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--host", default="0.0.0.0")
-    common.add_argument("--port", type=int, default=8420)
+    common.add_argument("--port", type=int, default=DEFAULT_PORT)
     common.add_argument("--powermetrics", action="store_true",
                         help="macOS: run powermetrics as root for power and temps")
     common.add_argument("--lhm-url", help="Windows: LibreHardwareMonitor data.json URL")
@@ -888,8 +913,22 @@ def main(argv=None):
     badges.add_argument("--forget", metavar="BADGE_ID")
     badges.set_defaults(func=cmd_badges)
 
+    auto = subs.add_parser("autostart", parents=[common],
+                           help="run the tray when you log in")
+    auto.set_defaults(func=cmd_autostart, verb="status")
+    auto_verbs = auto.add_subparsers(dest="verb", metavar="enable|disable")
+    for verb, what in (("enable", "start the tray at login"),
+                       ("disable", "stop starting the tray at login")):
+        step = auto_verbs.add_parser(verb, parents=[common], help=what)
+        step.set_defaults(func=cmd_autostart, verb=verb)
+
     args = parser.parse_args(argv)
     return args.func(args)
+
+
+def tray_main(argv=None):
+    """The gui-scripts entry point. Defaults to the tray, and takes its flags."""
+    return main(["tray", *(sys.argv[1:] if argv is None else argv)])
 
 
 if __name__ == "__main__":

@@ -49,6 +49,11 @@ Issues = "https://github.com/pimoroni/statsbadge/issues"
 [project.scripts]
 statsbadge = "statsbadge.__main__:main"
 
+# A launcher with no console window behind it, which is what the Windows Run key points
+# at. Same as the console script on macOS and Linux.
+[project.gui-scripts]
+statsbadge-tray = "statsbadge.__main__:tray_main"
+
 # The tag is the version. uv's build backend takes only static metadata, astral-sh/uv#11718
 # being open, so the backend is hatchling. `uv build` and `uv publish` drive it the same
 # way, those being the frontend.
