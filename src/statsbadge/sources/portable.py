@@ -22,7 +22,7 @@ class Portable(Source):
     provides = ("cpu", "mem", "disk", "net", "power", "sys")
 
     @classmethod
-    def available(cls):
+    def available(cls, _config=None):
         return True
 
     def __init__(self, config):

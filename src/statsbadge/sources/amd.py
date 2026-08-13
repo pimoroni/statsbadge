@@ -18,7 +18,7 @@ class AmdGpu(Source):
     provides = ("gpu",)
 
     @classmethod
-    def available(cls):
+    def available(cls, _config=None):
         return bool(_cards())
 
     def sample(self, frame, dt):

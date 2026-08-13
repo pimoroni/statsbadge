@@ -23,9 +23,11 @@ class LibreHardwareMonitor(Source):
     provides = ("cpu", "gpu", "fans", "power")
 
     @classmethod
-    def available(cls):
+    def available(cls, config=None):
+        # The address it was given, and not the usual one: a server on another port is
+        # exactly the case the setting exists for.
         try:
-            _fetch(DEFAULT_URL, timeout=1.0)
+            _fetch((config or {}).get("lhm_url") or DEFAULT_URL, timeout=1.0)
             return True
         except Exception:
             # Not running is the common case, and this source is optional.

@@ -14,7 +14,7 @@ class Nvidia(Source):
     provides = ("gpu",)
 
     @classmethod
-    def available(cls):
+    def available(cls, _config=None):
         try:
             import pynvml
         except ImportError:

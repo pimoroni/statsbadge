@@ -25,7 +25,7 @@ class LinuxHwmon(Source):
     provides = ("cpu", "fans")
 
     @classmethod
-    def available(cls):
+    def available(cls, _config=None):
         return os.path.isdir("/sys/class/hwmon")
 
     def sample(self, frame, dt):

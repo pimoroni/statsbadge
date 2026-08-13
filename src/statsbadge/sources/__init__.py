@@ -37,7 +37,7 @@ def discover(config=None):
     loaded = []
     for cls in candidates:
         try:
-            if cls.available():
+            if cls.available(config or {}):
                 loaded.append(cls(config or {}))
         except Exception:
             # A source that cannot even answer available() counts as absent.

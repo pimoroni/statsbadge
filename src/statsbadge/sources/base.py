@@ -138,7 +138,7 @@ class Source:
         """
 
     @classmethod
-    def available(cls):
+    def available(cls, _config=None):
         """True if this source can run here. Cheap: no sampling, no subprocesses."""
         return False
 
