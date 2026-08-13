@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import time
 
-from . import repl
+from . import NO_WINDOW, repl
 
 APP_NAME = "stats"
 STATE_FILE = "/state/stats.json"
@@ -758,7 +758,14 @@ def wait_for_enumeration(previous=None, timeout=15):
     return None
 
 
-def eject(volume):
+def eject(volume, port=None):
+    """Send the badge back out of disk mode, and take the volume with it.
+
+    An eject is what the firmware watches for: the SCSI stop reboots it. Windows has no
+    eject command to run, so the badge is reset over the REPL, which stays up alongside
+    the volume. The flush before it is the point. A reset pulls the volume out from under
+    Windows, and anything left in the write cache goes with it, half a file at a time.
+    """
     system = platform.system()
     try:
         if system == "Darwin":
@@ -767,5 +774,10 @@ def eject(volume):
             subprocess.run(["sync"], capture_output=True, timeout=20)
             subprocess.run(["udisksctl", "unmount", "-b", volume],
                            capture_output=True, timeout=20)
+        elif system == "Windows" and port:
+            subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                            f"Write-VolumeCache -DriveLetter {volume[0]}"],
+                           capture_output=True, timeout=20, **NO_WINDOW)
+            hard_reset(port, settle=False)
     except Exception:
         pass
