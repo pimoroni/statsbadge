@@ -226,7 +226,7 @@ def test_what_runs_at_login_is_a_real_path():
 
 @check
 def test_a_print_survives_having_nowhere_to_print():
-    """Under pythonw and inside a .app sys.stdout is None, and every print here raises."""
+    """sys.stdout is None under pythonw, and inside an .app bundle. Every print raises."""
     was = (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__)
     directory = tempfile.mkdtemp()
     try:
