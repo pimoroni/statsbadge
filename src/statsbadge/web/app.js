@@ -576,12 +576,10 @@ function displayName(name) {
   return (listed && listed.title) || name
 }
 
-/** The package, where the title does not already say it. "Octopus Energy" is worth
- * statsbadge-octopus beside it; "Clock" is not worth statsbadge-clock. */
-function alsoCalled(title, name) {
-  return title.toLowerCase() === name.toLowerCase()
-    ? []
-    : [el("span", { className: "given", textContent: `statsbadge-${name}` })]
+/** Under the title, not in it: what you would type, and which release is here. */
+function givenName(name, version) {
+  const given = `statsbadge-${name}`
+  return version ? `${given} @ ${version}` : given
 }
 
 // What /api/extensions last said: the published list, each entry's state, and whether
@@ -639,11 +637,10 @@ function catalogueBox() {
 }
 
 function offerRow(entry) {
-  const notes = []
-  if (entry.version) notes.push(entry.version)
+  const notes = [givenName(entry.name, entry.version)]
   if (entry.needs) notes.push(`needs ${entry.needs}`)
   // The badge gets code over USB alone; /v1 carries readings and a layout.
-  if (entry.page) notes.push("adds a badge page")
+  if (entry.page) notes.push("includes badge page")
   if (entry.installed && !entry.managed) notes.push("installed by the environment")
   if (entry.disabled) notes.push("switched off")
   if (entry.installed && entry.managed && !entry.asked) {
@@ -653,13 +650,9 @@ function offerRow(entry) {
   if (behind[entry.name]) notes.push(`${behind[entry.name]} is out`)
 
   const summary = [entry.summary, notes.join(" · ")].filter(Boolean)
-  // The title the catalogue gives it, and the name `ext add` takes beside it: one is a
-  // heading, the other is what you would type.
-  const shown = entry.title || entry.name
   return el("li", null,
             el("div", null,
-               el("strong", { textContent: shown }),
-               ...alsoCalled(shown, entry.name),
+               el("strong", { textContent: entry.title || entry.name }),
                ...summary.map((text) => el("small", { textContent: text }))),
             el("div", null,
                ...(behind[entry.name] && entry.managed ? [updateButton(entry)] : []),
@@ -780,17 +773,15 @@ function extensionBox(extension, settings) {
   } else if (extension.available === false) {
     state.textContent = "Installed, but not usable on this host."
   } else {
-    const parts = []
-    if (extension.version) parts.push(extension.version)
+    const parts = [givenName(extension.name, extension.version)]
     if (extension.provides.length) parts.push(extension.provides.join(", "))
-    if (extension.badge_module) parts.push("draws a page of its own")
+    if (extension.badge_module) parts.push("includes badge page")
     state.textContent = parts.join(" · ")
   }
 
   const open = openExtensions.has(extension.name)
-  const shown = displayName(extension.name)
-  const head = el("h3", null, el("span", { textContent: shown }),
-                  ...alsoCalled(shown, extension.name))
+  const head = el("h3", null,
+                  el("span", { textContent: displayName(extension.name) }))
   const box = el("section", null, el("header", null, head), state)
   if (!settings.length) return box
 
