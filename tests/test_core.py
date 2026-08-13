@@ -5874,6 +5874,47 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
 
 
 @check
+def test_a_bundle_with_no_trust_store_is_given_one(_h):
+    """Inside a packaged app there is none: get_default_verify_paths answers None to both,
+    and every HTTPS request an extension makes cannot find an issuer."""
+    import ssl
+
+    from statsbadge import __main__ as cli
+
+    empty = ssl.DefaultVerifyPaths(None, None, "", None, "", None)
+    fake = type(sys)("certifi")
+    fake.where = lambda: os.path.join("nowhere", "cacert.pem")
+
+    was_paths, was_certifi = ssl.get_default_verify_paths, sys.modules.get("certifi")
+    was_file, was_dir = os.environ.pop("SSL_CERT_FILE", None), os.environ.pop("SSL_CERT_DIR", None)
+    try:
+        ssl.get_default_verify_paths = lambda: empty
+        sys.modules["certifi"] = fake
+        assert cli.trust_store() == fake.where()
+        assert os.environ["SSL_CERT_FILE"] == fake.where()
+
+        # Asked again with one already set, it leaves it alone.
+        os.environ["SSL_CERT_FILE"] = "somewhere/else.pem"
+        assert cli.trust_store() is None
+
+        # And a machine with a store of its own is not touched.
+        del os.environ["SSL_CERT_FILE"]
+        ssl.get_default_verify_paths = was_paths
+        assert cli.trust_store() is None
+        assert "SSL_CERT_FILE" not in os.environ
+    finally:
+        ssl.get_default_verify_paths = was_paths
+        if was_certifi is None:
+            sys.modules.pop("certifi", None)
+        else:
+            sys.modules["certifi"] = was_certifi
+        for key, value in (("SSL_CERT_FILE", was_file), ("SSL_CERT_DIR", was_dir)):
+            os.environ.pop(key, None)
+            if value is not None:
+                os.environ[key] = value
+
+
+@check
 def test_uv_is_found_where_it_lives_and_not_only_on_the_path(_h):
     """A tray started at login carries the PATH it was given then, and a uv tool
     environment has no pip behind it: the Extensions tab offered nothing at all on a

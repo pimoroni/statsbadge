@@ -846,12 +846,36 @@ def main(argv=None):
         step.set_defaults(func=cmd_autostart, verb=verb)
 
     args = parser.parse_args(argv)
+    trust_store()
     # Extensions live beside the config, so every command sees them. Swept first, while
     # nothing has imported out of a generation the last build replaced.
     directory = config_dir(getattr(args, "config_dir", None))
     library.sweep(directory)
     library.activate(directory)
     return args.func(args)
+
+
+def trust_store():
+    """Point OpenSSL at a bundle of roots where it has none. Returns the file, or None.
+
+    A packaged app carries a Python built somewhere else, and inside the bundle there is
+    no trust store: `get_default_verify_paths()` answers None to both, and every HTTPS
+    request an extension makes comes back unable to find an issuer. certifi travels in
+    the app for this, and anywhere else this does nothing.
+    """
+    import ssl
+    if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
+        return None
+    paths = ssl.get_default_verify_paths()
+    if ((paths.cafile and os.path.exists(paths.cafile))
+            or (paths.capath and os.path.isdir(paths.capath))):
+        return None
+    try:
+        import certifi
+    except ImportError:
+        return None
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    return certifi.where()
 
 
 def tray_main(argv=None):
