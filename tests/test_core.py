@@ -5965,6 +5965,27 @@ def test_uv_is_found_where_it_lives_and_not_only_on_the_path(_h):
 
 
 @check
+def test_a_packaged_app_installs_with_a_version_and_not_an_interpreter(_h):
+    """There is no interpreter in a bundle to point uv at: briefcase ships the library
+    and not the binary. uv takes the version to resolve for instead."""
+    was_executable, was_uv = sys.executable, library._uv
+    try:
+        sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
+                                      "Contents", "MacOS", "statsbadge")
+        library._uv = lambda: os.path.join(os.sep, "somewhere", "uv")
+        argv = library.installer()
+        assert "--python" not in argv, argv
+        assert argv[-2:] == ["--python-version",
+                             f"{sys.version_info.major}.{sys.version_info.minor}"], argv
+    finally:
+        sys.executable, library._uv = was_executable, was_uv
+
+    # Anywhere else it is the interpreter that is running, whose environment is the one
+    # being built against.
+    assert "--python" in library.installer()
+
+
+@check
 def test_a_packaged_app_is_never_asked_to_stand_in_for_pip(_h):
     """Its sys.executable is the app. `-m pip` there starts a second copy of the app,
     icon and all, and answers nothing."""

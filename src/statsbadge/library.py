@@ -109,9 +109,20 @@ def _uv():
     found = shutil.which("uv")
     if found:
         return found
+    try:
+        import uv
+        found = uv.find_uv_bin()
+        if found and os.path.isfile(found):
+            return found
+    except (ImportError, FileNotFoundError):
+        pass
     name = "uv.exe" if os.name == "nt" else "uv"
     places = [os.path.join(os.path.expanduser("~"), ".local", "bin"),
-              os.path.dirname(sys.executable or "")]
+              os.path.dirname(sys.executable or ""),
+              # A bundle puts the binaries beside the packages, which is nowhere uv's own
+              # finder looks: sys.prefix there is the Python it was built with.
+              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "bin")]
     if os.name == "nt":
         places.append(os.path.join(os.environ.get("LOCALAPPDATA", ""), "uv", "bin"))
     for place in places:
@@ -148,8 +159,15 @@ def installer():
         return None
     kind, argv = found
     argv = [*argv, "install"]
-    # uv installs into the environment it is pointed at, and picks none by itself.
-    return [*argv, "--python", sys.executable] if kind == "uv" else argv
+    if kind != "uv":
+        return argv
+    # uv installs into the environment it is pointed at, and picks none by itself. A
+    # packaged app has no interpreter to point at - briefcase ships the library and not
+    # the binary - so uv is told the version instead, and resolves for this machine.
+    if bundled():
+        return [*argv, "--python-version",
+                f"{sys.version_info.major}.{sys.version_info.minor}"]
+    return [*argv, "--python", sys.executable]
 
 
 def outdated(config_dir, timeout=60):
