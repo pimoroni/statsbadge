@@ -165,10 +165,10 @@ def _push(options, session, badges, identity, modules, say, confirm, password):
         except (install.InstallError, OSError) as exc:
             # The volume is left mounted. Whatever went wrong, it is halfway through the
             # app directory, and running this again is what puts it right.
-            install.eject(volume)
+            install.eject(volume, port)
             return _answer(f"{exc}. Run this again once the badge comes back.",
                            badge=info["uid"], model=info["model"])
-        install.eject(volume)
+        install.eject(volume, port)
         say("  ejected; waiting for the badge to come back...")
         try:
             port = install.wait_for_port(previous=port)

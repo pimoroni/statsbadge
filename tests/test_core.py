@@ -4782,6 +4782,46 @@ class FakeBoard:
     PROMPT = b"raw REPL; CTRL-B to exit\r\n"
 
 
+@check
+def test_the_badge_is_sent_back_out_of_disk_mode(_h):
+    """The firmware reboots on the SCSI stop an eject sends, and Windows has no eject
+    command to send one with. It came back anyway, by accident: the REPL check in
+    wait_for_port soft resets the badge, with the volume still mounted.
+
+    So the reset is asked for there, and the flush before it is the point. A reset pulls
+    the volume out from under Windows, and a write still cached goes with it."""
+    ran, reset = [], []
+    was = (install.platform, install.subprocess, install.hard_reset)
+    install.platform = type(sys)("platform")
+    install.subprocess = type(sys)("subprocess")
+    install.subprocess.run = lambda argv, **_kwargs: ran.append(argv)
+    install.hard_reset = lambda port, settle=True: reset.append((port, settle))
+    try:
+        for system in ("Darwin", "Linux", "Windows"):
+            install.platform.system = lambda system=system: system
+            ran.clear()
+            install.eject("E:\\" if system == "Windows" else "/Volumes/BADGE", "/dev/x")
+            words = " ".join(word for argv in ran for word in argv)
+            if system == "Windows":
+                # The cmdlet takes a drive letter, where the volume is "E:\".
+                assert "Write-VolumeCache -DriveLetter E" in words, words
+                assert reset == [("/dev/x", False)], reset
+            else:
+                assert "Write-VolumeCache" not in words, words
+                assert not reset, (system, reset)
+                assert "eject" in words or "unmount" in words, words
+
+        # A flush that will not take stays swallowed: it is reported already, as the port
+        # failing to come back, and there is nothing the caller can do differently.
+        def refuse(*_argv, **_kwargs):
+            raise OSError(5, "no such volume")
+
+        install.subprocess.run = refuse
+        install.eject("E:\\", "/dev/x")
+    finally:
+        install.platform, install.subprocess, install.hard_reset = was
+
+
 class FakePort:
     def __init__(self, device, pid, product, vid=0x2E8A):
         self.device, self.vid, self.pid = device, vid, pid
