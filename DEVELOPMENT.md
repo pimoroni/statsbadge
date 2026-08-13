@@ -233,6 +233,39 @@ Every release fires every publish workflow, so each tests its tag prefix before 
 work. Each package needs a workflow file to itself, because PyPI matches a publisher on the
 filename that runs.
 
+### The desktop apps
+
+Briefcase builds the `.dmg` and the `.msi`, from `[tool.briefcase]` in `pyproject.toml`.
+
+statsbadge goes in as a **wheel**, named in `requires`. Copied `sources` arrive with no
+`.dist-info`, and both the extension mechanism and `version()` read installed metadata, so a
+bundle built that way finds no extensions and cannot say what it is. What
+`sources` points at is `packaging/statsbadge_tray/`, a shim whose one job is to call
+`tray_main()`. It is named apart from the package because the app directory comes before
+`app_packages` on `sys.path`, and a shim called `statsbadge` would shadow the real one.
+
+The three extensions bundled with it are in `requires` too, as paths. Adding a fourth on a
+packaged machine takes uv or pip, so the bundle ships with what most people want.
+
+`sys.executable` in a bundle is the app's own binary. `bundled()` in `__init__.py` is what
+notices: running it with `-m pip` starts a second copy of the app, and a login entry has to
+name the app itself.
+
+```bash
+uv run python tools/icon.py                         # the .icns and .ico, from the same mark
+uv run python tools/app_version.py                  # the tag, into the briefcase table
+uv run --group packaging briefcase create macOS app --no-input      # or: windows
+uv run --group packaging briefcase build macOS app --no-input
+uv run --group packaging briefcase package macOS app --adhoc-sign --no-input
+```
+
+The version in `[tool.briefcase]` stays `0.0.0` in the repository, since the tag is the
+version everywhere else and briefcase takes a static one. CI writes it in before packaging.
+
+Ad-hoc signed, there being no Apple Developer account behind it, so the first launch needs
+Open from the context menu. Notarising it later takes an account, a Developer ID certificate
+and `briefcase package macOS app --identity`.
+
 ## Working on it
 
 ```bash

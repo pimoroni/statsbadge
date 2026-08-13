@@ -26,6 +26,20 @@ GNOME hosts no tray at all without the [AppIndicator extension](https://extensio
 Run `statsbadge tray --check` for what is missing on this machine. Without a tray it serves
 anyway.
 
+### An app, if you would rather not have a terminal at all
+
+Every release carries a `.dmg` for macOS and an `.msi` for Windows. They hold the whole
+thing - Python, the server, the tray, and the clock, ISS and quakes extensions - and need
+nothing installed first. Linux keeps the uv path above.
+
+Neither is signed. macOS refuses a double-click on the first run: right-click the app and
+choose **Open**, and it will not ask again. On Windows, SmartScreen hides the button behind **More info**, then
+**Run anyway**.
+
+One thing the app cannot do: install more extensions. That needs uv or pip on the machine,
+and a packaged app has neither, so the **Extensions** tab lists what is there and says so.
+The three it ships with cover the pages most people want.
+
 Working on a checkout instead:
 
 ```bash
