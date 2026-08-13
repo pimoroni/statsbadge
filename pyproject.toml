@@ -153,6 +153,7 @@ LSUIElement = true
 
 [tool.briefcase.app.statsbadge-tray.windows]
 console_app = false
-# NVML, for a card the app would otherwise have nothing to say about. Windows and Linux
-# only: no Mac has one.
+# NVML, for a card the app would otherwise have nothing to say about. `requires` is
+# cumulative in briefcase, so this is the app's list plus one. Windows only, that and
+# macOS being the two apps built, and no Mac having such a card.
 requires = ["nvidia-ml-py>=12"]

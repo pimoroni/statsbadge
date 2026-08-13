@@ -279,7 +279,7 @@ jobs:
             sign: "--adhoc-sign"
           - os: windows-latest
             platform: windows
-            built: build\\statsbadge-tray\\windows\\app\\statsbadge.exe
+            built: build/statsbadge-tray/windows/app/src/statsbadge.exe
             # Unsigned, so SmartScreen warns the first time. Briefcase fetches WiX itself.
             sign: ""
 
@@ -320,6 +320,9 @@ jobs:
       # installs with; `ext` reads the metadata it ships; `--be-pip` is what it spawns to
       # install one.
       - name: Ask the built app what it has
+        # bash on both, since powershell reads a quoted path as a string and wants the
+        # call operator to run it.
+        shell: bash
         run: |
           "${{ matrix.built }}" --check
           "${{ matrix.built }}" ext
