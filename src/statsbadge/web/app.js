@@ -643,7 +643,7 @@ function offerRow(entry) {
   if (entry.version) notes.push(entry.version)
   if (entry.needs) notes.push(`needs ${entry.needs}`)
   // The badge gets code over USB alone; /v1 carries readings and a layout.
-  if (entry.page) notes.push("draws its own page, so it needs statsbadge install over USB")
+  if (entry.page) notes.push("adds a badge page")
   if (entry.installed && !entry.managed) notes.push("installed by the environment")
   if (entry.disabled) notes.push("switched off")
   if (entry.installed && entry.managed && !entry.asked) {
