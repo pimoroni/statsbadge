@@ -5881,11 +5881,15 @@ def test_a_bundle_with_no_trust_store_is_given_one(_h):
 
     from statsbadge import __main__ as cli
 
-    class Bare:
-        """A context with nothing loaded, which is what a bundle builds."""
+    class Store:
+        """A context with as many roots as it was told, since the runner's own count is
+        not the thing under test: uv's Python on Linux loads none."""
+
+        def __init__(self, roots):
+            self.roots = roots
 
         def cert_store_stats(self):
-            return {"x509": 0, "crl": 0, "x509_ca": 0}
+            return {"x509": self.roots, "crl": 0, "x509_ca": self.roots}
 
     fake = type(sys)("certifi")
     fake.where = lambda: os.path.join("nowhere", "cacert.pem")
@@ -5893,7 +5897,7 @@ def test_a_bundle_with_no_trust_store_is_given_one(_h):
     was_context, was_certifi = ssl.create_default_context, sys.modules.get("certifi")
     was_file, was_dir = os.environ.pop("SSL_CERT_FILE", None), os.environ.pop("SSL_CERT_DIR", None)
     try:
-        ssl.create_default_context = lambda *_args, **_kwargs: Bare()
+        ssl.create_default_context = lambda *_args, **_kwargs: Store(0)
         sys.modules["certifi"] = fake
         assert cli.trust_store() == fake.where()
         assert os.environ["SSL_CERT_FILE"] == fake.where()
@@ -5905,7 +5909,7 @@ def test_a_bundle_with_no_trust_store_is_given_one(_h):
         # A machine with roots of its own is not touched, wherever it keeps them:
         # Windows names no file at all and loads them from the system store.
         del os.environ["SSL_CERT_FILE"]
-        ssl.create_default_context = was_context
+        ssl.create_default_context = lambda *_args, **_kwargs: Store(128)
         assert cli.trust_store() is None
         assert "SSL_CERT_FILE" not in os.environ
     finally:

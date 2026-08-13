@@ -78,6 +78,13 @@ jobs:
       - name: Where a login entry would go
         run: uv run statsbadge autostart
 
+      # How many roots this Python can verify against. A packaged app has none of its
+      # own, and neither does uv's Python on some hosts, so it is worth seeing per
+      # platform rather than inferring it from a test that went red.
+      - name: Report what this Python can verify
+        run: uv run python -c "import ssl; print(ssl.get_default_verify_paths());
+             print(ssl.create_default_context().cert_store_stats())"
+
       # Here and not only on Linux: the extensions library is the part most likely to
       # differ, between path separators, a .pyd that cannot be replaced while it is
       # imported, and pip standing in where there is no uv.
