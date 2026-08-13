@@ -87,7 +87,60 @@ dev = ["ruff>=0.6", "mpremote>=1.22"]
 # Building an extension's .af icon font. A group and not an extra, since nothing needs it
 # to run or install: uv sync --group fonts.
 fonts = ["freetype-py>=2.4", "shapely>=2.1"]
+# The desktop apps. A group of its own, since it pulls a toolchain nothing else here
+# wants: uv run --group packaging briefcase ...
+packaging = ["briefcase>=0.4.4"]
 
 # The example extension is kept out of the workspace. It declares a real dependency on
 # statsbadge, which is correct once published but circular in a checkout, so it is
 # installed for development with --no-deps. See README.
+
+# -- packaged apps ----------------------------------------------------------
+#
+# Briefcase, not PyInstaller: everything goes in as a wheel, so `.dist-info` survives.
+# `importlib.metadata` is what finds extensions and reports the version, and a bundle
+# without it has neither.
+
+[tool.briefcase]
+project_name = "statsbadge"
+bundle = "com.pimoroni"
+version = "0.0.0"
+url = "https://github.com/pimoroni/statsbadge"
+# Restated without the glob, which briefcase reads as a literal path. The font licences
+# still travel in the wheel installed inside the bundle, which carries its own.
+license = "MIT"
+license-files = ["LICENSE"]
+author = "Philip Howard"
+author_email = "phil@pimoroni.com"
+
+[tool.briefcase.app.statsbadge-tray]
+formal_name = "statsbadge"
+description = "System stats from a host PC, drawn on a Badgeware badge"
+# The mark the tray and the badge draw, at the sizes each platform asks for. Written by
+# tools/icon.py, so the app icon cannot drift from the one in the menu bar.
+icon = "packaging/icons/icon"
+sources = ["packaging/statsbadge_tray"]
+requires = [
+    ".",
+    "./extensions/statsbadge-clock",
+    "./extensions/statsbadge-iss",
+    "./extensions/statsbadge-quakes",
+]
+
+[tool.briefcase.app.statsbadge-tray.macOS]
+universal_build = false
+
+# pyobjc ships its own test suite, and debug symbols beside it. Neither is wanted in a
+# bundle, and codesign refuses the .dSYM anyway.
+cleanup_paths = [
+    "{app.formal_name}.app/Contents/Resources/app_packages/PyObjCTest",
+    "{app.formal_name}.app/Contents/Resources/app_packages/**/*.dSYM",
+]
+
+# No Dock icon and no application menu: this lives in the menu bar, and an app with
+# nothing to show has no business taking a slot in the Dock.
+[tool.briefcase.app.statsbadge-tray.macOS.info]
+LSUIElement = true
+
+[tool.briefcase.app.statsbadge-tray.windows]
+console_app = false

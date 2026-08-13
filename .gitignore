@@ -10,6 +10,8 @@ shots/*.raw
 stats/ext/
 build/
 dist/
+# Briefcase writes one of these when a build fails.
+logs/
 .DS_Store
 dist/
 .venv/

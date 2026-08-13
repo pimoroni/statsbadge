@@ -21,6 +21,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / "src" / "statsbadge" / "badge_app"
 WEB = ROOT / "src" / "statsbadge" / "web"
 TRAY = ROOT / "src" / "statsbadge" / "tray" / "assets"
+# The packaged app's icon, which is not shipped in the wheel: briefcase reads it from here
+# and builds the .icns and .ico each platform wants.
+APP_ICONS = ROOT / "packaging" / "icons"
 sys.path.insert(0, str(APP))
 
 
@@ -74,6 +77,8 @@ COLOURS = 32                      # 16 also reads fine at this size; 32 leaves m
 
 TRAY_SIZE = 44                    # every tray scales down from one square
 ICO_SIZES = ((16, 16), (24, 24), (32, 32), (48, 48), (256, 256))
+APP_SIZE = 1024                   # what an .icns holds at its largest
+APP_INSET = 0.78                  # of the plate, so the mark sits in it as a Dock icon does
 CLEAR = (0, 0, 0, 0)
 MONO_INK = (0, 0, 0, 255)
 MONO_GRID = (0, 0, 0, 90)         # a template carries shading in its alpha
@@ -163,6 +168,22 @@ def main():
     for name, dot in (("tray-template", None), ("tray-template-attention", MONO_INK)):
         _write(TRAY / f"{name}.png",
                render(TRAY_SIZE, MONO_GRID, MONO_INK, MONO_INK, dot=dot, ring=CLEAR))
+
+    # Drawn at twice the size wanted and reduced, so this is not the 24 pixel mark
+    # enlarged. macOS reads the .icns and Windows the .ico; briefcase falls back to its
+    # own mascot for a format it cannot find, and says so in one line nobody reads.
+    APP_ICONS.mkdir(parents=True, exist_ok=True)
+    inner = round(APP_SIZE * APP_INSET)
+    art = Image.new("RGBA", (APP_SIZE, APP_SIZE), CLEAR)
+    ImageDraw.Draw(art).rounded_rectangle(
+        [(0, 0), (APP_SIZE - 1, APP_SIZE - 1)],
+        radius=round(APP_SIZE * CORNER / SIZE), fill=plate)
+    art.alpha_composite(
+        render(inner, *colours, supersample=max(SUPERSAMPLE, -(-inner * 2 // SIZE))),
+        ((APP_SIZE - inner) // 2, (APP_SIZE - inner) // 2))
+    for out in (APP_ICONS / "icon.icns", APP_ICONS / "icon.ico"):
+        art.save(out, **({"sizes": ICO_SIZES} if out.suffix == ".ico" else {}))
+        print(f"wrote {out.relative_to(ROOT)}, {out.stat().st_size} bytes")
 
     out = TRAY / "statsbadge.ico"
     render(ICO_SIZES[-1][0], *colours, plate=plate, supersample=SUPERSAMPLE * 2).save(
