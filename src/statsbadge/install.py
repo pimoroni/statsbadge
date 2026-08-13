@@ -354,7 +354,7 @@ def regions_on(volume):
     """
     path = secrets_file(volume)
     if path:
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             match = re.search(r"^\s*REGION\s*=[^\n#]*#\s*Options are ([^\n]+)$",
                               handle.read(), re.M)
         if match:
@@ -370,7 +370,7 @@ def wifi_network_on(volume):
     path = secrets_file(volume)
     if not path:
         return None
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         return _secret_value(handle.read(), "WIFI_SSID") or None
 
 
@@ -404,7 +404,7 @@ def write_secrets(volume, ssid, password, region=None, timezone=None):
     if timezone is not None:
         values["TIMEZONE"] = int(timezone)
 
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         text = handle.read()
     for key, value in values.items():
         # json.dumps, not repr: a valid Python literal either way, and it matches the
@@ -422,7 +422,7 @@ def write_secrets(volume, ssid, password, region=None, timezone=None):
                               replace, text, count=1, flags=re.M)
         if not count:
             text = text.rstrip("\n") + f"\n{key} = {literal}\n"
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         handle.write(text)
     return path
 
@@ -590,7 +590,7 @@ def _stale_modules(built_dir):
     comparison there is noise. A build with no BUILD_INFO cannot be checked.
     """
     try:
-        info = json.loads((pathlib.Path(built_dir) / "BUILD_INFO").read_text())
+        info = json.loads((pathlib.Path(built_dir) / "BUILD_INFO").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
     try:

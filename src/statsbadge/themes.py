@@ -31,7 +31,7 @@ ROLES = ("bg", "panel", "ink", "dim", "accent", "grid")
 
 
 def _load():
-    text = resources.files(__package__).joinpath("themes.toml").read_text()
+    text = resources.files(__package__).joinpath("themes.toml").read_text(encoding="utf-8")
     data = tomllib.loads(text)
     aliases = data.pop("aliases", {})
     return data, aliases

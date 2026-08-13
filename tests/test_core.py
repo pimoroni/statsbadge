@@ -503,12 +503,14 @@ def test_a_stale_precompile_is_not_what_gets_installed(_h):
     original = install.packaged_mpy_dir
     install.packaged_mpy_dir = bundled
     try:
-        (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": digest}}))
+        (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": digest}}),
+                                          encoding="utf-8")
         assert install._stale_modules(built) == []
         source, _note = install.choose_app_source(None, False, None)
         assert source == str(built), source
 
-        (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": "0" * 64}}))
+        (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": "0" * 64}}),
+                                          encoding="utf-8")
         assert install._stale_modules(built) == ["look.py"]
         source, note = install.choose_app_source(None, False, None)
         assert source is None, source
@@ -597,11 +599,11 @@ def test_reload_never_lowers_a_counter(h):
     assert h.signed("GET", "/v1/stats", seq=seq)[0] == 200
     # Rewrite the file with seq=0 for this badge, as a stale copy would have it.
     path = os.path.join(h.dir, "badges.json")
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         data = json.load(handle)
     data["badges"][h.badge_id]["seq"] = 0
     time.sleep(0.01)
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         json.dump(data, handle)
     h.service.badges._reload_if_changed()
     status, body = h.signed("GET", "/v1/stats", seq=seq)
@@ -628,7 +630,7 @@ def test_counter_is_persisted(h):
         assert h.raw("GET", "/v1/stats", None, _headers(who, seq, secret))[0] == 200
 
     # The guarantee is that disk stays within the threshold of memory.
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         on_disk = json.load(handle)["badges"][who]["seq"]
     assert on_disk > 0, "the counter never reached disk"
     assert on_disk >= seq - auth.SEQ_PERSIST_EVERY, (on_disk, seq)
@@ -833,7 +835,7 @@ def test_write_secrets_keeps_the_rest_of_the_file(_h):
     with tempfile.TemporaryDirectory() as volume:
         os.mkdir(os.path.join(volume, "system"))
         path = os.path.join(volume, "system", "secrets.py")
-        with open(path, "w") as handle:
+        with open(path, "w", encoding="utf-8") as handle:
             handle.write(template)
 
         assert install.secrets_file(volume) == path
@@ -844,7 +846,7 @@ def test_write_secrets_keeps_the_rest_of_the_file(_h):
         password = 'p@ss "w0rd"\\'
         install.write_secrets(volume, "Some Network", password, region="us")
 
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             after = handle.read()
         values = {}
         exec(compile(after, "secrets.py", "exec"), values)
@@ -857,7 +859,7 @@ def test_write_secrets_keeps_the_rest_of_the_file(_h):
 
         # Writing again replaces, and does not append a second WIFI_SSID.
         install.write_secrets(volume, "Other", "pw")
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             after = handle.read()
         assert after.count("WIFI_SSID") == 1
         values = {}
@@ -867,7 +869,7 @@ def test_write_secrets_keeps_the_rest_of_the_file(_h):
 
         # A key the file lacks is appended.
         install.write_secrets(volume, "Third", "pw", timezone=-7)
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             values = {}
             exec(compile(handle.read(), "secrets.py", "exec"), values)
         assert values["TIMEZONE"] == -7
@@ -885,12 +887,12 @@ def test_app_files_and_pruning(_h):
         os.makedirs(os.path.join(source, "mpy"))
         for name in ("__init__.mpy", "net.mpy", "icon.png", "MPY_VERSION",
                      "BUILD_INFO", ".hidden"):
-            with open(os.path.join(source, name), "w") as handle:
+            with open(os.path.join(source, name), "w", encoding="utf-8") as handle:
                 handle.write(name)
-        with open(os.path.join(source, "mpy", "stowaway.mpy"), "w") as handle:
+        with open(os.path.join(source, "mpy", "stowaway.mpy"), "w", encoding="utf-8") as handle:
             handle.write("not this one either")
         plugin = os.path.join(work, "clockface.py")
-        with open(plugin, "w") as handle:
+        with open(plugin, "w", encoding="utf-8") as handle:
             handle.write("# a badge-side extension module")
 
         names = dict(install.app_files(source, [("clock", plugin)]))
@@ -902,10 +904,10 @@ def test_app_files_and_pruning(_h):
         target = os.path.join(work, "stats")
         os.makedirs(os.path.join(target, "ext"))
         for name in ("__init__.mpy", "net.mpy", "net.py", "icon.png", "notes.txt"):
-            with open(os.path.join(target, name), "w") as handle:
+            with open(os.path.join(target, name), "w", encoding="utf-8") as handle:
                 handle.write("old")
         for name in ("clockface.py", "gone.py"):
-            with open(os.path.join(target, "ext", name), "w") as handle:
+            with open(os.path.join(target, "ext", name), "w", encoding="utf-8") as handle:
                 handle.write("old")
 
         removed = install.prune_app(target, set(names))
@@ -975,8 +977,8 @@ def test_extensions_describe_finds_the_clock(h):
     described = {record["name"] for record in caps["extensions"]}
     assert described == set(found), (described, set(found))
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="extensions"' in (web / "index.html").read_text()
-    script = (web / "app.js").read_text()
+    assert 'id="extensions"' in (web / "index.html").read_text(encoding="utf-8")
+    script = (web / "app.js").read_text(encoding="utf-8")
     assert "caps.extensions" in script, "the UI still lists only what has settings"
     assert "extensionBox" in script, "an extension is not a box of its own"
 
@@ -1242,7 +1244,7 @@ def test_a_bar_can_be_named_by_whoever_sent_it(h):
     finally:
         collector.extensions.remove(source)
 
-    source_text = pathlib.Path(install.app_source_dir(), "pages.py").read_text()
+    source_text = pathlib.Path(install.app_source_dir(), "pages.py").read_text(encoding="utf-8")
     body = source_text[source_text.index("def _bars"):source_text.index("def behind_at")]
     assert "LANE_NAMES" in body, "_bars numbers its lanes whatever the source sent"
 
@@ -1298,11 +1300,11 @@ def test_every_kind_has_a_badge_layout_and_a_ui_shape(_h):
     """A kind the server accepts has to be drawable and configurable, or it is a page
     that validates, reaches the badge and shows a message saying it cannot be drawn."""
     app = pathlib.Path(install.app_source_dir())
-    pages_source = (app / "pages.py").read_text()
+    pages_source = (app / "pages.py").read_text(encoding="utf-8")
     ui_source = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-                 / "app.js").read_text()
+                 / "app.js").read_text(encoding="utf-8")
     markup = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-              / "index.html").read_text()
+              / "index.html").read_text(encoding="utf-8")
     for kind in layout.KINDS:
         assert f'"{kind}": _' in pages_source, f"{kind} has no renderer"
         assert f"  {kind}: {{" in ui_source, f"{kind} has no shape in the UI"
@@ -1315,9 +1317,9 @@ def test_a_full_scale_is_offered_where_it_is_read(_h):
     renderer looks at it. Offered too widely it is a control that does nothing; too narrowly
     and a page of counts is stuck being scaled by the busiest reading the host has seen."""
     app = pathlib.Path(install.app_source_dir())
-    pages_source = (app / "pages.py").read_text()
+    pages_source = (app / "pages.py").read_text(encoding="utf-8")
     ui_source = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-                 / "app.js").read_text()
+                 / "app.js").read_text(encoding="utf-8")
 
     # fraction_of reads the page's max for its caller, so those kinds count too.
     reads = set()
@@ -1357,7 +1359,7 @@ def test_caselights_take_a_field_or_a_flag(_h):
         return layout.validate({**base, "caselights": value})["caselights"]
 
     # Offered as following the backlight now, though the flag is still stored as it was.
-    page = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    page = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
     assert "Follow the Backlight" in page and "Follow the Theme" not in page
 
     assert stored("cpu.pct") == "cpu.pct"
@@ -1408,7 +1410,7 @@ def test_icon_font_corpus_and_packing(_h):
 
     with tempfile.TemporaryDirectory() as work:
         path = os.path.join(work, "icons.txt")
-        with open(path, "w") as handle:
+        with open(path, "w", encoding="utf-8") as handle:
             handle.write("# a comment\n"
                          "\n"
                          "sunny e81a\n"
@@ -1419,7 +1421,7 @@ def test_icon_font_corpus_and_packing(_h):
         for bad, why in (("sunny\n", "one field"),
                          ("sunny nothex\n", "bad codepoint"),
                          ("sunny e81a ab\n", "two-character remap")):
-            with open(path, "w") as handle:
+            with open(path, "w", encoding="utf-8") as handle:
                 handle.write(bad)
             try:
                 tool.read_corpus(path)
@@ -1639,7 +1641,7 @@ def test_clock_weather_units_and_icons(_h):
     corpus = os.path.join(os.path.dirname(clock.__file__), "..", "..", "icons.txt")
     if os.path.exists(corpus):
         packed = set()
-        with open(corpus) as handle:
+        with open(corpus, encoding="utf-8") as handle:
             for line in handle:
                 line = line.split("#", 1)[0].split()
                 if len(line) == 3:
@@ -1774,7 +1776,7 @@ def test_the_build_script_defaults_where_the_installer_looks(_h):
     The default output used to be build/mpy while the installer reads the copy inside the
     package, so a bare rebuild left the stale bytecode exactly where it was.
     """
-    script = (pathlib.Path(__file__).parent.parent / "ci" / "build-mpy.sh").read_text()
+    script = (pathlib.Path(__file__).parent.parent / "ci" / "build-mpy.sh").read_text(encoding="utf-8")
     default = [line for line in script.splitlines() if line.startswith("OUT_DIR=")]
     assert default, "no OUT_DIR default in the build script"
     assert "src/statsbadge/badge_app/mpy" in default[0], default[0]
@@ -1782,7 +1784,7 @@ def test_the_build_script_defaults_where_the_installer_looks(_h):
     # Both CI workflows still name the packaged copy.
     for workflow in ("ci.yml", "publish.yml"):
         text = (pathlib.Path(__file__).parent.parent / ".github" / "workflows"
-                / workflow).read_text()
+                / workflow).read_text(encoding="utf-8")
         if "build-mpy.sh" in text:
             assert "src/statsbadge/badge_app/mpy" in text, workflow
 
@@ -1792,7 +1794,7 @@ def test_the_field_picker_offers_each_reading_once(_h):
     """numericRefs is a subset of availableRefs, so concatenating them listed every
     number twice - once qualified by its group and once again below it."""
     ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-          / "app.js").read_text()
+          / "app.js").read_text(encoding="utf-8")
     # Joining the two lists is fine, so long as the result is deduplicated where it is
     # joined. Checked per line so this cannot pass by matching the fix itself.
     for line in ui.splitlines():
@@ -1808,7 +1810,7 @@ def test_every_kind_picks_from_a_pool_that_suits_it(_h):
     """A gauge offered uptime drew an empty ring, and a grid offered cpu.cores printed a
     list. Each slot now draws from a pool, and every kind has to name one."""
     ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-          / "app.js").read_text()
+          / "app.js").read_text(encoding="utf-8")
     shape = ui[ui.index("const SHAPE = {"):ui.index("async function api(")]
     pools = ui[ui.index("const POOLS = {"):]
     pools = pools[:pools.index("}")]
@@ -1886,7 +1888,7 @@ def test_setup_waves_through_a_server_already_paired(_h):
     """Setup is offered after a few failed polls, not only when unpaired, so it is easy to
     reach with nothing wrong. Asking to pair again then failed for a server the badge was
     already paired with, because the host was not in pairing mode."""
-    source = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text(encoding="utf-8")
     assert "_already_paired" in source, "no already-paired path in setup"
     # Reached before anything is asked of the host.
     ask = source[source.index("def _ask_to_join"):]
@@ -1907,7 +1909,7 @@ def test_the_badge_scans_for_longer_than_the_host_waits(_h):
     """
     from statsbadge import beacon
 
-    source = (pathlib.Path(install.app_source_dir()) / "net.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "net.py").read_text(encoding="utf-8")
     assert f"BEACON_PORT = {beacon.PORT}" in source, "the badge listens on another port"
     assert f"BEACON_EVERY_MS = {int(beacon.INTERVAL * 1000)}" in source, (
         "the badge assumes a different interval")
@@ -1922,8 +1924,8 @@ def test_the_badge_scans_for_longer_than_the_host_waits(_h):
 
     # Every scan covers an interval. Setup's countdown does it by repeating a short one
     # until the six seconds are up, so its own scans are allowed to be brief.
-    menu = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text()
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    menu = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     for short in re.findall(r"discover\(timeout_ms=(\d+)\)", app):
         raise AssertionError(f"a {short}ms scan outside the countdown")
     assert "deadline" in menu, "the countdown is what makes setup's short scans add up"
@@ -1939,7 +1941,7 @@ def test_every_cache_that_holds_a_colour_is_dropped_on_a_theme_change(_h):
     """
     import ast
 
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     # Registered, or named here as holding no colour and why.
     exempt = {"_fonts", "_weights", "_CLEARS"}
     loose = []
@@ -1962,7 +1964,7 @@ def test_every_cache_that_holds_a_colour_is_dropped_on_a_theme_change(_h):
 
     # The waterfall's scroll buffer and worldmap's pens are state, not one container.
     assert "@clears\ndef waterfall_reset" in source
-    world = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    world = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text(encoding="utf-8")
     assert "@draw.clears\ndef forget" in world, "the map keeps the old theme's pens"
 
 
@@ -1976,7 +1978,7 @@ def test_the_theme_the_badge_boots_with_is_the_host_s_dark(_h):
     """
     import ast
 
-    source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text(encoding="utf-8")
     call = None
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Theme":
@@ -1999,7 +2001,7 @@ def test_the_installer_and_the_app_name_the_same_extension_directory(_h):
     Disagreeing is an extension that installs and then draws nothing, with the page kind
     it registers missing and no error anywhere.
     """
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     assert f'EXT_DIR = "{install.EXT_DIR}"' in app, install.EXT_DIR
     # `pages` would be a directory shadowing the app's pages.py on sys.path.
     assert install.EXT_DIR != "pages"
@@ -2014,15 +2016,15 @@ def test_one_writer_owns_the_badge_state_file(_h):
     as the pairing: two writers each had to merge, and either could have replaced.
     """
     app_dir = pathlib.Path(install.app_source_dir())
-    net_source = (app_dir / "net.py").read_text()
+    net_source = (app_dir / "net.py").read_text(encoding="utf-8")
     assert f'STATE_FILE = "{install.STATE_FILE}"' in net_source, (
         f"the app does not write {install.STATE_FILE}")
 
     # The installer merges, so a page index and a pairing with another host both survive.
     assert "data = json.load(open(path))" in (
-        pathlib.Path("src/statsbadge/install.py").read_text())
+        pathlib.Path("src/statsbadge/install.py").read_text(encoding="utf-8"))
 
-    app = (app_dir / "__init__.py").read_text()
+    app = (app_dir / "__init__.py").read_text(encoding="utf-8")
     assert "State." not in app, "the app is writing state behind Config's back"
     for owned in ("self.config.page = self.page_index", "self.config.save()"):
         assert owned in app, owned
@@ -2032,7 +2034,7 @@ def test_one_writer_owns_the_badge_state_file(_h):
 def test_a_row_of_text_and_a_plot_measures_its_columns(_h):
     """A fixed column either leaves a gap after the names or runs the readings into the
     plots, and which of the two it does depends on the fields the page carries."""
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     for widget in ("def bars", "def sparklines", "def graph"):
         body = source[source.index(widget):]
         body = body[:body.index("\ndef ", 1)]
@@ -2040,7 +2042,7 @@ def test_a_row_of_text_and_a_plot_measures_its_columns(_h):
 
     # The gauge and its column sit in the band on one gap, so no part of the pair can be
     # placed on a number it picked.
-    look_source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text()
+    look_source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text(encoding="utf-8")
     for name in ("DIAL_C = (DIAL_GAP", "READOUT_X = DIAL_C[0]",
                  "READOUT_W = W - READOUT_X - DIAL_GAP"):
         assert name in look_source, f"{name} is not derived from the dial's gap"
@@ -2054,8 +2056,8 @@ def test_a_split_page_takes_the_layout_it_is_given(_h):
     app = pathlib.Path(install.app_source_dir())
 
     # Four rings have to fit the same radius a single gauge draws in.
-    look_source = (app / "look.py").read_text()
-    draw_source = (app / "draw.py").read_text()
+    look_source = (app / "look.py").read_text(encoding="utf-8")
+    draw_source = (app / "draw.py").read_text(encoding="utf-8")
     scope = {}
     for line in look_source.splitlines():
         if line.startswith(("DIAL_OUTER", "DIAL_GAP", "READOUT_H", "READOUT_NOTE_H")):
@@ -2068,7 +2070,7 @@ def test_a_split_page_takes_the_layout_it_is_given(_h):
     # The clock takes both from the app, restating neither, and puts its column
     # where every other split page puts it.
     clock = (pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
-             / "clockface.py").read_text()
+             / "clockface.py").read_text(encoding="utf-8")
     assert "CENTRE = look.DIAL_C" in clock, "the clock face has a centre of its own"
     assert "RADIUS = look.DIAL_OUTER" in clock, "the clock face has a radius of its own"
     assert "look.READOUT_X" in clock and "draw.column_lines" in clock, (
@@ -2090,8 +2092,8 @@ def test_a_gauge_can_sweep_to_its_reading(_h):
         "off by default")
 
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="animate"' in (web / "index.html").read_text(), "no control in the UI"
-    assert 'bindCheck("animate", "animate")' in (web / "app.js").read_text(), \
+    assert 'id="animate"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
+    assert 'bindCheck("animate", "animate")' in (web / "app.js").read_text(encoding="utf-8"), \
         "the control is not bound"
 
     sys.path.insert(0, install.app_source_dir())
@@ -2159,7 +2161,7 @@ def test_a_gauge_can_sweep_to_its_reading(_h):
         pages.sweep_reset()
         pages.__dict__.pop("tween", None)
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     assert "pages_module.sweep_reset()" in app[app.index("def turn"):], (
         "a page turn keeps the last page's needle positions")
     assert "pages_module.moving" in app, "nothing asks for a frame while a gauge is moving"
@@ -2183,12 +2185,12 @@ def test_a_page_can_slide_on_like_a_card(_h):
     assert layout.validate({"slide": False, "pages": layout.DEFAULT_PAGES})["slide"] == "off"
 
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="slide"' in (web / "index.html").read_text(), "no control in the UI"
-    assert "config.slide" in (web / "app.js").read_text(), "the control is not bound"
+    assert 'id="slide"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
+    assert "config.slide" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
     for style in layout.SLIDE_STYLES:
-        assert f'value="{style}"' in (web / "index.html").read_text(), style
+        assert f'value="{style}"' in (web / "index.html").read_text(encoding="utf-8"), style
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     sliding = app[app.index("def render_sliding"):]
     sliding = sliding[:sliding.index("\n    def ", 1)]
     # Both cards are a rect out of an image, which makes the direction free: a window
@@ -2250,10 +2252,10 @@ def test_smooth_graphs_are_a_setting_that_reaches_the_badge(_h):
     assert layout.validate({"smooth": "yes", "pages": layout.DEFAULT_PAGES})["smooth"] is True
 
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="smooth"' in (web / "index.html").read_text(), "no control in the UI"
-    assert "config.smooth" in (web / "app.js").read_text(), "the control is not bound"
+    assert 'id="smooth"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
+    assert "config.smooth" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
     # The badge applies it where it applies the rest of the layout.
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.SMOOTH" in applied[:applied.index("\n    def ", 1)]
 
@@ -2409,7 +2411,7 @@ def test_a_palette_can_carry_a_second_accent(h):
 
     # Where it shows: the chrome takes it, so the first accent is left for what a reading is
     # drawn in. A palette with none has the two the same colour, and it holds.
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     header = source[source.index("def furniture("):]
     header = header[:header.index("\ndef ", 1)]
     assert "screen.pen = theme.accent_b" in header, "the header rule is not the second accent"
@@ -2418,8 +2420,8 @@ def test_a_palette_can_carry_a_second_accent(h):
     assert "theme.accent_b if i == index" in pips, "the current pip is not the second accent"
 
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="accentb"' in (web / "index.html").read_text(), "no control in the UI"
-    assert "config.accent_b" in (web / "app.js").read_text(), "the control is not bound"
+    assert 'id="accentb"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
+    assert "config.accent_b" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
     status, shown = h.raw("GET", "/api/theme?theme=tinted-dark&second=triadic")
     assert status == 200 and shown["palette"]["accent_b"] != shown["palette"]["accent"]
     status, _bad = h.raw("GET", "/api/theme?theme=tinted-dark&second=nonesuch")
@@ -2447,7 +2449,7 @@ def test_the_single_hue_themes_are_the_bold_variant_now(_h):
     # A stored name keeps drawing: resolved once when the file is read, so nothing
     # downstream has to know it ever existed.
     path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-alias-"), "layout.json")
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         json.dump({"rev": 3, "theme": "amber", "pages": layout.DEFAULT_PAGES,
                    "badges": {"badgeone": {"rev": 4, "theme": "cyan",
                                            "pages": layout.DEFAULT_PAGES}}}, handle)
@@ -2515,7 +2517,7 @@ def test_a_badge_s_own_layout_falls_back_to_the_default(_h):
     drew the boot colours whatever was chosen.
     """
     path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-blocks-"), "layout.json")
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         json.dump({"rev": 4, "theme": "sakura", "brightness": 0.8,
                    "badges": {"partial": {"brightness": 0.5},
                               "whole": {"theme": "mono", "tint": layout.DEFAULT_CONFIG["tint"]}}},
@@ -2564,7 +2566,7 @@ def test_a_re_tinted_theme_is_a_different_theme_to_a_cache(_h):
     app = pathlib.Path(install.app_source_dir())
     clock = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge/clockface.py")
     for source in [app / "draw.py", app / "worldmap.py", app / "__init__.py", clock]:
-        body = source.read_text()
+        body = source.read_text(encoding="utf-8")
         assert "theme.name" not in body, f"{source.name} still keys a cache on the name"
 
 
@@ -2584,7 +2586,7 @@ def test_the_case_lights_follow_the_backlight(_h):
     assert not hasattr(look.THEMES[look.DEFAULT], "case")
     assert look.from_palette("d", {**_palette_of("dark"), "case": 0.9}).__dict__.get("case") is None
 
-    source = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     bodies = {node.name: node for node in ast.walk(tree)
               if isinstance(node, ast.FunctionDef)}
@@ -2614,7 +2616,7 @@ def test_the_themes_are_a_data_file(_h):
 
     from statsbadge import derive, themes
 
-    raw = tomllib.loads(resources.files("statsbadge").joinpath("themes.toml").read_text())
+    raw = tomllib.loads(resources.files("statsbadge").joinpath("themes.toml").read_text(encoding="utf-8"))
     raw.pop("aliases")
     assert set(raw) == set(themes.THEMES) and len(raw) == 22, len(raw)
 
@@ -2753,7 +2755,7 @@ def test_the_preview_reads_a_number_as_the_badge_does(_h):
     sys.path.insert(0, install.app_source_dir())
     import pages as pages_module
 
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
 
     def table(name):
         body = script.split(f"const {name} = {{")[1].split("}")[0]
@@ -2801,17 +2803,17 @@ def test_the_preview_draws_in_the_badge_s_own_faces(_h):
     web = pathlib.Path("src/statsbadge/web")
     for name in ("lexend-var.ttf", "icons.woff2"):
         assert (web / name).is_file(), f"{name} is not shipped with the UI"
-    sheet = (web / "app.css").read_text()
+    sheet = (web / "app.css").read_text(encoding="utf-8")
     assert "@font-face" in sheet and "lexend-var.ttf" in sheet and "icons.woff2" in sheet
 
-    corpus = pathlib.Path("ci/badge-icons.txt").read_text()
+    corpus = pathlib.Path("ci/badge-icons.txt").read_text(encoding="utf-8")
     rows = [m.groups() for m in
             (re.match(r"^(\w+)\s+([0-9a-f]{4})\s+(\S)\s*$", line)
              for line in corpus.splitlines()) if m]
     assert len(rows) == 18, len(rows)
 
     # The JS addresses a symbol by the same letter badge-side code does.
-    script = (web / "app.js").read_text()
+    script = (web / "app.js").read_text(encoding="utf-8")
     shown = dict(re.findall(r"(\w): 0x([0-9a-f]{4})", script.split("const ICONS = {")[1]
                             .split("}")[0]))
     assert shown == {letter: point for _name, point, letter in rows}, shown
@@ -2842,8 +2844,8 @@ def test_the_dark_theme_s_colours_are_not_copied_by_hand(h):
 
     # The splash mark is the badge's, so the tab icon is too. Two copies of it, with
     # icon.svg's comment asking for a test rather than a build step.
-    marks = [pathlib.Path("src/statsbadge/web/icon.svg").read_text(),
-             pathlib.Path("src/statsbadge/web/index.html").read_text()]
+    marks = [pathlib.Path("src/statsbadge/web/icon.svg").read_text(encoding="utf-8"),
+             pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")]
     for role in ("bg", "grid", "accent", "ink"):
         for mark in marks:
             assert hexed(dark[role]) in mark.lower(), (role, hexed(dark[role]))
@@ -2870,7 +2872,7 @@ def test_the_themes_are_offered_light_and_dark(h):
 
     _status, caps = h.raw("GET", "/api/capabilities")
     assert {record["name"] for record in caps["themes"]} == set(layout.THEMES)
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
     assert "optgroup" in script, "the picker is still one flat list"
     assert "record.label" in script
     assert "titleCase(record.name)" not in script, "the UI still titles a theme itself"
@@ -2955,7 +2957,7 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     assert set(caps["accents"]) == set(derive.ACCENT_FAMILIES)
     assert caps["accents"]["saturated"] == [list(a) for a in derive.accents("saturated")]
     web = pathlib.Path("src/statsbadge/web")
-    page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
+    page, script = (web / "index.html").read_text(encoding="utf-8"), (web / "app.js").read_text(encoding="utf-8")
     assert "data-tint" in page and 'id="screens"' in page, "no picker or preview in the UI"
     # Which themes take an accent is the host's answer, and the UI holds no list.
     assert "record.derived" in script and "config.tint" in script
@@ -3077,7 +3079,7 @@ def test_each_badge_has_its_own_layout(h):
     # A single-badge file is taken as the default, so every badge carries on showing
     # what it showed.
     path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-layout-"), "layout.json")
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         json.dump({"rev": 7, "theme": "mono", "pages": layout.DEFAULT_PAGES}, handle)
     old = layout.Config(path)
     assert old.configured() == []
@@ -3093,7 +3095,7 @@ def test_each_badge_has_its_own_layout(h):
 
     # The picker is in the header, where it says what everything below belongs to.
     web = pathlib.Path("src/statsbadge/web")
-    page, script = (web / "index.html").read_text(), (web / "app.js").read_text()
+    page, script = (web / "index.html").read_text(encoding="utf-8"), (web / "app.js").read_text(encoding="utf-8")
     header = page[page.index("<header>"):page.index("</header>")]
     for control in ("<label>Badge", 'id="pair"', 'id="save"'):
         assert control in header, control
@@ -3129,9 +3131,9 @@ def test_the_big_gauge_can_show_the_whole_ramp(_h):
                             "pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid"
 
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="gaugefill"' in (web / "index.html").read_text(), "no control in the UI"
-    assert "config.gauge_fill" in (web / "app.js").read_text(), "the control is not bound"
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    assert 'id="gaugefill"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
+    assert "config.gauge_fill" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.GAUGE_FILL" in applied[:applied.index("\n    def ", 1)]
 
@@ -3160,7 +3162,7 @@ def test_the_big_gauge_can_show_the_whole_ramp(_h):
     assert positions == sorted(positions), positions
     assert backwards.stops[0][1] == theme.ramp[-1][1], "it does not start at the hot end"
     assert backwards.stops[-1][1] == theme.ramp[0][1]
-    pages_source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text()
+    pages_source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text(encoding="utf-8")
     assert "backwards=field in GOOD_HIGH" in pages_source, (
         "nothing tells the gradient which way the field is read"
     )
@@ -3231,7 +3233,7 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
         collector.extensions.remove(source)
 
     # The badge keeps the rescaled families to itself, or 11.1G would print as 11.1GMB.
-    src = pathlib.Path(install.app_source_dir(), "draw.py").read_text()
+    src = pathlib.Path(install.app_source_dir(), "draw.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     wanted = {"fmt", "_several", "_rate", "_size", "_duration", "short_unit", "use_units"}
     picked = [n for n in tree.body
@@ -3246,7 +3248,7 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
                      "rpm": "2200rpm", "kwh": "0.2kWh"}, shown
 
     # The app takes them where it takes the group names.
-    app = pathlib.Path(install.app_source_dir(), "__init__.py").read_text()
+    app = pathlib.Path(install.app_source_dir(), "__init__.py").read_text(encoding="utf-8")
     assert 'draw.use_units(self.setting("units"))' in app
 
 
@@ -3278,7 +3280,7 @@ def test_a_figure_carries_its_unit_or_is_handed_one(_h):
     assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
 
     # Nowhere else either: a page kind printing a figure has to place the unit somewhere.
-    source = pathlib.Path(install.app_source_dir(), "pages.py").read_text()
+    source = pathlib.Path(install.app_source_dir(), "pages.py").read_text(encoding="utf-8")
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.FunctionDef):
             continue
@@ -3298,7 +3300,7 @@ def test_a_hint_beside_a_secret_leaves_room_for_the_field(_h):
     """
     import re
 
-    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text()
+    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text(encoding="utf-8")
     block = sheet[sheet.index(".secrets {"):]
     block = block[:block.index("\n}")]
     assert "max-content" in block, "the first column no longer sizes to its content"
@@ -3307,7 +3309,7 @@ def test_a_hint_beside_a_secret_leaves_room_for_the_field(_h):
     assert "grid-column: 1 / -1" in spans.group(1), spans.group(1)
 
     # The block builds a label, a field and a hint per secret, so all three need a column.
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
     built = script[script.index("function secretsBlock"):]
     built = built[:built.index("\n}")]
     assert 'el("p"' in built, "the hint is no longer drawn here"
@@ -3321,12 +3323,12 @@ def test_the_theme_box_spans_the_panels_beside_it(_h):
     rows. The span is a count, so it has to match how many there are."""
     import re
 
-    page = pathlib.Path("src/statsbadge/web/index.html").read_text()
+    page = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
     settings = page.split('aria-label="Settings"')[1].split('<section id="badges">')[0]
     beside = len(re.findall(r"<section(?: class=\"[^\"]*\")?>", settings))
     assert beside == 6, beside
 
-    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text()
+    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text(encoding="utf-8")
     spanned = re.search(r'section\[aria-label="Theme"\] \{ grid-column: 1; grid-row: span (\d+)',
                         sheet)
     assert spanned, "the theme box no longer spans the panels"
@@ -3341,7 +3343,7 @@ def test_the_theme_box_spans_the_panels_beside_it(_h):
 def test_the_settings_are_grouped_by_what_they_do(_h):
     """One list of every control was a soup. A setting is grouped under the heading it sits
     under, so the panel can be read by what somebody came to change."""
-    page = pathlib.Path("src/statsbadge/web/index.html").read_text()
+    page = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
     sections = sections_of(page)
     wanted = {
         "Look &amp; Feel": ("theme", "accentb"),
@@ -3370,8 +3372,8 @@ def themes_bg(name):
 def test_the_ui_takes_its_colours_from_the_host(_h):
     """The UI asks for the palette of whatever theme is selected, so there is nowhere for
     a copy to live and drift from the badge's tables."""
-    web = pathlib.Path("src/statsbadge/web/app.js").read_text()
-    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text()
+    web = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text(encoding="utf-8")
     assert "THEME_COLOURS" not in web, "the UI still carries a palette table"
     assert "/api/theme?" in web, "the UI does not ask the host for a palette"
     # Four pages at 320x240, drawn from what the host sent.
@@ -3379,12 +3381,12 @@ def test_the_ui_takes_its_colours_from_the_host(_h):
     assert "--pv-" not in web + sheet, "the preview still keeps colours in the sheet"
     # The rule for a graph's second series is the badge's, resolved on the host and sent.
     assert "shown.series" in web, "the UI picks the second series itself"
-    assert '"series"' in pathlib.Path("src/statsbadge/server.py").read_text()
+    assert '"series"' in pathlib.Path("src/statsbadge/server.py").read_text(encoding="utf-8")
     # The UI's accent and ramp are generated from the dark theme, not typed in.
     assert "--ramp-0:" not in sheet, "the sheet still declares the ramp by hand"
     assert "--accent:" not in sheet, "the sheet still declares the accent by hand"
     assert "var(--ramp-0)" in sheet, "the sheet stopped using the generated tokens"
-    assert "/tokens.css" in pathlib.Path("src/statsbadge/web/index.html").read_text()
+    assert "/tokens.css" in pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
 
 
 @check
@@ -3404,7 +3406,7 @@ def test_a_full_battery_is_not_an_alarm(_h):
     assert pages.severity_of("cpu.pct", None) is None
 
     # It is only the colour: the sweep and the bar are the reading itself.
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     body = source[source.index("def gauge("):]
     body = body[:body.index("\ndef ", 1)]
     assert "theme.at(fraction if hot is None else hot)" in body
@@ -3443,7 +3445,7 @@ def test_the_badge_dims_to_suit_the_room(_h):
     assert layout.validate({"pages": layout.DEFAULT_PAGES})["auto_brightness"] is False
     assert layout.validate({"auto_brightness": True,
                             "pages": layout.DEFAULT_PAGES})["auto_brightness"] is True
-    assert 'id="autobright"' in pathlib.Path("src/statsbadge/web/index.html").read_text()
+    assert 'id="autobright"' in pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
 
 
 @check
@@ -3459,10 +3461,10 @@ def test_the_badge_pages_on_its_own_when_left_alone(_h):
     assert clamped["advance_every_s"] == 1, clamped
 
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="idle"' in (web / "index.html").read_text()
-    assert '"idle_advance_s"' in (web / "app.js").read_text()
+    assert 'id="idle"' in (web / "index.html").read_text(encoding="utf-8")
+    assert '"idle_advance_s"' in (web / "app.js").read_text(encoding="utf-8")
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     advance = app[app.index("    def advance_if_idle"):]
     advance = advance[:advance.index("\n    # --", 1)]
     # The turns it makes for itself leave the idle timer alone, or the first
@@ -3489,7 +3491,7 @@ def test_a_button_can_do_something_without_the_host(_h):
     actions = dict(layout.LOCAL_ACTIONS)
     assert set(actions) == {"badge.prev", "badge.next", "badge.brightness"}, actions
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     press = app[app.index("    def press(self"):]
     press = press[:press.index("\n    def ", 1)]
     assert "LOCAL_PREFIX" in press and "send_command" in press, press
@@ -3507,7 +3509,7 @@ def test_a_button_can_do_something_without_the_host(_h):
 def test_a_press_waits_for_the_poll_rather_than_losing_to_it(_h):
     """One request is in flight at a time and the badge polls every interval, so a press
     that had to find the connection idle mostly found it busy and did nothing."""
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     send = app[app.index("    def send_command(self"):]
     send = send[:send.index("\n    def ", 1)]
     # Held, and served once the connection frees: a press outlives a request in flight.
@@ -3558,7 +3560,7 @@ def test_a_smoothed_graph_still_reads_as_the_data(_h):
 
     # The weights are worked out once: evaluating the polynomial per point cost 265us a
     # point on the badge, which is 50ms for one series.
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     body = source[source.index("def curve("):]
     body = body[:body.index("\ndef ", 1)]
     assert "_basis(steps)" in body, "the weights are not taken from the table"
@@ -3667,8 +3669,8 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
     assert layout.validate({"plot_animation": True,
                             "pages": layout.DEFAULT_PAGES})["plot_animation"] is True
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="plotanim"' in (web / "index.html").read_text(), "no control in the UI"
-    assert 'bindCheck("plotanim", "plot_animation")' in (web / "app.js").read_text(), \
+    assert 'id="plotanim"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
+    assert 'bindCheck("plotanim", "plot_animation")' in (web / "app.js").read_text(encoding="utf-8"), \
         "it is not bound"
 
     # A graph keeps room on its right for the samples still coming in. Laid across the
@@ -3709,7 +3711,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
     # whatever it is called, which shows as a jump and not as points settling.
     assert pages.SCROLLS == ("graph", "trend"), pages.SCROLLS
     assert "spark" in pages.PLOTS, "it still wants a series fetched for it"
-    sparks = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    sparks = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     body = sparks[sparks.index("def sparklines("):]
     body = body[:body.index("\n# --", 1)]
     assert "shift" not in body, "a sparkline is still being handed an offset"
@@ -3720,7 +3722,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(_h):
 
     # Every page that draws a series asks for one, not only the graph pages: a sparkline was
     # plotting the live value twice, a flat line whatever the machine was doing.
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     refs = app[app.index("    def _plot_refs(self"):]
     refs = refs[:refs.index("\n    def ", 1)]
     assert "pages_module.PLOTS" in refs, "only the graph pages ask for a series"
@@ -3770,7 +3772,7 @@ def test_the_notice_screen_offers_a_way_out(_h):
 
     Polls back off to fifteen seconds apart while a host is quiet, which is no use to
     somebody who has just woken the PC."""
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
 
     notice = app[app.index("    def render(self):"):]
     notice = notice[:notice.index("\n    def ", 1)]
@@ -3807,8 +3809,8 @@ def test_switching_host_forgets_the_old_one_the_same_way(_h):
     new host's name.
     """
     app_dir = pathlib.Path(install.app_source_dir())
-    app = (app_dir / "__init__.py").read_text()
-    menu = (app_dir / "setup.py").read_text()
+    app = (app_dir / "__init__.py").read_text(encoding="utf-8")
+    menu = (app_dir / "setup.py").read_text(encoding="utf-8")
 
     forget = app[app.index("    def forget_host(self):"):]
     forget = forget[:forget.index("\n    def ", 1)]
@@ -3833,7 +3835,7 @@ def test_a_press_that_closes_a_modal_screen_stops_there(_h):
     A modal screen returns the moment its button goes down, so the edge is still standing
     when the loop reaches `buttons()`. `badge.poll()` rolls it forward first.
     """
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
 
     loop = app[app.index("def main():"):]
     menu = loop[loop.index("pairing_ui().hosts_menu(app)"):]
@@ -3864,13 +3866,13 @@ def test_sparkline_rows_can_be_told_apart(_h):
                             "pages": layout.DEFAULT_PAGES})["rows"] == "zebra"
 
     web = pathlib.Path("src/statsbadge/web")
-    assert 'id="rows"' in (web / "index.html").read_text(), "no control in the UI"
-    assert "config.rows" in (web / "app.js").read_text(), "the control is not bound"
+    assert 'id="rows"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
+    assert "config.rows" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
     for style in layout.ROW_STYLES:
-        assert f'value="{style}"' in (web / "index.html").read_text(), style
+        assert f'value="{style}"' in (web / "index.html").read_text(encoding="utf-8"), style
 
     # The badge applies it where it applies the rest of the layout.
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text()
+    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.ROWS" in applied[:applied.index("\n    def ", 1)]
 
@@ -3888,7 +3890,7 @@ def test_sparkline_rows_can_be_told_apart(_h):
     assert pale.stripe.r < pale.bg.r and dark.stripe.r > dark.bg.r
 
     # The axis rule under a plot is drawn only where the rows are otherwise unseparated.
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     sparks = source[source.index("def sparklines("):]
     sparks = sparks[:sparks.index("\ndef ", 1)]
     assert "if ROWS == ROW_NONE:" in sparks, "the axis is drawn whatever separates the rows"
@@ -3982,7 +3984,7 @@ def test_the_clock_only_syncs_from_a_fresh_reading(_h):
     stale reading treated as authority drags the hands back to it. Measured on the badge: with
     the reading reconsidered every frame the clock jumped back 30s at 31s, and again after."""
     badge = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
-    source = (badge / "clockface.py").read_text()
+    source = (badge / "clockface.py").read_text(encoding="utf-8")
 
     resync = source[source.index("def _resync("):]
     resync = resync[:resync.index("\n\n\n") if "\n\n\n" in resync else len(resync)]
@@ -4003,7 +4005,7 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
     """The face list is host side and the renderers are badge side, so a face added to one
     and not the other is a page that draws the default and says nothing."""
     badge = (pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge"))
-    source = (badge / "clockface.py").read_text()
+    source = (badge / "clockface.py").read_text(encoding="utf-8")
     try:
         from statsbadge_clock import Clock
     except ImportError:
@@ -4023,7 +4025,7 @@ def test_every_clock_face_the_ui_offers_can_be_drawn(_h):
     assert any(path.endswith("lcd.af") for path in Clock.badge_assets), Clock.badge_assets
     assert (badge / "lcd.af").exists(), "the LCD face's font is not built"
     # Shipped, so its licence ships with it.
-    licence = pathlib.Path("licences/OFL-DSEG.txt").read_text()
+    licence = pathlib.Path("licences/OFL-DSEG.txt").read_text(encoding="utf-8")
     assert "keshikan" in licence and "SIL Open Font License" in licence
 
     # The unlit segments go down before the lit ones, or they cover them.
@@ -4045,7 +4047,7 @@ def test_the_version_is_written_down_once(_h):
     prefix a workflow fires on, and the prefix the build strips to get a version."""
     import statsbadge
 
-    source = pathlib.Path("src/statsbadge/__init__.py").read_text()
+    source = pathlib.Path("src/statsbadge/__init__.py").read_text(encoding="utf-8")
     # The assignment, since the word itself appears in the docstring above.
     assert not re.search(r"^__version__\s*=", source, re.M), "a second copy of the version"
     assert statsbadge.version(), "nothing can say what is installed"
@@ -4074,10 +4076,10 @@ def test_the_version_is_written_down_once(_h):
         prefix = plugin["tool"]["uv-dynamic-versioning"]["pattern-prefix"]
         assert prefix == f"{short}-", (name, prefix)
         # The prefix the workflow fires on is the prefix the build strips.
-        workflow = (workflows / f"publish-{short}.yml").read_text()
+        workflow = (workflows / f"publish-{short}.yml").read_text(encoding="utf-8")
         assert f"TAG_PREFIX: {prefix}v" in workflow, (short, prefix)
         for module in (directory / "src").rglob("__init__.py"):
-            assert not re.search(r"^__version__\s*=", module.read_text(), re.M), module
+            assert not re.search(r"^__version__\s*=", module.read_text(encoding="utf-8"), re.M), module
 
 
 @check
@@ -4138,7 +4140,7 @@ def test_an_api_key_is_masked_until_it_is_asked_for(_h):
     and the first few characters are enough for somebody checking to recognise.
     """
     ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-          / "app.js").read_text()
+          / "app.js").read_text(encoding="utf-8")
     assert "function masked(" in ui and "Edit secrets" in ui
     # A secret does not go in the ordinary run of rows, or it would be on screen anyway
     assert "if (setting.secret) continue" in ui, "a secret is still drawn with the rest"
@@ -4175,7 +4177,7 @@ def test_a_number_setting_is_held_to_its_bounds(_h):
     assert stored({"every": 120, "loose": None}) == {"every": 120.0, "loose": None}
 
     # The UI draws one as a number, with the bounds on the field.
-    ui = (pathlib.Path("src/statsbadge/web") / "app.js").read_text()
+    ui = (pathlib.Path("src/statsbadge/web") / "app.js").read_text(encoding="utf-8")
     assert 'setting.type === "number"' in ui, "a number setting is still a text box"
     assert "setting.unit" in ui, "nowhere to put what it is counted in"
 
@@ -4263,7 +4265,7 @@ def test_a_hidden_row_is_actually_hidden(_h):
     for every theme - where only a derived palette works one out.
     """
     web = pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-    css, markup = (web / "app.css").read_text(), (web / "index.html").read_text()
+    css, markup = (web / "app.css").read_text(encoding="utf-8"), (web / "index.html").read_text(encoding="utf-8")
 
     class Hidden(html.parser.HTMLParser):
         """Every element the page starts out hiding, and how a rule could name it."""
@@ -4371,7 +4373,7 @@ def test_a_message_shortens_the_way_the_firmware_does(_h):
     line, in Python, on every draw. Measured on a Tufty, that was the page at 34.9ms
     settled against 24.8 for the same page drawn by the firmware.
     """
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
     body = source[source.index("def flow("):source.index("def picture(")]
     assert "overflow=ELLIPSES" in body, "the page is not asking for the truncation"
     assert "screen.measure_text(" not in body, "still measuring text to lay it out"
@@ -4439,7 +4441,7 @@ def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs(_h):
         pyproject = directory / "pyproject.toml"
         if not pyproject.is_file():
             continue
-        source = "\n".join(path.read_text()
+        source = "\n".join(path.read_text(encoding="utf-8")
                            for path in sorted(directory.rglob("src/**/__init__.py")))
         if not any(mark in source for mark in marks):
             continue
@@ -4457,7 +4459,7 @@ def test_every_package_here_can_be_published(_h):
     filename, so an extension with no workflow cannot be published at all, and every
     release fires every workflow, so each has to test its tag prefix or they all try."""
     workflows = pathlib.Path(".github/workflows")
-    main = (workflows / "publish.yml").read_text()
+    main = (workflows / "publish.yml").read_text(encoding="utf-8")
     # The top-level package takes the plain tags, and lets an extension's release alone.
     assert "startsWith(github.event.release.tag_name, 'v')" in main
 
@@ -4473,7 +4475,7 @@ def test_every_package_here_can_be_published(_h):
 
         workflow = workflows / f"publish-{short}.yml"
         assert workflow.is_file(), f"{name} has no publish workflow"
-        text = workflow.read_text()
+        text = workflow.read_text(encoding="utf-8")
         assert f"PACKAGE: {name}" in text, workflow
         assert f"DIRECTORY: extensions/{name}" in text, workflow
         # The prefix appears twice in each workflow: the guard that gates the run, and
@@ -4507,9 +4509,9 @@ def test_a_frame_is_walked_past_its_own_scalars(h):
     assert loose == set(collect.FRAME_SCALARS), loose
 
     source = pathlib.Path(install.__file__).parent / "__main__.py"
-    assert "collect.FRAME_SCALARS" in source.read_text(), "probe keeps a second list again"
+    assert "collect.FRAME_SCALARS" in source.read_text(encoding="utf-8"), "probe keeps a second list again"
 
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
     named = re.search(r"const FRAME_SCALARS = \[(.*?)\]", script).group(1)
     assert [word.strip().strip('"') for word in named.split(",")] == list(collect.FRAME_SCALARS)
 
@@ -4551,12 +4553,12 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
     for path in ["src/statsbadge/sources/macos.py", "src/statsbadge/sources/linux.py",
                  "src/statsbadge/sources/windows.py",
                  *sorted(str(p) for p in pathlib.Path("extensions").glob("*/src/*/__init__.py"))]:
-        text = pathlib.Path(path).read_text()
+        text = pathlib.Path(path).read_text(encoding="utf-8")
         if "note_fault" not in text or "sudoers" in text and "note_ok" not in text:
             continue
         assert "note_ok" in text, f"{path} records faults and never clears one"
     # The UI puts the reason under the name, keeping both.
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
     assert 'source.last_fault ? "faulty" : null' in script, \
         "a recovered source still shows as broken"
     assert 'provides.join(", ")' in script.split("function renderSources")[1][:600]
@@ -4756,7 +4758,7 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
             sys.modules["serial"] = was
 
     # mpremote has gone from the runtime, and pyserial is a plain dependency.
-    assert "mpremote" not in pathlib.Path("src/statsbadge/install.py").read_text()
+    assert "mpremote" not in pathlib.Path("src/statsbadge/install.py").read_text(encoding="utf-8")
     with open("pyproject.toml", "rb") as handle:
         project = tomllib.load(handle)["project"]
     assert any(name.startswith("pyserial") for name in project["dependencies"]), project
@@ -4778,7 +4780,7 @@ def test_a_published_readme_links_to_somewhere_that_exists(_h):
         with open(pyproject, "rb") as handle:
             project = tomllib.load(handle)["project"]
         readme = pyproject.parent / project["readme"]
-        text = readme.read_text()
+        text = readme.read_text(encoding="utf-8")
         repository = project["urls"]["Repository"].removesuffix("/")
         slug = repository.removeprefix("https://github.com/")
         raw = f"https://raw.githubusercontent.com/{slug}/main/"
@@ -4848,7 +4850,7 @@ def test_the_list_is_what_every_build_is_made_from(_h):
         assert tooling.read_wanted(work) == []
         tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-iss"])
         # The file explains itself, and the comments stay comments.
-        assert pathlib.Path(work, tooling.WANTED).read_text().startswith("#")
+        assert pathlib.Path(work, tooling.WANTED).read_text(encoding="utf-8").startswith("#")
         # What is asked for against what is here, which is what `ext sync` repairs.
         assert tooling.adrift(work, ["clock"]) == ["statsbadge-iss"]
         assert tooling.adrift(work, ["clock", "iss"]) == []
@@ -4989,9 +4991,11 @@ def test_the_mark_is_the_same_one_everywhere(h):
     """The badge draws it from splash.py's numbers, the config UI links a file and the site
     inlines a copy so it needs no request. Three expressions of one mark, so each is checked
     against the geometry every time."""
-    icon = pathlib.Path("src/statsbadge/web/icon.svg").read_text()
-    page = pathlib.Path("src/statsbadge/web/index.html").read_text()
-    site = pathlib.Path("index.html").read_text()
+    # As bytes: the server hands the file over unchanged, and a Windows checkout with CRLF
+    # line endings would not match text read back through universal newlines.
+    icon = pathlib.Path("src/statsbadge/web/icon.svg").read_bytes().decode("utf-8")
+    page = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
+    site = pathlib.Path("index.html").read_text(encoding="utf-8")
 
     # The UI asks for the file, and the server hands it over with the right type: a favicon
     # served as octet-stream is a favicon the browser ignores. Safari reads no SVG favicon at
@@ -5020,7 +5024,7 @@ def test_the_mark_is_the_same_one_everywhere(h):
 
     # The proportions come from splash.py, which the badge draws before it has a
     # font. The bars carry it: three widths, two gaps and the tallest of them.
-    splash = (pathlib.Path(install.app_source_dir()) / "splash.py").read_text()
+    splash = (pathlib.Path(install.app_source_dir()) / "splash.py").read_text(encoding="utf-8")
     numbers = {}
     for line in splash.splitlines():
         if line.startswith(("BAR_W", "BAR_GAP", "BAR_HEIGHTS", "OUTER", "INNER")):
@@ -5099,8 +5103,8 @@ def test_the_badge_can_report_on_itself_with_no_host(_h):
 
     # The kind picker is written out in the page and not built from the API, so it is the
     # one place a new kind can reach the badge and be forgotten in the browser.
-    markup = pathlib.Path("src/statsbadge/web/index.html").read_text()
-    app = pathlib.Path("src/statsbadge/web/app.js").read_text()
+    markup = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
+    app = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
     offered = set(re.findall(r'<option value="([a-z]+)">', markup))
     for kind in layout.KINDS:
         assert kind in offered, f"{kind} is not in the kind picker"
@@ -5108,7 +5112,7 @@ def test_the_badge_can_report_on_itself_with_no_host(_h):
 
     # The badge draws it: the kind is in the app's table, reads no fields, and stays
     # animated, being numbers to read.
-    source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text(encoding="utf-8")
     table = source[source.index("_KINDS = {"):]
     table = table[:table.index("}")]
     assert '"badge": _badge_page' in table, table
@@ -5134,7 +5138,7 @@ def test_the_world_map_is_parsed_once_for_every_page_that_wants_it(_h):
 
     # The pens are the part a theme change invalidates, and the expensive half of a
     # second page: 288 ramp lookups and 288 composites.
-    source = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text(encoding="utf-8")
     body = source[source.index("def pens("):]
     body = body[:body.index("\ndef ", 1)]
     # By `theme.key` and not `theme.name`: a derived theme keeps its name when it is built
@@ -5145,7 +5149,7 @@ def test_the_world_map_is_parsed_once_for_every_page_that_wants_it(_h):
     # Every page's band comes out of one View, leaving the projection stated once.
     for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
         page = (pathlib.Path("extensions") / extension / "src"
-                / extension.replace("-", "_") / "badge" / f"{module}.py").read_text()
+                / extension.replace("-", "_") / "badge" / f"{module}.py").read_text(encoding="utf-8")
         assert "worldmap.View(" in page, module
         assert "world.geo.json" not in page, f"{module} reads the map itself"
 
@@ -5180,7 +5184,7 @@ def test_the_night_side_is_the_one_the_sun_is_not_on(_h):
     assert path[1].x == -180.0 and path[-2].x == 180.0, (path[1], path[-2])
 
     # Three copies across, or a view wide enough to see a date line loses the wash at one edge.
-    source = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    source = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text(encoding="utf-8")
     body = source[source.index("    def night("):]
     body = body[:body.index("\n    def ", 1) if "\n    def " in body[1:] else len(body)]
     assert "nearest - 360.0, nearest, nearest + 360.0" in body, body[-400:]
@@ -5202,7 +5206,7 @@ def test_a_map_page_stays_inside_its_own_band(_h):
     )
     for extension, module, drawers in pages_and_bands:
         source = (pathlib.Path("extensions") / extension / "src"
-                  / extension.replace("-", "_") / "badge" / f"{module}.py").read_text()
+                  / extension.replace("-", "_") / "badge" / f"{module}.py").read_text(encoding="utf-8")
         scope = {"look": look}
         for line in source.splitlines():
             if line.startswith(("BAND_H", "MAP_TOP", "MAP_H", "BAND_TOP")):
@@ -5222,7 +5226,7 @@ def test_a_map_page_stays_inside_its_own_band(_h):
             assert "screen.clip = was" in body, (module, name)
 
     # The map itself and the night wash are the app's, and clip themselves for the same reason.
-    shared = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text()
+    shared = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text(encoding="utf-8")
     for name in ("    def land(", "    def night("):
         body = shared[shared.index(name):]
         body = body[:body.index("\n    def ", 1) if "\n    def " in body[1:] else len(body)]
@@ -5242,11 +5246,11 @@ def test_the_station_rides_the_track_it_is_already_drawing(_h):
     import math
 
     ext = pathlib.Path("extensions/statsbadge-iss/src/statsbadge_iss")
-    source = (ext / "__init__.py").read_text()
+    source = (ext / "__init__.py").read_text(encoding="utf-8")
     assert "POSITION_EVERY = 300.0" in source, "the feed is still asked for every few seconds"
 
     # The two that place the marker, run without the firmware behind them.
-    page = (ext / "badge" / "issmap.py").read_text()
+    page = (ext / "badge" / "issmap.py").read_text(encoding="utf-8")
     tree = ast.parse(page)
     wanted = {"eased", "flown_at"}
     picked = [node for node in tree.body
@@ -5293,7 +5297,7 @@ def test_the_iss_page_agrees_with_its_source(_h):
     would fail quietly: the sub-solar point arrives with the position, and a page reading a
     name that moved would draw a map with no night on it and say nothing."""
     source = (pathlib.Path("extensions/statsbadge-iss/src/statsbadge_iss/badge")
-              / "issmap.py").read_text()
+              / "issmap.py").read_text(encoding="utf-8")
     try:
         from statsbadge_iss import ISS
     except ImportError:
@@ -5329,7 +5333,7 @@ def test_a_quake_marker_is_a_marker_and_not_a_footprint(_h):
     import ast
 
     page = pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge"
-                        "/quakemap.py").read_text()
+                        "/quakemap.py").read_text(encoding="utf-8")
     assert "RING_SPAN" not in page, "the reticle is still measured in degrees"
 
     tree = ast.parse(page)
@@ -5365,7 +5369,7 @@ def test_the_quake_page_agrees_with_its_source(_h):
     """The events are host side and the drawing is badge side, so a name that moved on one
     is a page that draws blank and leaves the reader guessing."""
     source = (pathlib.Path("extensions/statsbadge-quakes/src/statsbadge_quakes/badge")
-              / "quakemap.py").read_text()
+              / "quakemap.py").read_text(encoding="utf-8")
     try:
         from statsbadge_quakes import Quakes, _event
     except ImportError:
@@ -5405,7 +5409,7 @@ def test_the_app_keeps_what_extensions_reach_into_it_for(_h):
     app_dir = pathlib.Path(install.app_source_dir())
     defined = {}
     for module in ("draw", "look", "worldmap", "pages"):
-        tree = ast.parse((app_dir / f"{module}.py").read_text())
+        tree = ast.parse((app_dir / f"{module}.py").read_text(encoding="utf-8"))
         names = set()
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
@@ -5418,7 +5422,7 @@ def test_the_app_keeps_what_extensions_reach_into_it_for(_h):
     for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
         path = (pathlib.Path("extensions") / extension / "src"
                 / extension.replace("-", "_") / "badge" / f"{module}.py")
-        for node in ast.walk(ast.parse(path.read_text())):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
                     and node.value.id in defined):
                 reached.add((node.value.id, node.attr))
@@ -5443,7 +5447,7 @@ def test_a_map_page_only_uses_names_the_badge_has(_h):
     for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
         path = (pathlib.Path("extensions") / extension / "src"
                 / extension.replace("-", "_") / "badge" / f"{module}.py")
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         fault = check_app.check_names(path, tree, injected)
         assert fault is None, fault
 
@@ -5554,10 +5558,11 @@ def test_a_rebuild_does_not_prune_away_what_it_is_installing(_h):
             os.makedirs(os.path.join(where, "madeup_ext"))
             os.makedirs(info)
             pathlib.Path(info, "METADATA").write_text(
-                "Metadata-Version: 2.1\nName: madeup-ext\nVersion: 1.0\n")
+                "Metadata-Version: 2.1\nName: madeup-ext\nVersion: 1.0\n", encoding="utf-8")
             pathlib.Path(info, "RECORD").write_text(
-                "madeup_ext/__init__.py,,\nmadeup_ext-1.0.dist-info/METADATA,,\n")
-            pathlib.Path(where, "madeup_ext", "__init__.py").write_text("")
+                "madeup_ext/__init__.py,,\nmadeup_ext-1.0.dist-info/METADATA,,\n",
+                encoding="utf-8")
+            pathlib.Path(where, "madeup_ext", "__init__.py").write_text("", encoding="utf-8")
 
         sys.path.append(live)
         try:
@@ -5721,7 +5726,7 @@ def test_wifi_details_are_kept_unless_replacing_them_was_asked_for(_h):
     said = []
     with tempfile.TemporaryDirectory() as volume:
         os.mkdir(os.path.join(volume, "system"))
-        with open(os.path.join(volume, "system", "secrets.py"), "w") as handle:
+        with open(os.path.join(volume, "system", "secrets.py"), "w", encoding="utf-8") as handle:
             handle.write('WIFI_SSID = "Already Here"\nWIFI_PASSWORD = "old"\n')
 
         kept = push._set_wifi({"password": "new"}, volume, "Other", said.append)
@@ -5742,7 +5747,7 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
                 'REGION = "eu"  # Options are us, cuba, eu, moldova, nz\n')
     with tempfile.TemporaryDirectory() as volume:
         os.mkdir(os.path.join(volume, "system"))
-        with open(os.path.join(volume, "system", "secrets.py"), "w") as handle:
+        with open(os.path.join(volume, "system", "secrets.py"), "w", encoding="utf-8") as handle:
             handle.write(template)
 
         # The file is the authority, and it lists what it takes beside the setting.
@@ -5759,7 +5764,7 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
         assert install.wifi_network_on(volume) is None
 
         install.write_secrets(volume, "Some Network", "pw", region="EU")
-        with open(os.path.join(volume, "system", "secrets.py")) as handle:
+        with open(os.path.join(volume, "system", "secrets.py"), encoding="utf-8") as handle:
             values = {}
             exec(compile(handle.read(), "secrets.py", "exec"), values)
         assert values["REGION"] == "eu", "a region has to reach the badge as it writes it"

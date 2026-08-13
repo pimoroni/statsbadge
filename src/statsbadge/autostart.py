@@ -168,7 +168,7 @@ class Desktop:
     def enable(self, argv, log=None):
         del log
         os.makedirs(self.base, exist_ok=True)
-        with open(self.where(), "w") as handle:
+        with open(self.where(), "w", encoding="utf-8") as handle:
             handle.write("[Desktop Entry]\n"
                          "Type=Application\n"
                          f"Name={NAME}\n"

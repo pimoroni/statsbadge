@@ -19,7 +19,7 @@ def load(config_dir):
     """This server's identity, minting and saving one if there is not one yet."""
     path = os.path.join(config_dir, "server.json")
     try:
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             data = json.load(handle)
         if data.get("id"):
             # The friendly name follows the hostname, which may have changed.
@@ -41,7 +41,7 @@ def _write(path, data):
     if directory:
         os.makedirs(directory, exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w") as handle:
+    with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)
     os.replace(tmp, path)
 

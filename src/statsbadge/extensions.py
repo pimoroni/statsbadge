@@ -110,7 +110,7 @@ def catalogue():
     """The published extensions, from catalogue.toml, in the order it names them."""
     import tomllib
     from importlib import resources
-    text = resources.files(__package__).joinpath("catalogue.toml").read_text()
+    text = resources.files(__package__).joinpath("catalogue.toml").read_text(encoding="utf-8")
     return [{"name": name, "title": entry.get("title") or name,
              "summary": entry.get("summary", ""),
              "page": bool(entry.get("page")), "needs": entry.get("needs")}
