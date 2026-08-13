@@ -218,8 +218,12 @@ def test_what_runs_at_login_is_a_real_path():
     argv = autostart.command()
     assert argv, "nothing to run"
     assert os.path.isabs(argv[0]), argv
-    with_flags = autostart.command(config_dir="/tmp/x", port=9000)
-    assert with_flags[-4:] == ["--config-dir", "/tmp/x", "--port", "9000"], with_flags
+    # A relative directory is made absolute. Login starts this from somewhere else
+    # entirely, and a path relative to where `autostart enable` was run is nowhere.
+    with_flags = autostart.command(config_dir=os.path.join("some", "where"), port=9000)
+    assert with_flags[-4] == "--config-dir", with_flags
+    assert os.path.isabs(with_flags[-3]), with_flags
+    assert with_flags[-2:] == ["--port", "9000"], with_flags
 
 
 # -- the log ----------------------------------------------------------------
