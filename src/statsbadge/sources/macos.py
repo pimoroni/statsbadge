@@ -5,12 +5,13 @@ Apple exposes very little without privileges. What is readable as a normal user:
 - GPU utilisation and memory, from IOAccelerator's PerformanceStatistics via ioreg.
 - Thermal pressure and any CPU speed limit, from pmset.
 
-Die temperatures, fan RPM and package power all live behind the SMC or
-powermetrics, which needs root. `MacPowermetrics` covers that and is opt-in, so the
-default install asks for no password and reports no temperature.
+Die temperatures, fan RPM and package power all live behind the SMC or powermetrics,
+which needs root. `MacPowermetrics` covers those, and is tried on every start: `sudo -n`
+prompts for nothing, so the cost of asking is a refusal.
 
-Asked for with `--powermetrics` and not permitted, it prints the sudoers rule to add and
-carries on without those fields: a flag that quietly does nothing is worse than no flag.
+Refused, it carries on without those fields and says nothing, since nobody asked for
+them. Asked for with `--powermetrics` it prints the sudoers rule to add instead: a flag
+that quietly does nothing is worse than no flag.
 """
 
 import getpass
@@ -145,7 +146,10 @@ class MacPowermetrics(Source):
 
     def __init__(self, config):
         super().__init__(config)
-        self._enabled = bool(config.get("powermetrics"))
+        # Three answers, not two: asked for out loud, left alone, or tried quietly.
+        wanted = config.get("powermetrics")
+        self._asked = wanted is True
+        self._enabled = wanted is not False
         self._proc = None
         self._thread = None
         self._latest = {}
@@ -156,12 +160,14 @@ class MacPowermetrics(Source):
         if not self._enabled:
             return
         if not self._permitted():
-            # The advice goes to the terminal the flag was typed at. The fault is one
-            # line, which is what the config UI and `probe` show.
-            print(sudoers_advice(), file=sys.stderr)
-            self.note_fault(RuntimeError(
-                "sudo will not run powermetrics without a password: add a rule to "
-                "/etc/sudoers.d/statsbadge"))
+            # Only where it was asked for. Tried by default, a refusal is the ordinary
+            # state of a Mac and not something to colour the Stats tab red over: the
+            # Help tab is where the rule to allow it is written out.
+            if self._asked:
+                print(sudoers_advice(), file=sys.stderr)
+                self.note_fault(RuntimeError(
+                    "sudo will not run powermetrics without a password: add a rule to "
+                    "/etc/sudoers.d/statsbadge"))
             self._enabled = False
             return
         self._proc = subprocess.Popen(
