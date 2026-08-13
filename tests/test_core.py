@@ -5874,18 +5874,47 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
 
 
 @check
+def test_uv_is_found_where_it_lives_and_not_only_on_the_path(_h):
+    """A tray started at login carries the PATH it was given then, and a uv tool
+    environment has no pip behind it: the Extensions tab offered nothing at all on a
+    machine that plainly had uv."""
+    was_which, was_home = shutil.which, os.environ.get("HOME")
+    with tempfile.TemporaryDirectory() as home:
+        beside = os.path.join(home, ".local", "bin")
+        os.makedirs(beside)
+        uv = os.path.join(beside, "uv.exe" if os.name == "nt" else "uv")
+        with open(uv, "w", encoding="utf-8") as handle:
+            handle.write("")
+        try:
+            shutil.which = lambda _name: None
+            os.environ["HOME"] = home
+            # USERPROFILE is what expanduser reads on Windows.
+            was_profile = os.environ.get("USERPROFILE")
+            os.environ["USERPROFILE"] = home
+            assert library._uv() == uv, library._uv()
+            assert library.tool()[0] == "uv"
+        finally:
+            shutil.which = was_which
+            for key, value in (("HOME", was_home), ("USERPROFILE", was_profile)):
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+
+@check
 def test_a_packaged_app_is_never_asked_to_stand_in_for_pip(_h):
     """Its sys.executable is the app. `-m pip` there starts a second copy of the app,
     icon and all, and answers nothing."""
-    was_executable, was_which = sys.executable, shutil.which
+    was_executable, was_uv = sys.executable, library._uv
     try:
         sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
                                       "Contents", "MacOS", "statsbadge")
-        shutil.which = lambda _name: None          # no uv either
+        library._uv = lambda: None                 # no uv anywhere either
         assert library.tool() is None
         assert library.installer() is None
     finally:
-        sys.executable, shutil.which = was_executable, was_which
+        sys.executable, library._uv = was_executable, was_uv
 
 
 @check
