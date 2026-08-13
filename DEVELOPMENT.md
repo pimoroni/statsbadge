@@ -237,19 +237,32 @@ filename that runs.
 
 Briefcase builds the `.dmg` and the `.msi`, from `[tool.briefcase]` in `pyproject.toml`.
 
-statsbadge goes in as a **wheel**, named in `requires`. Copied `sources` arrive with no
+statsbadge goes in as a **wheel**, named in `requires`. Copied `sources` arrive stripped of
 `.dist-info`, and both the extension mechanism and `version()` read installed metadata, so a
-bundle built that way finds no extensions and cannot say what it is. What
+bundle built that way lists zero extensions and reports its version as unknown. What
 `sources` points at is `packaging/statsbadge_tray/`, a shim whose one job is to call
 `tray_main()`. It is named apart from the package because the app directory comes before
 `app_packages` on `sys.path`, and a shim called `statsbadge` would shadow the real one.
 
-The three extensions bundled with it are in `requires` too, as paths. Adding a fourth on a
-packaged machine takes uv or pip, so the bundle ships with what most people want.
+The three extensions bundled with it are in `requires` too, as paths, and so are two things
+a bundle turns out to need:
 
-`sys.executable` in a bundle is the app's own binary. `bundled()` in `__init__.py` is what
-notices: running it with `-m pip` starts a second copy of the app, and a login entry has to
-name the app itself.
+**certifi**, because a bundle arrives with an empty trust store. `get_default_verify_paths()` answers
+None to both and every HTTPS request an extension makes cannot find an issuer, which reaches
+the screen as a source that says it cannot be reached. `trust_store()` points `SSL_CERT_FILE`
+at certifi where a machine offers it nothing, and leaves a stocked one alone. Telling the
+two apart takes both halves: Windows loads 409 roots from the system store while naming a
+file it lacks, Linux names a directory it searches on demand, and a bundle has each empty.
+
+**pip**, because installing an extension takes an installer, and `-m pip` needs an
+interpreter that a bundle leaves out: briefcase ships the Python library alone. So the app spawns
+*itself* under `--be-pip`, a verb that runs pip's entry point through `runpy` instead of
+starting a tray. In this process it would take over the root logger while a server is
+running; as a child it is a windowed program, where `uv.exe` is a console one that flashes
+a black box up mid-install. uv is still preferred wherever it is on the PATH.
+
+`sys.executable` in a bundle is the app binary, which is why any of that matters.
+`bundled()` in `__init__.py` is what notices, and a login entry names the app itself.
 
 ```bash
 uv run python tools/icon.py                         # the .icns and .ico, from the same mark
@@ -261,6 +274,10 @@ uv run --group packaging briefcase package macOS app --adhoc-sign --no-input
 
 The version in `[tool.briefcase]` stays `0.0.0` in the repository, since the tag is the
 version everywhere else and briefcase takes a static one. CI writes it in before packaging.
+
+CI runs the built app before packaging it - `--check`, `ext`, `--be-pip --version` - since
+all three faults above were invisible to every other job. `--check` reports the tray, the
+roots it can verify against and what it installs with.
 
 Ad-hoc signed, there being no Apple Developer account behind it, so the first launch needs
 Open from the context menu. Notarising it later takes an account, a Developer ID certificate

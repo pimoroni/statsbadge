@@ -627,7 +627,7 @@ def cmd_tray(args):
         stopped = backend.why_not()
         print(stopped or f"tray backend: {backend.name()}")
         # What an extension can verify a certificate against. A packaged app has no roots
-        # of its own, and this is the line that says whether it was given some.
+        # to verify against, and this line says whether it was given some.
         given = trust_store()
         paths = ssl.get_default_verify_paths()
         print("certificates: {} from {}".format(
@@ -720,8 +720,8 @@ def be_pip(argv):
     """Be `python -m pip`, for a bundle with no python to be it.
 
     Spawned as a child of itself rather than run in this process: pip takes over the root
-    logger, and a server is running here. runpy is what `-m` does, so this is pip's own
-    entry point and not its internals.
+    logger, and a server is running here. runpy is what `-m` does, so this is pip's entry
+    point and not its internals.
     """
     import runpy
     sys.argv = ["pip", *argv]
@@ -893,7 +893,7 @@ def trust_store():
     Both halves are needed to tell a bundle from a host that is perfectly well. Windows
     names no file and loads 409 roots from the system store. Linux names a directory and
     loads nothing, since a directory is searched per verification by subject hash. Only
-    the bundle has neither, and a machine with roots of its own must not be handed certifi
+    the bundle has neither, and a machine with roots must not be handed certifi
     in place of them.
     """
     import ssl
@@ -918,7 +918,7 @@ def trust_store():
 def tray_main(argv=None):
     """The gui-scripts entry point. The tray, unless another command was named.
 
-    A flag is the tray's; a word is a command of its own. That is what lets a packaged
+    A flag is the tray's; a word is a command. That is what lets a packaged
     app, whose only entry point is this, still be asked for `ext` or `status`. The pip
     verb is a flag and neither, being how the app spawns itself.
     """
