@@ -16,7 +16,7 @@ env:
 
 jobs:
   check:
-    name: Lint and test
+    name: Lint and start-up checks
     runs-on: ubuntu-latest
 
     steps:
@@ -41,9 +41,6 @@ jobs:
       - name: Lint
         run: uv run ruff check --config ci/ruff.toml src tools tests extensions
 
-      - name: Server, auth and framing tests
-        run: uv run python tests/test_core.py
-
       # Catches a source that cannot even be imported on a clean machine.
       - name: Probe this host
         run: uv run statsbadge probe
@@ -54,7 +51,7 @@ jobs:
         run: uv run statsbadge tray --check
 
   tray:
-    name: Tray and run at login
+    name: Tests, on every platform
     strategy:
       fail-fast: false
       matrix:
@@ -70,13 +67,22 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
 
-      - run: uv sync
+      - name: Install
+        run: |
+          uv sync --all-extras
+          uv pip install --no-deps ./extensions/statsbadge-clock
 
       - name: Report what the tray would need
         run: uv run statsbadge tray --check
 
       - name: Where a login entry would go
         run: uv run statsbadge autostart
+
+      # Here and not only on Linux: the extensions library is the part most likely to
+      # differ, between path separators, a .pyd that cannot be replaced while it is
+      # imported, and pip standing in where there is no uv.
+      - name: Server, auth, extensions and framing tests
+        run: uv run python tests/test_core.py
 
       - name: Tray, menu and autostart tests
         run: uv run python tests/test_tray.py

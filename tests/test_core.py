@@ -941,7 +941,9 @@ def test_unreadable_badge_store_is_not_treated_as_empty(_h):
         try:
             reopened = auth.Store(path)
             if reopened.unreadable is None:
-                return          # running as root, where the mode means nothing
+                # Root, or Windows, where a mode is only a read-only bit and the file is
+                # readable whatever it says.
+                return
             assert reopened.list_badges() == {}
             try:
                 reopened.save()
