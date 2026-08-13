@@ -84,7 +84,6 @@ code {
 }
 
 header {
-  display: grid;
   gap: 0 1.5rem;
   padding-block: 2rem 1rem;
 
@@ -131,16 +130,6 @@ header {
   small { font-size: 0.8rem; }
 }
 
-@media (width >= 40rem) {
-  header {
-    grid-template-columns: 1fr auto;
-
-    > h1 { grid-area: 1 / 1; }
-    > p { grid-column: 1; }
-    > nav { grid-area: 1 / 2; align-self: center; }
-  }
-}
-
 nav ul {
   display: flex;
   flex-wrap: wrap;
@@ -148,6 +137,8 @@ nav ul {
   margin: 0;
   padding: 0;
   list-style: none;
+  float: right;
+  margin-bottom: 1rem;
 }
 
 nav a {
@@ -285,10 +276,22 @@ dl {
 }
 
 @media (width >= 40rem) {
+  header {
+    grid-template-columns: 1fr auto;
+
+    > h1 { grid-area: 1 / 1; }
+    > p { grid-column: 1; }
+    > nav { grid-area: 1 / 2; align-self: center; }
+  }
+  nav ul {margin-bottom:0;}
+}
+
+@media (width >= 40rem) {
   dl {
     grid-template-columns: 7rem 1fr;
     dd { margin-bottom: 0.25rem; }
   }
+  header {display: grid;}
 }
 
 table {
