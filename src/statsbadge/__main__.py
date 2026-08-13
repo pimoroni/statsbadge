@@ -89,7 +89,7 @@ def source_config_from(args):
         os.path.join(config_dir(getattr(args, "config_dir", None)), "layout.json")
     ).snapshot().get("settings")
     return {
-        "powermetrics": getattr(args, "powermetrics", False),
+        "powermetrics": getattr(args, "powermetrics", None),
         "lhm_url": getattr(args, "lhm_url", None),
         "iface": getattr(args, "iface", None),
         "disk_path": getattr(args, "disk_path", None),
@@ -745,8 +745,13 @@ def main(argv=None):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--host", default="0.0.0.0")
     common.add_argument("--port", type=int, default=DEFAULT_PORT)
-    common.add_argument("--powermetrics", action="store_true",
-                        help="macOS: run powermetrics as root for power and temps")
+    # Tried by default on macOS and quiet when sudo refuses. Named here to say so out
+    # loud, or to keep it from being tried at all.
+    common.add_argument("--powermetrics", dest="powermetrics", action="store_true",
+                        default=None,
+                        help="macOS: report the sudoers rule if powermetrics is refused")
+    common.add_argument("--no-powermetrics", dest="powermetrics", action="store_false",
+                        help="macOS: leave powermetrics alone, temperatures and all")
     common.add_argument("--lhm-url", help="Windows: LibreHardwareMonitor data.json URL")
     common.add_argument("--iface", help="network interface to report (default: busiest)")
     common.add_argument("--disk-path",

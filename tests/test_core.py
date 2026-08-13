@@ -5874,6 +5874,29 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
 
 
 @check
+def test_powermetrics_is_tried_and_says_nothing_when_refused(_h):
+    """`sudo -n` prompts for nothing, so the cost of asking is a refusal. A Mac without
+    the rule is the ordinary case and not worth colouring the Stats tab red over, but a
+    flag typed on purpose deserves an answer."""
+    from statsbadge.sources import macos
+
+    tried = macos.MacPowermetrics({})
+    assert tried._enabled is True, "not even tried"
+    assert tried._asked is False, "a default reports as having been asked for"
+
+    asked = macos.MacPowermetrics({"powermetrics": True})
+    assert (asked._enabled, asked._asked) == (True, True)
+
+    off = macos.MacPowermetrics({"powermetrics": False})
+    assert off._enabled is False, "--no-powermetrics still ran it"
+
+    # The rule names one command and this user, since that is what sudoers matches on.
+    line = macos.sudoers_line()
+    assert " ".join(macos.powermetrics_argv()) in line, line
+    assert "NOPASSWD:" in line and "ALL=(root)" in line, line
+
+
+@check
 def test_a_bundle_with_no_trust_store_is_given_one(_h):
     """Inside a packaged app there are no roots at all, and every HTTPS request an
     extension makes cannot find an issuer."""
