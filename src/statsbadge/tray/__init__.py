@@ -43,9 +43,11 @@ def quit_on_signal(quit_now):
 
 
 class TrayApp:
-    def __init__(self, stack, log_path=None, config_dir=None, port=None):
+    def __init__(self, stack, log_path=None, config_dir=None, port=None,
+                 launchd_log=None):
         self.stack = stack
         self.log_path = log_path
+        self.launchd_log = launchd_log
         # Carried into an autostart entry, and only when they were asked for.
         self.config_dir = config_dir
         self.port = port
@@ -162,7 +164,8 @@ class TrayApp:
         if self.at_login:
             autostart.disable()
         else:
-            autostart.enable(config_dir=self.config_dir, port=self.port)
+            autostart.enable(config_dir=self.config_dir, port=self.port,
+                             log=self.launchd_log)
         self.wake()
 
     def quit(self):

@@ -32,8 +32,8 @@ def enabled(base=None):
     return backend(base).enabled()
 
 
-def enable(base=None, config_dir=None, port=None):
-    return backend(base).enable(command(config_dir, port))
+def enable(base=None, config_dir=None, port=None, log=None):
+    return backend(base).enable(command(config_dir, port), log)
 
 
 def disable(base=None):
@@ -92,7 +92,8 @@ class Registry:
             return False
         return True
 
-    def enable(self, argv):
+    def enable(self, argv, log=None):
+        del log
         import winreg
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.base) as key:
             winreg.SetValueEx(key, NAME, 0, winreg.REG_SZ, quoted(argv))
@@ -121,12 +122,18 @@ class LaunchAgent:
     def enabled(self):
         return os.path.isfile(self.where())
 
-    def enable(self, argv):
+    def enable(self, argv, log=None):
         os.makedirs(self.base, exist_ok=True)
         # No KeepAlive. Quitting from the menu means it.
+        entry = {"Label": LABEL, "ProgramArguments": list(argv),
+                 "RunAtLoad": True, "ProcessType": "Interactive"}
+        if log:
+            # Anything printed before logs.start replaces the streams, which is where
+            # a missing extra or a broken import would say so.
+            os.makedirs(os.path.dirname(log), exist_ok=True)
+            entry["StandardOutPath"] = entry["StandardErrorPath"] = log
         with open(self.where(), "wb") as handle:
-            plistlib.dump({"Label": LABEL, "ProgramArguments": list(argv),
-                           "RunAtLoad": True, "ProcessType": "Interactive"}, handle)
+            plistlib.dump(entry, handle)
         if self.live:
             _launchctl("bootstrap", f"gui/{os.getuid()}", self.where())
         return self.where()
@@ -153,7 +160,8 @@ class Desktop:
     def enabled(self):
         return os.path.isfile(self.where())
 
-    def enable(self, argv):
+    def enable(self, argv, log=None):
+        del log
         os.makedirs(self.base, exist_ok=True)
         with open(self.where(), "w") as handle:
             handle.write("[Desktop Entry]\n"

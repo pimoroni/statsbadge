@@ -786,7 +786,8 @@ def cmd_tray(args):
 
     print(f"statsbadge tray on http://127.0.0.1:{args.port}/")
     app = tray_app.TrayApp(stack, log_path=log_path,
-                           config_dir=args.config_dir, port=_asked_port(args))
+                           config_dir=args.config_dir, port=_asked_port(args),
+                           launchd_log=logs.path(directory, "launchd"))
     tray_app.quit_on_signal(app.quit)
     try:
         return app.run(backend.Tray(app.title(), app.model), stack.serve_in_background)
@@ -806,7 +807,9 @@ def cmd_autostart(args):
     port = _asked_port(args)
 
     if args.verb == "enable":
-        print(f"starting at login, from {autostart.enable(config_dir=kept, port=port)}")
+        where = autostart.enable(config_dir=kept, port=port,
+                                 log=logs.path(config_dir(args.config_dir), "launchd"))
+        print(f"starting at login, from {where}")
         return 0
     if args.verb == "disable":
         print("no longer starting at login" if autostart.disable()
