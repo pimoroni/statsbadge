@@ -1901,6 +1901,54 @@ def test_setup_waves_through_a_server_already_paired(_h):
 
 
 @check
+def test_a_beacon_goes_out_on_every_interface_it_can_name(_h):
+    """Windows reports no broadcast address of its own, so it is worked out here.
+
+    Without one the only packet leaving is the global broadcast, and on a machine with a
+    virtual switch that leaves by whichever interface holds the default route. The badge
+    finds hosts by beacon alone, so such a host is invisible to it.
+    """
+    from statsbadge import beacon
+
+    assert beacon._subnet_broadcast("10.10.1.155", "255.255.255.0") == "10.10.1.255"
+    assert beacon._subnet_broadcast("192.168.0.5", "255.255.0.0") == "192.168.255.255"
+    # A point to point link has no broadcast address, and nothing to send to.
+    assert beacon._subnet_broadcast("10.0.0.1", "255.255.255.254") is None
+    assert beacon._subnet_broadcast("10.0.0.1", None) is None
+
+    import psutil
+    entry = type("Address", (), {"family": socket.AF_INET, "address": "10.10.1.155",
+                                 "netmask": "255.255.255.0", "broadcast": None})
+    was = psutil.net_if_addrs
+    psutil.net_if_addrs = lambda: {"Ethernet": [entry]}
+    try:
+        addresses = beacon._broadcast_addresses()
+    finally:
+        psutil.net_if_addrs = was
+    assert addresses == ["255.255.255.255", "10.10.1.255"], addresses
+
+
+@check
+def test_the_badge_never_waits_on_a_socket_the_screen_is_behind(_h):
+    """A blocking connect to a host that is not there holds the draw loop for as long as
+    lwIP takes to give up. The screen stops and HOME is never sampled, so the badge sits
+    on "Connecting" with no way into the hosts menu."""
+    source = (pathlib.Path(install.app_source_dir()) / "net.py").read_text(encoding="utf-8")
+    connect = source[source.index("def _connect"):source.index("def _connecting")]
+    assert "setblocking(False)" in connect, "the connect blocks the loop"
+    assert "EINPROGRESS" in connect, "a connect that only started is an error to this"
+    assert "yield from self._connecting()" in source, "nothing waits for the connect"
+
+    # The badge reports POLLOUT and POLLHUP together for an address with nothing at it,
+    # measured on the board, so the failure has to be looked at first.
+    # From the loop over what the poll returned, the register call above naming POLLOUT
+    # for what it is watching.
+    waiting = source[source.index("for _sock, flags in"):source.index("# -- requests")]
+    assert waiting.index("POLLERR") < waiting.index("POLLOUT"), \
+        "a failed connect would read as a connected one"
+
+
+@check
 def test_the_badge_scans_for_longer_than_the_host_waits(_h):
     """The badge listens for a beacon and the host sends one, and neither imports the other.
 
