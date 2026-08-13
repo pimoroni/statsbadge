@@ -13,6 +13,7 @@ The badge's clock is set from the host once and then left alone; see RESYNC_S.
 """
 
 import machine
+import math
 import time
 
 import draw
@@ -247,9 +248,25 @@ def _register_font():
 # face is monospaced, where any time measures the same.
 WIDEST_TIME = "44:44"
 
-# The dot colon, as fractions of the digit height: the column it takes, how far up the
-# digits each dot sits, and its radius. Taken off the seven-segment face's colon.
-COLON_W, COLON_AT, COLON_DOT = 0.20, 0.30, 0.062
+# The dot colon, in fractions of the digit height: the column it takes, and a dot's radius.
+COLON_W, COLON_DOT = 0.20, 0.061
+# How far below the top of the digits the two dots sit. Measured off the seven-segment
+# face's colon with tools/read_af.py, so paging between the digital faces leaves it put.
+COLON_AT = (0.309, 0.720)
+
+# How far the colon dims at the half second, of 255. A beat and not a blink, because a
+# colon that goes out entirely reads as a fault.
+COLON_DIM = 90
+
+
+def _colon_alpha():
+    """How lit the colon is, over one turn of the second.
+
+    A sine off the badge's clock, the same reading the second hand sweeps on, so the beat
+    lands on the second and not on whenever the page was first drawn.
+    """
+    lit = 0.5 + 0.5 * math.cos(_local_time()[2] % 1.0 * math.pi * 2.0)
+    return int(COLON_DIM + (255 - COLON_DIM) * lit)
 
 
 def _digits_font(spec):
@@ -316,20 +333,28 @@ def _digital(clock, weather, label, theme, spec):
     # The sprite's baseline sits `size` from its top, which the second term takes off.
     y = digits_top + (room - ink) // 2 - (size - ink)
     # The unlit segments first, as a real display shows them.
-    if spec["ghost"] and name == spec["font"]:
+    ghosting = spec["ghost"] and name == spec["font"]
+    if ghosting:
         draw.blit_label(spec["ghost"], size, theme.grid, x, y, name=name)
         draw.blit_label(spec["ghost"], size, theme.grid, minutes_x, y, name=name)
     draw.blit_label(hours, size, theme.ink, x, y, name=name)
     draw.blit_label(minutes or "--", size, theme.ink, minutes_x, y, name=name)
-    # Between the two, wherever justifying them left the middle.
+    # Between the two, wherever justifying them left the middle, beating the second.
     colon_x = (x + left_w + minutes_x) / 2.0
     if dots:
         ink_top = y + size - ink
         screen.pen = theme.accent
-        for at in (ink_top + ink * COLON_AT, ink_top + ink * (1.0 - COLON_AT)):
-            screen.shape(shape.circle(vec2(colon_x, at), ink * COLON_DOT))
+        screen.alpha = _colon_alpha()
+        for at in COLON_AT:
+            screen.shape(shape.circle(vec2(colon_x, ink_top + ink * at), ink * COLON_DOT))
     else:
-        draw.blit_label(":", size, theme.accent, colon_x - colon_w / 2.0, y, name=name)
+        colon_left = colon_x - colon_w / 2.0
+        # Its unlit segments too, so what dims is the colon and not the gap it leaves.
+        if ghosting:
+            draw.blit_label(":", size, theme.grid, colon_left, y, name=name)
+        screen.alpha = _colon_alpha()
+        draw.blit_label(":", size, theme.accent, colon_left, y, name=name)
+    screen.alpha = 255
 
     # The weather along the bottom, symbol first.
     y = look.BODY_TOP + look.BODY_H - 34
@@ -375,6 +400,9 @@ def render(page, frame, _history, theme):
     _register_font()
     chosen = ((page or {}).get("face") or DEFAULT_FACE)
     if chosen in DIGITAL:
+        # The numbers come from the host, but the colon beats on the badge's clock: never
+        # set, it keeps 1Hz against a second unrelated to the time on the screen.
+        _resync(host, frame.get("seq"))
         _digital(clock, weather, label, theme, DIGITAL[chosen])
         return
 
