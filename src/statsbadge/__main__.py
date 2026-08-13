@@ -94,7 +94,9 @@ def source_config_from(args):
         "disk_path": getattr(args, "disk_path", None),
         "extensions": layout.merge_settings(
             parse_extension_options(getattr(args, "extension", None)), stored),
-        "disabled_extensions": getattr(args, "without", None) or [],
+        # What --without names for this run, and what was switched off for good.
+        "disabled_extensions": (getattr(args, "without", None) or [])
+        + tooling.read_disabled(config_dir(getattr(args, "config_dir", None))),
     }
 
 
@@ -502,18 +504,21 @@ def cmd_extensions(args):
     verb = getattr(args, "verb", None) or "list"
     if verb == "outdated":
         return _report_outdated(args)
+    if verb in ("disable", "enable"):
+        return _switch_extensions(args, verb)
     if verb != "list":
         return _change_extensions(args, verb)
 
     directory = config_dir(args.config_dir)
-    found = extensions.describe()
+    found = extensions.describe(tooling.read_disabled(directory))
     if not found:
         print("no extensions installed")
         print(_how_to_add("clock"))
         return 0
     for record in found:
-        state = "ok" if record["available"] else (
-            "not available here" if record["loaded"] else "failed to import")
+        state = "disabled" if record["disabled"] else (
+            "ok" if record["available"] else (
+                "not available here" if record["loaded"] else "failed to import"))
         version = f" {record['version']}" if record["version"] else ""
         print(f"{record['name']}{version}  {state}")
         if record["provides"]:
@@ -560,6 +565,17 @@ def _report_outdated(args):
     return 0
 
 
+def _switch_extensions(args, verb):
+    """Leave an extension installed and stop loading it, or start again."""
+    directory = config_dir(args.config_dir)
+    changed = tooling.switch(directory, args.names, off=verb == "disable")
+    if not changed:
+        print(f"already {verb}d: {', '.join(args.names)}")
+        return 0
+    print(f"{verb}d {', '.join(changed)}. Restart statsbadge to take effect.")
+    return 0
+
+
 def _change_extensions(args, verb):
     """add, remove or sync: keep `extensions.txt` and the tool environment in step."""
     directory = config_dir(args.config_dir)
@@ -586,8 +602,6 @@ def _change_extensions(args, verb):
 
     changed, why = done["changed"], done["why"]
     if done["ok"]:
-        if done["nothing"]:
-            return 0
         for entry in done["shadowed"]:
             print(f"{entry['name']} is already installed in {entry['where']}.")
             print("  That copy is the one that runs, so its version is whatever is there.")
@@ -595,13 +609,15 @@ def _change_extensions(args, verb):
             # The progress line went to stdout, and this goes to stderr.
             sys.stdout.flush()
             for entry in done["stuck"]:
-                print(f"Unable to uninstall {entry['name']}.", file=sys.stderr)
-                print(f"  It is installed in {entry['where']}, which is statsbadge's own "
-                      f"environment and not the extensions library.", file=sys.stderr)
-                print("  Whatever put it there has to take it out.", file=sys.stderr)
-            said = ", ".join(entry["name"] for entry in done["stuck"])
-            print(f"{tooling.WANTED} no longer asks for {said}.", file=sys.stderr)
+                print(f"Unable to uninstall {entry['name']}. It is managed by the "
+                      f"environment.", file=sys.stderr)
+                print(f"  {entry['where']}", file=sys.stderr)
+            said = " ".join(entry["name"] for entry in done["stuck"])
+            print(f"  to switch it off instead: statsbadge ext disable {said}",
+                  file=sys.stderr)
             return 1
+        if done["nothing"]:
+            return 0
         print("done. Run `statsbadge install` to push any badge-side code they ship.")
         return 0
 
@@ -894,15 +910,17 @@ def main(argv=None):
                            help="list extensions, or add and remove them")
     exts.set_defaults(func=cmd_extensions, verb="list", names=[])
     verbs = exts.add_subparsers(dest="verb",
-                                metavar="add|remove|upgrade|outdated|sync")
+                                metavar="add|remove|disable|enable|upgrade|outdated|sync")
     for verb, what in (("add", "install an extension and remember it"),
                        ("remove", "uninstall an extension and forget it"),
+                       ("disable", "leave one installed, and stop loading it"),
+                       ("enable", "load one that was disabled"),
                        ("upgrade", "take newer releases, of one extension or of all"),
                        ("outdated", "ask the index which of them have moved on"),
                        ("sync", "build the library again from whatever the list names")):
         step = verbs.add_parser(verb, parents=[common], help=what)
         step.set_defaults(func=cmd_extensions, verb=verb, names=[])
-        if verb in ("add", "remove"):
+        if verb in ("add", "remove", "disable", "enable"):
             step.add_argument("names", nargs="+", metavar="NAME",
                               help="a short name like clock, or any pip requirement")
         elif verb == "upgrade":

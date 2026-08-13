@@ -4952,16 +4952,28 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported(_h):
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
             assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
 
-            # Removing takes it off the list, and the environment's copy stays put. That
-            # is a removal that did not take, so it says so and fails.
+            # Removing cannot take, so nothing is written and nothing is built. The list
+            # goes on asking for it, since it goes on being installed: dropping the line
+            # made a second attempt report success over an extension that was still there.
+            built = []
+            cli.tooling.library.build = lambda _d, r, **_k: (built.append(list(r))
+                                                             or "/lib/gen", None)
             said, complained = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(said), contextlib.redirect_stderr(complained):
                 assert cli._change_extensions(Args, "remove") == 1  # noqa: SLF001
-            assert tooling.read_wanted(work) == []
+            assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
+            assert built == [], "it built for a removal that could not happen"
             spoken = complained.getvalue()
             assert spoken.startswith("Unable to uninstall bluesky."), spoken
             assert "/venv/site-packages" in spoken, spoken
             assert "Removed" not in said.getvalue(), said.getvalue()
+
+            # And again, since the list still asks for it: the same answer, not a success.
+            complained = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(complained):
+                assert cli._change_extensions(Args, "remove") == 1  # noqa: SLF001
+            assert complained.getvalue().startswith("Unable to uninstall bluesky.")
         finally:
             (cli.tooling.library.build, cli.tooling.library.activate,
              cli.tooling.library.elsewhere, cli.extensions.describe,
@@ -5432,6 +5444,30 @@ def test_a_map_page_only_uses_names_the_badge_has(_h):
         tree = ast.parse(path.read_text(), filename=str(path))
         fault = check_app.check_names(path, tree, injected)
         assert fault is None, fault
+
+
+@check
+def test_a_generation_is_asked_about_by_name_and_not_by_prefix(_h):
+    """A dist-info separates name from version with the same hyphen a name spells as an
+    underscore, so normalising the whole stem matched nothing.
+
+    Everything asking what a generation holds went through this: the library reported
+    nothing as its own, so a Remove button became Disable, and the check refusing an
+    extension that wants a newer statsbadge never fired.
+    """
+    work = tempfile.mkdtemp(prefix="statsbadge-named-")
+    try:
+        for stem in ("statsbadge_clock-1.2.0", "statsbadge-1.3.3", "statsbadge_iss-1.0.3"):
+            os.makedirs(os.path.join(work, f"{stem}.dist-info"))
+        assert library.resolved(work, "statsbadge-clock") == "1.2.0"
+        assert library.resolved(work, "statsbadge_clock") == "1.2.0"
+        # The host itself, which is what the version check reads.
+        assert library.resolved(work, "statsbadge") == "1.3.3"
+        assert library.resolved(work, "statsbadge-quakes") is None
+        assert library.holds(work, "clock") and library.holds(work, "iss")
+        assert not library.holds(work, "quakes")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 @check

@@ -367,8 +367,17 @@ main ul {
   display: flex; align-items: center; gap: 8px;
 }
 
-.configured section > header h3 { flex: 1; display: flex; align-items: baseline; gap: 6px; }
+.configured section > header h3 { flex: 1; display: flex; align-items: baseline; gap: 8px;
+                                  min-width: 0; }
 .configured section > header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
+
+/* The package, beside the name somebody reads. Read as a name and not as another heading,
+   the way a page's given title is: the heading is uppercase in the accent, this is not. */
+.given {
+  color: var(--ink); text-transform: none; letter-spacing: normal;
+  font-size: var(--text-sm); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 @media (width >= 64rem) {
   .extensions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -390,9 +399,7 @@ main ul {
   li > div:first-child { flex: 1; min-width: 0; }
   li > div:last-child { display: flex; gap: 6px; flex-shrink: 0; }
   strong { color: var(--ink); font-size: var(--text-md); font-weight: 600; }
-
-  /* The name to type, beside the name to read. */
-  code { margin-left: 6px; }
+  .given { margin-left: 6px; }
 }
 
 main section:has(> section) {
