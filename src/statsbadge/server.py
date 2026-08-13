@@ -738,8 +738,25 @@ def _lower(headers):
     return {key.lower(): value for key, value in headers.items()}
 
 
+# How long a set of addresses stands. They change when an interface does, and every
+# request that shows them or bakes one into a badge would otherwise pay for the lookup
+# below again.
+ADDRESSES_FOR = 30.0
+# Long enough for a resolver that is going to answer. A host whose own name is in neither
+# DNS nor mDNS blocks for seconds, and a request must not wait for that.
+NAME_LOOKUP = 1.0
+
+_addresses = None
+_addresses_at = 0.0
+
+
 def _local_addresses():
     """Addresses a badge could reach this host on, best guess first."""
+    global _addresses, _addresses_at
+    now = time.monotonic()
+    if _addresses is not None and now - _addresses_at < ADDRESSES_FOR:
+        return list(_addresses)
+
     found = []
     try:
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -748,11 +765,32 @@ def _local_addresses():
         probe.close()
     except OSError:
         pass
-    try:
-        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            addr = info[4][0]
-            if addr not in found and not addr.startswith("127."):
-                found.append(addr)
-    except OSError:
-        pass
-    return found
+    for addr in _named_addresses():
+        if addr not in found and not addr.startswith("127."):
+            found.append(addr)
+
+    _addresses, _addresses_at = found, now
+    return list(found)
+
+
+def _named_addresses(timeout=NAME_LOOKUP):
+    """What this host's own name resolves to, given a moment to answer.
+
+    On a thread, since the call has no timeout of its own: a macOS box whose hostname
+    nothing can resolve takes it past the point where the browser has given up on the
+    request. The route the socket above picked is the useful answer anyway; this only adds
+    the other interfaces.
+    """
+    answer = []
+
+    def look():
+        try:
+            answer.extend(info[4][0] for info in socket.getaddrinfo(
+                socket.gethostname(), None, socket.AF_INET))
+        except OSError:
+            pass
+
+    thread = threading.Thread(target=look, daemon=True, name="statsbadge-addresses")
+    thread.start()
+    thread.join(timeout)
+    return list(answer)
