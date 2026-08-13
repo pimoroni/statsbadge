@@ -385,8 +385,12 @@ class Collector:
                 if value:
                     available[group] = sorted({k for item in value for k in item})
             elif isinstance(value, dict) and value:
-                available[group] = sorted(value if offered is None
-                                          else (key for key in value if key in offered))
+                keys = value if offered is None else (
+                    key for key in value if key in offered)
+                # `<field>_names` labels the lanes of the field beside it, which the badge
+                # reads for itself. Nothing points a dial at one.
+                available[group] = sorted(key for key in keys
+                                          if not key.endswith("_names"))
         described = model.describe()
         _merge_declared(described, declared)
         return {
