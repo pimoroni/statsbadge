@@ -40,10 +40,23 @@ def powermetrics_argv():
     return [shutil.which("powermetrics") or POWERMETRICS, *POWERMETRICS_ARGS]
 
 
+# What sudoers reads as syntax inside a command, per sudoers(5). The comma is the one
+# that bites: it separates commands in a rule, so `--samplers cpu_power,gpu_power` reads
+# as three of them and visudo refuses the second as not a path.
+SUDOERS_SPECIAL = ("\\", ",", ":", "=")
+
+
+def sudoers_escaped(word):
+    """One argument, as a rule has to spell it."""
+    for special in SUDOERS_SPECIAL:
+        word = word.replace(special, "\\" + special)
+    return word
+
+
 def sudoers_line():
     """The rule that allows exactly that command, for this user and this machine."""
-    return "{} ALL=(root) NOPASSWD: {}".format(getpass.getuser(),
-                                               " ".join(powermetrics_argv()))
+    return "{} ALL=(root) NOPASSWD: {}".format(
+        getpass.getuser(), " ".join(sudoers_escaped(word) for word in powermetrics_argv()))
 
 
 def sudoers_advice():

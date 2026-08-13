@@ -5946,8 +5946,22 @@ def test_powermetrics_is_tried_and_says_nothing_when_refused(_h):
 
     # The rule names one command and this user, since that is what sudoers matches on.
     line = macos.sudoers_line()
-    assert " ".join(macos.powermetrics_argv()) in line, line
     assert "NOPASSWD:" in line and "ALL=(root)" in line, line
+    assert macos.powermetrics_argv()[0] in line, line
+
+    # A comma separates commands in a rule, so an unescaped one in `--samplers
+    # cpu_power,gpu_power,thermal` reads as three of them and visudo refuses the second
+    # as not a path. Checked by visudo itself where there is one.
+    assert "\\," in line, f"visudo will not take this: {line}"
+    assert "cpu_power\\,gpu_power\\,thermal" in line, line
+    if shutil.which("visudo"):
+        with tempfile.TemporaryDirectory() as work:
+            rule = os.path.join(work, "statsbadge")
+            with open(rule, "w", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+            done = subprocess.run(["visudo", "-c", "-f", rule],
+                                  capture_output=True, text=True)
+            assert done.returncode == 0, done.stdout + done.stderr
 
 
 @check
