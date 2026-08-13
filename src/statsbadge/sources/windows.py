@@ -82,15 +82,22 @@ class LibreHardwareMonitor(Source):
         # Every voltage the CPU reports, in the order it reports them, with the labels
         # for the lanes beside them. A bar each is what these are for.
         volts = [(_lane(path[-1]), round(value, 3))
-                 for path, _label, value, unit in readings
+                 for path, _label, value, unit, _top in readings
                  if unit == "V" and _under(path, ("cpu",))]
         if volts:
             frame["cpu"].setdefault("volts", [value for _name, value in volts])
             frame["cpu"].setdefault("volts_names", [name for name, _value in volts])
+            # The highest LHM has seen any of them reach, as the full scale for the bars.
+            # Without one they are drawn against 100 and sit against the left edge.
+            ceiling = max((top for path, _label, _value, unit, top in readings
+                           if unit == "V" and top and _under(path, ("cpu",))),
+                          default=None)
+            if ceiling:
+                frame.setdefault("peaks", {})["cpu.volts"] = round(ceiling, 3)
 
         fans = [
             {"name": path[-1], "rpm": int(value)}
-            for path, label, value, unit in readings
+            for path, _label, value, unit, _top in readings
             if unit == "RPM" and value
         ]
         if fans and not frame["fans"]:
@@ -103,20 +110,27 @@ def _fetch(url, timeout):
 
 
 def _walk(node, path):
-    """Flatten LHM's nested tree into (path, label, value, unit) readings."""
+    """Flatten LHM's tree into (path, label, value, unit, highest) readings.
+
+    Every sensor carries the highest it has been seen to reach, which is the only full
+    scale a voltage has: nothing else says how far a rail can swing.
+    """
     label = str(node.get("Text", ""))
     here = path + [label] if label else path
     raw = node.get("Value")
     if raw:
         parsed = _parse(raw)
         if parsed is not None:
-            yield here, label, parsed[0], parsed[1]
+            top = _parse(node.get("Max"))
+            yield here, label, parsed[0], parsed[1], (top[0] if top else None)
     for child in node.get("Children", []) or []:
         yield from _walk(child, here)
 
 
 def _parse(raw):
     """LHM formats values as "45.0 °C" or "1,234 RPM"."""
+    if raw is None:
+        return None
     text = str(raw).strip().replace(",", "")
     parts = text.split(" ", 1)
     try:
@@ -141,7 +155,7 @@ def _lane(label):
 def _pick(readings, branch_words, label_words, unit):
     """First reading under a branch whose label matches, in preference order."""
     for want in label_words:
-        for path, label, value, got_unit in readings:
+        for path, label, value, got_unit, _top in readings:
             if got_unit != unit:
                 continue
             if not _under(path, branch_words):

@@ -149,6 +149,7 @@ SCALE = {
     "temp": 100.0, "power": 250.0, "package_w": 150.0, "rpm": 6000.0,
     "freq": 6000.0, "clock": 3000.0,
     "up_bps": 12.5e6, "down_bps": 12.5e6, "read_bps": 500e6, "write_bps": 500e6,
+    "volts": 1.6,       # a core rail, which sits near 1.1
 }
 
 # cores is a list of percentages, which is not obvious from the name: without it a
@@ -317,7 +318,9 @@ def _bars(page, frame, _history, theme):
     values = value_of(frame, ref)
     if not isinstance(values, list):
         values = [] if values is None else [values]
-    maximum = float(page.get("max") or 100.0)
+    # What the page says, else the full scale the host sent for it, else a percentage.
+    maximum = float(page.get("max") or peak_of(ref, frame) or SCALE.get(field_of(ref))
+                    or 100.0)
     names = value_of(frame, ref + LANE_NAMES)
     draw.bars(theme, values, maximum, field_of(ref),
               _swept_lanes(ref, values, maximum),
@@ -705,7 +708,9 @@ def _waterfall(page, frame, history, theme):
     global _wf_from, _wf_to, _wf_seq, _wf_at, _wf_labels
     ref = page.get("field", "cpu.cores")
     values = value_of_list(frame, ref)
-    maximum = float(page.get("max") or 100.0)
+    # What the page says, else the full scale the host sent for it, else a percentage.
+    maximum = float(page.get("max") or peak_of(ref, frame) or SCALE.get(field_of(ref))
+                    or 100.0)
 
     if values and frame.get("seq") != _wf_seq:
         if not _wf_to:
