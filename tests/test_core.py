@@ -5875,20 +5875,25 @@ def test_a_region_the_firmware_does_not_know_is_refused(_h):
 
 @check
 def test_a_bundle_with_no_trust_store_is_given_one(_h):
-    """Inside a packaged app there is none: get_default_verify_paths answers None to both,
-    and every HTTPS request an extension makes cannot find an issuer."""
+    """Inside a packaged app there are no roots at all, and every HTTPS request an
+    extension makes cannot find an issuer."""
     import ssl
 
     from statsbadge import __main__ as cli
 
-    empty = ssl.DefaultVerifyPaths(None, None, "", None, "", None)
+    class Bare:
+        """A context with nothing loaded, which is what a bundle builds."""
+
+        def cert_store_stats(self):
+            return {"x509": 0, "crl": 0, "x509_ca": 0}
+
     fake = type(sys)("certifi")
     fake.where = lambda: os.path.join("nowhere", "cacert.pem")
 
-    was_paths, was_certifi = ssl.get_default_verify_paths, sys.modules.get("certifi")
+    was_context, was_certifi = ssl.create_default_context, sys.modules.get("certifi")
     was_file, was_dir = os.environ.pop("SSL_CERT_FILE", None), os.environ.pop("SSL_CERT_DIR", None)
     try:
-        ssl.get_default_verify_paths = lambda: empty
+        ssl.create_default_context = lambda *_args, **_kwargs: Bare()
         sys.modules["certifi"] = fake
         assert cli.trust_store() == fake.where()
         assert os.environ["SSL_CERT_FILE"] == fake.where()
@@ -5897,13 +5902,14 @@ def test_a_bundle_with_no_trust_store_is_given_one(_h):
         os.environ["SSL_CERT_FILE"] = "somewhere/else.pem"
         assert cli.trust_store() is None
 
-        # And a machine with a store of its own is not touched.
+        # A machine with roots of its own is not touched, wherever it keeps them:
+        # Windows names no file at all and loads them from the system store.
         del os.environ["SSL_CERT_FILE"]
-        ssl.get_default_verify_paths = was_paths
+        ssl.create_default_context = was_context
         assert cli.trust_store() is None
         assert "SSL_CERT_FILE" not in os.environ
     finally:
-        ssl.get_default_verify_paths = was_paths
+        ssl.create_default_context = was_context
         if was_certifi is None:
             sys.modules.pop("certifi", None)
         else:
