@@ -128,9 +128,9 @@ requires = [
     # The roots to verify a certificate against. The bundle's own Python has none at all,
     # so without this every extension that fetches anything fails.
     "certifi",
-    # What installs an extension. There is no interpreter in here to run `pip -m`, and
-    # uv is a binary that needs none: it takes the version to resolve for instead.
-    "uv",
+    # What installs an extension. The app spawns itself to be `python -m pip`, there
+    # being no interpreter in here to be one: 6MB against uv's 39.
+    "pip",
     "./extensions/statsbadge-clock",
     "./extensions/statsbadge-iss",
     "./extensions/statsbadge-quakes",

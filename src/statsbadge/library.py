@@ -17,6 +17,7 @@ start instead, before anything has imported from it.
 import csv
 import importlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 import platform
@@ -24,7 +25,7 @@ import shutil
 import subprocess
 import sys
 
-from . import bundled
+from . import NO_WINDOW, PIP_VERB, bundled
 
 LIB = "lib"
 PARTIAL = ".partial"
@@ -132,6 +133,14 @@ def _uv():
     return None
 
 
+def _packaged_pip():
+    """Whether pip travelled in the app."""
+    try:
+        return importlib.util.find_spec("pip") is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def tool():
     """(which one, the argv up to its verb) for what can install here, or None.
 
@@ -140,13 +149,14 @@ def tool():
     found = _uv()
     if found:
         return "uv", [found, "pip"]
-    # A packaged app's executable is the app. Running it with `-m pip` starts a second
-    # copy of it, tray icon and all, instead of asking pip anything.
+    # A packaged app's executable is the app, so `-m pip` there starts a second copy of
+    # it. It spawns itself as pip instead, which is the one thing in the bundle that can
+    # be an interpreter.
     if bundled():
-        return None
+        return ("pip", [sys.executable, PIP_VERB]) if _packaged_pip() else None
     try:
         subprocess.run([sys.executable, "-m", "pip", "--version"],
-                       capture_output=True, check=True)
+                       capture_output=True, check=True, **NO_WINDOW)
     except (OSError, subprocess.CalledProcessError):
         return None
     return "pip", [sys.executable, "-m", "pip"]
@@ -186,7 +196,8 @@ def outdated(config_dir, timeout=60):
             "--target" if kind == "uv" else "--path", where]
     try:
         done = subprocess.run(argv, capture_output=True, text=True, check=False,
-                              encoding="utf-8", errors="replace", timeout=timeout)
+                              encoding="utf-8", errors="replace", timeout=timeout,
+                              **NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return []
     if done.returncode != 0:
@@ -225,7 +236,8 @@ def build(config_dir, requirements, verbose=False):
             argv.append("--quiet")
         try:
             done = subprocess.run(argv, capture_output=not verbose, text=True,
-                                  encoding="utf-8", errors="replace", check=False)
+                                  encoding="utf-8", errors="replace", check=False,
+                                  **NO_WINDOW)
         except OSError as exc:
             shutil.rmtree(target, ignore_errors=True)
             return None, f"could not run the installer: {exc}"

@@ -11,6 +11,7 @@ import webbrowser
 
 from . import (auth, autostart, beacon, collect, extensions, identity, install, layout,
                library, logs, push, pushed, runner, server, tooling)
+from . import PIP_VERB
 # Named apart from the `version` locals in this module, which are extensions' own.
 from . import version as package_version
 
@@ -704,7 +705,23 @@ examples:
 'statsbadge update' is the same command. 'statsbadge status' says what is on the badge.
 """
 
+def be_pip(argv):
+    """Be `python -m pip`, for a bundle with no python to be it.
+
+    Spawned as a child of itself rather than run in this process: pip takes over the root
+    logger, and a server is running here. runpy is what `-m` does, so this is pip's own
+    entry point and not its internals.
+    """
+    import runpy
+    sys.argv = ["pip", *argv]
+    runpy.run_module("pip", run_name="__main__", alter_sys=True)
+    return 0
+
+
 def main(argv=None):
+    asked = list(sys.argv[1:] if argv is None else argv)
+    if asked and asked[0] == PIP_VERB:
+        return be_pip(asked[1:])
     parser = argparse.ArgumentParser(prog="statsbadge",
                                      description="System stats for a Badgeware badge")
     parser.add_argument("--config-dir", help="where to keep layout and pairings")
@@ -889,7 +906,11 @@ def trust_store():
 
 def tray_main(argv=None):
     """The gui-scripts entry point. Defaults to the tray, and takes its flags."""
-    return main(["tray", *(sys.argv[1:] if argv is None else argv)])
+    asked = list(sys.argv[1:] if argv is None else argv)
+    # Whatever the app was started as, this one is not a tray.
+    if asked and asked[0] == PIP_VERB:
+        return main(asked)
+    return main(["tray", *asked])
 
 
 if __name__ == "__main__":
