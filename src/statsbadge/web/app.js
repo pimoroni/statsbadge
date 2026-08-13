@@ -556,14 +556,125 @@ async function refreshPruned() {
 function renderSettings() {
   const schema = caps.extension_settings || {}
   const installed = caps.extensions || []
-  if (!installed.length) {
-    $("extensions").replaceChildren(el("section", null, el("p", { textContent:
-      "None installed. pip install one, then run statsbadge install." })))
-    return
-  }
   config.settings = config.settings || {}
   $("extensions").replaceChildren(
+    catalogueBox(),
     ...installed.map((extension) => extensionBox(extension, schema[extension.name] || [])))
+}
+
+// What /api/extensions last said: the published list, each entry's state, and whether
+// this install can rebuild itself.
+let catalogue = null
+// Names with a request in flight, so a second click cannot start a second rebuild.
+const installing = new Set()
+
+async function refreshCatalogue() {
+  try {
+    catalogue = await api("/api/extensions")
+  } catch (error) {
+    catalogue = null
+  }
+  renderSettings()
+}
+
+/** The published extensions, each with the one button that applies to it.
+ *
+ * A fixed list: PyPI cannot be asked which packages are statsbadge extensions. The box
+ * below takes any requirement, so a third-party one goes in there. */
+function catalogueBox() {
+  const box = el("section", null, el("h3", { textContent: "Extensions" }))
+  if (!catalogue) {
+    box.append(el("p", { textContent: "Could not read the list of extensions." }))
+    return box
+  }
+  if (!catalogue.manageable) {
+    box.append(el("p", { textContent:
+      `Installing from here needs a uv tool install. This one runs from ${catalogue.prefix},`
+      + " so add them with uv pip install instead." }))
+  }
+  box.append(el("ul", null, ...catalogue.offered.map(offerRow)))
+  box.append(freeformForm())
+  return box
+}
+
+function offerRow(entry) {
+  const notes = []
+  if (entry.version) notes.push(entry.version)
+  if (entry.needs) notes.push(`needs ${entry.needs}`)
+  // The badge gets code over USB alone; /v1 carries readings and a layout.
+  if (entry.page) notes.push("draws its own page, so it needs statsbadge install over USB")
+  if (entry.installed && !entry.asked) notes.push("installed, but not on the list")
+  if (entry.asked && !entry.installed) notes.push("asked for, but not installed")
+
+  const summary = [entry.summary, notes.join(" · ")].filter(Boolean)
+  // The name as the package spells it, matching the settings box below and `ext add`.
+  return el("li", null,
+            el("span", { textContent: entry.name }),
+            ...summary.map((text) => el("small", { textContent: text })),
+            offerButton(entry))
+}
+
+function offerButton(entry) {
+  const busy = installing.has(entry.name)
+  // Keyed on what is here: an entry listed but absent is put back by installing it, the
+  // repair `ext add` makes.
+  const verb = entry.installed ? "remove" : "add"
+  return el("button", {
+    type: "button",
+    textContent: busy ? "Working..." : (verb === "add" ? "Install" : "Remove"),
+    disabled: busy || !catalogue.manageable,
+    onclick: () => changeExtension(verb, entry.name),
+  })
+}
+
+function freeformForm() {
+  const field = el("input", { type: "text", name: "requirement",
+                              placeholder: "another extension, or any pip requirement" })
+  const form = el("form", { onsubmit: (event) => {
+    event.preventDefault()
+    const asked = field.value.trim()
+    if (!asked) return
+    field.value = ""
+    changeExtension("add", asked)
+  } },
+                  field,
+                  el("button", { type: "submit", textContent: "Install",
+                                 disabled: !catalogue.manageable }))
+  form.setAttribute("aria-label", "Install an extension by name")
+  return form
+}
+
+/** Install or remove, then take up the result. A rebuild resolves the whole environment,
+ * so this can sit there for a minute; the button says so and refuses a second click. */
+async function changeExtension(verb, name) {
+  installing.add(name)
+  renderSettings()
+  let done
+  try {
+    done = await api("/api/extensions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [verb]: [name] }),
+    })
+  } catch (error) {
+    toast(String(error.message || error), true)
+    installing.delete(name)
+    renderSettings()
+    return
+  }
+  installing.delete(name)
+  if (!done.ok) {
+    toast(done.why || "could not do that", true)
+    if (done.manual && done.manual.length) toast(done.manual.join("; "), true)
+  } else {
+    toast(verb === "add" ? `Installed ${name}` : `Removed ${name}`)
+    if (done.moved) toast(`statsbadge itself moved ${done.moved[0]} to ${done.moved[1]}`)
+    if (verb === "add" && (done.needs_usb || []).includes(name)) {
+      toast("Run statsbadge install to push its page to the badge")
+    }
+  }
+  await refreshCatalogue()
+  await refreshCaps()
 }
 
 function extensionBox(extension, settings) {
@@ -1983,6 +2094,8 @@ async function boot() {
   renderSources()
   renderBadges()
   renderLive()
+  // After the first paint, since the list is a nicety and the page draws without it.
+  refreshCatalogue().catch(() => {})
 
   $("save").onclick = save
   const form = pick("main form")

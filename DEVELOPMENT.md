@@ -102,6 +102,13 @@ at, so a sync is only considered against a *new* reading, keyed on the frame's `
 
 **`screen.raw` is R G B A, premultiplied, no byte swap.** Get it wrong and red and blue swap.
 
+**Installing an extension rebuilds the environment the server is running from.**
+`uv tool install --force` replaces it whole. The process survives, and
+`Service.reload_extensions` picks the new one up because `entry_points()` walks `sys.path`
+on every call. What it cannot survive is statsbadge itself moving, which a rebuild can
+do: `apply` reports that as `moved`, and the answer then is a restart. One rebuild at
+a time, under a lock, or the second is resolved from a list the first has already replaced.
+
 **The tray owns the main thread, and the server does not.** `icon.run()` drives
 NSApplication on macOS and pumps messages on Windows, so `serve_forever` runs on a thread
 under it. That is the other way round from `serve`. Signals do not arrive either: Python
