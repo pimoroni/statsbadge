@@ -20,6 +20,8 @@ Two halves sharing one small contract. The host picks *what* to show and the bad
 | [`layout.py`](src/statsbadge/layout.py) | page kinds, validation, pruning |
 | [`server.py`](src/statsbadge/server.py) | the HTTP server, and the framing that makes it fast |
 | [`install.py`](src/statsbadge/install.py) | pushing the app and credentials over USB |
+| [`push.py`](src/statsbadge/push.py) | the order those go in, for the CLI and the config UI alike |
+| [`pushed.py`](src/statsbadge/pushed.py) | what each badge was last seen holding, so a stale one shows |
 | [`runner.py`](src/statsbadge/runner.py) | collector, server and beacon, started and stopped together |
 | [`tray/`](src/statsbadge/tray/) | the menu bar icon, its menu, and the pystray adapter |
 | [`autostart.py`](src/statsbadge/autostart.py) | run at login, one backend per platform |

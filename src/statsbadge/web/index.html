@@ -27,8 +27,11 @@
   <label>Badge <select></select></label>
   <small></small>
   <button type="button" id="pair">Pair a badge&hellip;</button>
+  <button type="button" id="usb">Update badge&hellip;</button>
   <button type="button" id="save" class="primary" disabled>Save</button>
-  <dialog></dialog>
+  <dialog id="pairing"></dialog>
+  <dialog id="installer" class="installer"></dialog>
+  <p id="stale" class="stale" role="status" hidden></p>
   <nav>
     <button type="button" aria-current="page">Pages</button>
     <button type="button">Extensions</button>
