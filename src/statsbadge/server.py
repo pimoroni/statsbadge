@@ -20,7 +20,8 @@ import sys
 import threading
 import traceback
 
-from . import auth, commands, derive, extensions, identity, layout, themes, tooling
+from . import (auth, commands, derive, extensions, identity, layout, library, themes,
+               tooling)
 from .collect import Collector
 
 # Normalised and absolute: `_static` compares a normalised target against this, so a `..`
@@ -84,9 +85,9 @@ class Service:
         return {
             "offered": extensions.offered(
                 wanted=tooling.read_wanted(self.config_dir)),
-            # Only a uv tool install can rebuild its own environment. Anywhere else the UI
-            # shows the list and says what to run.
-            "manageable": tooling.base_requirement(tooling.as_uv_tool()) is not None,
+            # Extensions go beside the config, so any layout can manage them. All this
+            # needs is something to install with.
+            "manageable": library.installer() is not None,
             "prefix": sys.prefix,
         }
 
@@ -100,16 +101,10 @@ class Service:
             done = tooling.apply(self.config_dir, verb, asking,
                                  {record["name"] for record in extensions.describe()})
             answer = {key: done[key] for key in
-                      ("ok", "why", "already", "restored", "absent", "unknown", "moved")}
+                      ("ok", "why", "already", "restored", "absent", "unknown", "stuck")}
             answer["changed"] = [tooling.short_name(r) for r in done["changed"]]
-            answer["manual"] = [f"uv pip install {r}"
-                                for r in done.get("absent_here") or ()]
-            # One field for the UI to show, whichever way it failed.
             if done["unknown"]:
                 answer["why"] = f"nothing on PyPI is called {done['unknown']}"
-            elif answer["manual"]:
-                answer["why"] = (f"this is not a uv tool install, so {sys.prefix} cannot "
-                                 f"rebuild itself")
             if done["ok"]:
                 answer["loaded"] = self.reload_extensions()
                 # Only what the badge cannot be given over the wire: /v1 carries readings
