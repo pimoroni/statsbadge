@@ -7,6 +7,7 @@ plain run with no pytest installed.
 import builtins
 import contextlib
 import html.parser
+import importlib
 import io
 import json
 import os
@@ -26,8 +27,9 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from statsbadge import (auth, extensions, identity, install, layout, model, server,  # noqa: E402
-                        themes)
+# noqa: E402  the path above has to be set before these import
+from statsbadge import (auth, extensions, identity, install, layout, library,
+                        model, server, themes)
 
 
 class FakeColour:
@@ -4382,10 +4384,9 @@ def test_a_message_shortens_the_way_the_firmware_does(_h):
 
 @check
 def test_a_plugin_wanting_a_newer_statsbadge_is_explained(_h):
-    """uv resolves the tool environment in one go, so an extension asking for a newer
-    statsbadge either takes the tool up with it or fails - and which one depends on whether
-    the tool was installed with a pin. Both were measured against real wheels in a throwaway
-    UV_TOOL_DIR; what is checked here is that uv's prose comes out as something to act on.
+    """An extension asking for a newer statsbadge cannot have one: the library installs
+    beside statsbadge and never over it. What is checked here is that the installer's
+    prose comes out as something to act on.
 
     Its last line is "your requirements are unsatisfiable", which is true of every
     resolution failure and says nothing about the versions - and the versions are the whole
@@ -4401,20 +4402,12 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained(_h):
         "      And because you require statsbadge-cloudflare, we can conclude that your\n"
         "      requirements are unsatisfiable.\n")
     line = tooling.explain(said)
-    assert line == ("statsbadge-cloudflare needs statsbadge>=1.1.0, and this tool is "
-                    "installed as statsbadge==1.0.0"), line
+    assert line == ("statsbadge-cloudflare needs statsbadge>=1.1.0, and this is "
+                    "statsbadge==1.0.0"), line
     # The extension is named, so the caller can tell a plugin just asked for from one
     # that was already in the list.
     assert tooling.blamed(line) == "statsbadge-cloudflare", tooling.blamed(line)
     assert tooling.blamed(said) == "statsbadge-cloudflare"
-
-    # The fix is to let statsbadge move, which means dropping the pin the tool carries.
-    assert tooling.unpinned("statsbadge==1.0.0") == "statsbadge"
-    assert tooling.unpinned("statsbadge[nvidia]>=1.0") == "statsbadge[nvidia]"
-    # A checkout resolves to whatever is in it, so the pin is already loose.
-    assert tooling.unpinned("statsbadge") is None
-    assert tooling.unpinned("/home/someone/statsbadge") is None
-    assert tooling.unpinned("statsbadge[nvidia]") is None
 
     # An unknown name is answered as one. uv reports it as a resolver error, which
     # otherwise reads as a version clash.
@@ -4423,13 +4416,12 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained(_h):
                            "your requirements are unsatisfiable.") == (
         "no such package: nosuchthing")
 
-    # The command offered has to rebuild what is there now, keeping everything installed
-    # dropped by the fix for something that was not.
+    # The build refuses before it promotes anything, so a generation is never left
+    # holding an extension that cannot run.
     with tempfile.TemporaryDirectory() as directory:
-        tooling.write_wanted(directory, ["statsbadge-clock"])
-        argv = tooling.install_argv("statsbadge", directory)
-        assert "--with-requirements" in argv, argv
-        assert tooling.wanted_path(directory) in argv, argv
+        where, why = library.build(directory, ["statsbadge-quakes>=99"])
+        assert where is None and why, (where, why)
+        assert library.generations(directory) == [], "a failed build was promoted"
 
 
 @check
@@ -4805,37 +4797,16 @@ def test_a_published_readme_links_to_somewhere_that_exists(_h):
 
 
 @check
-def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
-    """`uv tool install` replaces the environment instead of adding to it, so adding a second
-    extension by naming only that one drops the first. The list in the config directory is
-    where every install is made from, and uv's receipt seeds it."""
+def test_the_list_is_what_every_build_is_made_from(_h):
+    """`extensions.txt` is the record, and one extension can be named three ways.
+
+    A list holding two spellings of one plugin asks the installer for it twice, so
+    everything is compared by the short name `ext add` would have been given.
+    """
     from statsbadge import tooling
 
-    work = tempfile.mkdtemp(prefix="statsbadge-tool-")
+    work = tempfile.mkdtemp(prefix="statsbadge-list-")
     try:
-        # A receipt beside the interpreter marks a tool; a venv or a checkout has none.
-        assert tooling.as_uv_tool(work) is None
-        pathlib.Path(work, tooling.RECEIPT).write_text(
-            '[tool]\n'
-            'requirements = [\n'
-            '    { name = "statsbadge", extras = ["nvidia"], directory = "/src/sb" },\n'
-            '    { name = "statsbadge-clock", directory = "/src/sb/extensions/clock" },\n'
-            '    { name = "statsbadge-iss" },\n'
-            ']\n')
-        receipt = tooling.as_uv_tool(work)
-        # The extra has to survive: reinstalling as plain statsbadge would drop NVML support.
-        assert tooling.base_requirement(receipt) == "/src/sb[nvidia]", receipt
-        # Everything else it was built with is where an `ext add` starts.
-        assert tooling.installed_beside(receipt) == ["/src/sb/extensions/clock",
-                                                     "statsbadge-iss"]
-
-        registry = {"tool": {"requirements": [{"name": "statsbadge"}]}}
-        assert tooling.base_requirement(registry) == "statsbadge"
-        pinned = {"tool": {"requirements": [{"name": "statsbadge", "specifier": "==0.2.0"}]}}
-        assert tooling.base_requirement(pinned) == "statsbadge==0.2.0"
-        # Something this cannot read is left alone, and the caller offers the command.
-        assert tooling.base_requirement({"tool": {"requirements": []}}) is None
-
         # A short name becomes the package; anything already specific is left alone.
         assert tooling.as_requirement("clock") == "statsbadge-clock"
         for given in ("statsbadge-clock", "./extensions/statsbadge-iss", "statsbadge-iss>=0.2",
@@ -4845,12 +4816,10 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
                                    ("/src/sb/extensions/statsbadge-iss", "iss"),
                                    ("statsbadge-quakes>=0.2", "quakes")):
             assert tooling.short_name(requirement) == short, requirement
-
-        # One extension, three spellings: a list holding two of them asks uv for it twice.
         assert tooling.names(["/src/sb/extensions/statsbadge-clock"]) == {"clock"}
         assert tooling.short_name("clock") == tooling.short_name("statsbadge-clock")
 
-        # uv's resolver explains itself at length; the useful part is the name.
+        # The resolver explains itself at length; the useful part is the name.
         resolver = ("error: Because statsbadge-nope was not found in the package registry and "
                     "you require statsbadge-nope, we can conclude that your requirements are "
                     "unsatisfiable.")
@@ -4859,14 +4828,14 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
         assert tooling.explain("") == "uv did not say why"
 
         # Which package it was, out of either form. The caller holds the explained line,
-        # and a rebuild installs every entry, so the name uv trips over need not be the one
+        # and a build installs every entry, so the name it trips over need not be the one
         # just asked for. Saying which makes the message actionable.
         assert tooling.blamed(resolver) == "statsbadge-nope"
         assert tooling.blamed(tooling.explain(resolver)) == "statsbadge-nope"
         assert tooling.blamed("no internet") is None
 
         # An index is only asked about a bare name, a path or a specifier being skipped.
-        # An unreachable index is no answer either, so both come back None and uv settles it.
+        # An unreachable index is no answer either, so both come back None.
         assert tooling.on_index("./extensions/statsbadge-iss") is None
         assert tooling.on_index("statsbadge-clock>=2") is None
         assert tooling.on_index("git+https://example.invalid/x.git") is None
@@ -4878,107 +4847,75 @@ def test_a_uv_tool_install_keeps_the_extensions_it_already_had(_h):
         tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-iss"])
         # The file explains itself, and the comments stay comments.
         assert pathlib.Path(work, tooling.WANTED).read_text().startswith("#")
-
-        # Taking something out has to rebuild: measured against uv, a shorter list alone writes
-        # the shorter receipt but leaves the package in site-packages, entry point and all.
-        adding = tooling.install_argv("statsbadge", work)
-        removing = tooling.install_argv("statsbadge", work, fresh=True)
-        assert "--reinstall" not in adding, adding
-        assert "--reinstall" in removing, removing
-        for argv in (adding, removing):
-            assert argv[1:4] == ["tool", "install", "--force"], argv
-            assert argv[-2:] == ["--with-requirements", tooling.wanted_path(work)], argv
-        # An empty list points at nothing, and uv refuses an empty requirements file.
-        tooling.write_wanted(work, [])
-        assert "--with-requirements" not in tooling.install_argv("statsbadge", work)
+        # What is asked for against what is here, which is what `ext sync` repairs.
+        assert tooling.adrift(work, ["clock"]) == ["statsbadge-iss"]
+        assert tooling.adrift(work, ["clock", "iss"]) == []
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
 @check
-def test_an_upgrade_that_dropped_the_extensions_is_put_right_by_adding_one(_h):
-    """`uv tool install` replaces the environment whole, so upgrading statsbadge takes the
-    extensions with it and leaves `extensions.txt` naming things that have gone.
+def test_an_extension_asked_for_but_absent_is_built_back(_h):
+    """A Python upgrade leaves the library unread, so the list asks for what is not here.
 
-    `ext add` answered "already installed" to that, true of the list alone, leaving the
-    reader with the one command that cannot help. The fix is `ext sync`, which is now what
-    asking for an extension already on the list runs.
+    Asking for it again builds it back instead of reporting an install nothing can see.
+    The whole list is built, not only the name just given.
     """
     from statsbadge import __main__ as cli
     from statsbadge import tooling
 
-    # The list holds requirements and the environment reports entry point names, so telling one
-    # from the other rests on an extension calling its entry point what its package is called.
-    for directory in sorted(pathlib.Path("extensions").iterdir()):
-        pyproject = directory / "pyproject.toml"
-        if not pyproject.is_file():
-            continue
-        with open(pyproject, "rb") as handle:
-            project = tomllib.load(handle)["project"]
-        entries = list(project["entry-points"]["statsbadge.sources"])
-        assert entries == [tooling.short_name(project["name"])], (project["name"], entries)
-
-    work = tempfile.mkdtemp(prefix="statsbadge-sync-")
+    work = tempfile.mkdtemp(prefix="statsbadge-upgrade-")
     try:
         tooling.write_wanted(work, ["statsbadge-clock", "/src/statsbadge-cloudflare"])
-        # Both there, whichever way the list spells them.
-        assert tooling.adrift(work, ["clock", "cloudflare"]) == []
-        # What the upgrade leaves: named on the list, absent from the environment.
-        assert tooling.adrift(work, ["clock"]) == ["/src/statsbadge-cloudflare"]
-        assert tooling.adrift(work, []) == ["statsbadge-clock", "/src/statsbadge-cloudflare"]
 
         class Args:
             names = ["cloudflare"]
             config_dir = work
             verbose = False
 
-        ran = []
-
-        def rebuild(base, _directory, **_kwargs):
-            ran.append(base)
-            return True, ""
-
-        was = (cli.tooling.as_uv_tool, cli.tooling.run_install, cli.extensions.describe)
+        built = []
+        was = (cli.tooling.library.build, cli.tooling.library.activate,
+               cli.tooling.library.holds, cli.extensions.describe)
         try:
-            cli.tooling.as_uv_tool = lambda *_a, **_k: {
-                "tool": {"requirements": [{"name": "statsbadge"}]}}
-            cli.tooling.run_install = rebuild
-            # The environment after an upgrade: clock is back, cloudflare still missing.
+            def build(_directory, requirements, **_kwargs):
+                built.append(list(requirements))
+                return "/lib/gen", None
+
+            cli.tooling.library.build = build
+            cli.tooling.library.activate = lambda *_a: None
+            cli.tooling.library.holds = lambda *_a: True
+            # After an upgrade: clock is back, cloudflare still missing.
             cli.extensions.describe = lambda: [{"name": "clock"}]
             said = io.StringIO()
             with contextlib.redirect_stdout(said):
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
-            # It rebuilt, as an invisible install calls for.
-            assert ran == ["statsbadge"], ran
+            assert built == [["statsbadge-clock", "/src/statsbadge-cloudflare"]], built
             assert "not installed" in said.getvalue(), said.getvalue()
             # The list is untouched: it already asked for exactly this.
             assert tooling.read_wanted(work) == ["statsbadge-clock",
                                                  "/src/statsbadge-cloudflare"]
 
-            # With the extension actually there, adding it again still does nothing.
-            ran.clear()
+            # With the extension actually there, adding it again builds nothing.
+            built.clear()
             cli.extensions.describe = lambda: [{"name": "clock"}, {"name": "cloudflare"}]
             said = io.StringIO()
             with contextlib.redirect_stdout(said):
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
-            assert ran == [], ran
+            assert built == [], built
             assert "already installed" in said.getvalue(), said.getvalue()
         finally:
-            (cli.tooling.as_uv_tool, cli.tooling.run_install,
-             cli.extensions.describe) = was
+            (cli.tooling.library.build, cli.tooling.library.activate,
+             cli.tooling.library.holds, cli.extensions.describe) = was
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
 @check
-def test_adding_an_extension_that_is_already_there_records_it(_h):
-    """Not every statsbadge is a uv tool: a checkout runs from a virtualenv, where an
-    extension is pip installed and discovered by its entry point with nothing to rebuild.
+def test_an_extension_already_in_the_environment_is_recorded_and_reported(_h):
+    """A checkout runs from a virtualenv where an extension may be pip installed already.
 
-    `ext add` consulted the list before the environment, so an extension that was installed
-    and loading was told there was nothing to rebuild and handed the command to install what
-    it already had. It is now reported as present and written down, so a later `ext sync`
-    from a tool install still asks for it.
+    It is reported as present and written down, so a later build asks for it too. Taking
+    one out of the list cannot take it out of the environment, which the caller is told.
     """
     from statsbadge import __main__ as cli
     from statsbadge import tooling
@@ -4990,18 +4927,20 @@ def test_adding_an_extension_that_is_already_there_records_it(_h):
             config_dir = work
             verbose = False
 
-        was = (cli.tooling.as_uv_tool, cli.extensions.describe, cli.tooling.on_index)
+        was = (cli.tooling.library.build, cli.tooling.library.activate,
+               cli.tooling.library.holds, cli.extensions.describe, cli.tooling.on_index)
         try:
-            cli.tooling.as_uv_tool = lambda *_a, **_k: None      # a venv, not a tool
+            cli.tooling.library.build = lambda *_a, **_k: ("/lib/gen", None)
+            cli.tooling.library.activate = lambda *_a: None
             cli.tooling.on_index = lambda *_a, **_k: True
 
             # Installed, with nothing on the list: it has never been written.
+            cli.tooling.library.holds = lambda *_a: False
             cli.extensions.describe = lambda: [{"name": "bluesky"}]
             said = io.StringIO()
             with contextlib.redirect_stdout(said):
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
             assert "already installed" in said.getvalue(), said.getvalue()
-            assert "nothing here to rebuild" not in said.getvalue(), said.getvalue()
             assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
 
             # Asking again is quiet, and does not write it twice.
@@ -5010,80 +4949,18 @@ def test_adding_an_extension_that_is_already_there_records_it(_h):
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
             assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
 
-            # Absent, with no tool to build one.
-            cli.extensions.describe = list
-            tooling.forget_wanted(work)
-            said = io.StringIO()
-            with contextlib.redirect_stdout(said):
-                assert cli._change_extensions(Args, "add") == 1  # noqa: SLF001
-            assert "uv pip install statsbadge-bluesky" in said.getvalue(), said.getvalue()
-            # Command first, packaging after.
-            assert said.getvalue().startswith("install these into"), said.getvalue()
+            # Removing takes it off the list, and the environment's copy stays put.
+            said, complained = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(said), contextlib.redirect_stderr(complained):
+                assert cli._change_extensions(Args, "remove") == 0  # noqa: SLF001
             assert tooling.read_wanted(work) == []
-
-            # `sync` names nothing, so it works out what is missing.
-            tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-bluesky"])
-            cli.extensions.describe = lambda: [{"name": "clock"}]
-            said = io.StringIO()
-            with contextlib.redirect_stdout(said):
-                assert cli._change_extensions(Args, "sync") == 1  # noqa: SLF001
-            spoken = said.getvalue()
-            assert "uv pip install statsbadge-bluesky" in spoken, spoken
-            assert "statsbadge-clock" not in spoken, "it offered to install what is there"
-
-            # A sync with nothing missing still speaks.
-            cli.extensions.describe = lambda: [{"name": "clock"}, {"name": "bluesky"}]
-            said = io.StringIO()
-            with contextlib.redirect_stdout(said):
-                assert cli._change_extensions(Args, "sync") == 0  # noqa: SLF001
-            assert said.getvalue().strip() == "nothing to do", said.getvalue()
+            assert "still here" in complained.getvalue(), complained.getvalue()
         finally:
-            (cli.tooling.as_uv_tool, cli.extensions.describe,
+            (cli.tooling.library.build, cli.tooling.library.activate,
+             cli.tooling.library.holds, cli.extensions.describe,
              cli.tooling.on_index) = was
     finally:
         shutil.rmtree(work, ignore_errors=True)
-
-
-@check
-def test_asking_for_powermetrics_without_the_rule_says_so(_h):
-    """--powermetrics needs one sudoers rule.
-
-    A flag that quietly falls back leaves the reader guessing, and a rule matching anything
-    other than the argv sudo is handed matches nothing, so the line printed has to be the
-    command run."""
-    from statsbadge.sources import macos
-
-    argv = macos.powermetrics_argv()
-    assert argv[0].endswith("powermetrics"), argv
-    # The rule and the command cannot drift, sudoers matching the entire command line.
-    assert " ".join(argv) in macos.sudoers_line(), macos.sudoers_line()
-    assert "NOPASSWD" in macos.sudoers_line()
-    assert macos.sudoers_line() in macos.sudoers_advice()
-    assert "/etc/sudoers.d/statsbadge" in macos.sudoers_advice()
-
-    source = macos.MacPowermetrics({"powermetrics": True})
-    # The check asks whether sudo will run *this*, not whether sudo works at all: a rule for
-    # powermetrics alone leaves `sudo -n true` refused.
-    probe = _source_of(macos.MacPowermetrics._permitted)  # noqa: SLF001
-    assert "powermetrics_argv()" in probe and '"true"' not in probe, probe
-
-    # With no rule in place, the flag reports itself and the source stands down before
-    # sampling in silence.
-    said = io.StringIO()
-    was, sys.stderr = sys.stderr, said
-    try:
-        source._permitted = lambda: False  # noqa: SLF001
-        source.start()
-    finally:
-        sys.stderr = was
-    assert "visudo" in said.getvalue(), said.getvalue()
-    assert macos.sudoers_line() in said.getvalue()
-    assert source.faults == 1, source.faults
-    assert "sudoers" in source.last_fault, source.last_fault
-    # It draws blank, so a page of temperatures is pruned before it reaches the badge.
-    frame = model.empty_frame()
-    source.sample(frame, 1.0)
-    assert frame["power"] == {} and frame["cpu"] == {}, frame
 
 
 @check
@@ -5551,6 +5428,43 @@ def test_a_map_page_only_uses_names_the_badge_has(_h):
 
 
 @check
+def test_a_rebuild_does_not_prune_away_what_it_is_installing(_h):
+    """The generation being replaced is on sys.path, and every build resolves against an
+    empty directory and prunes what this environment already has.
+
+    Counting the live generation as "already here" pruned each extension straight back
+    out of the generation installing it, so a rebuild emptied the library.
+    """
+    work = tempfile.mkdtemp(prefix="statsbadge-prune-")
+    try:
+        live = os.path.join(work, "lib", "gen-0001")
+        target = os.path.join(work, "lib", "gen-0002")
+        for where in (live, target):
+            info = os.path.join(where, "madeup_ext-1.0.dist-info")
+            os.makedirs(os.path.join(where, "madeup_ext"))
+            os.makedirs(info)
+            pathlib.Path(info, "METADATA").write_text(
+                "Metadata-Version: 2.1\nName: madeup-ext\nVersion: 1.0\n")
+            pathlib.Path(info, "RECORD").write_text(
+                "madeup_ext/__init__.py,,\nmadeup_ext-1.0.dist-info/METADATA,,\n")
+            pathlib.Path(where, "madeup_ext", "__init__.py").write_text("")
+
+        sys.path.append(live)
+        try:
+            importlib.invalidate_caches()
+            assert library.prune(target, ignore=os.path.join(work, "lib")) == []
+            assert os.path.isdir(os.path.join(target, "madeup_ext")), "pruned its own build"
+            # Without the library ignored, the live generation counts and it goes.
+            assert library.prune(target) == ["madeup_ext"]
+            assert not os.path.isdir(os.path.join(target, "madeup_ext"))
+        finally:
+            sys.path.remove(live)
+            importlib.invalidate_caches()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+@check
 def test_the_catalogue_says_what_each_extension_is_and_what_it_needs(_h):
     """The published list, so the config UI can offer them without asking PyPI.
 
@@ -5598,7 +5512,7 @@ def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h):
                          {"Content-Type": "application/json"})
     assert status == 400, (status, body)
 
-    # A name no index knows is refused before anything is written.
+    # A name absent from every index is refused before anything is written.
     status, body = h.raw("POST", "/api/extensions",
                          json.dumps({"add": ["statsbadge-not-a-real-one-xyz"]}).encode(),
                          {"Content-Type": "application/json"})

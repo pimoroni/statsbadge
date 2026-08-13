@@ -9,8 +9,8 @@ import threading
 import time
 import webbrowser
 
-from . import (auth, autostart, beacon, collect, extensions, install, layout, logs,
-               runner, server, tooling)
+from . import (auth, autostart, beacon, collect, extensions, install, layout, library,
+               logs, runner, server, tooling)
 # Named apart from the `version` locals in this module, which are extensions' own.
 from . import version as package_version
 
@@ -531,21 +531,14 @@ def cmd_extensions(args):
         if missing:
             print("  not installed: {}".format(", ".join(missing)))
             print("  run: statsbadge ext sync")
-    elif tooling.as_uv_tool():
-        # Installed with --with and not from the list, so say where the list would be.
-        # The next `uv tool install` replaces the environment and drops them.
+    else:
         print()
-        print(f"no {tooling.WANTED} yet. The first `statsbadge ext add` writes one, taking")
-        print("what this tool was installed with as its starting point.")
+        print(f"no {tooling.WANTED} yet. The first `statsbadge ext add` writes one.")
     return 0
 
 
 def _how_to_add(name):
-    """The line to run to install an extension, for however statsbadge itself was installed."""
-    receipt = tooling.as_uv_tool()
-    if receipt and tooling.base_requirement(receipt):
-        return f"try: statsbadge ext add {name}"
-    return f"try: uv pip install {tooling.PREFIX}{name}"
+    return f"try: statsbadge ext add {name}"
 
 
 def _change_extensions(args, verb):
@@ -570,37 +563,23 @@ def _change_extensions(args, verb):
               file=sys.stderr)
         return 1
 
-    changed, base, why = done["changed"], done["base"], done["why"]
-    if base is None and not done["nothing"]:
-        print(f"install these into {sys.prefix}:")
-        for requirement in done["absent_here"]:
-            print(f"    uv pip install {requirement}")
-        print(f"`ext {verb}` requires a uv tool install.")
-        return 1
+    changed, why = done["changed"], done["why"]
     if done["ok"]:
         if done["nothing"]:
-            if verb == "sync" or base is None:
-                print("nothing to do")
             return 0
-        if done["moved"]:
-            print("statsbadge itself moved {} to {}: an extension asked for it.".format(
-                *done["moved"]))
+        for short in done["stuck"]:
+            print(f"{short} is installed in the environment itself, so it is still here.",
+                  file=sys.stderr)
+            print(f"  whatever put it in {sys.prefix} has to take it out again.",
+                  file=sys.stderr)
         print("done. Run `statsbadge install` to push any badge-side code they ship.")
         return 0
 
     print(why, file=sys.stderr)
-    # An extension wanting a statsbadge newer than this tool is pinned to. The fix is to
-    # let statsbadge move, and the list is back to what it was, so the command below
-    # rebuilds exactly what is there now, unpinned.
-    loosened = tooling.unpinned(base) if "needs statsbadge" in why else None
-    if loosened:
-        print(f"  this tool was installed as {base}, so statsbadge cannot move. Unpin it, "
-              f"then add again:", file=sys.stderr)
-        print(f"    {tooling.quoted(tooling.install_argv(loosened, directory))}",
-              file=sys.stderr)
-        for requirement in changed:
-            print(f"    statsbadge ext add {tooling.short_name(requirement)}",
-                  file=sys.stderr)
+    if "needs statsbadge" in (why or ""):
+        # The library installs beside statsbadge and cannot move it, so the upgrade is the
+        # answer and it is not one this can make.
+        print("  upgrade statsbadge itself, then add it again.", file=sys.stderr)
         return 1
     # uv names one package, and it need not be one just asked for. The rebuild installs
     # the whole list, so an entry that was already there and cannot be installed fails
@@ -909,6 +888,11 @@ def main(argv=None):
         step.set_defaults(func=cmd_autostart, verb=verb)
 
     args = parser.parse_args(argv)
+    # Extensions live beside the config, so every command sees them. Swept first, while
+    # nothing has imported out of a generation the last build replaced.
+    directory = config_dir(getattr(args, "config_dir", None))
+    library.sweep(directory)
+    library.activate(directory)
     return args.func(args)
 
 

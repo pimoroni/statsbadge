@@ -665,10 +665,13 @@ async function changeExtension(verb, name) {
   installing.delete(name)
   if (!done.ok) {
     toast(done.why || "could not do that", true)
-    if (done.manual && done.manual.length) toast(done.manual.join("; "), true)
   } else {
     toast(verb === "add" ? `Installed ${name}` : `Removed ${name}`)
-    if (done.moved) toast(`statsbadge itself moved ${done.moved[0]} to ${done.moved[1]}`)
+    // Installed into the environment itself, where a build beside the config cannot
+    // reach it.
+    for (const stuck of done.stuck || []) {
+      toast(`${stuck} is installed in statsbadge itself, so it is still here`, true)
+    }
     if (verb === "add" && (done.needs_usb || []).includes(name)) {
       toast("Run statsbadge install to push its page to the badge")
     }
