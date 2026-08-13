@@ -253,6 +253,70 @@ jobs:
         with:
           files: ${{ env.NAME }}.zip
 
+  package-desktop:
+    name: Pack the desktop app
+    needs: [check, tray, web]
+    permissions:
+      contents: write # to attach the installer to a release
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macOS
+            # Ad-hoc signed, there being no Apple Developer account behind this. The .app
+            # runs, but the first launch needs Open from the context menu: Gatekeeper
+            # refuses a double-click on anything unnotarised.
+            sign: "--adhoc-sign"
+          - os: windows-latest
+            platform: windows
+            # Unsigned, so SmartScreen warns the first time. Briefcase fetches WiX itself.
+            sign: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # The version comes from the nearest tag, which a shallow clone does not carry.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # setup-uv publishes no v9 tag, only exact versions
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --group packaging
+
+      # From the same mark the tray and the badge draw. Briefcase falls back to its own
+      # mascot for an icon it cannot find, and says so in one line among hundreds.
+      - name: Draw the icons
+        run: uv run python tools/icon.py
+
+      # Briefcase takes a static version, and everything else here reads the tag.
+      - name: Say what is being packaged
+        run: uv run python tools/app_version.py
+
+      - name: Build it
+        run: |
+          uv run briefcase create ${{ matrix.platform }} app --no-input
+          uv run briefcase build ${{ matrix.platform }} app --no-input
+          uv run briefcase package ${{ matrix.platform }} app --no-input ${{ matrix.sign }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: statsbadge-${{ matrix.platform }}
+          path: dist/*
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+
   package-app:
     name: Pack the badge app
     runs-on: ubuntu-latest
