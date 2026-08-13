@@ -36,9 +36,10 @@ def start(config_dir, name="tray"):
     # Propagating reaches logging's last resort handler, which writes to stderr.
     logger.propagate = False
 
+    # A terminal still gets everything, or `tray` looks hung with its reasons in a file.
     # One buffer each, or a half-written stdout line and a stderr line splice together.
-    sys.stdout = _Stream(logger)
-    sys.stderr = _Stream(logger)
+    sys.stdout = _Stream(logger, _terminal(sys.stdout))
+    sys.stderr = _Stream(logger, _terminal(sys.stderr))
     # Under pythonw the originals are None too.
     sys.__stdout__ = sys.stdout
     sys.__stderr__ = sys.stderr
@@ -53,20 +54,39 @@ class _Handler(logging.handlers.RotatingFileHandler):
         """Swallow it. The default reports to sys.stderr, which is this handler."""
 
 
+def _terminal(stream):
+    """The stream if someone is watching it, else None."""
+    try:
+        return stream if stream is not None and stream.isatty() else None
+    except (AttributeError, ValueError, OSError):
+        return None
+
+
 class _Stream:
-    """A file-like object that turns writes into whole log lines."""
+    """A file-like object that turns writes into whole log lines.
+
+    `echo` is the terminal it came from, where there is one, so the log is a record and
+    not a diversion.
+    """
 
     encoding = "utf-8"
     errors = "replace"
 
-    def __init__(self, logger):
+    def __init__(self, logger, echo=None):
         self._logger = logger
+        self._echo = echo
         self._parts = []
         self._lock = threading.Lock()
 
     def write(self, text):
         if not text:
             return 0
+        if self._echo is not None:
+            try:
+                self._echo.write(text)
+                self._echo.flush()
+            except (ValueError, OSError):
+                self._echo = None
         with self._lock:
             self._parts.append(text)
             if "\n" in text:
@@ -85,7 +105,7 @@ class _Stream:
         self.flush()
 
     def isatty(self):
-        return False
+        return self._echo is not None
 
     def readable(self):
         return False

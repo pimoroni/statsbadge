@@ -225,6 +225,32 @@ def test_what_runs_at_login_is_a_real_path():
 # -- the log ----------------------------------------------------------------
 
 @check
+def test_a_terminal_still_sees_everything_the_log_does():
+    """Redirecting a terminal wholesale left `tray` looking hung.
+
+    Without a tray it says why and serves anyway, and that sentence went to the log file
+    where nobody was looking. A terminal is echoed to, and the log keeps the record.
+    """
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    was = (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__)
+    watching = Terminal()
+    directory = tempfile.mkdtemp()
+    try:
+        sys.stdout = sys.stderr = watching
+        target = logs.start(directory, "watched")
+        print("pystray is not installed")
+        assert sys.stdout.isatty(), "a terminal behind it should still report as one"
+    finally:
+        sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__ = was
+
+    assert "pystray is not installed" in watching.getvalue(), watching.getvalue()
+    assert "pystray is not installed" in open(target).read()
+
+
+@check
 def test_a_print_survives_having_nowhere_to_print():
     """sys.stdout is None under pythonw, and inside an .app bundle. Every print raises."""
     was = (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__)
