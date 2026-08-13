@@ -250,9 +250,14 @@ class Collector:
                 continue
             decayed = self._peaks.get(key, 0.0) * decay
             self._peaks[key] = max(float(value), decayed, floor)
-        if self._peaks:
-            # Scale, not a reading, so it is never offered as a field.
-            frame["peaks"] = {key: round(value) for key, value in self._peaks.items()}
+        # Whatever a source put there stands under these: LibreHardwareMonitor reports
+        # how high each rail has been, which is past guessing here. Scale and not a
+        # reading, so none of it is offered as a field.
+        given = dict(frame.get("peaks") or {})
+        if self._peaks or given:
+            # Three places, or a voltage rounds to one.
+            given.update({key: round(value, 3) for key, value in self._peaks.items()})
+            frame["peaks"] = given
 
     def _push_history(self, frame):
         """One point per sample per field, aligned to the sample clock.

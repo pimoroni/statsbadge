@@ -5903,13 +5903,20 @@ def test_core_voltages_come_back_as_a_bar_each(_h):
             {"Text": "Intel Core i9-10980HK", "ImageURL": "images_icon/cpu.png",
              "Children": [
                  {"Text": "Voltages", "Children": [
-                     {"Text": "CPU Core #1", "Value": "1.325 V"},
-                     {"Text": "CPU Core #2", "Value": "1.294 V"},
-                     {"Text": "CPU SoC", "Value": "1.100 V"},
+                     {"Text": "CPU Core #1", "Value": "1.325 V", "Max": "1.456 V"},
+                     {"Text": "CPU Core #2", "Value": "1.294 V", "Max": "1.449 V"},
+                     {"Text": "CPU SoC", "Value": "1.100 V", "Max": "1.100 V"},
                  ]},
                  {"Text": "Temperatures", "Children": [
                      {"Text": "Core Average", "Value": "78.1 °C"},
                      {"Text": "CPU Package", "Value": "91.0 °C"},
+                 ]},
+             ]},
+            {"Text": "Alienware m15", "ImageURL": "images_icon/mainboard.png",
+             "Children": [
+                 # The board's rails are voltages too, and no scale for a core.
+                 {"Text": "Voltages", "Children": [
+                     {"Text": "Voltage #1", "Value": "11.821 V", "Max": "11.821 V"},
                  ]},
              ]},
             {"Text": "NVIDIA GeForce RTX 2080", "ImageURL": "images_icon/nvidia.png",
@@ -5935,6 +5942,9 @@ def test_core_voltages_come_back_as_a_bar_each(_h):
         windows._fetch = was
 
     assert frame["cpu"]["volts"] == [1.325, 1.294, 1.1], frame["cpu"]["volts"]
+    # The highest LHM has seen a CPU rail reach is the full scale for the bars. Drawn
+    # against 100 they sit against the left edge, and a board's 12V rail is not it.
+    assert frame["peaks"]["cpu.volts"] == 1.456, frame.get("peaks")
     # Short enough for a lane, and the badge reads them off the field beside it.
     assert frame["cpu"]["volts_names"] == ["Core #1", "Core #2", "SoC"], \
         frame["cpu"]["volts_names"]

@@ -1174,6 +1174,7 @@ const SCALE = {
   temp: 100, power: 250, package_w: 150, rpm: 6000,
   freq: 6000, clock: 3000,
   up_bps: 12.5e6, down_bps: 12.5e6, read_bps: 500e6, write_bps: 500e6,
+  volts: 1.6,
 }
 // pages.PERCENT. Longer than the live view's list further down, which is a different job:
 // `cores` is a list of percentages, and a gauge needs to know that where a printed reading
