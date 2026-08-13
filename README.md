@@ -13,16 +13,26 @@ Build your stats overview from a selection of pages - bar graphs and waterfalls 
 Uses [uv](https://docs.astral.sh/uv/). As a tool, so it lands on your PATH and keeps a separate environment:
 
 ```bash
-uv tool install statsbadge
-statsbadge serve
+uv tool install "statsbadge[tray]"
+statsbadge tray
 ```
+
+That puts an icon in your menu bar or notification area and serves from there, so there is
+no terminal to leave open. The menu opens the config UI, approves a badge asking to pair,
+and switches on **Start at login**. `statsbadge serve` is the same server without the icon,
+and `uv tool install statsbadge` without the extra is all a headless host needs.
+
+On Linux the tray needs GTK bindings from your distribution, which pip cannot supply, and
+GNOME hosts no tray at all without the [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
+Run `statsbadge tray --check` for what is missing on this machine. Without a tray it serves
+anyway.
 
 Working on a checkout instead:
 
 ```bash
-uv sync
+uv sync --extra tray
 uv pip install --no-deps ./extensions/statsbadge-clock   # optional
-uv run statsbadge serve
+uv run statsbadge tray
 ```
 
 Into whatever environment you already have, with pip or uv:
@@ -32,7 +42,7 @@ uv pip install statsbadge      # or from a checkout: uv pip install .
 pip install statsbadge         # plain pip works too
 ```
 
-One extra, if you want it: `statsbadge[nvidia]` for NVIDIA cards via NVML. Pushing the app to a badge over USB needs nothing added.
+Two extras: `statsbadge[tray]` for the icon, and `statsbadge[nvidia]` for NVIDIA cards via NVML. Take both with `statsbadge[tray,nvidia]`. Pushing the app to a badge over USB needs nothing added.
 
 With the badge on USB, in another terminal:
 
@@ -56,7 +66,12 @@ Then open <http://127.0.0.1:8420/> to pick screens, themes and button bindings. 
 ## Everything else you might want
 
 ```bash
-statsbadge serve                       # the usual thing
+statsbadge tray                        # the usual thing, with an icon to reach it by
+statsbadge tray --check                # whether a tray works here, and what it needs
+statsbadge serve                       # the same server, in a terminal
+statsbadge autostart                   # whether it starts at login, and what runs
+statsbadge autostart enable            # start the tray at login
+statsbadge autostart disable
 statsbadge status                      # what is on the badge, what this host knows
 statsbadge ext                         # installed extensions, and whether they loaded
 statsbadge ext add clock               # install one and remember it
@@ -75,7 +90,9 @@ statsbadge --config-dir ./cfg serve    # global options come before the subcomma
 
 Each badge is configured separately. The picker in the header of the config UI names the badge a page belongs to, and pages, theme, buttons and the rest belong to that badge. A badge that has just been paired draws the default until it is saved for the first time, the entry "Default, for any other badge" in the picker. Saving for one badge leaves the others where they are - a badge only refetches when its layout's revision moves. Forgetting a badge takes its layout with it. What an extension is *told* - a place, an API key - stays one answer per host, since that is what it is.
 
-Configuration lives in `~/.config/statsbadge` on Linux, `~/Library/Application Support/statsbadge` on macOS and `%LOCALAPPDATA%\statsbadge` on Windows, or `$XDG_CONFIG_HOME/statsbadge` wherever that is set. `statsbadge status` prints the path it is using. Three files: `layout.json`, `server.json` and `badges.json`, the last holding pairing secrets and kept at mode 600.
+Configuration lives in `~/.config/statsbadge` on Linux, `~/Library/Application Support/statsbadge` on macOS and `%LOCALAPPDATA%\statsbadge` on Windows, or `$XDG_CONFIG_HOME/statsbadge` wherever that is set. `statsbadge status` prints the path it is using. Three files: `layout.json`, `server.json` and `badges.json`, the last holding pairing secrets and kept at mode 600. The tray writes its output to `logs/tray.log` beside them, since it has no terminal to print to; **Open the log** in the menu goes there.
+
+`statsbadge autostart enable` writes a registry value under `HKCU\...\CurrentVersion\Run` on Windows, a LaunchAgent in `~/Library/LaunchAgents` on macOS, or a `.desktop` file in `~/.config/autostart` elsewhere. It records whatever `--config-dir` and `--port` you asked for. `statsbadge autostart` prints exactly what would run, and the tray's **Start at login** is the same switch.
 
 ## Changing IPs, and more than one computer
 

@@ -20,6 +20,10 @@ Two halves sharing one small contract. The host picks *what* to show and the bad
 | [`layout.py`](src/statsbadge/layout.py) | page kinds, validation, pruning |
 | [`server.py`](src/statsbadge/server.py) | the HTTP server, and the framing that makes it fast |
 | [`install.py`](src/statsbadge/install.py) | pushing the app and credentials over USB |
+| [`runner.py`](src/statsbadge/runner.py) | collector, server and beacon, started and stopped together |
+| [`tray/`](src/statsbadge/tray/) | the menu bar icon, its menu, and the pystray adapter |
+| [`autostart.py`](src/statsbadge/autostart.py) | run at login, one backend per platform |
+| [`logs.py`](src/statsbadge/logs.py) | where a process with no terminal prints |
 
 ## The frame
 
@@ -97,6 +101,20 @@ and `App.sweep` collects once a second between frames while the screen holds sti
 at, so a sync is only considered against a *new* reading, keyed on the frame's `seq`.
 
 **`screen.raw` is R G B A, premultiplied, no byte swap.** Get it wrong and red and blue swap.
+
+**The tray owns the main thread, and the server does not.** `icon.run()` drives
+NSApplication on macOS and pumps messages on Windows, so `serve_forever` runs on a thread
+under it. That is the other way round from `serve`. Signals do not arrive either: Python
+runs a handler on the main thread between bytecodes, and that thread is inside the
+toolkit, so `tray` blocks SIGINT and SIGTERM and waits for them in `sigwait` on a thread.
+`launchctl bootout` sends SIGTERM.
+
+**A second bind to a listening port succeeds on Windows.** `Server` sets `SO_REUSEADDR`,
+which there means the two split incoming connections, where macOS and Linux fail the bind.
+So `tray` asks `/v1/hello` before binding, and that check is the only single-instance guard.
+
+**`sys.stdout` is None under `pythonw`, and inside a `.app` bundle.** This package prints
+about 145 times, so `logs.start` replaces the streams before anything else in `cmd_tray`.
 
 **Nothing in `sample` may wait on a network.** Every source shares the collector's thread and
 the first sample is taken during `start`, so a lookup that hangs holds up the launch.
