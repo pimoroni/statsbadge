@@ -123,6 +123,14 @@ def _push(options, session, badges, identity, modules, say, confirm, password):
     if options.get("mpy") and state_only:
         say("  note: --mpy does nothing with --state-only, which writes credentials only")
 
+    # Before the badge is touched. write_secrets checks it again against the badge's own
+    # list, by which point the app is copied and the volume is mounted.
+    region = options.get("region")
+    if region and region.lower() not in install.REGIONS:
+        return _answer(f"{region} is not a WiFi region the badge knows. One of: "
+                       f"{', '.join(install.REGIONS)}",
+                       badge=info["uid"], model=info["model"])
+
     ssid = options.get("ssid")
     if ssid and options.get("password") is None:
         if password is None:

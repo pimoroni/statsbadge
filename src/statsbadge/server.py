@@ -252,6 +252,9 @@ class Service:
             "log": list(job["log"]) if job else [],
             "result": job["result"] if job else None,
             "ports": install.find_ports(),
+            # The picker is built from these. A region outside the set leaves the radio
+            # unable to associate, so it must not be typed.
+            "regions": list(install.REGIONS),
         }
 
     def start_install(self, options):
