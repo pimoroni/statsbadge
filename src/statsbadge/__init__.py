@@ -21,10 +21,17 @@ def version():
 def bundled():
     """Whether this is a packaged app, where `sys.executable` is the app's own binary.
 
-    A briefcase bundle leaves no marker, so the tell is that the executable is not a
-    Python. It matters twice: running it with `-m pip` starts a second copy of the app,
-    and a login entry has to name the app itself and not an interpreter with flags.
+    A briefcase bundle leaves no marker of its own, so the tell is the executable: a
+    Python, or something else. It matters twice. Running it with `-m pip` starts a second
+    copy of the app, and a login entry has to name the app itself.
     """
     if getattr(sys, "frozen", False):
         return True
-    return not os.path.basename(sys.executable or "").lower().startswith("python")
+    beside = os.path.dirname(sys.executable or "")
+    if os.path.basename(sys.executable or "").lower().startswith("python"):
+        return False
+    # A console script's launcher sits beside the interpreter it runs, which is what
+    # `statsbadge-tray.exe` in a venv's Scripts is. A bundle's binary has no such
+    # neighbour: its Python is somewhere else inside the app.
+    return not any(os.path.exists(os.path.join(beside, name)) for name in
+                   ("python.exe", "pythonw.exe", "python3", "python"))

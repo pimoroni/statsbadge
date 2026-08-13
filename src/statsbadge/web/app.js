@@ -639,8 +639,9 @@ function catalogueBox() {
   }
   if (!catalogue.manageable) {
     box.append(el("p", { textContent:
-      `Installing from here needs a uv tool install. This one runs from ${catalogue.prefix},`
-      + " so add them with uv pip install instead." }))
+      "Installing needs uv or pip, and this server can reach neither. It runs from "
+      + `${catalogue.prefix}, and a tray started at login carries the PATH it was given `
+      + "then. Add them with uv pip install, or start it again from a terminal." }))
   }
   box.append(el("ul", { className: "catalogue" }, ...catalogue.offered.map(offerRow)))
   box.append(freeformForm())

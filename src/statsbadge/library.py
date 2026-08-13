@@ -99,12 +99,34 @@ def sweep(config_dir):
     return dropped
 
 
+def _uv():
+    """uv, on the PATH or where its installer leaves it.
+
+    A tray started at login carries the PATH it was given then, and a uv tool environment
+    has no pip behind it. Between them the Extensions tab went quiet on a machine that
+    plainly had uv.
+    """
+    found = shutil.which("uv")
+    if found:
+        return found
+    name = "uv.exe" if os.name == "nt" else "uv"
+    places = [os.path.join(os.path.expanduser("~"), ".local", "bin"),
+              os.path.dirname(sys.executable or "")]
+    if os.name == "nt":
+        places.append(os.path.join(os.environ.get("LOCALAPPDATA", ""), "uv", "bin"))
+    for place in places:
+        candidate = os.path.join(place, name)
+        if place and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def tool():
     """(which one, the argv up to its verb) for what can install here, or None.
 
     uv first, since a uv-made virtualenv usually carries no pip at all.
     """
-    found = shutil.which("uv")
+    found = _uv()
     if found:
         return "uv", [found, "pip"]
     # A packaged app's executable is the app. Running it with `-m pip` starts a second
