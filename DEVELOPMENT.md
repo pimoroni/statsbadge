@@ -24,6 +24,8 @@ Two halves sharing one small contract. The host picks *what* to show and the bad
 | [`tray/`](src/statsbadge/tray/) | the menu bar icon, its menu, and the pystray adapter |
 | [`autostart.py`](src/statsbadge/autostart.py) | run at login, one backend per platform |
 | [`logs.py`](src/statsbadge/logs.py) | where a process with no terminal prints |
+| [`library.py`](src/statsbadge/library.py) | the extensions directory beside the config, and its generations |
+| [`tooling.py`](src/statsbadge/tooling.py) | `extensions.txt`, and turning a change to it into a build |
 
 ## The frame
 
@@ -102,12 +104,19 @@ at, so a sync is only considered against a *new* reading, keyed on the frame's `
 
 **`screen.raw` is R G B A, premultiplied, no byte swap.** Get it wrong and red and blue swap.
 
-**Installing an extension rebuilds the environment the server is running from.**
-`uv tool install --force` replaces it whole. The process survives, and
-`Service.reload_extensions` picks the new one up because `entry_points()` walks `sys.path`
-on every call. What it cannot survive is statsbadge itself moving, which a rebuild can
-do: `apply` reports that as `moved`, and the answer then is a restart. One rebuild at
-a time, under a lock, or the second is resolved from a list the first has already replaced.
+**A rebuild must not count the generation it is replacing.** Extensions install to
+`<config>/lib/<tag>-<n>` with `--target`, which resolves against an empty directory and so
+drags in a second copy of statsbadge, Pillow and psutil. `library.prune` drops whatever
+this environment already carries at the same version. The live generation is on
+`sys.path` by then, so counting it pruned every extension straight back out of the
+generation installing it, and a rebuild emptied the library.
+
+**Every build writes a fresh generation.** An imported `.pyd` cannot be replaced on
+Windows, so a build lands in `<tag>-<n>.partial` and is renamed into place. Older
+generations are swept at the next start, before anything has imported from them.
+`Service.reload_extensions` then picks the new one up in place, `entry_points()` walking
+`sys.path` on every call. One build at a time, under a lock, or the second resolves from
+a list the first has already replaced.
 
 **The tray owns the main thread, and the server does not.** `icon.run()` drives
 NSApplication on macOS and pumps messages on Windows, so `serve_forever` runs on a thread
