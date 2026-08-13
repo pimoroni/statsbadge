@@ -187,7 +187,9 @@ statsbadge install
 
 Badge-side modules go on by default, so adding an extension and then running `install` is all of it. `--no-extensions` leaves them off, and `--without NAME` drops one from both the frame and the badge.
 
-`uv tool install` is declarative: every run replaces the last, so naming one extension would drop the others. `ext add` keeps the list in `extensions.txt` beside your config and rebuilds from all of it. It starts from whatever the tool was already installed with, extras like `statsbadge[nvidia]` included, read from uv's record of the install.
+Extensions install into `lib/` beside your config, not into the environment statsbadge itself runs from, and that directory goes on `sys.path` at startup. So this works the same from a `uv tool install`, a virtualenv, a pipx install or a checkout, and upgrading statsbadge no longer drops them.
+
+`extensions.txt` beside your config is the record, and every change rebuilds from all of it, so removing one is a rebuild without that line. Each build lands in a new numbered directory and is renamed into place. Older ones are swept at the next start, once nothing is importing from them.
 
 ```bash
 statsbadge ext                     # what is installed, and what the list asks for
@@ -200,7 +202,7 @@ The tab offers whatever [`catalogue.toml`](https://github.com/pimoroni/statsbadg
 
 Installing from the UI needs a `uv tool install`, the one layout that can rebuild itself. Anywhere else the tab still lists what is installed and prints the `uv pip install` line to run.
 
-Installed some other way - a venv, pipx, a checkout - and `ext add` prints the `uv pip install` line to run instead. The list is still the record either way.
+Installing needs either `uv` or `pip` on the machine.
 
 Three extensions are vendored here: [statsbadge-clock](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's world map, so running both costs one copy of the coastlines and no geometry crosses the network.
 
