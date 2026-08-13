@@ -6,6 +6,7 @@ remember the previous frame to draw a network graph.
 
 import os
 import platform
+import re
 import socket
 import time
 
@@ -175,6 +176,16 @@ def _busiest_iface():
     return best[2], best[1]
 
 
+# What the chip is called, with the trademarks, the word CPU and the clock speed taken
+# out: the badge draws this on one 320 pixel line, and "Intel(R) Core(TM) i7-10750H CPU @
+# 2.60GHz" is mostly punctuation.
+_CPU_NOISE = re.compile(r"\((?:R|TM|r|tm)\)|\bCPU\b|\bProcessor\b|\s+\d+-Core\b|@.*$")
+
+
+def _tidy_cpu(name):
+    return " ".join(_CPU_NOISE.sub(" ", name).split()) or name
+
+
 def _cpu_name():
     system = platform.system()
     try:
@@ -183,12 +194,23 @@ def _cpu_name():
             out = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
                                  capture_output=True, text=True, timeout=2)
             if out.returncode == 0 and out.stdout.strip():
-                return out.stdout.strip()
+                return _tidy_cpu(out.stdout.strip())
         elif system == "Linux":
             with open("/proc/cpuinfo") as f:
                 for line in f:
                     if line.startswith("model name"):
-                        return line.split(":", 1)[1].strip()
+                        return _tidy_cpu(line.split(":", 1)[1].strip())
+        elif system == "Windows":
+            # platform.processor() there is "Intel64 Family 6 Model 165 Stepping 2,
+            # GenuineIntel": the stepping, and not the name anyone knows the chip by.
+            # The registry holds what the chip calls itself, and reading it is instant.
+            import winreg
+            with winreg.OpenKey(
+                    winreg.HKEY_LOCAL_MACHINE,
+                    r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as key:
+                name = winreg.QueryValueEx(key, "ProcessorNameString")[0]
+            if name.strip():
+                return _tidy_cpu(name)
     except Exception:
         pass
-    return platform.processor() or platform.machine()
+    return _tidy_cpu(platform.processor() or platform.machine())
