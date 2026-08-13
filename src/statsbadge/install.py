@@ -340,13 +340,18 @@ def wifi_network(port):
     return None
 
 
-def wifi_configured(volume):
-    """Whether secrets.py already names a network."""
+def wifi_network_on(volume):
+    """The SSID secrets.py names on a mounted volume, or None."""
     path = secrets_file(volume)
     if not path:
-        return False
+        return None
     with open(path) as handle:
-        return bool(_secret_value(handle.read(), "WIFI_SSID"))
+        return _secret_value(handle.read(), "WIFI_SSID") or None
+
+
+def wifi_configured(volume):
+    """Whether secrets.py already names a network."""
+    return bool(wifi_network_on(volume))
 
 
 def _secret_value(text, key):
