@@ -42,46 +42,22 @@ class PortBusy(InstallError):
 
 # -- finding the badge ------------------------------------------------------
 
-# 0x2E8A is Raspberry Pi's vendor id, and a debug probe shares it with the board it
-# is attached to. Talking MicroPython to a CMSIS-DAP interface times out, and these are
-# excluded by product id, the ordering being no guarantee.
-NOT_A_BADGE_PIDS = frozenset((
-    0x0003,     # RP2 BOOTSEL mass storage
-    0x0004,     # picoprobe
-    0x000C,     # Debug Probe (CMSIS-DAP)
-    0x000A,     # Pico SDK stdio only
+# MICROPY_HW_USB_PID from each board definition. The vendor id is Raspberry Pi's, shared
+# with every other RP2350 board and with a debug probe attached to one.
+BADGE_VID = 0x2E8A
+BADGE_PIDS = frozenset((
+    0x1100,     # Badger 2350
+    0x1101,     # Tufty 2350
+    0x1102,     # Blinky 2350
 ))
 
 
 def find_ports():
-    """Serial ports that look like a Badgeware board, best candidate first."""
-    try:
-        from serial.tools import list_ports
-    except ImportError:
-        return _find_ports_by_glob()
+    """Serial ports that are a Badgeware board."""
+    from serial.tools import list_ports
 
-    ranked = []
-    for port in list_ports.comports():
-        if port.vid != 0x2E8A or port.pid in NOT_A_BADGE_PIDS:
-            continue
-        text = " ".join(filter(None, (port.product, port.manufacturer))).lower()
-        if "cmsis" in text or "debug probe" in text:
-            continue
-        # A board naming MicroPython is the surer match.
-        rank = 0 if "micropython" in text else 1
-        ranked.append((rank, port.device))
-    # pyserial sees vid/pid, so its answer stands: a glob fallback would hand back the
-    # debug probe it just ruled out.
-    ranked.sort()
-    return [device for _, device in ranked]
-
-
-def _find_ports_by_glob():
-    if platform.system() == "Darwin":
-        return sorted(glob.glob("/dev/cu.usbmodem*"))
-    if platform.system() == "Linux":
-        return sorted(glob.glob("/dev/ttyACM*"))
-    return []
+    return sorted(port.device for port in list_ports.comports()
+                  if port.vid == BADGE_VID and port.pid in BADGE_PIDS)
 
 
 def _exec(port, script, timeout=30):

@@ -4782,6 +4782,46 @@ class FakeBoard:
     PROMPT = b"raw REPL; CTRL-B to exit\r\n"
 
 
+class FakePort:
+    def __init__(self, device, pid, product, vid=0x2E8A):
+        self.device, self.vid, self.pid = device, vid, pid
+        self.product, self.manufacturer = product, "Pimoroni"
+
+
+@check
+def test_a_badge_is_found_by_the_product_id_it_declares(_h):
+    """Every board here is on Raspberry Pi's vendor id, badges included, so that alone
+    finds a debug probe and offers it a REPL that never answers. A badge sets its own
+    product id, which is the whole of the test: 0x1101 is a Tufty 2350, read off a
+    plugged-in one and off MICROPY_HW_USB_PID in the board definition it was built from."""
+    plugged = [
+        FakePort("/dev/probe", 0x000C, "Debug Probe (CMSIS-DAP)"),
+        FakePort("/dev/tufty", 0x1101, "Pimoroni Tufty 2350 MicroPython"),
+        FakePort("/dev/pico", 0x0005, "Board in FS mode"),
+        FakePort("/dev/badger", 0x1100, "Pimoroni Badger 2350 MicroPython"),
+        FakePort("/dev/bootsel", 0x0003, "RP2 Boot"),
+        FakePort("/dev/arduino", 0x1101, "Something else entirely", vid=0x2341),
+    ]
+    listing = type(sys)("serial.tools.list_ports")
+    listing.comports = lambda: plugged
+    tools = type(sys)("serial.tools")
+    tools.list_ports = listing
+    stub = type(sys)("serial")
+    stub.tools = tools
+    was = {name: sys.modules.get(name)
+           for name in ("serial", "serial.tools", "serial.tools.list_ports")}
+    sys.modules.update({"serial": stub, "serial.tools": tools,
+                        "serial.tools.list_ports": listing})
+    try:
+        assert install.find_ports() == ["/dev/badger", "/dev/tufty"], install.find_ports()
+    finally:
+        for name, module in was.items():
+            if module is None:
+                del sys.modules[name]
+            else:
+                sys.modules[name] = module
+
+
 @check
 def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else(_h):
     """Only the raw REPL, with mpremote off the PATH and no interpreter spawned.
