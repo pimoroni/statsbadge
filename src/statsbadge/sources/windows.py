@@ -61,7 +61,11 @@ class LibreHardwareMonitor(Source):
         gpu_temp = _pick(readings, ("gpu",), ("core",), "°C")
         gpu_load = _pick(readings, ("gpu",), ("core",), "%")
         gpu_power = _pick(readings, ("gpu",), ("package", "total"), "W")
-        if any(v is not None for v in (gpu_temp, gpu_load, gpu_power)):
+        # VRAM comes as three figures in MB. The frame carries what is used and how
+        # full that leaves it.
+        vram_used = _pick(readings, ("gpu",), ("memory used",), "MB")
+        vram_total = _pick(readings, ("gpu",), ("memory total",), "MB")
+        if any(v is not None for v in (gpu_temp, gpu_load, gpu_power, vram_used)):
             gpus = frame["gpu"] or [{}]
             if gpu_temp is not None:
                 gpus[0].setdefault("temp", gpu_temp)
@@ -69,7 +73,20 @@ class LibreHardwareMonitor(Source):
                 gpus[0].setdefault("pct", gpu_load)
             if gpu_power is not None:
                 gpus[0].setdefault("power", gpu_power)
+            if vram_used is not None:
+                gpus[0].setdefault("mem_used_mb", round(vram_used))
+                if vram_total:
+                    gpus[0].setdefault("mem_pct", round(vram_used / vram_total * 100, 1))
             frame["gpu"] = gpus
+
+        # Every voltage the CPU reports, in the order it reports them, with the labels
+        # for the lanes beside them. A bar each is what these are for.
+        volts = [(_lane(path[-1]), round(value, 3))
+                 for path, _label, value, unit in readings
+                 if unit == "V" and _under(path, ("cpu",))]
+        if volts:
+            frame["cpu"].setdefault("volts", [value for _name, value in volts])
+            frame["cpu"].setdefault("volts_names", [name for name, _value in volts])
 
         fans = [
             {"name": path[-1], "rpm": int(value)}
@@ -109,14 +126,25 @@ def _parse(raw):
     return value, (parts[1].strip() if len(parts) > 1 else "")
 
 
+def _under(path, branch_words):
+    """Whether a reading sits under one of these branches."""
+    joined = " ".join(path).lower()
+    return any(word in joined for word in branch_words)
+
+
+def _lane(label):
+    """A voltage's label, short enough for a bar: "CPU Core #1" is "Core #1"."""
+    text = str(label).strip()
+    return text[4:].strip() if text.lower().startswith("cpu ") else text
+
+
 def _pick(readings, branch_words, label_words, unit):
     """First reading under a branch whose label matches, in preference order."""
     for want in label_words:
         for path, label, value, got_unit in readings:
             if got_unit != unit:
                 continue
-            joined = " ".join(path).lower()
-            if not any(word in joined for word in branch_words):
+            if not _under(path, branch_words):
                 continue
             if want in label.lower():
                 return round(value, 1)

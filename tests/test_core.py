@@ -5890,6 +5890,69 @@ def test_the_help_tab_is_told_what_this_platform_needs(h):
 
 
 @check
+def test_core_voltages_come_back_as_a_bar_each(_h):
+    """LibreHardwareMonitor reports a voltage per rail, which is a list and not a reading:
+    a bar each, labelled, the way per-core load is drawn."""
+    from statsbadge.sources import windows
+
+    # Shaped like a real reply: hardware named after the part, sections under it, and
+    # the sensor labels LHM uses.
+    tree = {"Text": "Sensor", "Children": [{
+        "Text": "DESKTOP-1", "ImageURL": "images_icon/computer.png",
+        "Children": [
+            {"Text": "Intel Core i9-10980HK", "ImageURL": "images_icon/cpu.png",
+             "Children": [
+                 {"Text": "Voltages", "Children": [
+                     {"Text": "CPU Core #1", "Value": "1.325 V"},
+                     {"Text": "CPU Core #2", "Value": "1.294 V"},
+                     {"Text": "CPU SoC", "Value": "1.100 V"},
+                 ]},
+                 {"Text": "Temperatures", "Children": [
+                     {"Text": "Core Average", "Value": "78.1 °C"},
+                     {"Text": "CPU Package", "Value": "91.0 °C"},
+                 ]},
+             ]},
+            {"Text": "NVIDIA GeForce RTX 2080", "ImageURL": "images_icon/nvidia.png",
+             "Children": [
+                 {"Text": "Temperatures", "Children": [
+                     {"Text": "GPU Core", "Value": "59.0 °C"},
+                 ]},
+                 {"Text": "Data", "Children": [
+                     {"Text": "GPU Memory Used", "Value": "236.0 MB"},
+                     {"Text": "GPU Memory Total", "Value": "8192.0 MB"},
+                 ]},
+             ]},
+        ],
+    }]}
+
+    source = windows.LibreHardwareMonitor({})
+    was = windows._fetch
+    frame = model.empty_frame()
+    try:
+        windows._fetch = lambda _url, **_kwargs: tree
+        source.sample(frame, 1.0)
+    finally:
+        windows._fetch = was
+
+    assert frame["cpu"]["volts"] == [1.325, 1.294, 1.1], frame["cpu"]["volts"]
+    # Short enough for a lane, and the badge reads them off the field beside it.
+    assert frame["cpu"]["volts_names"] == ["Core #1", "Core #2", "SoC"], \
+        frame["cpu"]["volts_names"]
+
+    # The package figure is the CPU temperature by convention, and the one every other
+    # monitor shows.
+    assert frame["cpu"]["temp"] == 91.0, frame["cpu"]
+
+    # VRAM comes as figures in MB, and how full it is has to be worked out.
+    assert frame["gpu"][0]["mem_used_mb"] == 236
+    assert frame["gpu"][0]["mem_pct"] == 2.9
+
+    # The labels are not a reading, so nothing offers them to a dial.
+    assert "volts" in model.LIST_FIELDS
+    assert "volts_names" not in model.GROUPS["cpu"]
+
+
+@check
 def test_a_source_that_can_run_now_is_taken_up_without_a_restart(_h):
     """`available()` is asked once, at startup. LibreHardwareMonitor answers no while its
     server is down or on another port, so a URL typed in the browser reached a source that

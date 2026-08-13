@@ -10,7 +10,7 @@ FRAME_VERSION = 1
 # Every group the wire format defines, with the fields a page may ask for. Kept
 # explicit because it is also the contract the config UI and the badge read.
 GROUPS = {
-    "cpu": ("pct", "temp", "freq", "load", "cores", "procs"),
+    "cpu": ("pct", "temp", "freq", "load", "cores", "volts", "procs"),
     "mem": ("pct", "used_mb", "total_mb", "swap_pct", "swap_used_mb"),
     "gpu": ("name", "pct", "temp", "mem_pct", "mem_used_mb", "power", "fan_pct", "clock"),
     "net": ("iface", "up_bps", "down_bps", "up_total_mb", "down_total_mb"),
@@ -40,7 +40,7 @@ GROUP_LABELS = {
 FIELD_LABELS = {
     "cpu": {"pct": "Load %", "temp": "Temperature °C", "freq": "Clock MHz",
             "load": "Load average", "cores": "Per-core load %",
-            "procs": "Processes"},
+            "volts": "Core volts V", "procs": "Processes"},
     "mem": {"pct": "Used %", "used_mb": "Used GB", "total_mb": "Total GB",
             "swap_pct": "Swap %", "swap_used_mb": "Swap GB"},
     "gpu": {"name": "Name", "pct": "Load %", "temp": "Temperature °C",
@@ -70,7 +70,7 @@ PERCENT_FIELDS = frozenset(
 
 # Fields whose value is a list, which only the kinds that draw a lane or a bar each can
 # use. A gauge handed one has nothing to point at.
-LIST_FIELDS = frozenset(("cores", "load"))
+LIST_FIELDS = frozenset(("cores", "load", "volts"))
 
 # Fields holding a message and not a reading: a post, a mention, a headline, an RSS
 # entry. Only a `notify` page draws one. No group in the model has one, a host measuring
@@ -80,6 +80,7 @@ ITEM_FIELDS = frozenset()
 # Sensible full-scale values for the rest, used when a page does not override it.
 FULL_SCALE = {
     "temp": 100.0,      # degrees C
+    "volts": 1.6,       # a core rail, which sits near 1.2
     "power": 250.0,     # watts, a big GPU
     "package_w": 150.0,
     "rpm": 6000.0,
