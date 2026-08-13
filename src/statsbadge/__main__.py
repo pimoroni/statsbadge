@@ -8,9 +8,10 @@ import os
 import sys
 import threading
 import time
+import webbrowser
 
-from . import (auth, autostart, beacon, collect, extensions, install, layout, runner,
-               server, tooling)
+from . import (auth, autostart, beacon, collect, extensions, install, layout, logs,
+               runner, server, tooling)
 # Named apart from the `version` locals in this module, which are extensions' own.
 from . import version as package_version
 
@@ -130,19 +131,6 @@ def _extension_line(record):
     return record["name"]
 
 
-def _badge_names(paired):
-    """Each paired badge as the name it was given, with its id alongside where they differ.
-
-    A badge nobody has renamed is recorded under its own id, so one name is all there is to
-    print for it.
-    """
-    shown = []
-    for badge_id, record in (paired or {}).items():
-        name = record.get("name") or badge_id
-        shown.append(name if name == badge_id else f"{name} ({badge_id})")
-    return shown
-
-
 def cmd_serve(args):
     service = build_service(args)
     try:
@@ -170,7 +158,7 @@ def cmd_serve(args):
             ", ".join(missing)))
         # Which venv, it need not be the one the reader is standing in.
         print(f"  running from:      {sys.prefix}")
-    paired = _badge_names(service.badges.list_badges())
+    paired = auth.display_names(service.badges.list_badges())
     print("  paired badges:     %s" % (", ".join(paired) if paired else
                                        "none yet, run 'statsbadge pair'"))
     if stack.announcer:
@@ -447,7 +435,7 @@ def cmd_status(args):
     if unreadable:
         print(f"  badges:     cannot be read: {unreadable}")
     else:
-        named = _badge_names(paired)
+        named = auth.display_names(paired)
         print("  badges:     {}".format(", ".join(named) if named else "none paired"))
     found = extensions.describe()
     loaded = [e["name"] for e in found if e["available"]]
@@ -762,13 +750,60 @@ def cmd_badges(args):
     return 0
 
 
+# -- tray -------------------------------------------------------------------
+
+def cmd_tray(args):
+    from . import tray as tray_app
+    from .tray import backend
+
+    if args.check:
+        stopped = backend.why_not()
+        print(stopped or f"tray backend: {backend.name()}")
+        return 0
+
+    directory = config_dir(args.config_dir)
+    # Before anything prints. Under pythonw and inside a .app there is nowhere to print to.
+    log_path = logs.start(directory) if not args.console else None
+
+    stopped = backend.why_not()
+    if stopped:
+        print(stopped, file=sys.stderr)
+        print("\nserving without one. Ctrl-C to stop.", file=sys.stderr)
+        return cmd_serve(args)
+
+    tray_app.block_signals()
+    service = build_service(args)
+    try:
+        stack = runner.Stack.start(service, args.host, args.port, args.verbose,
+                                   announce=not args.no_beacon)
+    except runner.AddressInUse as exc:
+        if exc.by:
+            # Already serving, so hand the browser over instead of starting a second one.
+            webbrowser.open(f"http://127.0.0.1:{args.port}/")
+            print(f"statsbadge is already serving on {args.port}")
+            return 0
+        return _report_in_use(exc)
+
+    print(f"statsbadge tray on http://127.0.0.1:{args.port}/")
+    app = tray_app.TrayApp(stack, log_path=log_path,
+                           config_dir=args.config_dir, port=_asked_port(args))
+    tray_app.quit_on_signal(app.quit)
+    try:
+        return app.run(backend.Tray(app.title(), app.model), stack.serve_in_background)
+    finally:
+        stack.stop()
+
+
+def _asked_port(args):
+    return args.port if args.port != DEFAULT_PORT else None
+
+
 # -- autostart --------------------------------------------------------------
 
 def cmd_autostart(args):
-    directory = config_dir(args.config_dir)
     # Only what was asked for, or a login start would pin this run's defaults.
-    kept = directory if args.config_dir else None
-    port = args.port if args.port != DEFAULT_PORT else None
+    kept = args.config_dir
+    port = _asked_port(args)
 
     if args.verb == "enable":
         print(f"starting at login, from {autostart.enable(config_dir=kept, port=port)}")
@@ -833,6 +868,14 @@ def main(argv=None):
 
     serve = subs.add_parser("serve", parents=[common], help="run the server")
     serve.set_defaults(func=cmd_serve)
+
+    tray = subs.add_parser("tray", parents=[common],
+                           help="serve, with an icon in the tray or menu bar")
+    tray.add_argument("--check", action="store_true",
+                      help="report whether a tray works here, and stop")
+    tray.add_argument("--console", action="store_true",
+                      help="print to this terminal instead of the log file")
+    tray.set_defaults(func=cmd_tray)
 
     pair = subs.add_parser("pair", parents=[common],
                            help="show a pairing code for a badge on the network")

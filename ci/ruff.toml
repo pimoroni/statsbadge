@@ -150,5 +150,9 @@ lint.extend-select = ["UP"]
 "src/statsbadge/__main__.py" = ["SLF001"]
 "src/statsbadge/runner.py" = ["SLF001"]
 
+# An exception on the toolkit's thread takes the icon with it, so every callback catches
+# broadly. The macOS template flag is set through pystray's own NSImage.
+"src/statsbadge/tray/*.py" = ["BLE001", "SLF001"]
+
 # The test harness prints its results itself, and reaches into internals to do it.
 "tests/*.py" = ["BLE001", "SLF001"]

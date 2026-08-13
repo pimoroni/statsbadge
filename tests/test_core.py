@@ -2983,10 +2983,8 @@ def test_a_badge_can_be_given_a_name(h):
     # `serve` and `status` report the name somebody chose, so a host with two badges says
     # which is which. A badge nobody has named is recorded under its id, and one of those is
     # all there is to print for it.
-    from statsbadge import __main__ as cli
-
-    assert cli._badge_names({}) == []  # noqa: SLF001
-    assert cli._badge_names({  # noqa: SLF001
+    assert auth.display_names({}) == []
+    assert auth.display_names({
         "e661badge0000001": {"name": "Desk badge"},
         "e661badge0000002": {"name": "e661badge0000002"},
         "e661badge0000003": {},
