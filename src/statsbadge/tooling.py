@@ -158,6 +158,117 @@ def short_name(requirement):
     return tail[len(PREFIX):] if tail.startswith(PREFIX) else tail
 
 
+def plan(verb, asking, wanted, present):
+    """What `extensions.txt` should become. The caller writes it and installs from it.
+
+    `changed` has to be installed or removed; `recorded` is here already and only needs
+    listing. The notes are left for the caller: one prints them, the other answers a
+    request with them.
+    """
+    wanted = list(wanted)
+    done = {"wanted": wanted, "changed": [], "recorded": [], "already": [],
+            "restored": [], "absent": [], "unknown": None}
+    for name in asking or ():
+        requirement = as_requirement(name)
+        short = short_name(requirement)
+        if verb == "remove":
+            matches = [r for r in wanted if r == requirement or short_name(r) == short]
+            if not matches:
+                done["absent"].append(short)
+            for match in matches:
+                wanted.remove(match)
+                done["changed"].append(match)
+            continue
+
+        listed = short in names(wanted)
+        if short in present:
+            # Here already: pip installed into a virtualenv, or an editable checkout.
+            done["already"].append(short)
+            if not listed:
+                wanted.append(requirement)
+                done["recorded"].append(requirement)
+            continue
+        if listed:
+            # On the list but absent from the environment, which is what a `uv tool
+            # install` of statsbadge itself leaves behind. Asking for it is asking for it
+            # back, so rebuild instead of reporting an install nothing can see.
+            done["restored"].append(short)
+            done["changed"].append(requirement)
+            continue
+        # Asked of the index before anything is written or rebuilt. The rebuild installs
+        # the whole list, so an unknown name comes back as a failure naming whichever
+        # entry uv tripped over, which may well be a different one.
+        if on_index(requirement) is False:
+            done["unknown"] = requirement
+            return done
+        wanted.append(requirement)
+        done["changed"].append(requirement)
+    return done
+
+
+def apply(config_dir, verb, asking, present, verbose=False, announce=None):
+    """Plan the change, write the list, then rebuild the environment.
+
+    Both callers take these steps in this order and report them differently, so what went
+    wrong comes back for the caller to say. `announce` is called once with what is about
+    to be installed, since there is a wait.
+    """
+    receipt = as_uv_tool()
+    before = read_wanted(config_dir)
+    had_list = os.path.isfile(wanted_path(config_dir))
+    wanted = list(before)
+    if not wanted and receipt:
+        # Nothing written down yet, but uv records what the tool was built with, and
+        # adopting that is the point. `ext add` on a tool installed with --with would
+        # otherwise reinstall naming only the new one, dropping everything already there.
+        wanted = installed_beside(receipt)
+
+    done = plan(verb, asking, wanted, present)
+    done.update({"ok": False, "why": None, "base": None, "moved": None, "nothing": False})
+    if done["unknown"]:
+        return done
+    if verb != "sync" and not done["changed"] and not done["recorded"]:
+        done["ok"] = done["nothing"] = True
+        return done
+
+    done["base"] = base_requirement(receipt) if receipt else None
+    if done["base"] is None:
+        # Not a uv tool, or a receipt this cannot read: nothing here builds an environment.
+        # Listed anyway, for a later `ext sync` from a tool install.
+        if done["recorded"]:
+            write_wanted(config_dir, done["wanted"])
+        # `sync` names nothing, so fall back to what is adrift.
+        done["absent_here"] = done["changed"] or adrift(config_dir, present)
+        done["nothing"] = not done["absent_here"]
+        done["ok"] = done["nothing"]
+        return done
+
+    write_wanted(config_dir, done["wanted"])
+    if announce:
+        announce(done["changed"] or done["wanted"])
+    # uv resolves the whole environment at once, so an extension asking for a newer
+    # statsbadge takes the tool with it. That is the right answer and a quiet one.
+    was = installed_version()
+    done["ok"], done["why"] = run_install(done["base"], config_dir,
+                                          fresh=verb != "add", verbose=verbose)
+    if done["ok"]:
+        # explain() reads uv's stderr, and a quiet success leaves it saying nothing useful.
+        done["why"] = None
+    else:
+        # Put the list back: it records what is installed, and the rebuild failed.
+        if had_list:
+            write_wanted(config_dir, before)
+        else:
+            forget_wanted(config_dir)
+        return done
+
+    importlib.invalidate_caches()
+    now = installed_version()
+    if was and now and was != now:
+        done["moved"] = (was, now)
+    return done
+
+
 def install_argv(base, config_dir, fresh=False):
     """The command that makes the tool environment match `extensions.txt`.
 

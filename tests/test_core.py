@@ -26,7 +26,8 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from statsbadge import auth, identity, install, layout, model, server, themes  # noqa: E402
+from statsbadge import (auth, extensions, identity, install, layout, model, server,  # noqa: E402
+                        themes)
 
 
 class FakeColour:
@@ -5547,6 +5548,117 @@ def test_a_map_page_only_uses_names_the_badge_has(_h):
         tree = ast.parse(path.read_text(), filename=str(path))
         fault = check_app.check_names(path, tree, injected)
         assert fault is None, fault
+
+
+@check
+def test_the_catalogue_says_what_each_extension_is_and_what_it_needs(_h):
+    """The published list, so the config UI can offer them without asking PyPI.
+
+    A page's badge module travels over USB alone, so the entry saying so is what keeps
+    someone from installing one and waiting for a page that cannot arrive.
+    """
+    listed = extensions.catalogue()
+    named = {entry["name"] for entry in listed}
+    assert {"clock", "iss", "quakes"} <= named, named
+    for entry in listed:
+        assert entry["summary"], entry
+    # The three in this repo ship badge modules, and the entry has to say so.
+    ships = {entry["name"] for entry in listed if entry["page"]}
+    assert ships == {"clock", "iss", "quakes"}, ships
+    # And what has to be typed in before it reports anything.
+    assert next(e for e in listed if e["name"] == "cloudflare")["needs"]
+
+
+@check
+def test_an_extension_asked_for_but_absent_is_offered_as_such(_h):
+    """`uv tool install` replaces the environment whole and leaves `extensions.txt` alone,
+    so the two part company without either being edited. The UI has to show that."""
+    offered = {entry["name"]: entry for entry in
+               extensions.offered(installed=[], wanted=["statsbadge-quakes"])}
+    assert offered["quakes"]["asked"] and not offered["quakes"]["installed"]
+    assert not offered["clock"]["asked"]
+
+    # Anything installed that the catalogue does not name is still listed, or a
+    # third-party one would be invisible and unremovable.
+    offered = {entry["name"]: entry for entry in extensions.offered(
+        installed=[{"name": "weather", "version": "2.0", "badge_module": "w.py"}],
+        wanted=[])}
+    assert offered["weather"]["installed"] and offered["weather"]["page"]
+
+
+@check
+def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h):
+    """Loopback only, since this installs and then runs arbitrary packages."""
+    status, body = h.raw("GET", "/api/extensions")
+    assert status == 200, (status, body)
+    assert body["offered"] and "manageable" in body, body
+
+    # Naming nothing is a bad request and not an empty rebuild.
+    status, body = h.raw("POST", "/api/extensions", json.dumps({"add": []}).encode(),
+                         {"Content-Type": "application/json"})
+    assert status == 400, (status, body)
+
+    # A name no index knows is refused before anything is written.
+    status, body = h.raw("POST", "/api/extensions",
+                         json.dumps({"add": ["statsbadge-not-a-real-one-xyz"]}).encode(),
+                         {"Content-Type": "application/json"})
+    assert status == 200 and body["ok"] is False, (status, body)
+    assert body["unknown"] and body["why"], body
+
+
+@check
+def test_an_extension_installed_since_start_is_taken_up_without_a_restart(_h):
+    """entry_points() walks sys.path on every call, so a reload picks one up in place.
+
+    One already running is kept as it stands: building it again would throw away what it
+    has fetched and start its clock over. One that has gone is stopped.
+    """
+    from statsbadge import extensions as ext
+    from statsbadge.collect import Collector
+
+    class Fake:
+        provides = ("fake",)
+
+        def __init__(self, _config):
+            self.started = self.stopped = 0
+
+        @classmethod
+        def available(cls):
+            return True
+
+        def start(self):
+            self.started += 1
+
+        def stop(self):
+            self.stopped += 1
+
+    class Entry:
+        name = "fake"
+
+        def load(self):
+            return Fake
+
+    offered = []
+    was = ext._entries
+    ext._entries = lambda: list(offered)
+    try:
+        collector = Collector(interval=1.0)      # not started: no sampling thread wanted
+        assert collector.extensions == []
+
+        offered.append(Entry())
+        assert collector.reload_extensions() == ["fake"]
+        arrived = collector.extensions[0]
+        assert arrived.started == 1, "a new extension was not started"
+
+        assert collector.reload_extensions() == ["fake"]
+        assert collector.extensions[0] is arrived, "a reload rebuilt one already running"
+        assert arrived.started == 1, "a reload started one that was already going"
+
+        offered.clear()
+        assert collector.reload_extensions() == []
+        assert arrived.stopped == 1, "one that has gone was left running"
+    finally:
+        ext._entries = was
 
 
 def _source_of(fn):

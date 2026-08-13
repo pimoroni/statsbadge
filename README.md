@@ -175,7 +175,11 @@ A palette can also carry a second accent, used sparingly. A graph's second serie
 
 ## Extensions
 
-An extension is a pip install away. It adds data to the frame, and optionally badge-side code for a page the built-in kinds cannot draw:
+An extension is a pip install away. It adds data to the frame, and optionally badge-side code for a page the built-in kinds cannot draw.
+
+The **Extensions** tab of the config UI lists the published ones with an Install button each, and a box that takes any other pip requirement. Installing one takes effect where it stands, with no restart: the server picks it up and its pages appear in the kind picker. One that draws its own page needs `statsbadge install` over USB as well, since `/v1` carries readings and a layout and never code. Which ones those are is on the list, before you install one.
+
+The same thing from a terminal:
 
 ```bash
 statsbadge ext add clock
@@ -192,6 +196,10 @@ statsbadge ext add iss quakes      # add, then rebuild
 statsbadge ext remove clock        # take one out, and out of the environment
 statsbadge ext sync                # make the environment match the list
 ```
+
+The tab offers whatever [`catalogue.toml`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/catalogue.toml) names, which is every extension this project publishes. That list is a convenience. Any pip requirement works, whether from PyPI, a URL or a path.
+
+Installing from the UI needs a `uv tool install`, the one layout that can rebuild itself. Anywhere else the tab still lists what is installed and prints the `uv pip install` line to run.
 
 Installed some other way - a venv, pipx, a checkout - and `ext add` prints the `uv pip install` line to run instead. The list is still the record either way.
 

@@ -6,6 +6,7 @@ latency. One background thread samples on an interval and requests serve the las
 frame, which also means ten badges cost the same as one.
 """
 
+import importlib
 import threading
 import time
 
@@ -26,6 +27,7 @@ class Collector:
         self.sources = discover(self.config)
         # A store per extension, for what it works out as against what it is told. Nothing is
         # written until one asks to keep something.
+        self.state_dir = state_dir
         self.extensions = extensions.load(self.config, state_dir)
         self.frame = model.empty_frame()
         self.seq = 0
@@ -67,6 +69,37 @@ class Collector:
                 source.stop()
             except Exception:
                 pass
+
+    def reload_extensions(self):
+        """Pick up whatever is installed now. Returns the names loaded.
+
+        entry_points() walks sys.path on every call, so one installed since start is
+        visible without a restart. Rebinding the list is atomic, and a sample already
+        walking the old one finishes on it.
+
+        An extension that was loaded before is kept as it stands. Building it again would
+        throw away what it has fetched and start its clock over.
+        """
+        importlib.invalidate_caches()
+        running = {source.name: source for source in self.extensions}
+        kept = []
+        for source in extensions.load(self.config, self.state_dir):
+            already = running.pop(source.name, None)
+            if already is not None:
+                kept.append(already)
+                continue
+            try:
+                source.start()
+            except Exception as exc:
+                source.note_fault(exc)
+            kept.append(source)
+        self.extensions = kept
+        for gone in running.values():
+            try:
+                gone.stop()
+            except Exception:
+                pass
+        return [source.name for source in kept]
 
     def _run(self):
         while not self._stop.wait(self.interval):

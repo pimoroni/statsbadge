@@ -2,7 +2,6 @@
 
 import argparse
 import getpass
-import importlib
 import json
 import os
 import sys
@@ -552,102 +551,43 @@ def _how_to_add(name):
 def _change_extensions(args, verb):
     """add, remove or sync: keep `extensions.txt` and the tool environment in step."""
     directory = config_dir(args.config_dir)
-    receipt = tooling.as_uv_tool()
-    before = tooling.read_wanted(directory)
-    had_list = os.path.isfile(tooling.wanted_path(directory))
-    wanted = list(before)
-    if not wanted and receipt:
-        # Nothing written down yet, but uv records what the tool was built with, and
-        # adopting that is the point. `ext add` on a tool installed with --with would
-        # otherwise reinstall naming only the new one, dropping everything already there.
-        wanted = tooling.installed_beside(receipt)
+    doing = "installing" if verb != "remove" else "removing"
+    done = tooling.apply(
+        directory, verb, args.names if verb != "sync" else (),
+        {record["name"] for record in extensions.describe()}, verbose=args.verbose,
+        announce=lambda these: print(
+            f"{doing} {', '.join(tooling.short_name(r) for r in these)}..."))
 
-    # `recorded` is installed already and only needs listing, or `ext sync` drops it.
-    changed, recorded = [], []
-    if verb == "add":
-        present = {record["name"] for record in extensions.describe()}
-        for name in args.names:
-            requirement = tooling.as_requirement(name)
-            short = tooling.short_name(requirement)
-            listed = short in tooling.names(wanted)
-            if short in present:
-                # Here already: pip installed into a virtualenv, or an editable checkout.
-                print(f"already installed: {short}")
-                if not listed:
-                    wanted.append(requirement)
-                    recorded.append(requirement)
-                continue
-            if listed:
-                # On the list but absent from the environment, which is what a `uv tool
-                # install` of statsbadge itself leaves behind. Asking for it is asking for
-                # it back, so rebuild instead of reporting an install nothing can see.
-                print(f"{short} is asked for but not installed: putting it back.")
-                changed.append(requirement)
-                continue
-            # Asked of the index before anything is written or rebuilt. The rebuild
-            # installs the whole list, so a name that is not a package comes back as a
-            # failure naming whichever entry uv tripped over, which need not be this one.
-            if tooling.on_index(requirement) is False:
-                print(f"no such extension: {requirement}", file=sys.stderr)
-                print(f"  nothing on PyPI is called that. {tooling.WANTED} is unchanged.",
-                      file=sys.stderr)
-                return 1
-            wanted.append(requirement)
-            changed.append(requirement)
-    elif verb == "remove":
-        for name in args.names:
-            requirement = tooling.as_requirement(name)
-            matches = [r for r in wanted
-                       if r == requirement
-                       or tooling.short_name(r) == tooling.short_name(requirement)]
-            if not matches:
-                print(f"not installed: {tooling.short_name(requirement)}")
-                continue
-            for match in matches:
-                wanted.remove(match)
-                changed.append(match)
-    if verb != "sync" and not changed and not recorded:
-        return 0
+    for short in done["already"]:
+        print(f"already installed: {short}")
+    for short in done["restored"]:
+        print(f"{short} is asked for but not installed: putting it back.")
+    for short in done["absent"]:
+        print(f"not installed: {short}")
+    if done["unknown"]:
+        print(f"no such extension: {done['unknown']}", file=sys.stderr)
+        print(f"  nothing on PyPI is called that. {tooling.WANTED} is unchanged.",
+              file=sys.stderr)
+        return 1
 
-    base = tooling.base_requirement(receipt) if receipt else None
-    if base is None:
-        # Not a uv tool, or a receipt this cannot read: nothing here builds an environment.
-        # Listed anyway, for a later `ext sync` from a tool install.
-        if recorded:
-            tooling.write_wanted(directory, wanted)
-        # `sync` names nothing, so fall back to what is adrift.
-        absent = changed or tooling.adrift(
-            directory, (record["name"] for record in extensions.describe()))
-        if not absent:
-            print("nothing to do")
-            return 0
+    changed, base, why = done["changed"], done["base"], done["why"]
+    if base is None and not done["nothing"]:
         print(f"install these into {sys.prefix}:")
-        for requirement in absent:
+        for requirement in done["absent_here"]:
             print(f"    uv pip install {requirement}")
         print(f"`ext {verb}` requires a uv tool install.")
         return 1
-
-    tooling.write_wanted(directory, wanted)
-    doing = "installing" if verb != "remove" else "removing"
-    print(f"{doing} {', '.join(tooling.short_name(r) for r in changed or wanted)}...")
-    # uv resolves the whole environment at once, so an extension asking for a newer
-    # statsbadge takes the tool with it. That is the right answer and a quiet one.
-    was = tooling.installed_version()
-    ok, why = tooling.run_install(base, directory, fresh=verb != "add",
-                                  verbose=args.verbose)
-    if ok:
-        importlib.invalidate_caches()
-        now = tooling.installed_version()
-        if was and now and was != now:
-            print(f"statsbadge itself moved {was} to {now}: an extension asked for it.")
+    if done["ok"]:
+        if done["nothing"]:
+            if verb == "sync" or base is None:
+                print("nothing to do")
+            return 0
+        if done["moved"]:
+            print("statsbadge itself moved {} to {}: an extension asked for it.".format(
+                *done["moved"]))
         print("done. Run `statsbadge install` to push any badge-side code they ship.")
         return 0
 
-    # Put the list back: it records what is installed, and the rebuild failed.
-    if had_list:
-        tooling.write_wanted(directory, before)
-    else:
-        tooling.forget_wanted(directory)
     print(why, file=sys.stderr)
     # An extension wanting a statsbadge newer than this tool is pinned to. The fix is to
     # let statsbadge move, and the list is back to what it was, so the command below
@@ -762,7 +702,7 @@ def cmd_tray(args):
         return 0
 
     directory = config_dir(args.config_dir)
-    # Before anything prints. Under pythonw and inside a .app there is nowhere to print to.
+    # Before anything prints. Under pythonw, and inside an .app, there is nowhere to.
     log_path = logs.start(directory) if not args.console else None
 
     stopped = backend.why_not()

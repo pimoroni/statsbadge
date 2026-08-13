@@ -106,6 +106,42 @@ def _version(entry):
     return getattr(distribution, "version", None) if distribution else None
 
 
+def catalogue():
+    """The published extensions, from catalogue.toml, in the order it names them."""
+    import tomllib
+    from importlib import resources
+    text = resources.files(__package__).joinpath("catalogue.toml").read_text()
+    return [{"name": name, "summary": entry.get("summary", ""),
+             "page": bool(entry.get("page")), "needs": entry.get("needs")}
+            for name, entry in tomllib.loads(text).items()]
+
+
+def offered(installed=None, wanted=()):
+    """The catalogue with each entry's state, then anything installed it does not name.
+
+    `wanted` is `extensions.txt`, so one asked for but absent reads as adrift rather than
+    as never having been asked for.
+    """
+    from . import tooling
+    present = {record["name"]: record for record in
+               (describe() if installed is None else installed)}
+    # extensions.txt holds requirements; a plugin is known here by its short name.
+    asked = {tooling.short_name(requirement) for requirement in wanted}
+    listed = []
+    for entry in catalogue():
+        found = present.pop(entry["name"], None)
+        listed.append({**entry, "installed": found is not None,
+                       "asked": entry["name"] in asked,
+                       "version": (found or {}).get("version"),
+                       "error": (found or {}).get("error")})
+    # Whatever else is installed, so a third-party one is still listed and removable.
+    for name, found in sorted(present.items()):
+        listed.append({"name": name, "summary": "", "page": bool(found.get("badge_module")),
+                       "needs": None, "installed": True, "asked": name in asked,
+                       "version": found.get("version"), "error": found.get("error")})
+    return listed
+
+
 def badge_modules(sources):
     """The badge-side files the installer should push, as (name, path) pairs.
 

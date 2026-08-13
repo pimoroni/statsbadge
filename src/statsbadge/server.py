@@ -20,7 +20,7 @@ import sys
 import threading
 import traceback
 
-from . import auth, commands, derive, extensions, identity, layout, themes
+from . import auth, commands, derive, extensions, identity, layout, themes, tooling
 from .collect import Collector
 
 # Normalised and absolute: `_static` compares a normalised target against this, so a `..`
@@ -63,6 +63,7 @@ class Service:
         self.collector = Collector(interval=interval, config=source_config,
                                    state_dir=os.path.join(config_dir, "extensions"))
         self.started = threading.Event()
+        self._installing = threading.Lock()
 
     def start(self):
         self.announce_pages()
@@ -71,6 +72,52 @@ class Service:
 
     def stop(self):
         self.collector.stop()
+
+    def reload_extensions(self):
+        """Take up whatever is installed now, and tell it about the pages already stored."""
+        names = self.collector.reload_extensions()
+        self.announce_pages()
+        return names
+
+    def extension_catalogue(self):
+        """What the UI offers, and whether this install can act on it."""
+        return {
+            "offered": extensions.offered(
+                wanted=tooling.read_wanted(self.config_dir)),
+            # Only a uv tool install can rebuild its own environment. Anywhere else the UI
+            # shows the list and says what to run.
+            "manageable": tooling.base_requirement(tooling.as_uv_tool()) is not None,
+            "prefix": sys.prefix,
+        }
+
+    def change_extensions(self, verb, asking):
+        """Install or remove, then take up the result without a restart.
+
+        One at a time. Two rebuilds at once would race over the same environment, and the
+        second would be resolved from a list the first had already replaced.
+        """
+        with self._installing:
+            done = tooling.apply(self.config_dir, verb, asking,
+                                 {record["name"] for record in extensions.describe()})
+            answer = {key: done[key] for key in
+                      ("ok", "why", "already", "restored", "absent", "unknown", "moved")}
+            answer["changed"] = [tooling.short_name(r) for r in done["changed"]]
+            answer["manual"] = [f"uv pip install {r}"
+                                for r in done.get("absent_here") or ()]
+            # One field for the UI to show, whichever way it failed.
+            if done["unknown"]:
+                answer["why"] = f"nothing on PyPI is called {done['unknown']}"
+            elif answer["manual"]:
+                answer["why"] = (f"this is not a uv tool install, so {sys.prefix} cannot "
+                                 f"rebuild itself")
+            if done["ok"]:
+                answer["loaded"] = self.reload_extensions()
+                # Only what the badge cannot be given over the wire: /v1 carries readings
+                # and a layout, never code.
+                answer["needs_usb"] = sorted(
+                    name for name, _path in extensions.badge_modules(
+                        self.collector.extensions))
+            return answer
 
     def extension_kinds(self):
         """Page kinds that only the installed extensions can draw."""
@@ -488,6 +535,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # to whatever next holds that id.
             service.config.forget(badge_id)
             return self._json(200, {"forgotten": service.badges.forget(badge_id)})
+
+        if path == "/api/extensions" and method == "GET":
+            return self._json(200, service.extension_catalogue())
+
+        if path == "/api/extensions" and method == "POST":
+            payload = json.loads(body or b"{}")
+            verb = "remove" if payload.get("remove") else "add"
+            asking = [str(name).strip()
+                      for name in (payload.get(verb) or []) if str(name).strip()]
+            if not asking:
+                return self._fail(400, "name an extension to add or remove")
+            # Minutes, in the worst case: uv resolves and downloads the whole environment.
+            # One of the pool's threads waits on it; the badge keeps being served on
+            # another.
+            return self._json(200, service.change_extensions(verb, asking))
 
         return self._fail(404, "no such endpoint")
 
