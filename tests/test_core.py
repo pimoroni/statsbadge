@@ -5986,18 +5986,37 @@ def test_a_packaged_app_installs_with_a_version_and_not_an_interpreter(_h):
 
 
 @check
-def test_a_packaged_app_is_never_asked_to_stand_in_for_pip(_h):
-    """Its sys.executable is the app. `-m pip` there starts a second copy of the app,
-    icon and all, and answers nothing."""
-    was_executable, was_uv = sys.executable, library._uv
+def test_a_packaged_app_is_its_own_pip(_h):
+    """`-m pip` there would start a second copy of the app, icon and all, and answer
+    nothing. It spawns itself under a verb that is not the tray instead."""
+    from statsbadge import PIP_VERB, __main__ as cli
+
+    app = os.path.join(os.sep, "Applications", "statsbadge.app", "Contents", "MacOS",
+                       "statsbadge")
+    was_executable, was_uv, was_pip = sys.executable, library._uv, library._packaged_pip
     try:
-        sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
-                                      "Contents", "MacOS", "statsbadge")
+        sys.executable = app
         library._uv = lambda: None                 # no uv anywhere either
+        library._packaged_pip = lambda: True
+        assert library.tool() == ("pip", [app, PIP_VERB])
+        assert "-m" not in library.installer(), library.installer()
+
+        # And nothing to install with, where pip did not travel with the app.
+        library._packaged_pip = lambda: False
         assert library.tool() is None
-        assert library.installer() is None
     finally:
-        sys.executable, library._uv = was_executable, was_uv
+        sys.executable = was_executable
+        library._uv, library._packaged_pip = was_uv, was_pip
+
+    # The verb reaches pip rather than the tray, however the app was started.
+    ran = []
+    was_pip_run = cli.be_pip
+    try:
+        cli.be_pip = ran.append
+        cli.tray_main([PIP_VERB, "install", "nothing"])
+        assert ran == [["install", "nothing"]], ran
+    finally:
+        cli.be_pip = was_pip_run
 
 
 @check

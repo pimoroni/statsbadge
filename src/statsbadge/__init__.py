@@ -18,6 +18,16 @@ def version():
         return "unknown"
 
 
+# Windows opens a console window for every child a GUI app starts, and a tray is one: a
+# black box flashes up while an extension installs. subprocess.CREATE_NO_WINDOW, named
+# here so nothing has to import subprocess to say it.
+NO_WINDOW = {"creationflags": 0x08000000} if os.name == "nt" else {}
+
+# What a packaged app spawns itself as to be pip. There is no interpreter in a bundle to
+# run `-m pip` with, and the app is the nearest thing to one.
+PIP_VERB = "--be-pip"
+
+
 def bundled():
     """Whether this is a packaged app, where `sys.executable` is the app's own binary.
 
