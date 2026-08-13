@@ -1952,12 +1952,14 @@ async function watchPairing(announce) {
     }
     button.textContent = "Stop pairing"
     button.onclick = () => stopPairing().catch((error) => toast(error.message, true))
-    panel.replaceChildren(
+    // Filtered: replaceChildren writes a null out as the word, where el() drops one.
+    panel.replaceChildren(...[
       el("p", { textContent: "On the badge: launch Stats, press B to set up, and pick "
                              + `${(state.hosts || []).join(" / ")}:${state.port}` }),
       el("p", { textContent: `closes in ${state.expires_in}s` }),
       pending.length ? el("p", { textContent: "Approve the one whose code matches." }) : null,
-      pending.length ? pendingList(pending) : null)
+      pending.length ? pendingList(pending) : null,
+    ].filter(Boolean))
     if (!panel.open) panel.show()
     return true
   }

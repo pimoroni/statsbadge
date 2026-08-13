@@ -124,8 +124,11 @@ body > header {
 dialog {
   position: absolute; inset: 100% var(--gap) auto auto; width: 340px;
   margin: 0; padding: 12px; border: 0;
-  background: var(--panel2); border-left: 3px solid var(--accent); color: var(--ink);
-  box-shadow: 0 8px 24px #0009;
+
+  /* Panel, so the fields and rows inside are drawn in panel2 as they are everywhere else.
+     No shadow: it hangs off the bottom of a sticky header and paints up over it. */
+  background: var(--panel); border-left: 3px solid var(--accent); color: var(--ink);
+  outline: none;
 
   p { text-align: center; }
   p:last-of-type { font-variant-numeric: tabular-nums; }
@@ -133,7 +136,7 @@ dialog {
 
   li {
     display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center;
-    background: var(--panel); padding: 8px 10px;
+    background: var(--panel2); padding: 8px 10px;
   }
 
   li samp {
@@ -148,8 +151,6 @@ dialog {
 
 dialog.installer {
   width: 400px;
-  /* Panel, not panel2, which is what the fields inside it are drawn in. */
-  background: var(--panel);
 
   p { text-align: left; }
   p.note { margin-bottom: 10px; }
