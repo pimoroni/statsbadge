@@ -2027,7 +2027,11 @@ function installerBox() {
   const status = el("p", { className: "found", textContent: "Looking for a badge…" })
   const ssid = el("input", { type: "text", id: "ssid", placeholder: "Network name" })
   const password = el("input", { type: "password", id: "wifipass" })
-  const region = el("input", { type: "text", id: "region", placeholder: "us" })
+  // A picker, not a field. The firmware takes a fixed set of countries, and one outside
+  // that set leaves the radio unable to associate: the screen then reads as a badge that
+  // cannot reach the host, with no clue about the region.
+  const region = el("select", { id: "region" },
+                    el("option", { value: "", textContent: "Leave as it is" }))
   const zone = el("input", { type: "number", id: "zone", min: -12, max: 14, step: 1,
                              placeholder: "0" })
   const wifi = el("input", { type: "checkbox", id: "setwifi" })
@@ -2071,7 +2075,7 @@ async function startInstall() {
     asking.password = installer.password.value
     // Named here, so it replaces whatever the badge was set to.
     asking.force_secrets = true
-    if (installer.region.value.trim()) asking.region = installer.region.value.trim()
+    if (installer.region.value) asking.region = installer.region.value
     if (installer.zone.value !== "") asking.timezone = Number(installer.zone.value)
   }
   installer.go.disabled = true
@@ -2090,6 +2094,10 @@ function watchInstall() {
 
 function paintInstall(state) {
   if (!installer) return
+  if (installer.region.options.length < 2) {
+    installer.region.append(...(state.regions || []).map(
+      (name) => el("option", { value: name, textContent: name })))
+  }
   const port = (state.ports || [])[0]
   installer.status.textContent = state.running
     ? "Working…"

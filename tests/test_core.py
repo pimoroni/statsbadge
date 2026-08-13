@@ -5733,6 +5733,41 @@ def test_wifi_details_are_kept_unless_replacing_them_was_asked_for(_h):
 
 
 @check
+def test_a_region_the_firmware_does_not_know_is_refused(_h):
+    """It sets the radio's country. An unknown one cannot associate, and all the badge can
+    say about that is that it cannot reach the host."""
+    template = ('WIFI_SSID = ""\nWIFI_PASSWORD = ""\n'
+                'REGION = "eu"  # Options are us, cuba, eu, moldova, nz\n')
+    with tempfile.TemporaryDirectory() as volume:
+        os.mkdir(os.path.join(volume, "system"))
+        with open(os.path.join(volume, "system", "secrets.py"), "w") as handle:
+            handle.write(template)
+
+        # The file is the authority, and it lists what it takes beside the setting.
+        assert install.regions_on(volume) == ("us", "cuba", "eu", "moldova", "nz")
+
+        try:
+            install.write_secrets(volume, "Some Network", "pw", region="gb")
+        except install.InstallError as exc:
+            assert "gb" in str(exc) and "moldova" in str(exc), exc
+        else:
+            raise AssertionError("an unknown region was written to the badge")
+
+        # Nothing was written, region or otherwise.
+        assert install.wifi_network_on(volume) is None
+
+        install.write_secrets(volume, "Some Network", "pw", region="EU")
+        with open(os.path.join(volume, "system", "secrets.py")) as handle:
+            values = {}
+            exec(compile(handle.read(), "secrets.py", "exec"), values)
+        assert values["REGION"] == "eu", "a region has to reach the badge as it writes it"
+
+    # A volume with no list falls back to what this package knows.
+    with tempfile.TemporaryDirectory() as bare:
+        assert install.regions_on(bare) == install.REGIONS
+
+
+@check
 def test_a_port_that_will_not_open_is_not_called_a_reset(_h):
     """Every command hands the badge back with a reset. One it never reached has none."""
     assert install.hard_reset("/dev/statsbadge-not-a-port", settle=False) is False

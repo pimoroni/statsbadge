@@ -767,7 +767,12 @@ def main(argv=None):
     inst.add_argument("--pass", dest="password",
                       help="password for --ssid. Prompted for if omitted; pass an empty "
                            "string for an open network")
-    inst.add_argument("--region", help="WiFi region: us, eu, australia, nz and so on")
+    # Checked here as well as on the way to the badge: a region outside that set leaves
+    # the radio unable to associate, and the only sign of it is a badge that never
+    # connects.
+    inst.add_argument("--region", type=str.lower, choices=install.REGIONS,
+                      metavar="REGION",
+                      help="WiFi region: {}".format(", ".join(install.REGIONS)))
     inst.add_argument("--timezone", type=int, help="hours offset from GMT")
     inst.add_argument("--force-secrets", action="store_true",
                       help="replace WiFi details the badge already has")

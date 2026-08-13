@@ -340,6 +340,31 @@ def wifi_network(port):
     return None
 
 
+# What the firmware takes as a WiFi country, mirrored from the badge's own secrets.py.
+# One outside this set leaves the radio unable to associate, which reaches the screen as an
+# app that cannot reach the host.
+REGIONS = ("us", "cuba", "eu", "moldova", "lebanon", "egypt", "chile", "australia", "nz")
+
+
+def regions_on(volume):
+    """The regions the badge's secrets.py lists, or the mirrored list.
+
+    The file is the authority, and it carries the list in the comment beside REGION. A
+    firmware that learns another one is then not refused by a constant here.
+    """
+    path = secrets_file(volume)
+    if path:
+        with open(path) as handle:
+            match = re.search(r"^\s*REGION\s*=[^\n#]*#\s*Options are ([^\n]+)$",
+                              handle.read(), re.M)
+        if match:
+            found = tuple(word.strip().lower()
+                          for word in match.group(1).split(",") if word.strip())
+            if found:
+                return found
+    return REGIONS
+
+
 def wifi_network_on(volume):
     """The SSID secrets.py names on a mounted volume, or None."""
     path = secrets_file(volume)
@@ -371,7 +396,11 @@ def write_secrets(volume, ssid, password, region=None, timezone=None):
         raise InstallError(f"no secrets.py on {volume}")
     values = {"WIFI_SSID": ssid, "WIFI_PASSWORD": password}
     if region:
-        values["REGION"] = region
+        allowed = regions_on(volume)
+        if region.lower() not in allowed:
+            raise InstallError(f"{region} is not a WiFi region this badge knows. "
+                               f"One of: {', '.join(allowed)}")
+        values["REGION"] = region.lower()
     if timezone is not None:
         values["TIMEZONE"] = int(timezone)
 
