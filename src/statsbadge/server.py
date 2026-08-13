@@ -82,14 +82,32 @@ class Service:
 
     def extension_catalogue(self):
         """What the UI offers, and whether this install can act on it."""
+        listed = extensions.describe(tooling.read_disabled(self.config_dir))
+        where = library.current(self.config_dir)
+        for record in listed:
+            # Only what the library built can be uninstalled from here. The rest is the
+            # environment's, and the most this can do about one is stop loading it.
+            record["managed"] = bool(where and library.holds(where, record["name"]))
         return {
             "offered": extensions.offered(
-                wanted=tooling.read_wanted(self.config_dir)),
+                installed=listed,
+                wanted=tooling.read_wanted(self.config_dir),
+                disabled=tooling.read_disabled(self.config_dir)),
             # Extensions go beside the config, so any layout can manage them. All this
             # needs is something to install with.
             "manageable": library.installer() is not None,
             "prefix": sys.prefix,
         }
+
+    def switch_extensions(self, verb, asking):
+        """Stop loading an extension, or start again. Takes effect where it stands."""
+        changed = tooling.switch(self.config_dir, asking, off=verb == "disable")
+        self.collector.config["disabled_extensions"] = tooling.read_disabled(
+            self.config_dir)
+        return {"ok": True, "changed": changed, "loaded": self.reload_extensions(),
+                "why": None, "stuck": [], "shadowed": [], "unpinned": [],
+                "already": [], "restored": [], "absent": [], "unknown": None,
+                "nothing": not changed, "needs_usb": [], "restart": []}
 
     def change_extensions(self, verb, asking):
         """Install or remove, then take up the result without a restart.
@@ -102,7 +120,7 @@ class Service:
                                  {record["name"] for record in extensions.describe()})
             answer = {key: done[key] for key in
                       ("ok", "why", "already", "restored", "absent", "unknown", "stuck",
-                       "unpinned")}
+                       "unpinned", "shadowed", "nothing")}
             answer["changed"] = [tooling.short_name(r) for r in done["changed"]]
             if done["unknown"]:
                 answer["why"] = f"nothing on PyPI is called {done['unknown']}"
@@ -546,12 +564,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/extensions" and method == "POST":
             payload = json.loads(body or b"{}")
-            verb = next((v for v in ("remove", "upgrade") if v in payload), "add")
+            verb = next((v for v in ("remove", "upgrade", "disable", "enable")
+                         if v in payload), "add")
             asking = [str(name).strip()
                       for name in (payload.get(verb) or []) if str(name).strip()]
             # Naming nothing upgrades all of them; the others need a name.
             if not asking and verb != "upgrade":
-                return self._fail(400, "name an extension to add or remove")
+                return self._fail(400, "name an extension to act on")
+            if verb in ("disable", "enable"):
+                return self._json(200, service.switch_extensions(verb, asking))
             # Minutes, in the worst case: uv resolves and downloads the whole environment.
             # One of the pool's threads waits on it; the badge keeps being served on
             # another.

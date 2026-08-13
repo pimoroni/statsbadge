@@ -114,7 +114,7 @@ def tool():
 
 
 def installer():
-    """What installs into a target directory, or None if there is nothing here that can."""
+    """What installs into a target directory, or None where neither is available."""
     found = tool()
     if found is None:
         return None
@@ -235,14 +235,19 @@ def elsewhere(config_dir, short_name):
 
 
 def resolved(target, name):
-    """What version of `name` the installer put in the target, or None."""
-    prefix = f"{name.lower().replace('-', '_')}-"
+    """What version of `name` the installer put in the target, or None.
+
+    The name is split off before it is normalised: a dist-info separates name from version
+    with the same hyphen that a name spells as an underscore, so normalising the whole
+    stem made `statsbadge_clock-1.2.0` match nothing at all.
+    """
+    wanted = name.lower().replace("-", "_")
     for entry in os.listdir(target):
         if not entry.endswith(".dist-info"):
             continue
-        stem = entry[:-len(".dist-info")]
-        if stem.lower().replace("-", "_").startswith(prefix):
-            return stem.rpartition("-")[2]
+        found, _, version = entry[:-len(".dist-info")].rpartition("-")
+        if found.lower().replace("-", "_") == wanted:
+            return version
     return None
 
 

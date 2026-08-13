@@ -557,7 +557,10 @@ function renderSettings() {
   const schema = caps.extension_settings || {}
   const installed = caps.extensions || []
   config.settings = config.settings || {}
+  // The lead-in written into the section, kept across a redraw of everything under it.
+  const intro = $("extensions").querySelector("p")
   $("extensions").replaceChildren(
+    ...(intro ? [intro] : []),
     el("div", { className: "configured" },
        ...installed.map((extension) => extensionBox(extension, schema[extension.name] || []))),
     catalogueBox())
@@ -573,12 +576,12 @@ function displayName(name) {
   return (listed && listed.title) || name
 }
 
-/** The name to type, where the title does not already say it. "Octopus Energy" is worth
- * `octopus` beside it; "Clock" is not worth `clock`. */
+/** The package, where the title does not already say it. "Octopus Energy" is worth
+ * statsbadge-octopus beside it; "Clock" is not worth statsbadge-clock. */
 function alsoCalled(title, name) {
   return title.toLowerCase() === name.toLowerCase()
     ? []
-    : [el("code", { textContent: name })]
+    : [el("span", { className: "given", textContent: `statsbadge-${name}` })]
 }
 
 // What /api/extensions last said: the published list, each entry's state, and whether
@@ -641,7 +644,11 @@ function offerRow(entry) {
   if (entry.needs) notes.push(`needs ${entry.needs}`)
   // The badge gets code over USB alone; /v1 carries readings and a layout.
   if (entry.page) notes.push("draws its own page, so it needs statsbadge install over USB")
-  if (entry.installed && !entry.asked) notes.push("installed, but not on the list")
+  if (entry.installed && !entry.managed) notes.push("installed by the environment")
+  if (entry.disabled) notes.push("switched off")
+  if (entry.installed && entry.managed && !entry.asked) {
+    notes.push("installed, but not on the list")
+  }
   if (entry.asked && !entry.installed) notes.push("asked for, but not installed")
   if (behind[entry.name]) notes.push(`${behind[entry.name]} is out`)
 
@@ -655,7 +662,7 @@ function offerRow(entry) {
                ...alsoCalled(shown, entry.name),
                ...summary.map((text) => el("small", { textContent: text }))),
             el("div", null,
-               ...(behind[entry.name] ? [updateButton(entry)] : []),
+               ...(behind[entry.name] && entry.managed ? [updateButton(entry)] : []),
                offerButton(entry)))
 }
 
@@ -672,6 +679,18 @@ function updateButton(entry) {
 
 function offerButton(entry) {
   const busy = installing.has(entry.name)
+  // Whatever the environment installed cannot be uninstalled from here, so the most on
+  // offer for one is to stop loading it.
+  if (entry.installed && !entry.managed) {
+    const verb = entry.disabled ? "enable" : "disable"
+    return el("button", {
+      type: "button",
+      textContent: busy ? "Working..." : (entry.disabled ? "Enable" : "Disable"),
+      title: "Installed by the environment, so it can only be switched off here",
+      disabled: busy,
+      onclick: () => changeExtension(verb, entry.name),
+    })
+  }
   // Keyed on what is here: an entry listed but absent is put back by installing it, the
   // repair `ext add` makes.
   const verb = entry.installed ? "remove" : "add"
@@ -723,10 +742,11 @@ async function changeExtension(verb, name) {
     toast(done.why || "could not do that", true)
   } else {
     // Only where it took: a copy in statsbadge's own environment survives a build, and
-    // saying "Removed" over the top of that is a plain lie.
-    if (!(done.stuck || []).length) {
+    // nothing at all happened where there was nothing to do.
+    if (!(done.stuck || []).length && !done.nothing) {
       toast({ add: `Installed ${name}`, remove: `Removed ${name}`,
-              upgrade: `Updated ${name}` }[verb])
+              upgrade: `Updated ${name}`, disable: `Switched ${name} off`,
+              enable: `Switched ${name} on` }[verb])
     }
     for (const note of done.unpinned || []) toast(note)
     // Already imported code stays imported until the process goes round again.

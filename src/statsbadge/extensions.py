@@ -72,7 +72,7 @@ def _entries():
         return []
 
 
-def describe():
+def describe(disabled=()):
     """Every discovered extension and how far it got, whether or not it loaded.
 
     A pip install that did not take is otherwise invisible until a page fails to turn
@@ -82,7 +82,7 @@ def describe():
     for entry in _entries():
         record = {"name": entry.name, "version": _version(entry), "loaded": False,
                   "available": None, "provides": [], "badge_module": None,
-                  "error": None}
+                  "error": None, "disabled": entry.name in disabled}
         try:
             cls = entry.load()
         except Exception as exc:  # noqa: BLE001  any import failure is worth reporting
@@ -117,7 +117,7 @@ def catalogue():
             for name, entry in tomllib.loads(text).items()]
 
 
-def offered(installed=None, wanted=()):
+def offered(installed=None, wanted=(), disabled=()):
     """The catalogue with each entry's state, then anything installed it does not name.
 
     `wanted` is `extensions.txt`, so one asked for but absent reads as adrift rather than
@@ -133,6 +133,8 @@ def offered(installed=None, wanted=()):
         found = present.pop(entry["name"], None)
         listed.append({**entry, "installed": found is not None,
                        "asked": entry["name"] in asked,
+                       "disabled": entry["name"] in disabled,
+                       "managed": (found or {}).get("managed", True),
                        "version": (found or {}).get("version"),
                        "error": (found or {}).get("error")})
     # Whatever else is installed, so a third-party one is still listed and removable.
@@ -140,6 +142,8 @@ def offered(installed=None, wanted=()):
         listed.append({"name": name, "title": name, "summary": "",
                        "page": bool(found.get("badge_module")),
                        "needs": None, "installed": True, "asked": name in asked,
+                       "disabled": name in disabled,
+                       "managed": found.get("managed", True),
                        "version": found.get("version"), "error": found.get("error")})
     return listed
 

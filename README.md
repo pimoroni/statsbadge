@@ -195,11 +195,18 @@ Extensions install into `lib/` beside your config, not into the environment stat
 statsbadge ext                     # what is installed, and what the list asks for
 statsbadge ext add iss quakes      # add, then rebuild
 statsbadge ext remove clock        # take one out, and out of the library
+statsbadge ext disable octopus     # leave it installed, and stop loading it
+statsbadge ext enable octopus
 statsbadge ext outdated            # ask the index which of them have moved on
 statsbadge ext upgrade             # take newer releases of everything unpinned
 statsbadge ext upgrade clock       # move that one, pin and all
 statsbadge ext sync                # build the library again from the list
 ```
+
+An extension the environment installed, an editable checkout say, cannot be uninstalled
+from here: a build only writes the library. Those offer **Disable** in place of Remove,
+which leaves them installed and stops loading them, recorded in `disabled.txt` beside your
+config.
 
 `ext outdated` and the **Update** button in the config UI both ask an index, so they want
 the network. A bare `ext upgrade` leaves anything you pinned in `extensions.txt` where it

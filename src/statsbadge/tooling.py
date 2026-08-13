@@ -19,6 +19,9 @@ from . import library
 # The extensions listed for this host, one requirement a line. Hand editable, and what
 # every rebuild is made from.
 WANTED = "extensions.txt"
+# The ones to leave unloaded, by short name. Beside the list and not inside it: one the
+# environment installed is never on the list, and switching it off has to work anyway.
+DISABLED = "disabled.txt"
 # What a plugin is called if it is named by its short name.
 PREFIX = "statsbadge-"
 # Anything carrying one of these is already a requirement, a path or a URL.
@@ -38,6 +41,40 @@ def read_wanted(config_dir):
         return []
     return [line.strip() for line in lines
             if line.strip() and not line.strip().startswith("#")]
+
+
+def disabled_path(config_dir):
+    return os.path.join(config_dir, DISABLED)
+
+
+def read_disabled(config_dir):
+    """The extensions switched off here, by short name."""
+    try:
+        with open(disabled_path(config_dir)) as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return []
+    return [line.strip() for line in lines
+            if line.strip() and not line.strip().startswith("#")]
+
+
+def write_disabled(config_dir, wanted):
+    os.makedirs(config_dir, exist_ok=True)
+    with open(disabled_path(config_dir), "w") as handle:
+        handle.write("# Extensions statsbadge leaves unloaded, one short name a line.\n")
+        for name in sorted(set(wanted)):
+            handle.write(f"{name}\n")
+
+
+def switch(config_dir, names_asked, off):
+    """Turn extensions off or on. Returns the short names that changed."""
+    was = set(read_disabled(config_dir))
+    asked = {short_name(as_requirement(name)) for name in names_asked}
+    now = (was | asked) if off else (was - asked)
+    if now == was:
+        return []
+    write_disabled(config_dir, now)
+    return sorted(asked & (now ^ was))
 
 
 def adrift(config_dir, installed):
@@ -212,6 +249,17 @@ def apply(config_dir, verb, asking, present, verbose=False, announce=None):
     done.update({"ok": False, "why": None, "nothing": False, "stuck": [], "shadowed": []})
     if done["unknown"]:
         return done
+
+    if verb == "remove" and done["changed"]:
+        # Before the list is written, and before any build: a copy in the environment
+        # survives both, so the list has to go on asking for what is still installed.
+        done["stuck"] = _outside(config_dir, done["changed"])
+        held = {entry["name"] for entry in done["stuck"]}
+        if held:
+            done["changed"] = [r for r in done["changed"] if short_name(r) not in held]
+            going = names(done["changed"])
+            done["wanted"] = [r for r in before if short_name(r) not in going]
+
     if verb != "sync" and not done["changed"]:
         # Nothing to build. Something already installed is only written down, and a build
         # would put a copy in the library that the environment's own would answer over.
@@ -243,11 +291,7 @@ def apply(config_dir, verb, asking, present, verbose=False, announce=None):
 
     library.activate(config_dir)
     done["ok"] = True
-    # Asked after the build, and after activate has settled sys.path, or every removal
-    # would look like one that did not take.
-    if verb == "remove":
-        done["stuck"] = _outside(config_dir, done["changed"])
-    else:
+    if verb != "remove":
         done["shadowed"] = _outside(config_dir, done["changed"])
     return done
 
