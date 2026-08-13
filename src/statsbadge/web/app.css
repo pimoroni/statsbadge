@@ -58,15 +58,13 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: var(--text-md)/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: var(--text-md)/1.5 Lexend, ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
+/* The title as the site sets it: lowercase, tight, over the same ramp. */
 h1 {
   display: flex; align-items: center; gap: 0.25em; width: fit-content;
-  font-family: Lexend, ui-sans-serif, system-ui, sans-serif;
-  font-size: 3rem; font-weight: 600; margin: 0;
-  /* The site's own title, to the letter: lowercase, tight, over the same ramp. */
-  letter-spacing: -0.03em;
+  font-size: 3rem; font-weight: 600; margin: 0; letter-spacing: -0.03em;
   background: linear-gradient(100deg, var(--ramp-0), var(--ramp-1) 45%,
                               var(--ramp-2) 72%, var(--ramp-3));
   background-clip: text;
@@ -77,7 +75,7 @@ h1 {
 
 h2, h3 {
   font-size: var(--text-md); font-weight: 600; margin: 0 0 8px;
-  color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent);
 }
 
 p { margin: 0 0 8px; color: var(--dim); font-size: var(--text-sm); }
@@ -104,17 +102,15 @@ body > header {
   label {
     display: flex; align-items: center; gap: 6px;
     color: var(--dim); font-size: var(--text-sm);
-    text-transform: uppercase; letter-spacing: 0.06em;
   }
 
-  label select { font-size: var(--text-md); text-transform: none; letter-spacing: 0;
-                 max-width: 220px; }
+  label select { font-size: var(--text-md); max-width: 220px; }
 
   nav { flex-basis: 100%; display: flex; gap: 2px; }
 
   nav button {
     background: none; color: var(--dim); padding: 8px 12px;
-    font-size: var(--text-md); text-transform: uppercase; letter-spacing: 0.06em;
+    font-size: var(--text-md);
   }
 
   nav button:hover:not(:disabled) { background: var(--panel2); }
@@ -159,8 +155,7 @@ dialog.installer {
   p.note { margin-bottom: 10px; }
 
   label.check {
-    color: var(--ink); font-size: var(--text-md);
-    text-transform: none; letter-spacing: 0; margin-bottom: 10px;
+    color: var(--ink); font-size: var(--text-md); margin-bottom: 10px;
   }
 
   .fields {
@@ -331,11 +326,11 @@ main > section > ol {
   header h3 .kind { flex: none; }
 
   /* The name somebody gave the page, beside the kind of page it is. Read as a name and not
-     as another heading: the kind is uppercase in the accent, this is what was typed. A long
-     one gives way rather than pushing the buttons off the end of the row. */
+     as another heading: the kind is in the accent, this is what was typed. A long one
+     gives way rather than pushing the buttons off the end of the row. */
   header h3 .given {
-    color: var(--ink); text-transform: none; letter-spacing: normal;
-    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--ink); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
   /* A page still called after its own kind has nothing to add, and an empty span would
@@ -418,17 +413,17 @@ main ul {
 .configured section > header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
 
 /* The package, beside the name somebody reads. Read as a name and not as another heading,
-   the way a page's given title is: the heading is uppercase in the accent, this is not. */
+   the way a page's given title is: the heading is in the accent, this is in the ink. */
 .given {
-  color: var(--ink); text-transform: none; letter-spacing: normal;
+  color: var(--ink);
   font-size: var(--text-sm); min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* What an extension has to be told, beside the name: a note against a heading, so it is
-   neither uppercase nor in the accent. */
+   in the dim and not in the accent. */
 .wants {
-  color: var(--dim); text-transform: none; letter-spacing: normal; font-weight: 400;
+  color: var(--dim); font-weight: 400;
   font-size: var(--text-sm); white-space: nowrap;
 }
 
@@ -464,7 +459,6 @@ main section:has(> section) {
   > h2 {
     grid-column: 1 / -1; margin: 0;
     font-size: var(--text-lg); color: var(--ink);
-    letter-spacing: 0; text-transform: none;
   }
 }
 
@@ -531,7 +525,6 @@ main > section[aria-label="Settings"] {
     grid-column: 1 / -1;
     margin: 4px 0 0;
     color: var(--ink); font-size: var(--text-lg);
-    letter-spacing: normal; text-transform: none;
   }
 
 

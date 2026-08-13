@@ -293,6 +293,14 @@ function renderPages() {
 /** The field slots a kind has. An extension's page declares them, since only its renderer
  * reads `fields` at all. The clock face draws from its groups and ignores them, so offering
  * seven pickers offered seven controls that did nothing. */
+/** What the picker calls a kind. The card used to shout the bare value in capitals, and
+ * "dial" beside "CPU" reads as a slip rather than a style. */
+function kindLabel(kind) {
+  const option = pick(`main form option[value="${CSS.escape(kind)}"]`)
+  return (option && option.textContent) || titleCase(kind)
+}
+
+
 function shapeFor(kind) {
   if (SHAPE[kind]) return SHAPE[kind]
   const declared = (caps.extension_pages || []).find((page) => page.kind === kind)
@@ -359,7 +367,8 @@ function pageCard(page, index) {
   // The heading is the handle: a card holds a text field and two pickers, and dragging it
   // from anywhere meant dragging it out from under whichever one was being used.
   const kind = el("h3", { title: "Drag to reorder" },
-                  el("span", { className: "kind", textContent: page.kind }), titled)
+                  el("span", { className: "kind", textContent: kindLabel(page.kind) }),
+                  titled)
   const item = el("li", null, el("header", null, kind, toggle, remove))
 
   if (open) {
