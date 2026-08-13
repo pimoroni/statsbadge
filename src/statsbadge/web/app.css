@@ -1,9 +1,10 @@
 /* -- the faces the badge draws with -------------------------------------- */
 
-/* Only the preview canvases use these; the rest of the UI keeps the system stack. Lexend
-   draws the badge's text. The symbols are subset from Material Symbols against
-   ci/badge-icons.txt, the corpus badge_app/icons.af is built from, so the two cannot come
-   to show different pictures. */
+/* The preview canvases and the wordmark; the rest of the UI keeps the system stack.
+   Lexend draws the badge's text, and the site's title, so the header here is set in the
+   same face rather than in whatever the system offers in capitals. The symbols are subset
+   from Material Symbols against ci/badge-icons.txt, the corpus badge_app/icons.af is built
+   from, so the two cannot come to show different pictures. */
 @font-face {
   font-family: Lexend;
   src: url("/lexend-var.ttf") format("truetype-variations");
@@ -61,9 +62,11 @@ body {
 }
 
 h1 {
-  display: flex; align-items: center; gap: 0.35em; width: fit-content;
+  display: flex; align-items: center; gap: 0.25em; width: fit-content;
+  font-family: Lexend, ui-sans-serif, system-ui, sans-serif;
   font-size: var(--text-xl); font-weight: 600; margin: 0;
-  letter-spacing: 0.06em; text-transform: uppercase;
+  /* The site's own title, to the letter: lowercase, tight, over the same ramp. */
+  letter-spacing: -0.03em;
   background: linear-gradient(100deg, var(--ramp-0), var(--ramp-1) 45%,
                               var(--ramp-2) 72%, var(--ramp-3));
   background-clip: text;
