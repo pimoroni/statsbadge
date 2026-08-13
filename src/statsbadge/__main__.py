@@ -862,14 +862,19 @@ def trust_store():
     no roots at all: every HTTPS request an extension makes comes back unable to find an
     issuer. certifi travels in the app for this, and anywhere else this does nothing.
 
-    Asked of a context rather than of the paths. Windows names no file, loading its roots
-    from the system store, and a machine with roots of its own must not be handed certifi
+    Both halves are needed to tell a bundle from a host that is perfectly well. Windows
+    names no file and loads 409 roots from the system store. Linux names a directory and
+    loads nothing, since a directory is searched per verification by subject hash. Only
+    the bundle has neither, and a machine with roots of its own must not be handed certifi
     in place of them.
     """
     import ssl
     if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
         return None
     try:
+        capath = ssl.get_default_verify_paths().capath
+        if capath and os.path.isdir(capath):
+            return None
         if ssl.create_default_context().cert_store_stats().get("x509_ca"):
             return None
     except (OSError, ValueError):
