@@ -48,6 +48,39 @@ jobs:
       - name: Probe this host
         run: uv run statsbadge probe
 
+      # No DISPLAY here, so this is the headless path under test: it has to report what
+      # is missing and exit 0, never traceback.
+      - name: Report what the tray would need
+        run: uv run statsbadge tray --check
+
+  tray:
+    name: Tray and run at login
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # setup-uv publishes no v9 tag, only exact versions
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - run: uv sync --extra tray
+
+      - name: Report what the tray would need
+        run: uv run statsbadge tray --check
+
+      - name: Where a login entry would go
+        run: uv run statsbadge autostart
+
+      - name: Tray, menu and autostart tests
+        run: uv run python tests/test_tray.py
+
   web:
     name: Lint the config UI
     runs-on: ubuntu-latest
@@ -69,7 +102,7 @@ jobs:
   build:
     name: Build the wheel
     runs-on: ubuntu-latest
-    needs: [check, web]
+    needs: [check, tray, web]
 
     env:
       TUFTY_REPO: pimoroni/tufty2350
@@ -128,6 +161,10 @@ jobs:
           assert not missing, f"missing from the wheel: {missing}"
           for asset in ("index.html", "app.css", "app.js", "icon.svg", "icon.png"):
               assert os.path.isfile(os.path.join(server.STATIC_DIR, asset)), asset
+          from statsbadge.tray import icons
+          for art in ("tray.png", "tray-template.png", "tray-attention.png",
+                      "tray-template-attention.png", "statsbadge.ico"):
+              assert os.path.isfile(os.path.join(icons.ASSETS, art)), art
           built = install.packaged_mpy_dir()
           assert built, "the wheel carries no precompiled app"
           print(f"wheel carries the app, the UI, and bytecode in {built}")
@@ -141,7 +178,7 @@ jobs:
   package-mpy:
     name: Pack a precompiled badge app
     runs-on: ubuntu-latest
-    needs: [check, web]
+    needs: [check, tray, web]
     permissions:
       contents: write
 
@@ -213,7 +250,7 @@ jobs:
   package-app:
     name: Pack the badge app
     runs-on: ubuntu-latest
-    needs: [check, web]
+    needs: [check, tray, web]
     permissions:
       contents: write # to attach the zip to a release
 
