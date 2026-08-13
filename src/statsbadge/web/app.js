@@ -104,7 +104,14 @@ function showSheet(wanted) {
 
 function bindTabs() {
   const tabs = all("header nav button")
-  tabs.forEach((tab, index) => { tab.onclick = () => showSheet(index) })
+  tabs.forEach((tab, index) => {
+    tab.onclick = () => {
+      showSheet(index)
+      // Asked for when it is opened. It puts a question to sudo, so it is no good in
+      // the poll that keeps the rest of the page fresh.
+      if (tab.textContent === "Help") renderHelp().catch(() => {})
+    }
+  })
   let opening = 0
   try {
     opening = Number(window.localStorage.getItem(REMEMBERED_TAB))
@@ -2160,6 +2167,109 @@ function renderStale() {
     `${names.join(", ")} ${one ? "was" : "were"} last seen running an older app. `
     + `Connect ${one ? "it" : "them"} by USB to update.`,
     button)
+}
+
+// -- help ------------------------------------------------------------------
+//
+// What this computer needs set up by hand. Every platform hides its sensors somewhere
+// different, and the two that need a human are macOS, where power and temperatures are
+// behind sudo, and Windows, where they are behind a driver.
+
+async function renderHelp() {
+  const node = $("help")
+  const intro = node.querySelector("p")
+  let facts
+  try {
+    facts = await api("/api/help")
+  } catch (error) {
+    node.replaceChildren(intro, el("p", { className: "bad", textContent: error.message }))
+    return
+  }
+  const reading = el("section", null,
+                     el("h2", { textContent: "Reading now" }),
+                     el("p", { textContent: (facts.sources || []).join(", ") || "nothing" }))
+  node.replaceChildren(intro, ...helpFor(facts), reading)
+}
+
+function helpFor(facts) {
+  if (facts.platform === "Darwin") return [macHelp(facts.powermetrics || {})]
+  if (facts.platform === "Windows") return [windowsHelp(facts.lhm || {})]
+  return [el("section", null,
+             el("h2", { textContent: "Linux" }),
+             el("p", { textContent: "Temperatures, fans and power come from the kernel "
+                                    + "through psutil, and need nothing set up. The tray "
+                                    + "needs GTK bindings from your distribution, and "
+                                    + "GNOME hosts none without the AppIndicator "
+                                    + "extension." }))]
+}
+
+/** macOS: GPU and thermal pressure are readable by anyone, power and temperatures are
+ * not. The rule is written for this user and this path, since that is what sudo matches
+ * a command against. */
+function macHelp(state) {
+  const box = el("section", null,
+                 el("h2", { textContent: "macOS" }),
+                 el("p", { textContent: "GPU load, VRAM and thermal pressure come from "
+                                        + "ioreg and pmset, which need no privileges and "
+                                        + "are on already." }))
+  if (!state.there) {
+    box.append(el("p", { textContent: "This Mac has no powermetrics, so there are no "
+                                      + "temperatures, fan speeds or package power." }))
+    return box
+  }
+  if (state.permitted) {
+    box.append(el("p", { className: "good",
+                         textContent: "Temperatures, fan speeds and package power are "
+                                      + "on: sudo runs powermetrics without a password." }))
+    return box
+  }
+  box.append(
+    el("p", { textContent: "Temperatures, fan speeds and package power need powermetrics, "
+                           + "which needs root. statsbadge asks for it at every start and "
+                           + "carries on without it. To allow that one command and nothing "
+                           + "else:" }),
+    el("pre", { textContent: `sudo visudo -f ${state.file}` }),
+    el("p", { textContent: "and put this line in it:" }),
+    el("pre", { textContent: state.sudoers }),
+    el("p", { textContent: "It takes effect at the next start. The server itself never "
+                           + "runs as root." }))
+  return box
+}
+
+/** Windows: a normal process is told nothing, so this reads a driver somebody else
+ * already wrote. */
+function windowsHelp(state) {
+  const box = el("section", null,
+                 el("h2", { textContent: "Windows" }),
+                 el("p", { textContent: "Windows tells an ordinary program nothing about "
+                                        + "temperatures, fan speeds or package power "
+                                        + "without a driver. LibreHardwareMonitor ships "
+                                        + "one and publishes its readings, which is what "
+                                        + "this reads." }))
+  box.append(state.reading
+    ? el("p", { className: "good", textContent: "Reading it now." })
+    : el("p", { textContent: "Not reading it: run LibreHardwareMonitor, then Options > "
+                             + "Remote Web Server > Run. Take it from the project's "
+                             + "releases on GitHub; the similarly named .com is not "
+                             + "theirs." }))
+
+  const field = el("input", { type: "text", id: "lhmurl", value: state.url || "",
+                              placeholder: state.default })
+  const save = el("button", { type: "button", className: "primary", textContent: "Save" })
+  save.onclick = () => api("/api/help", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lhm_url: field.value.trim() || state.default }),
+  }).then(() => {
+    toast("Saved")
+    return renderHelp()
+  }).catch((error) => toast(error.message, true))
+
+  box.append(el("label", { htmlFor: "lhmurl", textContent: "Its address" }), field,
+             el("menu", null, save),
+             el("p", { textContent: "Only if it is not on the usual port. Saved here and "
+                                    + "read straight away." }))
+  return box
 }
 
 // -- live ------------------------------------------------------------------

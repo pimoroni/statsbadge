@@ -188,6 +188,19 @@ class Config:
             handle.write(payload)
         os.replace(tmp, self.path)
 
+    def set_settings(self, name, block):
+        """Store one block of settings, leaving every layout alone.
+
+        Settings are the host's answers and not a badge's, so nothing here moves a
+        revision: no badge refetches for a Windows sensor URL.
+        """
+        with self._lock:
+            settings = self.data.setdefault("settings", {})
+            settings[name] = {**(settings.get(name) or {}), **block}
+            kept = copy.deepcopy(settings[name])
+        self.save()
+        return kept
+
     def snapshot(self):
         """The whole file, table included."""
         with self._lock:

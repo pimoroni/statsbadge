@@ -35,6 +35,10 @@ class LibreHardwareMonitor(Source):
         super().__init__(config)
         self.url = config.get("lhm_url") or DEFAULT_URL
 
+    def reconfigure(self, config):
+        """Take a URL typed in the browser without a restart."""
+        self.url = config.get("lhm_url") or DEFAULT_URL
+
     def sample(self, frame, dt):
         try:
             tree = _fetch(self.url, timeout=2.0)

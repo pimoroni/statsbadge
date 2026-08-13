@@ -30,6 +30,8 @@ MB = 1024 * 1024
 # argv that will be run. sudoers matches the whole command line, and a rule written for
 # anything else does not match.
 POWERMETRICS = "/usr/bin/powermetrics"
+# Where the rule goes, named in the advice and in the Help tab.
+SUDOERS_FILE = "/etc/sudoers.d/statsbadge"
 POWERMETRICS_ARGS = ("--samplers", "cpu_power,gpu_power,thermal", "-i", "1000", "-f", "plist")
 
 
@@ -159,7 +161,7 @@ class MacPowermetrics(Source):
     def start(self):
         if not self._enabled:
             return
-        if not self._permitted():
+        if not self.permitted():
             # Only where it was asked for. Tried by default, a refusal is the ordinary
             # state of a Mac and not something to colour the Stats tab red over: the
             # Help tab is where the rule to allow it is written out.
@@ -187,7 +189,7 @@ class MacPowermetrics(Source):
                 self._proc.kill()
 
     @staticmethod
-    def _permitted():
+    def permitted():
         """Whether sudo will run *this* command without a password.
 
         Asked of the command itself and not of sudo in general. A rule that allows

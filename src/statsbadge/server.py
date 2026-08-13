@@ -17,6 +17,7 @@ import os
 import socket
 import socketserver
 import sys
+import platform
 import threading
 import time
 import traceback
@@ -38,6 +39,12 @@ REASONS = {
 
 # Lines of install progress kept for the UI to poll.
 INSTALL_LOG = 400
+
+# Settings the host keeps for itself, under this name in layout.json's settings. Only
+# these: the block is handed to the sources, and a stored key nobody declared would be
+# whatever a browser felt like sending.
+HOST = "host"
+HOST_SETTINGS = ("lhm_url",)
 
 TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -63,8 +70,13 @@ class Service:
         # Stored settings reach the sources as they are constructed, so an extension
         # configured in the browser works from the next start with no flags to remember.
         source_config = dict(source_config or {})
+        stored = self.config.snapshot().get("settings") or {}
         source_config["extensions"] = layout.merge_settings(
-            source_config.get("extensions"), self.config.snapshot().get("settings"))
+            source_config.get("extensions"), stored)
+        # What the browser saved beats the flag, the same way an extension's settings do.
+        for key, value in (stored.get(HOST) or {}).items():
+            if key in HOST_SETTINGS and value:
+                source_config[key] = value
         self.collector = Collector(interval=interval, config=source_config,
                                    state_dir=os.path.join(config_dir, "extensions"))
         self.started = threading.Event()
@@ -143,6 +155,46 @@ class Service:
                     set(answer["changed"]) & set(answer["loaded"])
                 ) if verb == "upgrade" else []
             return answer
+
+    # -- what this host needs set up by hand -------------------------------
+
+    def help(self):
+        """What the Help tab shows: this platform, and where its sensors stand.
+
+        A request to itself rather than part of capabilities, which is polled: asking
+        sudo anything costs a moment, and nobody needs the answer once a second.
+        """
+        system = platform.system()
+        block = {"platform": system, "sources": [s.name for s in self.collector.sources]}
+        if system == "Darwin":
+            from .sources import macos
+            block["powermetrics"] = {
+                "there": macos.MacPowermetrics.available(),
+                "permitted": macos.MacPowermetrics.permitted(),
+                # Written for this user and this path, since that is what sudoers matches.
+                "sudoers": macos.sudoers_line(),
+                "file": macos.SUDOERS_FILE,
+            }
+        if system == "Windows":
+            from .sources import windows
+            block["lhm"] = {
+                "url": self.collector.config.get("lhm_url") or windows.DEFAULT_URL,
+                "default": windows.DEFAULT_URL,
+                "reading": any(s.name == windows.LibreHardwareMonitor.name
+                               for s in self.collector.sources),
+            }
+        return block
+
+    def set_host_settings(self, asked):
+        """Store what the Help tab changed, and tell the sources now."""
+        block = {key: str(value).strip() for key, value in asked.items()
+                 if key in HOST_SETTINGS and str(value).strip()}
+        if not block:
+            return self.help()
+        self.config.set_settings(HOST, block)
+        self.collector.config.update(block)
+        self.collector.reconfigure()
+        return self.help()
 
     def extension_kinds(self):
         """Page kinds that only the installed extensions can draw."""
@@ -632,6 +684,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             service.config.forget(badge_id)
             pushed.forget(service.config_dir, badge_id)
             return self._json(200, {"forgotten": service.badges.forget(badge_id)})
+
+        # Asked for when the tab is opened, not polled: it puts a question to sudo.
+        if path == "/api/help" and method == "GET":
+            return self._json(200, service.help())
+
+        if path == "/api/help" and method == "POST":
+            return self._json(200, service.set_host_settings(json.loads(body or b"{}")))
 
         if path == "/api/extensions" and method == "GET":
             return self._json(200, service.extension_catalogue())

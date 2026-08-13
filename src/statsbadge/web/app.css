@@ -364,6 +364,25 @@ main > section > ol {
 /* -- extensions ---------------------------------------------------------- */
 
 p.bad { color: var(--bad); }
+p.good { color: var(--good); }
+
+/* -- help ---------------------------------------------------------------- */
+
+.help {
+  /* A sudoers line is one long line, and the boxes here are prose rather than fields. */
+  grid-template-columns: repeat(auto-fill, minmax(26rem, 1fr));
+
+  pre {
+    grid-column: 1 / -1;
+    margin: 0 0 8px;
+    padding: 8px 10px;
+    background: var(--bg); color: var(--ink);
+    font-size: var(--text-sm);
+    overflow-x: auto;
+  }
+
+  menu { display: flex; margin: 0; padding: 0; }
+}
 
 .secrets {
   border-left: 2px solid var(--line);
