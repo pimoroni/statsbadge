@@ -194,9 +194,18 @@ Extensions install into `lib/` beside your config, not into the environment stat
 ```bash
 statsbadge ext                     # what is installed, and what the list asks for
 statsbadge ext add iss quakes      # add, then rebuild
-statsbadge ext remove clock        # take one out, and out of the environment
-statsbadge ext sync                # make the environment match the list
+statsbadge ext remove clock        # take one out, and out of the library
+statsbadge ext outdated            # ask the index which of them have moved on
+statsbadge ext upgrade             # take newer releases of everything unpinned
+statsbadge ext upgrade clock       # move that one, pin and all
+statsbadge ext sync                # build the library again from the list
 ```
+
+`ext outdated` and the **Update** button in the config UI both ask an index, so they want
+the network. A bare `ext upgrade` leaves anything you pinned in `extensions.txt` where it
+is; naming one is asking for it to move, which takes its pin off and says so. An extension
+already running keeps running the code it imported, so a newer release of one wants a
+restart, and it says that too.
 
 The tab offers whatever [`catalogue.toml`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/catalogue.toml) names, which is every extension this project publishes. That list is a convenience. Any pip requirement works, whether from PyPI, a URL or a path.
 

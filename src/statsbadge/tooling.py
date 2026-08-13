@@ -106,7 +106,11 @@ def plan(verb, asking, wanted, present):
     """
     wanted = list(wanted)
     done = {"wanted": wanted, "changed": [], "recorded": [], "already": [],
-            "restored": [], "absent": [], "unknown": None}
+            "restored": [], "absent": [], "unknown": None, "unpinned": []}
+    if verb == "upgrade" and not asking:
+        # Naming nothing means all of them.
+        done["changed"] = list(wanted)
+        return done
     for name in asking or ():
         requirement = as_requirement(name)
         short = short_name(requirement)
@@ -117,6 +121,20 @@ def plan(verb, asking, wanted, present):
             for match in matches:
                 wanted.remove(match)
                 done["changed"].append(match)
+            continue
+
+        if verb == "upgrade":
+            matches = [r for r in wanted if short_name(r) == short]
+            if not matches:
+                done["absent"].append(short)
+            for match in matches:
+                # Naming one is asking for it to move, so a version it was pinned to
+                # stops being the answer. A bare `ext upgrade` leaves every pin alone.
+                loose = without_pin(match)
+                if loose != match:
+                    wanted[wanted.index(match)] = loose
+                    done["unpinned"].append(f"{short} was pinned to {match}")
+                done["changed"].append(loose)
             continue
 
         listed = short in names(wanted)
@@ -145,6 +163,41 @@ def plan(verb, asking, wanted, present):
     return done
 
 
+def without_pin(requirement):
+    """`statsbadge-clock==1.1.0` as `statsbadge-clock`, and a path left as it is."""
+    if any(mark in requirement for mark in "/\\ "):
+        return requirement
+    loosened = re.split(r"[=<>!~]", requirement, maxsplit=1)[0].strip()
+    return loosened or requirement
+
+
+def pinned(wanted):
+    """The short names carrying a version, which a bare upgrade holds where they are."""
+    return {short_name(r) for r in wanted if without_pin(r) != r}
+
+
+def holding(config_dir, wanted, moving):
+    """The list to build so `moving` takes a newer release and the rest stay put.
+
+    A build resolves every unpinned name to its latest, which would carry the whole list
+    up with one asked for. Pinning the others to what the library holds keeps the change
+    to what was asked for. Anything already carrying a version, or naming a path, is left
+    exactly as written.
+    """
+    where = library.current(config_dir)
+    versions = {short_name(name): version
+                for name, version in library.installed(where).items()} if where else {}
+    held = []
+    for requirement in wanted:
+        short = short_name(requirement)
+        version = versions.get(short)
+        if short in moving or not version or any(m in requirement for m in SPEC_MARKS):
+            held.append(requirement)
+        else:
+            held.append(f"{requirement}=={version}")
+    return held
+
+
 def apply(config_dir, verb, asking, present, verbose=False, announce=None):
     """Plan the change, write the list, then rebuild the environment.
 
@@ -168,7 +221,11 @@ def apply(config_dir, verb, asking, present, verbose=False, announce=None):
         announce(done["changed"] or done["wanted"])
     # The whole list every time, so the library matches what is asked for and a removal is
     # a build without that line.
-    where, why = library.build(config_dir, done["wanted"], verbose=verbose)
+    building = done["wanted"]
+    if verb == "upgrade":
+        building = holding(config_dir, done["wanted"],
+                           names(done["changed"]))
+    where, why = library.build(config_dir, building, verbose=verbose)
     if where is None:
         # Put the list back: it records what is installed, and the build failed.
         if had_list:
