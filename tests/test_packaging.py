@@ -158,14 +158,14 @@ def test_a_published_readme_links_to_somewhere_that_exists():
                     assert pathlib.Path(target.removeprefix(prefix)).exists(), where
 
 
-def test_the_mark_is_the_same_one_everywhere(h):
+def test_the_mark_is_the_same_one_everywhere(h, ui):
     """The badge draws it from splash.py's numbers, the config UI links a file and the site
     inlines a copy so it needs no request. Three expressions of one mark, so each is checked
     against the geometry every time."""
     # As bytes: the server hands the file over unchanged, and a Windows checkout with CRLF
     # line endings would not match text read back through universal newlines.
     icon = pathlib.Path("src/statsbadge/web/icon.svg").read_bytes().decode("utf-8")
-    page = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
+    page = ui.markup
     site = pathlib.Path("index.html").read_text(encoding="utf-8")
 
     # The UI asks for the file, and the server hands it over with the right type: a favicon

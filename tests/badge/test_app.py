@@ -343,7 +343,7 @@ def test_a_brightness_the_ui_offers_stays_a_fraction():
     assert sent(2.463) == 1.0, "an out-of-range brightness reaches the panel"
 
 
-def test_the_badge_can_report_on_itself_with_no_host():
+def test_the_badge_can_report_on_itself_with_no_host(ui):
     """The one page kind whose readings do not come from the frame. It needs no field, so
     nothing can be picked for it and nothing can fail to answer: a prune that keeps only pages
     this host can fill would otherwise drop the page that asked for none of them."""
@@ -357,8 +357,8 @@ def test_the_badge_can_report_on_itself_with_no_host():
 
     # The kind picker is written out in the page and not built from the API, so it is the
     # one place a new kind can reach the badge and be forgotten in the browser.
-    markup = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
-    app = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    markup = ui.markup
+    app = ui.script
     offered = set(re.findall(r'<option value="([a-z]+)">', markup))
     for kind in layout.KINDS:
         assert kind in offered, f"{kind} is not in the kind picker"

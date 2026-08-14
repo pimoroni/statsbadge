@@ -528,7 +528,7 @@ def test_the_preview_reads_a_number_as_the_badge_does(ui):
     sys.path.insert(0, install.app_source_dir())
     import pages as pages_module
 
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    script = ui.script
 
     def table(name):
         body = script.split(f"const {name} = {{")[1].split("}")[0]
@@ -563,18 +563,16 @@ def test_the_preview_reads_a_number_as_the_badge_does(ui):
         assert ui.constants.get(name) == value, (name, value, ui.constants.get(name))
 
 
-def test_the_preview_draws_in_the_badge_s_own_faces():
+def test_the_preview_draws_in_the_badge_s_own_faces(ui, web_dir):
     """Four pages at 320x240, in Lexend and the badge's symbols. The icon font is subset
     from the corpus badge_app/icons.af is built from, so the two cannot differ."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
     import pages as pages_module
-
-    web = pathlib.Path("src/statsbadge/web")
     for name in ("lexend-var.ttf", "icons.woff2"):
-        assert (web / name).is_file(), f"{name} is not shipped with the UI"
-    sheet = (web / "app.css").read_text(encoding="utf-8")
+        assert (web_dir / name).is_file(), f"{name} is not shipped with the UI"
+    sheet = ui.css
     assert "@font-face" in sheet and "lexend-var.ttf" in sheet and "icons.woff2" in sheet
 
     corpus = pathlib.Path("ci/badge-icons.txt").read_text(encoding="utf-8")
@@ -584,7 +582,7 @@ def test_the_preview_draws_in_the_badge_s_own_faces():
     assert len(rows) == 18, len(rows)
 
     # The JS addresses a symbol by the same letter badge-side code does.
-    script = (web / "app.js").read_text(encoding="utf-8")
+    script = ui.script
     shown = dict(re.findall(r"(\w): 0x([0-9a-f]{4})", script.split("const ICONS = {")[1]
                             .split("}")[0]))
     assert shown == {letter: point for _name, point, letter in rows}, shown
@@ -592,7 +590,7 @@ def test_the_preview_draws_in_the_badge_s_own_faces():
     assert drawn <= set(shown), drawn - set(shown)
 
 
-def test_the_dark_theme_s_colours_are_not_copied_by_hand(h):
+def test_the_dark_theme_s_colours_are_not_copied_by_hand(h, ui):
     """The UI's accent, its ramp and the mark on its tab all come from the dark theme.
 
     Generated or checked. A copy typed in goes stale the moment a palette moves."""
@@ -615,13 +613,13 @@ def test_the_dark_theme_s_colours_are_not_copied_by_hand(h):
     # The splash mark is the badge's, so the tab icon is too. Two copies of it, with
     # icon.svg's comment asking for a test rather than a build step.
     marks = [pathlib.Path("src/statsbadge/web/icon.svg").read_text(encoding="utf-8"),
-             pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")]
+             ui.markup]
     for role in ("bg", "grid", "accent", "ink"):
         for mark in marks:
             assert hexed(dark[role]) in mark.lower(), (role, hexed(dark[role]))
 
 
-def test_the_themes_are_offered_light_and_dark(h):
+def test_the_themes_are_offered_light_and_dark(h, ui):
     """Which of them suits a lit room is the first thing anybody chooses between, so the picker
     groups them by that, read off each palette's background, since a theme that had to
     declare its mode could declare it wrong."""
@@ -641,7 +639,7 @@ def test_the_themes_are_offered_light_and_dark(h):
 
     _status, caps = h.raw("GET", "/api/capabilities")
     assert {record["name"] for record in caps["themes"]} == set(layout.THEMES)
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    script = ui.script
     assert "optgroup" in script, "the picker is still one flat list"
     assert "record.label" in script
     assert "titleCase(record.name)" not in script, "the UI still titles a theme itself"
@@ -652,7 +650,7 @@ def themes_bg(name):
     return themes.written()[name]["bg"]
 
 
-def test_a_theme_can_be_derived_from_one_accent(h):
+def test_a_theme_can_be_derived_from_one_accent(h, ui):
     """The tinted pair are derived: a whole palette from the one accent chosen, so the
     choice is stored and not its result. Restricted to a measured list, every accent on
     offer being checked here, so a pickable one cannot make a page nobody can read."""
@@ -728,8 +726,7 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     assert {r["name"] for r in caps["themes"] if r["derived"]} == derived
     assert set(caps["accents"]) == set(derive.ACCENT_FAMILIES)
     assert caps["accents"]["saturated"] == [list(a) for a in derive.accents("saturated")]
-    web = pathlib.Path("src/statsbadge/web")
-    page, script = (web / "index.html").read_text(encoding="utf-8"), (web / "app.js").read_text(encoding="utf-8")
+    page, script = ui.markup, ui.script
     assert "data-tint" in page and 'id="screens"' in page, "no picker or preview in the UI"
     # Which themes take an accent is the host's answer, and the UI holds no list.
     assert "record.derived" in script and "config.tint" in script
@@ -739,11 +736,11 @@ def test_a_theme_can_be_derived_from_one_accent(h):
     assert "previewWanted" in script, "a stale preview reply can win"
 
 
-def test_the_ui_takes_its_colours_from_the_host():
+def test_the_ui_takes_its_colours_from_the_host(ui):
     """The UI asks for the palette of whatever theme is selected, so there is nowhere for
     a copy to live and drift from the badge's tables."""
-    web = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
-    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text(encoding="utf-8")
+    web = ui.script
+    sheet = ui.css
     assert "THEME_COLOURS" not in web, "the UI still carries a palette table"
     assert "/api/theme?" in web, "the UI does not ask the host for a palette"
     # Four pages at 320x240, drawn from what the host sent.
@@ -756,4 +753,4 @@ def test_the_ui_takes_its_colours_from_the_host():
     assert "--ramp-0:" not in sheet, "the sheet still declares the ramp by hand"
     assert "--accent:" not in sheet, "the sheet still declares the accent by hand"
     assert "var(--ramp-0)" in sheet, "the sheet stopped using the generated tokens"
-    assert "/tokens.css" in pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
+    assert "/tokens.css" in ui.markup

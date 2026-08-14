@@ -269,7 +269,7 @@ def test_the_clock_only_syncs_from_a_fresh_reading():
     assert "_zone_offset(host, here)" in render, "a page elsewhere is not offset from the host"
 
 
-def test_a_frame_is_walked_past_its_own_scalars(h):
+def test_a_frame_is_walked_past_its_own_scalars(h, ui):
     """A frame carries a few scalars beside the groups of readings, so anything
     walking one has to step over them.
 
@@ -286,7 +286,7 @@ def test_a_frame_is_walked_past_its_own_scalars(h):
     source = pathlib.Path(install.__file__).parent / "__main__.py"
     assert "collect.FRAME_SCALARS" in source.read_text(encoding="utf-8"), "probe keeps a second list again"
 
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    script = ui.script
     named = re.search(r"const FRAME_SCALARS = \[(.*?)\]", script).group(1)
     assert [word.strip().strip('"') for word in named.split(",")] == list(collect.FRAME_SCALARS)
 
@@ -332,7 +332,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
             continue
         assert "note_ok" in text, f"{path} records faults and never clears one"
     # The UI puts the reason under the name, keeping both.
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    script = ui.script
     assert 'source.last_fault ? "faulty" : null' in script, \
         "a recovered source still shows as broken"
     assert 'provides.join(", ")' in ui.function("renderSources"), (

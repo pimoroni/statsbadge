@@ -144,7 +144,7 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
     assert "pages_module.moving" in app, "nothing asks for a frame while a gauge is moving"
 
 
-def test_a_page_can_slide_on_like_a_card():
+def test_a_page_can_slide_on_like_a_card(ui):
     """A window of the screen carries an origin, so a page drawn into one lands shifted and
     clipped: that is the card, and the rasteriser costs the window alone.
     `over` leaves the outgoing page standing under it; `deck` moves both, which needs a copy
@@ -159,12 +159,10 @@ def test_a_page_can_slide_on_like_a_card():
     # A bool still works, from before there was a choice of styles.
     assert layout.validate({"slide": True, "pages": layout.DEFAULT_PAGES})["slide"] == "over"
     assert layout.validate({"slide": False, "pages": layout.DEFAULT_PAGES})["slide"] == "off"
-
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="slide"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
-    assert "config.slide" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
+    assert 'id="slide"' in ui.markup, "no control in the UI"
+    assert "config.slide" in ui.script, "the control is not bound"
     for style in layout.SLIDE_STYLES:
-        assert f'value="{style}"' in (web / "index.html").read_text(encoding="utf-8"), style
+        assert f'value="{style}"' in ui.markup, style
 
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     sliding = app[app.index("def render_sliding"):]
@@ -218,24 +216,22 @@ def test_a_page_can_slide_on_like_a_card():
     assert 'style == "deck"' in start[:start.index("\n    def ", 1)]
 
 
-def test_smooth_graphs_are_a_setting_that_reaches_the_badge():
+def test_smooth_graphs_are_a_setting_that_reaches_the_badge(ui):
     """A drawing switch, so it is one setting covering every graph on the badge."""
     config = layout.validate({"smooth": False, "pages": layout.DEFAULT_PAGES})
     assert config["smooth"] is False
     assert layout.validate({"pages": layout.DEFAULT_PAGES})["smooth"] is True, "on by default"
     # Anything truthy, since the UI sends a checkbox and a command line sends a string.
     assert layout.validate({"smooth": "yes", "pages": layout.DEFAULT_PAGES})["smooth"] is True
-
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="smooth"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
-    assert "config.smooth" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
+    assert 'id="smooth"' in ui.markup, "no control in the UI"
+    assert "config.smooth" in ui.script, "the control is not bound"
     # The badge applies it where it applies the rest of the layout.
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.SMOOTH" in applied[:applied.index("\n    def ", 1)]
 
 
-def test_the_big_gauge_can_show_the_whole_ramp():
+def test_the_big_gauge_can_show_the_whole_ramp(ui):
     """A conical gradient follows the arc, so the ramp lays round the gauge with the part
     past the reading left faint, and the scale shows as well as the reading. Only the dial
     page's gauge, which is the one with a page to itself."""
@@ -248,10 +244,8 @@ def test_the_big_gauge_can_show_the_whole_ramp():
         "one colour by default")
     assert layout.validate({"gauge_fill": "rainbow",
                             "pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid"
-
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="gaugefill"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
-    assert "config.gauge_fill" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
+    assert 'id="gaugefill"' in ui.markup, "no control in the UI"
+    assert "config.gauge_fill" in ui.script, "the control is not bound"
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.GAUGE_FILL" in applied[:applied.index("\n    def ", 1)]
@@ -407,7 +401,7 @@ def test_a_smoothed_graph_still_reads_as_the_data():
     assert "screen.alpha" not in sparks, "a line does not need to let the page through"
 
 
-def test_a_plot_is_placed_by_when_its_readings_were_taken():
+def test_a_plot_is_placed_by_when_its_readings_were_taken(ui):
     """Three clocks are in play. The host samples every `serve --interval`, the badge polls
     every `interval_ms`, and each is blind to the other's rate.
 
@@ -453,9 +447,8 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken():
     assert layout.validate({"pages": layout.DEFAULT_PAGES})["plot_animation"] is False
     assert layout.validate({"plot_animation": True,
                             "pages": layout.DEFAULT_PAGES})["plot_animation"] is True
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="plotanim"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
-    assert 'bindCheck("plotanim", "plot_animation")' in (web / "app.js").read_text(encoding="utf-8"), \
+    assert 'id="plotanim"' in ui.markup, "no control in the UI"
+    assert 'bindCheck("plotanim", "plot_animation")' in ui.script, \
         "it is not bound"
 
     # A graph keeps room on its right for the samples still coming in. Laid across the
@@ -550,7 +543,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken():
     assert "note_spacing" in app and "behind_at" in app
 
 
-def test_sparkline_rows_can_be_told_apart():
+def test_sparkline_rows_can_be_told_apart(ui):
     """Six lines on one page looked like one plot with six traces, so the rows are banded.
 
     The band is worked out from the theme and not named in a palette: a step of
@@ -569,12 +562,10 @@ def test_sparkline_rows_can_be_told_apart():
         "banded by default")
     assert layout.validate({"rows": "stripey",
                             "pages": layout.DEFAULT_PAGES})["rows"] == "zebra"
-
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="rows"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
-    assert "config.rows" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
+    assert 'id="rows"' in ui.markup, "no control in the UI"
+    assert "config.rows" in ui.script, "the control is not bound"
     for style in layout.ROW_STYLES:
-        assert f'value="{style}"' in (web / "index.html").read_text(encoding="utf-8"), style
+        assert f'value="{style}"' in ui.markup, style
 
     # The badge applies it where it applies the rest of the layout.
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")

@@ -59,29 +59,26 @@ def test_a_dials_page_takes_up_to_four_fields():
     assert layout.prune([page], caps)[0]["fields"] == ["cpu.pct", "mem.pct"]
 
 
-def test_every_kind_has_a_badge_layout_and_a_ui_shape():
+def test_every_kind_has_a_badge_layout_and_a_ui_shape(ui):
     """A kind the server accepts has to be drawable and configurable, or it is a page
     that validates, reaches the badge and shows a message saying it cannot be drawn."""
     app = pathlib.Path(install.app_source_dir())
     pages_source = (app / "pages.py").read_text(encoding="utf-8")
-    ui_source = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-                 / "app.js").read_text(encoding="utf-8")
-    markup = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-              / "index.html").read_text(encoding="utf-8")
+    ui_source = ui.script
+    markup = ui.markup
     for kind in layout.KINDS:
         assert f'"{kind}": _' in pages_source, f"{kind} has no renderer"
         assert f"  {kind}: {{" in ui_source, f"{kind} has no shape in the UI"
         assert f'value="{kind}"' in markup, f"{kind} is not in the kind picker"
 
 
-def test_a_full_scale_is_offered_where_it_is_read():
+def test_a_full_scale_is_offered_where_it_is_read(ui):
     """A page carries where full is, and the UI has to offer that for exactly the kinds whose
     renderer looks at it. Offered too widely it is a control that does nothing; too narrowly
     and a page of counts is stuck being scaled by the busiest reading the host has seen."""
     app = pathlib.Path(install.app_source_dir())
     pages_source = (app / "pages.py").read_text(encoding="utf-8")
-    ui_source = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-                 / "app.js").read_text(encoding="utf-8")
+    ui_source = ui.script
 
     # fraction_of reads the page's max for its caller, so those kinds count too.
     reads = set()
@@ -112,7 +109,7 @@ def test_a_full_scale_is_offered_where_it_is_read():
     assert scaled("nonsense") is None and scaled(None) is None
 
 
-def test_caselights_take_a_field_or_a_flag():
+def test_caselights_take_a_field_or_a_flag(ui):
     """Three settings in one value: off, the backlight's level, or a reading to follow."""
     base = dict(layout.DEFAULT_CONFIG)
 
@@ -120,7 +117,7 @@ def test_caselights_take_a_field_or_a_flag():
         return layout.validate({**base, "caselights": value})["caselights"]
 
     # Offered as following the backlight now, though the flag is still stored as it was.
-    page = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    page = ui.script
     assert "Follow the Backlight" in page and "Follow the Theme" not in page
 
     assert stored("cpu.pct") == "cpu.pct"
@@ -191,11 +188,10 @@ def test_a_page_carries_only_what_its_kind_declared():
     assert "place" not in plain
 
 
-def test_the_field_picker_offers_each_reading_once():
+def test_the_field_picker_offers_each_reading_once(ui):
     """numericRefs is a subset of availableRefs, so concatenating them listed every
     number twice - once qualified by its group and once again below it."""
-    ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-          / "app.js").read_text(encoding="utf-8")
+    ui = ui.script
     # Joining the two lists is fine, so long as the result is deduplicated where it is
     # joined. Checked per line so this cannot pass by matching the fix itself.
     for line in ui.splitlines():
@@ -206,11 +202,10 @@ def test_the_field_picker_offers_each_reading_once():
     assert "new Set(refs)" in ui
 
 
-def test_every_kind_picks_from_a_pool_that_suits_it():
+def test_every_kind_picks_from_a_pool_that_suits_it(ui):
     """A gauge offered uptime drew an empty ring, and a grid offered cpu.cores printed a
     list. Each slot now draws from a pool, and every kind has to name one."""
-    ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-          / "app.js").read_text(encoding="utf-8")
+    ui = ui.script
     shape = ui[ui.index("const SHAPE = {"):ui.index("async function api(")]
     pools = ui[ui.index("const POOLS = {"):]
     pools = pools[:pools.index("}")]
@@ -249,7 +244,7 @@ def test_the_ui_is_told_what_a_gauge_can_scale():
     assert set(described["list_fields"]) >= {"cores", "load"}
 
 
-def test_each_badge_has_its_own_layout(h):
+def test_each_badge_has_its_own_layout(h, ui):
     """Everything on the page is configured per badge: two badges on one host draw different
     pages, and a save for one is not a save for the other. A badge that has not been given a
     layout draws the default, which is also what there is to edit before anything is paired."""
@@ -344,8 +339,7 @@ def test_each_badge_has_its_own_layout(h):
     shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
     # The picker is in the header, where it says what everything below belongs to.
-    web = pathlib.Path("src/statsbadge/web")
-    page, script = (web / "index.html").read_text(encoding="utf-8"), (web / "app.js").read_text(encoding="utf-8")
+    page, script = ui.markup, ui.script
     header = page[page.index("<header>"):page.index("</header>")]
     for control in ("<label>Badge", 'id="pair"', 'id="save"'):
         assert control in header, control
@@ -479,14 +473,13 @@ def test_a_figure_carries_its_unit_or_is_handed_one():
             assert "draw.short_unit" in calls, f"{node.name} prints a figure with no unit"
 
 
-def test_an_api_key_is_masked_until_it_is_asked_for():
+def test_an_api_key_is_masked_until_it_is_asked_for(ui):
     """The config page sits open on a desk all day, and a token is readable across a room.
 
     Masked and not hidden: "not set" and "set to the wrong one" have to be told apart,
     and the first few characters are enough for somebody checking to recognise.
     """
-    ui = (pathlib.Path(__file__).parent.parent / "src" / "statsbadge" / "web"
-          / "app.js").read_text(encoding="utf-8")
+    ui = ui.script
     assert "function masked(" in ui and "Edit secrets" in ui
     # A secret does not go in the ordinary run of rows, or it would be on screen anyway
     assert "if (setting.secret) continue" in ui, "a secret is still drawn with the rest"
@@ -502,7 +495,7 @@ def test_an_api_key_is_masked_until_it_is_asked_for():
     assert stored["thing"] == {"api_token": "sekrit"}, stored
 
 
-def test_a_number_setting_is_held_to_its_bounds():
+def test_a_number_setting_is_held_to_its_bounds(ui):
     """A reading's units, and how far it can go, are the extension's to declare.
 
     The browser stops the spinner and marks a field out of range, but a value typed straight
@@ -522,6 +515,6 @@ def test_a_number_setting_is_held_to_its_bounds():
     assert stored({"every": 120, "loose": None}) == {"every": 120.0, "loose": None}
 
     # The UI draws one as a number, with the bounds on the field.
-    ui = (pathlib.Path("src/statsbadge/web") / "app.js").read_text(encoding="utf-8")
+    ui = ui.script
     assert 'setting.type === "number"' in ui, "a number setting is still a text box"
     assert "setting.unit" in ui, "nowhere to put what it is counted in"

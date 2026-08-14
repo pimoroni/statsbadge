@@ -1,6 +1,5 @@
 """The config UI's markup: the controls it offers and how they group."""
 
-import pathlib
 import re
 
 from statsbadge import layout
@@ -25,7 +24,7 @@ def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
         assert setting in kept, f"validate drops {setting}, which {control} sets"
 
 
-def test_a_hint_beside_a_secret_leaves_room_for_the_field():
+def test_a_hint_beside_a_secret_leaves_room_for_the_field(ui):
     """An extension's API key sits in a two-column grid whose first column is max-content.
 
     A hint left in that column sets the track to the width of the paragraph unwrapped, and
@@ -33,7 +32,7 @@ def test_a_hint_beside_a_secret_leaves_room_for_the_field():
     block of prose in the settings grids spans both columns for this reason.
     """
 
-    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text(encoding="utf-8")
+    sheet = ui.css
     block = sheet[sheet.index(".secrets {"):]
     block = block[:block.index("\n}")]
     assert "max-content" in block, "the first column no longer sizes to its content"
@@ -42,7 +41,7 @@ def test_a_hint_beside_a_secret_leaves_room_for_the_field():
     assert "grid-column: 1 / -1" in spans.group(1), spans.group(1)
 
     # The block builds a label, a field and a hint per secret, so all three need a column.
-    script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
+    script = ui.script
     built = script[script.index("function secretsBlock"):]
     built = built[:built.index("\n}")]
     assert 'el("p"' in built, "the hint is no longer drawn here"
@@ -50,16 +49,16 @@ def test_a_hint_beside_a_secret_leaves_room_for_the_field():
         assert ruled in block, f"{ruled} has no column in .secrets"
 
 
-def test_the_theme_box_spans_the_panels_beside_it():
+def test_the_theme_box_spans_the_panels_beside_it(ui):
     """The theme box stands beside the settings panels, which it does by spanning their
     rows. The span is a count, so it has to match how many there are."""
 
-    page = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
+    page = ui.markup
     settings = page.split('aria-label="Settings"')[1].split('<section id="badges">')[0]
     beside = len(re.findall(r"<section(?: class=\"[^\"]*\")?>", settings))
     assert beside == 6, beside
 
-    sheet = pathlib.Path("src/statsbadge/web/app.css").read_text(encoding="utf-8")
+    sheet = ui.css
     spanned = re.search(r'section\[aria-label="Theme"\] \{ grid-column: 1; grid-row: span (\d+)',
                         sheet)
     assert spanned, "the theme box no longer spans the panels"
@@ -80,10 +79,10 @@ def sections_of(page):
     return found
 
 
-def test_the_settings_are_grouped_by_what_they_do():
+def test_the_settings_are_grouped_by_what_they_do(ui):
     """One list of every control was a soup. A setting is grouped under the heading it sits
     under, so the panel can be read by what somebody came to change."""
-    page = pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
+    page = ui.markup
     sections = sections_of(page)
     wanted = {
         "Look &amp; Feel": ("theme", "accentb"),
