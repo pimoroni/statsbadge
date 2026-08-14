@@ -289,7 +289,7 @@ and `briefcase package macOS app --identity`.
 uv sync                                             # dev environment
 uv pip install --no-deps ./extensions/statsbadge-clock
 uv run statsbadge probe                             # what this host can measure
-uv run python tests/test_core.py                    # server, auth, framing
+uv run pytest tests                                 # the whole suite
 uv run python tools/check_app.py                    # the app parses and is whole
 uv run ruff check --config ci/ruff.toml src tools tests extensions
 npm ci && npm run lint                              # the config UI: js, css, html

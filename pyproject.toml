@@ -61,6 +61,11 @@ statsbadge = "statsbadge.__main__:main"
 [project.gui-scripts]
 statsbadge-tray = "statsbadge.__main__:tray_main"
 
+# `tests/` carries no __init__.py, so pytest puts it on sys.path and conftest.py is
+# importable from a test file by name.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 # The tag is the version. uv's build backend takes only static metadata, astral-sh/uv#11718
 # being open, so the backend is hatchling. `uv build` and `uv publish` drive it the same
 # way, those being the frontend.
@@ -83,7 +88,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 # mpremote for the on-badge tools, which run a script over a mounted checkout. `mpremote
 # mount` is a filesystem protocol, and nothing statsbadge itself needs.
-dev = ["ruff>=0.6", "mpremote>=1.22"]
+dev = ["ruff>=0.6", "mpremote>=1.22", "pytest>=8.0"]
 # Building an extension's .af icon font. A group and not an extra, since nothing needs it
 # to run or install: uv sync --group fonts.
 fonts = ["freetype-py>=2.4", "shapely>=2.1"]

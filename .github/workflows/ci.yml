@@ -31,7 +31,9 @@ jobs:
       - name: Install
         run: |
           uv sync --all-extras
-          uv pip install --no-deps ./extensions/statsbadge-clock
+          # All three, so the tests that read an extension's badge page run rather than skip.
+          uv pip install --no-deps ./extensions/statsbadge-clock \
+            ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
 
       # The badge compiles these from source when the app is launched, where a syntax
       # error surfaces as a crash dialog.
@@ -70,7 +72,9 @@ jobs:
       - name: Install
         run: |
           uv sync --all-extras
-          uv pip install --no-deps ./extensions/statsbadge-clock
+          # All three, so the tests that read an extension's badge page run rather than skip.
+          uv pip install --no-deps ./extensions/statsbadge-clock \
+            ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
 
       - name: Report what the tray would need
         run: uv run statsbadge tray --check
@@ -88,11 +92,8 @@ jobs:
       # Here and not only on Linux: the extensions library is the part most likely to
       # differ, between path separators, a .pyd that cannot be replaced while it is
       # imported, and pip standing in where there is no uv.
-      - name: Server, auth, extensions and framing tests
-        run: uv run python tests/test_core.py
-
-      - name: Tray, menu and autostart tests
-        run: uv run python tests/test_tray.py
+      - name: Tests
+        run: uv run pytest tests -q
 
   web:
     name: Lint the config UI

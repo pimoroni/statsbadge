@@ -2,7 +2,7 @@
 
 Needs no server, no display and no pystray, so it runs on a headless CI box.
 
-    python3 tests/test_tray.py
+    uv run pytest tests/test_tray.py
 """
 
 import configparser
@@ -15,21 +15,13 @@ import sys
 import tempfile
 import tomllib
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+import pytest
 
-from statsbadge import autostart, logs, runner  # noqa: E402
-from statsbadge.tray import TrayApp  # noqa: E402
-from statsbadge.tray.backend import SEPARATOR  # noqa: E402
-
-CHECKS = []
+from statsbadge import autostart, logs, runner
+from statsbadge.tray import TrayApp
+from statsbadge.tray.backend import SEPARATOR
 
 ARGV = ["/opt/a place/statsbadge-tray", "--config-dir", "/tmp/a b", "--port", "8421"]
-
-
-def check(fn):
-    CHECKS.append(fn)
-    return fn
-
 
 class FakeBadges:
     def __init__(self):
@@ -51,7 +43,6 @@ class FakeBadges:
     def deny_enrolment(self, request_id):
         self.done.append(("deny", request_id))
 
-
 class FakeStack:
     """Enough of runner.Stack for a menu to be built from it."""
 
@@ -63,7 +54,6 @@ class FakeStack:
 
     def status(self):
         return dict(self._status)
-
 
 WAITING = {"request_id": "r1", "name": "Desk badge", "code": "4F9A2C",
            "waiting_s": 2, "expires_in": 120}
@@ -82,7 +72,6 @@ def find(items, label):
 
 # -- the menu ---------------------------------------------------------------
 
-@check
 def test_a_waiting_badge_is_approved_by_its_own_code():
     """Two steps and one decision each, the same contract the CLI and the UI keep.
 
@@ -106,7 +95,6 @@ def test_a_waiting_badge_is_approved_by_its_own_code():
     assert stack.service.badges.done[-1] == ("deny", "r1")
 
 
-@check
 def test_nothing_is_offered_that_cannot_be_done():
     """No badge waiting, no submenu. No address, nothing to copy."""
     quiet = TrayApp(FakeStack()).model()
@@ -118,7 +106,6 @@ def test_nothing_is_offered_that_cannot_be_done():
     assert "no network" in find(adrift, "Serving on no network address").label
 
 
-@check
 def test_the_pairing_item_reports_the_window_it_opens():
     stack = FakeStack()
     app = TrayApp(stack)
@@ -131,7 +118,6 @@ def test_the_pairing_item_reports_the_window_it_opens():
     assert find(app.model(), "Pairing closes in 240s").checked is True
 
 
-@check
 def test_the_summary_moves_only_when_the_menu_would():
     """appindicator rebuilds the whole menu on update, so a poll that changed nothing
     must not ask for one."""
@@ -145,7 +131,6 @@ def test_the_summary_moves_only_when_the_menu_would():
 
 # -- run at login -----------------------------------------------------------
 
-@check
 def test_a_login_entry_round_trips():
     """Written, read back, asked for twice, and taken away again."""
     for backend in (autostart.LaunchAgent, autostart.Desktop):
@@ -199,10 +184,8 @@ def _unquote(line):
     return [entry.replace("%%", "%") for entry in out]
 
 
-@check
+@pytest.mark.skipif(os.name != "nt", reason="the registry entry is Windows only")
 def test_windows_keeps_its_entry_in_the_registry():
-    if os.name != "nt":
-        return
     entry = autostart.Registry()
     was = entry.enabled()
     try:
@@ -215,7 +198,6 @@ def test_windows_keeps_its_entry_in_the_registry():
             entry.enable(ARGV)
 
 
-@check
 def test_the_gui_entry_point_still_takes_a_command():
     """A packaged app has this as its only entry point, so a bare word has to reach the
     command it names: `ext` and `status` are how CI asks the built app whether it works.
@@ -236,7 +218,6 @@ def test_the_gui_entry_point_still_takes_a_command():
                    ["ext", "outdated"], [PIP_VERB, "--version"]], ran
 
 
-@check
 def test_the_packaged_app_names_files_that_are_there():
     """Briefcase falls back to its own mascot for an icon it cannot find, and says so in
     one line among hundreds of them."""
@@ -255,7 +236,6 @@ def test_the_packaged_app_names_files_that_are_there():
     assert "." in app["requires"], app["requires"]
 
 
-@check
 def test_a_packaged_app_runs_itself_at_login():
     """A bundle's sys.executable is the app, which takes no `-m`, and a statsbadge-tray
     found on PATH beside it would be another install of it entirely."""
@@ -269,7 +249,6 @@ def test_a_packaged_app_runs_itself_at_login():
         sys.executable = was
 
 
-@check
 def test_what_runs_at_login_is_a_real_path():
     argv = autostart.command()
     assert argv, "nothing to run"
@@ -284,7 +263,6 @@ def test_what_runs_at_login_is_a_real_path():
 
 # -- the log ----------------------------------------------------------------
 
-@check
 def test_a_terminal_still_sees_everything_the_log_does():
     """Redirecting a terminal wholesale left `tray` looking hung.
 
@@ -310,7 +288,6 @@ def test_a_terminal_still_sees_everything_the_log_does():
     assert "pystray is not installed" in open(target).read()
 
 
-@check
 def test_a_print_survives_having_nowhere_to_print():
     """sys.stdout is None under pythonw, and inside an .app bundle. Every print raises."""
     was = (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__)
@@ -339,7 +316,6 @@ def test_a_print_survives_having_nowhere_to_print():
 
 # -- the port ---------------------------------------------------------------
 
-@check
 def test_a_port_nobody_holds_answers_nothing():
     """The single-instance check, and the only guard on Windows, where SO_REUSEADDR
     lets a second bind succeed."""
@@ -347,24 +323,3 @@ def test_a_port_nobody_holds_answers_nothing():
         sock.bind(("127.0.0.1", 0))
         free = sock.getsockname()[1]
     assert runner.already_serving(free, timeout=0.3) is None
-
-
-def main():
-    failures = []
-    for fn in CHECKS:
-        try:
-            fn()
-            print(f"ok   {fn.__name__}")
-        except AssertionError as exc:
-            failures.append(fn.__name__)
-            print(f"FAIL {fn.__name__}: {exc}")
-        except Exception as exc:
-            failures.append(fn.__name__)
-            print(f"ERR  {fn.__name__}: {type(exc).__name__}: {exc}")
-    print()
-    print(f"{len(CHECKS)} checks, {len(failures)} failed")
-    return 1 if failures else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
