@@ -516,7 +516,7 @@ def test_a_graph_s_two_series_read_apart():
             assert derive.apart(palette["bg"], shown) >= layout.SERIES_FLOOR, (name, second)
 
 
-def test_the_preview_reads_a_number_as_the_badge_does():
+def test_the_preview_reads_a_number_as_the_badge_does(ui):
     """The preview formats and scales readings itself, pages.py importing draw and draw
     expecting the firmware's globals, so the host cannot answer for it.
 
@@ -560,7 +560,7 @@ def test_the_preview_reads_a_number_as_the_badge_does():
                         ("SIZE_HUGE", look.SIZE_HUGE), ("DIAL_OUTER", look.DIAL_OUTER),
                         ("DIAL_INNER", look.DIAL_INNER), ("DIAL_FROM", int(look.DIAL_FROM)),
                         ("DIAL_TO", int(look.DIAL_TO))):
-        assert f"const {name} = {value}\n" in script, (name, value)
+        assert ui.constants.get(name) == value, (name, value, ui.constants.get(name))
 
 
 def test_the_preview_draws_in_the_badge_s_own_faces():

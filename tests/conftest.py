@@ -163,6 +163,32 @@ class ConfigUI:
                 continue
             yield named.group(1), re.match(r'\(\s*"[^"]+"\s*,\s*"([^"]+)"', body).group(1)
 
+    @property
+    def constants(self):
+        """The script's `const NAME = <number>` declarations, several of which restate a
+        figure from look.py: JavaScript cannot import it, so the two are checked instead."""
+        return {name: float(value) if "." in value else int(value)
+                for name, value in re.findall(
+                    r"^const ([A-Z][A-Z0-9_]*) = (-?[\d.]+)\s*$", self.script, re.M)}
+
+    def function(self, name):
+        """One named function's body, to the brace that closes it.
+
+        Slicing a fixed number of characters after the name reads whatever happens to
+        follow, so a helper moved in above the line under test quietly empties the check.
+        """
+        start = self.script.index(f"function {name}")
+        opened = self.script.index("{", start)
+        depth = 0
+        for position in range(opened, len(self.script)):
+            if self.script[position] == "{":
+                depth += 1
+            elif self.script[position] == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.script[opened:position + 1]
+        raise AssertionError(f"unbalanced braces in {name}")
+
     def _call_at(self, start):
         """From the bracket after the name, to the one that closes it."""
         opened = self.script.index("(", start)

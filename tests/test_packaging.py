@@ -6,6 +6,8 @@ import tomllib
 import urllib.error
 import urllib.request
 
+import yaml
+
 from statsbadge import install
 
 
@@ -68,8 +70,9 @@ def test_the_version_is_written_down_once():
         prefix = plugin["tool"]["uv-dynamic-versioning"]["pattern-prefix"]
         assert prefix == f"{short}-", (name, prefix)
         # The prefix the workflow fires on is the prefix the build strips.
-        workflow = (workflows / f"publish-{short}.yml").read_text(encoding="utf-8")
-        assert f"TAG_PREFIX: {prefix}v" in workflow, (short, prefix)
+        workflow = yaml.safe_load(
+            (workflows / f"publish-{short}.yml").read_text(encoding="utf-8"))
+        assert workflow["env"]["TAG_PREFIX"] == f"{prefix}v", (short, prefix)
         for module in (directory / "src").rglob("__init__.py"):
             assert not re.search(r"^__version__\s*=", module.read_text(encoding="utf-8"), re.M), module
 
@@ -93,18 +96,27 @@ def test_every_package_here_can_be_published():
         short = name.removeprefix("statsbadge-")
         found.append(short)
 
-        workflow = workflows / f"publish-{short}.yml"
-        assert workflow.is_file(), f"{name} has no publish workflow"
-        text = workflow.read_text(encoding="utf-8")
-        assert f"PACKAGE: {name}" in text, workflow
-        assert f"DIRECTORY: extensions/{name}" in text, workflow
+        path = workflows / f"publish-{short}.yml"
+        assert path.is_file(), f"{name} has no publish workflow"
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+        settings = workflow["env"]
+        assert settings["PACKAGE"] == name, (path.name, settings)
+        assert settings["DIRECTORY"] == f"extensions/{name}", (path.name, settings)
         # The prefix appears twice in each workflow: the guard that gates the run, and
         # the strip that checks the version. Both have to match.
-        assert f"TAG_PREFIX: {short}-v" in text, workflow
-        assert f"startsWith(github.event.release.tag_name, '{short}-v')" in text, workflow
-        # It publishes from the extension directory, not the repository root.
-        assert text.count("working-directory: ${{ env.DIRECTORY }}") >= 3, workflow
-        assert "uv publish --trusted-publishing always" in text, workflow
+        assert settings["TAG_PREFIX"] == f"{short}-v", (path.name, settings)
+        job = workflow["jobs"]["publish"]
+        assert f"startsWith(github.event.release.tag_name, '{short}-v')" in job["if"], path.name
+
+        # Every step that runs something runs it in the extension's directory, not the
+        # repository root, and the publish is the trusted one.
+        running = [step for step in job["steps"] if "run" in step]
+        assert running, path.name
+        for step in running:
+            assert step.get("working-directory") == "${{ env.DIRECTORY }}", (
+                path.name, step.get("name"))
+        assert any("uv publish --trusted-publishing always" in step["run"]
+                   for step in running), path.name
 
     assert len(found) >= 3, found
     # Every workflow names a package that is here; a stale one publishes whatever it finds.

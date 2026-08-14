@@ -291,7 +291,7 @@ def test_a_frame_is_walked_past_its_own_scalars(h):
     assert [word.strip().strip('"') for word in named.split(",")] == list(collect.FRAME_SCALARS)
 
 
-def test_a_source_that_recovered_stops_being_reported_as_broken(h):
+def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
     """An upstream 503 or a subprocess that took too long is a blip on a source that goes on
     working, so the count is kept and the reason is dropped. Left permanently set, a fault
     replaced what the source provides with the name of a Python exception."""
@@ -335,7 +335,8 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h):
     script = pathlib.Path("src/statsbadge/web/app.js").read_text(encoding="utf-8")
     assert 'source.last_fault ? "faulty" : null' in script, \
         "a recovered source still shows as broken"
-    assert 'provides.join(", ")' in script.split("function renderSources")[1][:600]
+    assert 'provides.join(", ")' in ui.function("renderSources"), (
+        "the UI no longer says what a source provides")
 
 
 def test_the_cpu_temperature_linux_reports_is_the_hottest_one():
