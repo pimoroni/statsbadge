@@ -196,14 +196,13 @@ def test_a_file_that_did_not_write_is_not_left_on_the_badge():
             install.COPY_WAIT = was_wait
 
 
-def test_the_installer_and_the_app_name_the_same_extension_directory():
+def test_the_installer_and_the_app_name_the_same_extension_directory(badge_constants):
     """The installer writes badge modules into it and the app puts it on sys.path.
 
     Disagreeing is an extension that installs and then draws nothing, with the page kind
     it registers missing and no error anywhere.
     """
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
-    assert f'EXT_DIR = "{install.EXT_DIR}"' in app, install.EXT_DIR
+    assert badge_constants("__init__.py")["EXT_DIR"] == install.EXT_DIR, install.EXT_DIR
     # `pages` would be a directory shadowing the app's pages.py on sys.path.
     assert install.EXT_DIR != "pages"
 

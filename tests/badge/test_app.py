@@ -72,7 +72,7 @@ def test_the_badge_never_waits_on_a_socket_the_screen_is_behind():
         "a failed connect would read as a connected one"
 
 
-def test_the_badge_scans_for_longer_than_the_host_waits():
+def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
     """The badge listens for a beacon and the host sends one, and neither imports the other.
 
     A scan shorter than the gap between two beacons misses a host that has just broadcast,
@@ -81,10 +81,12 @@ def test_the_badge_scans_for_longer_than_the_host_waits():
     from statsbadge import beacon
 
     source = (pathlib.Path(install.app_source_dir()) / "net.py").read_text(encoding="utf-8")
-    assert f"BEACON_PORT = {beacon.PORT}" in source, "the badge listens on another port"
-    assert f"BEACON_EVERY_MS = {int(beacon.INTERVAL * 1000)}" in source, (
+    badge = badge_constants("net.py")
+    assert badge["BEACON_PORT"] == beacon.PORT, "the badge listens on another port"
+    assert badge["BEACON_EVERY_MS"] == int(beacon.INTERVAL * 1000), (
         "the badge assumes a different interval")
-    assert "DISCOVER_MS = 2 * BEACON_EVERY_MS" in source
+    # Two of them, so a scan cannot fall between the beacon it wanted and the next.
+    assert badge["DISCOVER_MS"] == 2 * badge["BEACON_EVERY_MS"], badge["DISCOVER_MS"]
 
     # The host's own figure travels, so a server started with a different interval is
     # scanned for long enough without the badge being rebuilt.
@@ -129,7 +131,7 @@ def test_a_full_battery_is_not_an_alarm():
         "the sweep is no longer drawn from the reading")
 
 
-def test_the_badge_dims_to_suit_the_room():
+def test_the_badge_dims_to_suit_the_room(ui):
     """Measured on the badge, as raw u16 stepping in sixteens: darkness 48, a partly
     daylit room with the curtains closed 320, a lit room 4500.
 
@@ -159,10 +161,10 @@ def test_the_badge_dims_to_suit_the_room():
     assert layout.validate({"pages": layout.DEFAULT_PAGES})["auto_brightness"] is False
     assert layout.validate({"auto_brightness": True,
                             "pages": layout.DEFAULT_PAGES})["auto_brightness"] is True
-    assert 'id="autobright"' in pathlib.Path("src/statsbadge/web/index.html").read_text(encoding="utf-8")
+    assert ui.bindings.get("autobright") == "auto_brightness", ui.bindings
 
 
-def test_the_badge_pages_on_its_own_when_left_alone():
+def test_the_badge_pages_on_its_own_when_left_alone(ui):
     """Off by default: a display that moves while somebody is reading it is a nuisance."""
     config = layout.validate({"pages": layout.DEFAULT_PAGES})
     assert config["idle_advance_s"] == 0, config["idle_advance_s"]
@@ -173,9 +175,8 @@ def test_the_badge_pages_on_its_own_when_left_alone():
     # A page has to be up for a second to be read at all.
     assert clamped["advance_every_s"] == 1, clamped
 
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="idle"' in (web / "index.html").read_text(encoding="utf-8")
-    assert '"idle_advance_s"' in (web / "app.js").read_text(encoding="utf-8")
+    assert ui.bindings.get("idle") == "idle_advance_s", ui.bindings
+    assert ui.bindings.get("advance") == "advance_every_s", ui.bindings
 
     app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
     advance = app[app.index("    def advance_if_idle"):]

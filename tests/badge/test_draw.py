@@ -58,7 +58,7 @@ def test_a_split_page_takes_the_layout_it_is_given():
         "the clock face lays its column out by hand")
 
 
-def test_a_gauge_can_sweep_to_its_reading():
+def test_a_gauge_can_sweep_to_its_reading(ui):
     """A reading lands once a second and the gauge may ease to it instead of stepping.
 
     The needle has to leave from where it *is*: a second reading arriving mid-sweep must
@@ -71,10 +71,7 @@ def test_a_gauge_can_sweep_to_its_reading():
     assert layout.validate({"pages": layout.DEFAULT_PAGES})["animate"] is False, (
         "off by default")
 
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="animate"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
-    assert 'bindCheck("animate", "animate")' in (web / "app.js").read_text(encoding="utf-8"), \
-        "the control is not bound"
+    assert ui.bindings.get("animate") == "animate", "the UI control sets something else"
 
     sys.path.insert(0, install.app_source_dir())
     import pages

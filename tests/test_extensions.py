@@ -7,7 +7,7 @@ import sys
 from statsbadge import extensions, install, layout
 
 
-def test_extensions_describe_finds_the_clock(h):
+def test_extensions_describe_finds_the_clock(h, ui):
 
     found = {record["name"]: record for record in extensions.describe()}
     clock = found.get("clock")
@@ -22,11 +22,9 @@ def test_extensions_describe_finds_the_clock(h):
     _status, caps = h.raw("GET", "/api/capabilities")
     described = {record["name"] for record in caps["extensions"]}
     assert described == set(found), (described, set(found))
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="extensions"' in (web / "index.html").read_text(encoding="utf-8")
-    script = (web / "app.js").read_text(encoding="utf-8")
-    assert "caps.extensions" in script, "the UI still lists only what has settings"
-    assert "extensionBox" in script, "an extension is not a box of its own"
+    assert "extensions" in ui.ids, "the page has nowhere to list them"
+    assert "caps.extensions" in ui.script, "the UI still lists only what has settings"
+    assert "extensionBox" in ui.script, "an extension is not a box of its own"
 
 
 def test_extension_settings_are_declared_stored_and_applied(h):

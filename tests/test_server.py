@@ -209,18 +209,51 @@ def test_nodelay_is_set():
     assert server.Handler.disable_nagle_algorithm is True
 
 
-def _source_of(fn):
-    import inspect
-    return inspect.getsource(fn)
+def caller(h, address, path):
+    """A handler far enough along to be dispatched to, without a socket behind it.
 
-
-def test_config_api_is_loopback_only():
-    """The config API can mint secrets, so it answers on loopback alone.
-
-    Checked at the handler level: binding a second address to prove it is awkward,
-    but the guard is the part under test.
+    Built off the running server's own handler class, so it carries the service that
+    `make_server` bound to it. Binding a second address to prove the guard is awkward, so
+    the request arrives by hand: what it answers is recorded instead of written.
     """
-    assert "loopback" in _source_of(server.Handler._dispatch)
+    class Caller(h.httpd.RequestHandlerClass):
+        def __init__(self):
+            self.client_address = (address, 51234)
+            self.path = path
+            self.headers = {}
+            self.server = h.httpd
+            self.answered = None
+
+        def _send(self, status, body, _kind, _extra=None):
+            self.answered = (status, json.loads(body))
+
+    return Caller()
+
+
+def test_config_api_is_loopback_only(h):
+    """The config API can mint secrets, so it answers on loopback alone."""
+    for address in ("127.0.0.1", "::1"):
+        assert caller(h, address, "/api/capabilities")._is_local(), address
+    for address in ("10.0.0.5", "192.168.1.20", "8.8.8.8", "not-an-address"):
+        assert not caller(h, address, "/api/capabilities")._is_local(), address
+
+    # And that guard is the one dispatch keeps: a config path from off the machine is
+    # refused before it reaches the API.
+    off_box = caller(h, "10.0.0.5", "/api/capabilities")
+    off_box._dispatch("GET")
+    assert off_box.answered[0] == 403, off_box.answered
+    assert "loopback" in off_box.answered[1]["error"], off_box.answered
+
+    # The same path from loopback gets through to a real answer.
+    local = caller(h, "127.0.0.1", "/api/capabilities")
+    local._dispatch("GET")
+    assert local.answered[0] == 200, local.answered
+    assert "kinds" in local.answered[1], local.answered
+
+    # A badge path is not behind the guard: badges are on the network by definition.
+    badge = caller(h, "10.0.0.5", "/v1/hello")
+    badge._dispatch("GET")
+    assert badge.answered[0] == 200, badge.answered
 
 
 def test_server_identity_is_stable(h):

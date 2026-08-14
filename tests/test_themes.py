@@ -168,7 +168,7 @@ def test_a_theme_travels_as_its_colours():
         assert look.from_palette("bad", bad) is None, bad
 
 
-def test_a_palette_can_carry_a_second_accent(h):
+def test_a_palette_can_carry_a_second_accent(h, ui):
     """One more colour, used sparingly, a graph's second series being all of it. It is
     where the app used to hunt through the ramp for something that would show. A palette that
     names none gets the accent again, matching every palette without one."""
@@ -233,9 +233,10 @@ def test_a_palette_can_carry_a_second_accent(h):
     pips = pips[:pips.index("\ndef ", 1)]
     assert "theme.accent_b if i == index" in pips, "the current pip is not the second accent"
 
-    web = pathlib.Path("src/statsbadge/web")
-    assert 'id="accentb"' in (web / "index.html").read_text(encoding="utf-8"), "no control in the UI"
-    assert "config.accent_b" in (web / "app.js").read_text(encoding="utf-8"), "the control is not bound"
+    # Not one of the bound controls: a second accent is picked per theme, so the page
+    # carries the select and the script writes the setting where it renders the tint.
+    assert "accentb" in ui.ids, "no control in the UI"
+    assert "config.accent_b" in ui.script, "the control is not bound"
     status, shown = h.raw("GET", "/api/theme?theme=tinted-dark&second=triadic")
     assert status == 200 and shown["palette"]["accent_b"] != shown["palette"]["accent"]
     status, _bad = h.raw("GET", "/api/theme?theme=tinted-dark&second=nonesuch")

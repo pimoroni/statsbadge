@@ -3,6 +3,27 @@
 import pathlib
 import re
 
+from statsbadge import layout
+
+
+def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
+    """A control in the page, a binding in the script, and a setting the server keeps.
+
+    Three files have to agree and none imports another. Checked as the pairs they are:
+    a control bound to a setting `validate` drops is one the browser appears to offer and
+    the badge never sees, which no amount of matching either file's text would catch.
+    """
+    assert ui.bindings, "no bindings were read out of app.js"
+    for control, setting in ui.bindings.items():
+        assert control in ui.ids, f"{control} is bound but not in the page"
+        assert ui.ids[control] in ("input", "select"), (control, ui.ids[control])
+        assert setting in layout.DEFAULT_CONFIG, f"{control} is bound to {setting}, not a setting"
+
+    # And the server keeps each of them: a default round-trips through validate unchanged.
+    kept = layout.validate({**layout.DEFAULT_CONFIG, "pages": layout.DEFAULT_PAGES})
+    for control, setting in ui.bindings.items():
+        assert setting in kept, f"validate drops {setting}, which {control} sets"
+
 
 def test_a_hint_beside_a_secret_leaves_room_for_the_field():
     """An extension's API key sits in a two-column grid whose first column is max-content.

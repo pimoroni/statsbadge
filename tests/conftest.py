@@ -5,8 +5,11 @@ pytest imports this before any test module, which is what makes the badge stand-
 under `badge_app/` reaches `look`. Installing them here is the one ordering guarantee.
 """
 
+import ast
+import html.parser
 import json
 import pathlib
+import re
 import sys
 import tempfile
 import threading
@@ -112,6 +115,98 @@ def badge_modules():
     import pages
     import worldmap
     return {"draw": draw, "look": look, "net": net, "pages": pages, "worldmap": worldmap}
+
+
+class Markup(html.parser.HTMLParser):
+    """Every element the page gives an id, and the tag it is."""
+
+    def __init__(self):
+        super().__init__()
+        self.ids = {}
+
+    def handle_starttag(self, tag, attrs):
+        found = dict(attrs)
+        if found.get("id"):
+            self.ids[found["id"]] = tag
+
+
+class ConfigUI:
+    """The config UI as data: what index.html defines, and what app.js binds each id to.
+
+    Matching a binding as a substring - `'bindCheck("animate", "animate")' in script` -
+    breaks on a reformat and passes on a control that is bound to a setting the server
+    would refuse. Reading the calls out gives the pair to check against the real schema.
+    """
+
+    def __init__(self, web):
+        self.markup = (web / "index.html").read_text(encoding="utf-8")
+        self.script = (web / "app.js").read_text(encoding="utf-8")
+        self.css = (web / "app.css").read_text(encoding="utf-8")
+        parser = Markup()
+        parser.feed(self.markup)
+        self.ids = parser.ids
+        self.bindings = dict(self._bindings())
+
+    def _bindings(self):
+        for match in re.finditer(r"\bbind(Range|Check|Select)\b", self.script):
+            if self.script[:match.start()].rstrip().endswith("function"):
+                continue                      # the definition, not a call of it
+            body = self._call_at(match.end())
+            named = re.match(r'\(\s*"([^"]+)"', body)
+            assert named, body[:60]
+            if match.group(1) == "Select":
+                # A select reads and writes through closures, so its setting is whatever
+                # the write half assigns.
+                keys = sorted(set(re.findall(r"config\.(\w+)\s*=(?!=)", body)))
+                assert len(keys) == 1, (named.group(1), keys)
+                yield named.group(1), keys[0]
+                continue
+            yield named.group(1), re.match(r'\(\s*"[^"]+"\s*,\s*"([^"]+)"', body).group(1)
+
+    def _call_at(self, start):
+        """From the bracket after the name, to the one that closes it."""
+        opened = self.script.index("(", start)
+        depth = 0
+        for position in range(opened, len(self.script)):
+            if self.script[position] == "(":
+                depth += 1
+            elif self.script[position] == ")":
+                depth -= 1
+                if depth == 0:
+                    return self.script[opened:position + 1]
+        raise AssertionError(f"unbalanced brackets from {opened}")
+
+
+@pytest.fixture(scope="session")
+def ui(web_dir):
+    return ConfigUI(web_dir)
+
+
+@pytest.fixture(scope="session")
+def badge_constants():
+    """Read a badge module's module-level constants without importing it.
+
+    Several of these have to agree with a host-side figure, and `badge_app/__init__.py`
+    cannot be imported on a host at all. Matching the assignment as text breaks on a
+    comment or a reflow and says nothing about the value, so the source is parsed and the
+    constants evaluated in order, each seeing the ones above it.
+    """
+    def constants(module):
+        source = (pathlib.Path(install.app_source_dir()) / module).read_text(encoding="utf-8")
+        found = {}
+        for node in ast.parse(source).body:
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if not isinstance(target, ast.Name):
+                continue
+            try:
+                found[target.id] = eval(  # noqa: S307  a module in this repo, constants only
+                    compile(ast.Expression(node.value), module, "eval"), {}, dict(found))
+            except Exception:  # noqa: BLE001  anything needing the firmware is not a constant
+                continue
+        return found
+    return constants
 
 
 def headers(badge_id, seq, secret, method="GET", path="/v1/stats", body=b""):
