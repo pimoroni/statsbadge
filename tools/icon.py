@@ -9,13 +9,14 @@ times one scale factor, which keeps the two agreeing. Rendered at 16x and reduce
 there is no anti-aliasing to be had at 24 pixels otherwise.
 """
 
-import builtins
 import pathlib
 import shutil
 import subprocess
 import sys
 
 from PIL import Image, ImageDraw
+
+import badgefakes
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / "src" / "statsbadge" / "badge_app"
@@ -26,45 +27,7 @@ TRAY = ROOT / "src" / "statsbadge" / "tray" / "assets"
 APP_ICONS = ROOT / "packaging" / "icons"
 sys.path.insert(0, str(APP))
 
-
-
-class _Colour(tuple):
-    """Enough of the badge's `color` to build a theme on a host that has none.
-
-    A tuple of channels, the form PIL takes, carrying the one method `look` calls on
-    one. The same shim the tests install, in the one form this tool needs.
-    """
-
-    def to_oklch(self):
-        return self
-
-    def mix(self, other, part):
-        return _Colour(round(a + (b - a) * part / 255) for a, b in zip(self, other, strict=True))
-
-    def lighten(self, by):
-        return _Colour(max(0, min(255, channel + by)) for channel in self)
-
-    def darken(self, by):
-        return self.lighten(-by)
-
-    def with_alpha(self, _alpha):
-        return self
-
-
-class _Colours:
-    @staticmethod
-    def rgb(*channels):
-        return _Colour(channels[:3])
-
-    @staticmethod
-    def ramp(stops, steps):
-        """The table a theme builds at startup. Only the four flat colours are drawn here,
-        so the stops go through unsampled and nothing reads the result."""
-        del steps
-        return (colour for _position, colour in stops)
-
-
-builtins.color = _Colours
+badgefakes.install()
 
 import look  # noqa: E402
 import splash  # noqa: E402  its module-level constants; show() needs a badge
@@ -152,8 +115,9 @@ def _dot(draw, size, fill, ring):
 
 def main():
     theme = look.get(look.DEFAULT)
-    plate = theme.bg + (255,)
-    colours = (theme.grid + (255,), theme.accent + (255,), theme.ink + (255,))
+    # PIL takes a tuple of channels; a theme holds the badge's colour objects.
+    plate = theme.bg.parts()
+    colours = (theme.grid.parts(), theme.accent.parts(), theme.ink.parts())
 
     for out, px in ((APP / "icon.png", SIZE), (WEB / "icon.png", WEB_SIZE)):
         small = render(px, *colours, plate=plate)
@@ -162,7 +126,7 @@ def main():
         _shrink(out, small)
 
     TRAY.mkdir(parents=True, exist_ok=True)
-    for name, dot in (("tray", None), ("tray-attention", theme.accent + (255,))):
+    for name, dot in (("tray", None), ("tray-attention", theme.accent.parts())):
         _write(TRAY / f"{name}.png",
                render(TRAY_SIZE, *colours, plate=plate, dot=dot, ring=plate))
     for name, dot in (("tray-template", None), ("tray-template-attention", MONO_INK)):

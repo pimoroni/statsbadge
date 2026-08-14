@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """Record what actually gets called, for the graph to colour by instead of guessing.
 
-    python3 tools/callgraph_trace.py --out build/trace-tests.json -- tests/test_core.py
+    python3 tools/callgraph_trace.py --out build/trace-tests.json -- pytest tests
     python3 tools/callgraph_trace.py --out build/trace-probe.json -- statsbadge probe
 
 `sys.setprofile`, not `sys.monitoring`: .python-version pins 3.11. It is the better
 instrument here anyway, firing on call and return only rather than on every line.
 
-`tests/test_core.py` is the run worth having. It exercises nearly every host path and
-runs as a plain script with no pytest. It also installs the badge fakes on builtins before
-importing draw, look, pages and worldmap, so one command gives real counts for the whole
-host tree and for the badge's drawing layer, the part where cost matters. No shims are
-needed.
+The test suite is the run worth having. It exercises nearly every host path, and its
+conftest installs the badge stand-ins from `tools/badgefakes.py` before importing draw,
+look, pages and worldmap, so one command gives real counts for the whole host tree and for
+the badge's drawing layer, the part where cost matters. No shims are needed here.
 
 Counts for the whole run, but only the first `--window` seconds of ordered events: a run
 this size produces millions, and forty megabytes will not inline into a viewer. What was
@@ -159,7 +158,7 @@ def run(subject, recorder):
     """Run the subject in this process with the profiler already installed.
 
     In-process because these subjects do not cooperate with being told to profile
-    themselves, and `tests/test_core.py` runs perfectly well this way - it spawns its own
+    themselves, and the test suite runs perfectly well this way - it spawns its own
     threads and a real server, and `threading.setprofile` covers those.
     """
     first = subject[0]
