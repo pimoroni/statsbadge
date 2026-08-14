@@ -28,6 +28,10 @@ badgefakes.install()
 
 from statsbadge import auth, install, server  # noqa: E402
 
+# badge/wasm/ is MicroPython, run against the firmware by `node tools/wasm/run.mjs`. It
+# reaches `screen` and `rect`, so it cannot be imported here at all, let alone collected.
+collect_ignore_glob = ["badge/wasm/*.py"]
+
 class Harness:
     """A running server, its store, and a badge paired with it."""
 

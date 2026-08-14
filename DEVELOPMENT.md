@@ -297,6 +297,31 @@ uv build                                            # sdist + wheel
 ci/build-mpy.sh                                     # precompile the badge app
 ```
 
+### The badge app, without a badge
+
+`tests/badge/wasm/` runs the app's own modules against the real firmware under the
+badgeware WASM port: real picovector, real fonts, real `screen`. That is the only way
+to test what draws - `pages.render` reaches `screen`, `image` and `tween`, so on a host
+it can only be read as text, which is what the checks in `tests/badge/` still do.
+
+Fetch a runtime once (a batteries-included build, which carries the badgeware package
+and the fonts inside the wasm, so nothing else has to be staged):
+
+```bash
+gh release download v3.0.1 --repo pimoroni/badgeware-wasm \
+  --pattern 'badgeware-tufty2350-batteries-jspi.zip'
+unzip -q badgeware-tufty2350-batteries-jspi.zip -d build/badgeware-runtime
+```
+
+```bash
+node tools/wasm/run.mjs                  # every module in tests/badge/wasm
+node tools/wasm/run.mjs test_pages       # one of them
+```
+
+Needs node 25 or newer: a jspi build suspends through `WebAssembly.Suspending`.
+`BADGEWARE_RUNTIME` points it at a build of your own. Not in CI yet, the release
+being on a private repository.
+
 On a badge, over a mounted checkout:
 
 ```bash
