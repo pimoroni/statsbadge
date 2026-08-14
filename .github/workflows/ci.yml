@@ -95,6 +95,49 @@ jobs:
       - name: Tests
         run: uv run pytest tests -q
 
+  badge:
+    name: The badge app, against the firmware
+    runs-on: ubuntu-latest
+
+    env:
+      # The badgeware WASM runtime the badge tests run on. A batteries-included build,
+      # so it carries the badgeware package and the fonts and only the app is staged.
+      RUNTIME_REPO: pimoroni/badgeware-wasm
+      RUNTIME_TAG: v3.0.1
+      RUNTIME_ASSET: badgeware-tufty2350-batteries-jspi.zip
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # setup-uv publishes no v9 tag, only exact versions
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      # A jspi build suspends through WebAssembly.Suspending, which the runner's own node
+      # is older than. 25 is the first with it on by default.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Install
+        run: |
+          uv sync --all-extras
+          uv pip install --no-deps ./extensions/statsbadge-clock \
+            ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
+
+      - name: Fetch the badgeware runtime
+        run: |
+          curl -fsSL -o runtime.zip \
+            "https://github.com/$RUNTIME_REPO/releases/download/$RUNTIME_TAG/$RUNTIME_ASSET"
+          unzip -q runtime.zip -d build/badgeware-runtime
+
+      # What no host-side test can reach: the page kinds actually drawing, against real
+      # picovector and the real fonts.
+      - name: Draw every page kind
+        run: node tools/wasm/run.mjs
+
   web:
     name: Lint the config UI
     runs-on: ubuntu-latest
@@ -116,7 +159,7 @@ jobs:
   build:
     name: Build the wheel
     runs-on: ubuntu-latest
-    needs: [check, tray, web]
+    needs: [check, tray, badge, web]
 
     env:
       TUFTY_REPO: pimoroni/tufty2350
@@ -192,7 +235,7 @@ jobs:
   package-mpy:
     name: Pack a precompiled badge app
     runs-on: ubuntu-latest
-    needs: [check, tray, web]
+    needs: [check, tray, badge, web]
     permissions:
       contents: write
 
@@ -263,7 +306,7 @@ jobs:
 
   package-desktop:
     name: Pack the desktop app
-    needs: [check, tray, web]
+    needs: [check, tray, badge, web]
     permissions:
       contents: write # to attach the installer to a release
 
@@ -346,7 +389,7 @@ jobs:
   package-app:
     name: Pack the badge app
     runs-on: ubuntu-latest
-    needs: [check, tray, web]
+    needs: [check, tray, badge, web]
     permissions:
       contents: write # to attach the zip to a release
 

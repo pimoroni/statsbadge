@@ -308,9 +308,9 @@ Fetch a runtime once (a batteries-included build, which carries the badgeware pa
 and the fonts inside the wasm, so nothing else has to be staged):
 
 ```bash
-gh release download v3.0.1 --repo pimoroni/badgeware-wasm \
-  --pattern 'badgeware-tufty2350-batteries-jspi.zip'
-unzip -q badgeware-tufty2350-batteries-jspi.zip -d build/badgeware-runtime
+curl -fsSL -o runtime.zip https://github.com/pimoroni/badgeware-wasm/releases/download/\
+v3.0.1/badgeware-tufty2350-batteries-jspi.zip
+unzip -q runtime.zip -d build/badgeware-runtime
 ```
 
 ```bash
@@ -319,8 +319,8 @@ node tools/wasm/run.mjs test_pages       # one of them
 ```
 
 Needs node 25 or newer: a jspi build suspends through `WebAssembly.Suspending`.
-`BADGEWARE_RUNTIME` points it at a build of your own. Not in CI yet, the release
-being on a private repository.
+`BADGEWARE_RUNTIME` points it at a build of your own. CI runs the same thing, off
+the same release, in the `badge` job.
 
 On a badge, over a mounted checkout:
 
