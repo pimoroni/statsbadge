@@ -32,8 +32,7 @@ jobs:
         run: |
           uv sync --all-extras
           # All three, so the tests that read an extension's badge page run rather than skip.
-          uv pip install --no-deps ./extensions/statsbadge-clock \
-            ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
+          uv pip install --no-deps ./extensions/statsbadge-clock ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
 
       # The badge compiles these from source when the app is launched, where a syntax
       # error surfaces as a crash dialog.
@@ -73,8 +72,7 @@ jobs:
         run: |
           uv sync --all-extras
           # All three, so the tests that read an extension's badge page run rather than skip.
-          uv pip install --no-deps ./extensions/statsbadge-clock \
-            ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
+          uv pip install --no-deps ./extensions/statsbadge-clock ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
 
       - name: Report what the tray would need
         run: uv run statsbadge tray --check
@@ -124,13 +122,13 @@ jobs:
       - name: Install
         run: |
           uv sync --all-extras
-          uv pip install --no-deps ./extensions/statsbadge-clock \
-            ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
+          uv pip install --no-deps ./extensions/statsbadge-clock ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
 
       - name: Fetch the badgeware runtime
         run: |
           curl -fsSL -o runtime.zip \
             "https://github.com/$RUNTIME_REPO/releases/download/$RUNTIME_TAG/$RUNTIME_ASSET"
+          mkdir -p build/badgeware-runtime
           unzip -q runtime.zip -d build/badgeware-runtime
 
       # What no host-side test can reach: the page kinds actually drawing, against real

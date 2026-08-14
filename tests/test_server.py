@@ -7,7 +7,7 @@ import socket
 import sys
 import time
 
-from statsbadge import auth, identity, layout, server
+from statsbadge import auth, collect, identity, layout, server
 
 
 def test_hello_is_open(h):
@@ -104,11 +104,24 @@ def test_layout_and_history(h):
     # on the first one - so positions counted back from the newest mean the same time in all of
     # them. A field that drops out gets a None, which keeps
     # that true and what a plot draws a gap for.
-    before = {key: len(ring) for key, ring in h.service.collector.history(None, 160).items()}
+    #
+    # Measured on the rings still filling. A ring at its cap gains a point and drops one, so
+    # its length stops moving, and the two caps differ: a series ring holds SERIES_LEN
+    # against history_len for a scalar. Comparing lengths across the two once either has
+    # filled compares a ring that is still growing with one that cannot.
+    rings = h.service.collector.history(None, 160)
+    caps = {key: (collect.SERIES_LEN if ring and isinstance(ring[0], list)
+                  else h.service.collector.history_len)
+            for key, ring in rings.items()}
+    before = {key: len(ring) for key, ring in rings.items()}
     time.sleep(0.5)
     after = {key: len(ring) for key, ring in h.service.collector.history(None, 160).items()}
-    grew = {after[key] - length for key, length in before.items()}
-    assert len(grew) == 1, (before, after)
+
+    filling = {after[key] - length for key, length in before.items() if after[key] < caps[key]}
+    assert len(filling) <= 1, (before, after, caps)
+    for key, length in before.items():
+        if length >= caps[key]:
+            assert after[key] == caps[key], (key, length, after[key], caps[key])
 
 
 def test_unbound_command_is_refused(h):
