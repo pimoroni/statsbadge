@@ -10,22 +10,16 @@ import sys
 from statsbadge import install, layout
 
 
-def test_only_the_entry_point_starts_the_app():
-    """app.py starts nothing by being imported; __init__.py is what runs it.
+def test_the_entry_point_starts_the_app_and_can_be_quit():
+    """__init__.py runs the app, and binds `on_exit` before main() blocks.
 
-    Read rather than run: importing app.py needs the firmware, and under the WASM runner
-    it needs `socket`, which that port does not carry.
+    Read rather than run: this is the module that starts the app, so importing it here
+    would. That app.py starts nothing is `tests/badge/wasm/test_app.py`, which imports it.
     """
-    app_dir = pathlib.Path(install.app_source_dir())
-    module = ast.parse((app_dir / "app.py").read_text(encoding="utf-8"))
-    ran = [node for node in module.body
-           if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
-           and getattr(node.value.func, "id", "") == "main"]
-    assert not ran, f"app.py runs the app at import, on line {ran[0].lineno if ran else 0}"
-
-    entry = (app_dir / "__init__.py").read_text(encoding="utf-8")
+    entry = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(
+        encoding="utf-8")
     assert "app.main(APP_DIR)" in entry, "nothing starts the app"
-    # The launcher reads this off the module it imported, while main() is still blocking.
+    # The launcher reads on_exit off the module it imported, while main() is still going.
     assert entry.index("on_exit = app.on_exit") < entry.index("app.main("), \
         "HOME would quit without saving the page"
 

@@ -24,6 +24,9 @@ const RUNTIME = process.env.BADGEWARE_RUNTIME
 // finds lexend at the first candidate instead of the fallbacks.
 const APP_DIR = "/system/apps/stats"
 const TEST_DIR = "/tests"
+// What this port has no hardware for: socket, select, wifi, secrets. Last on sys.path,
+// so anything the runtime really carries answers first.
+const SHIM_DIR = "/shims"
 
 if (!fileExists(RUNTIME)) {
   console.error(
@@ -73,6 +76,7 @@ if (staged.length) {
   console.log(`ext: ${staged.length} file(s) from ${dirname(dirname(staged[0]))}`)
 }
 stage(join(ROOT, "tests", "badge", "wasm"), TEST_DIR, (name) => name !== "__pycache__")
+stage(join(ROOT, "tools", "wasm", "shims"), SHIM_DIR, (name) => name !== "__pycache__")
 
 const wanted = process.argv[2]
 const modules = mp.FS.readdir(TEST_DIR)
@@ -91,6 +95,7 @@ import sys
 sys.path.insert(0, "${TEST_DIR}")
 sys.path.insert(0, "${APP_DIR}")
 sys.path.insert(0, "${APP_DIR}/ext")
+sys.path.append("${SHIM_DIR}")
 
 import badgeware                     # badge, screen, image, tween, the buttons
 import os
