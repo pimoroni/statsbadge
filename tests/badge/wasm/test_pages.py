@@ -95,6 +95,35 @@ class PageKinds(unittest.TestCase):
                              f"{page['kind']} left a clip behind")
 
 
+class Lanes(unittest.TestCase):
+    """A source can send names beside a list of readings, and the bars take them.
+
+    Numbered lanes suit a core and are no use for a domain.
+    """
+
+    def setUp(self):
+        draw.prepare()
+        self.theme = look.get(look.DEFAULT)
+
+    def bars(self, frame):
+        draw.background(self.theme, "Edge", 0, 1, None)
+        pages.render({"kind": "bars", "title": "Edge", "field": "edge.cached"},
+                     frame, {}, self.theme, 0, 1)
+        return body_pixels()
+
+    def test_the_names_a_source_sent_reach_the_lanes(self):
+        numbered = self.bars({"edge": {"cached": [87.0, 74.5]}})
+        named = self.bars({"edge": {"cached": [87.0, 74.5],
+                                    "cached" + pages.LANE_NAMES: ["a.com", "b.com"]}})
+        self.assertTrue(differing(numbered, named) > 0.001,
+                        "the bars numbered their lanes whatever the source sent")
+
+    def test_a_source_that_sent_none_still_draws(self):
+        drawn = self.bars({"edge": {"cached": [87.0, 74.5]}})
+        blank = chrome_only(self.theme, "Edge", 0, 1)
+        self.assertTrue(differing(blank, drawn) > 0.001)
+
+
 class ExtensionKinds(unittest.TestCase):
     """Whatever the installed extensions registered, through the same dispatch."""
 

@@ -359,11 +359,11 @@ def test_a_badge_block_sits_over_the_default():
 
 
 def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
-    """A field with no suffix to read a unit off is sent its unit with the layout."""
-    # The badge keeps the families `fmt` rescales: `_mb` prints as 11.1G, which takes a B
-    # and not the MB it arrived in.
-    import ast
+    """A field with no suffix to read a unit off is sent its unit with the layout.
 
+    What the badge does with them is `Units` in tests/badge/wasm/test_units.py: it keeps
+    the families `fmt` rescales, so `_mb` prints as 11.1G and takes a B.
+    """
     from statsbadge.sources.base import Source
 
     class Meter(Source):
@@ -395,30 +395,14 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
     finally:
         collector.extensions.remove(source)
 
-    # A rescaled family takes the short unit, or 11.1G prints as 11.1GMB.
-    src = pathlib.Path(install.app_source_dir(), "draw.py").read_text(encoding="utf-8")
-    tree = ast.parse(src)
-    wanted = {"fmt", "_several", "_rate", "_size", "_duration", "short_unit", "use_units"}
-    picked = [n for n in tree.body
-              if isinstance(n, ast.FunctionDef) and n.name in wanted]
-    env = {"SEVERAL": 3, "UNITS": {}, "_readings": {}}
-    exec(compile(ast.Module(body=picked, type_ignores=[]), "draw", "exec"), env)  # noqa: S102
-    env["use_units"]({"used_mb": "MB", "uptime_s": "s", "rpm": "rpm", "kwh": "kWh"})
-    shown = {field: env["fmt"](value, field) + env["short_unit"](field)
-             for field, value in (("used_mb", 11400.0), ("uptime_s", 273600),
-                                  ("rpm", 2200.0), ("kwh", 0.25))}
-    assert shown == {"used_mb": "11.1GB", "uptime_s": "3d4h",
-                     "rpm": "2200rpm", "kwh": "0.2kWh"}, shown
-
-    # The app takes them where it takes the group names.
-    app = pathlib.Path(install.app_source_dir(), "app.py").read_text(encoding="utf-8")
-    assert 'draw.use_units(self.setting("units"))' in app
 
 
-def test_a_page_that_prints_a_figure_prints_its_unit():
-    """Every kind calling `draw.fmt` calls `draw.short_unit` too, wherever it puts it."""
-    import ast
+def test_a_row_of_a_name_and_a_figure_takes_the_unit_in_the_figure():
+    """A grid row has one slot, so `reading` returns the two together.
 
+    That no kind prints a bare figure is `EveryFigureCarriesAUnit` in
+    tests/badge/wasm/test_units.py, which renders each of them and watches.
+    """
     sys.path.insert(0, install.app_source_dir())
     import draw
     import pages
@@ -435,16 +419,6 @@ def test_a_page_that_prints_a_figure_prints_its_unit():
     # A duration prints its units in the figure and takes none; a string is not a reading.
     assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
 
-    # A slot with room passes the two separately; a row that is a name and a figure asks
-    # for them together.
-    source = pathlib.Path(install.app_source_dir(), "pages.py").read_text(encoding="utf-8")
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        calls = {ast.unparse(call.func) for call in ast.walk(node)
-                 if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)}
-        if "draw.fmt" in calls:
-            assert "draw.short_unit" in calls, f"{node.name} prints a figure with no unit"
 
 
 def test_an_api_key_is_masked_until_it_is_asked_for(ui):

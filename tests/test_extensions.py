@@ -231,7 +231,10 @@ def test_a_declared_group_is_named_on_the_badge_too():
 
 
 def test_a_bar_can_be_named_by_whoever_sent_it(h):
-    """A source sends lane names beside the values, and only the renderer reads them."""
+    """A source sends lane names beside the values, and only the renderer reads them.
+
+    `Lanes` in tests/badge/wasm/test_pages.py draws the bars with them and without.
+    """
     # Numbered lanes suit a core and are no use for a domain. The companion field is
     # declared nowhere: the picker offers the list, the names ride along in the frame.
     from statsbadge.sources.base import Source
@@ -264,10 +267,6 @@ def test_a_bar_can_be_named_by_whoever_sent_it(h):
         assert pages.value_of(frame, "edge.cached" + pages.LANE_NAMES) == ["a.com", "b.com"]
     finally:
         collector.extensions.remove(source)
-
-    source_text = pathlib.Path(install.app_source_dir(), "pages.py").read_text(encoding="utf-8")
-    body = source_text[source_text.index("def _bars"):source_text.index("def behind_at")]
-    assert "LANE_NAMES" in body, "_bars numbers its lanes whatever the source sent"
 
 
 def test_stored_settings_beat_the_command_line():
