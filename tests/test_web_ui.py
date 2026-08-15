@@ -6,32 +6,27 @@ from statsbadge import layout
 
 
 def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
-    """A control in the page, a binding in the script, and a setting the server keeps.
-
-    Three files have to agree and none imports another. Checked as the pairs they are:
-    a control bound to a setting `validate` drops is one the browser appears to offer and
-    the badge never sees, which no amount of matching either file's text would catch.
-    """
+    """Every binding in the script names a control in the page and a setting `validate`
+    keeps."""
+    # Three files that have to agree and none imports another, so they are checked as the
+    # pairs they are.
     assert ui.bindings, "no bindings were read out of app.js"
     for control, setting in ui.bindings.items():
         assert control in ui.ids, f"{control} is bound but not in the page"
         assert ui.ids[control] in ("input", "select"), (control, ui.ids[control])
         assert setting in layout.DEFAULT_CONFIG, f"{control} is bound to {setting}, not a setting"
 
-    # And the server keeps each of them: a default round-trips through validate unchanged.
+    # A default round-trips through validate unchanged.
     kept = layout.validate({**layout.DEFAULT_CONFIG, "pages": layout.DEFAULT_PAGES})
     for control, setting in ui.bindings.items():
         assert setting in kept, f"validate drops {setting}, which {control} sets"
 
 
 def test_a_hint_beside_a_secret_leaves_room_for_the_field(ui):
-    """An extension's API key sits in a two-column grid whose first column is max-content.
-
-    A hint left in that column sets the track to the width of the paragraph unwrapped, and
-    the field beside it collapses: an octopus key with a one-line hint measured 16px. Every
-    block of prose in the settings grids spans both columns for this reason.
-    """
-
+    """Prose in a settings grid spans both columns, so it cannot set the first track's
+    width."""
+    # The first column is max-content: a hint left in it sizes the track to the paragraph
+    # unwrapped, and an octopus key field beside one measured 16px.
     sheet = ui.css
     block = sheet[sheet.index(".secrets {"):]
     block = block[:block.index("\n}")]
@@ -50,9 +45,7 @@ def test_a_hint_beside_a_secret_leaves_room_for_the_field(ui):
 
 
 def test_the_theme_box_spans_the_panels_beside_it(ui):
-    """The theme box stands beside the settings panels, which it does by spanning their
-    rows. The span is a count, so it has to match how many there are."""
-
+    """The theme box's row span is a count, and matches the panels it stands beside."""
     page = ui.markup
     settings = page.split('aria-label="Settings"')[1].split('<section id="badges">')[0]
     beside = len(re.findall(r"<section(?: class=\"[^\"]*\")?>", settings))
@@ -70,8 +63,10 @@ def test_the_theme_box_spans_the_panels_beside_it(ui):
 
 
 def sections_of(page):
-    """The config UI's sections, keyed by heading. Only the ones that are a `section`: the
-    page list is a column to itself and would otherwise swallow the heading after it."""
+    """The config UI's sections, keyed by heading.
+
+    Only the ones that are a `section`: the page list is a column to itself and would
+    otherwise swallow the heading after it."""
     found = {}
     for part in page.split("<h2>")[1:]:
         heading, rest = part.split("</h2>", 1)
@@ -80,8 +75,7 @@ def sections_of(page):
 
 
 def test_the_settings_are_grouped_by_what_they_do(ui):
-    """One list of every control was a soup. A setting is grouped under the heading it sits
-    under, so the panel can be read by what somebody came to change."""
+    """Every control sits under the heading for what it changes, and under no other."""
     page = ui.markup
     sections = sections_of(page)
     wanted = {
@@ -96,7 +90,7 @@ def test_the_settings_are_grouped_by_what_they_do(ui):
         assert heading in sections, heading
         for control in controls:
             assert f'id="{control}"' in sections[heading], (heading, control)
-            # In that one only, so a moved control leaves its old place empty.
+            # A moved control leaves its old place empty.
             for other in wanted:
                 assert other == heading or f'id="{control}"' not in sections[other], (
                     control, other)

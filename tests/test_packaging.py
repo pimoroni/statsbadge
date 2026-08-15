@@ -12,11 +12,8 @@ from statsbadge import install
 
 
 def test_the_build_script_defaults_where_the_installer_looks():
-    """Otherwise "rebuild it with ci/build-mpy.sh" is advice that changes nothing.
-
-    The default output used to be build/mpy while the installer reads the copy inside the
-    package, so a bare rebuild left the stale bytecode exactly where it was.
-    """
+    """ci/build-mpy.sh writes where the installer reads, so a bare rebuild replaces the
+    bytecode."""
     script = (pathlib.Path(__file__).parent.parent / "ci" / "build-mpy.sh").read_text(encoding="utf-8")
     default = [line for line in script.splitlines() if line.startswith("OUT_DIR=")]
     assert default, "no OUT_DIR default in the build script"
@@ -31,14 +28,8 @@ def test_the_build_script_defaults_where_the_installer_looks():
 
 
 def test_the_version_is_written_down_once():
-    """Nowhere, in fact; the tag is the version.
-
-    A number in pyproject.toml and a `__version__` beside it were two things to bump, with
-    one of them silently stale. The build reads the tag, so releasing the wrong number takes
-    tagging the wrong number.
-
-    Two things have to agree for that to work, though, and they are in different files: the tag
-    prefix a workflow fires on, and the prefix the build strips to get a version."""
+    """The tag is the version: no package here declares one, and the prefix a workflow
+    fires on is the prefix its build strips."""
     import statsbadge
 
     source = pathlib.Path("src/statsbadge/__init__.py").read_text(encoding="utf-8")
@@ -50,8 +41,8 @@ def test_the_version_is_written_down_once():
         main = tomllib.load(handle)
     assert main["project"].get("version") is None, "a static version is back"
     assert "version" in main["project"]["dynamic"], main["project"]
-    # Hatchling leaves out what the VCS ignores, and the precompiled app is a build artefact:
-    # without this the wheel ships sources alone and the badge compiles them at every launch.
+    # Hatchling leaves out what the VCS ignores, and the precompiled app is a build
+    # artefact, so without this the badge compiles the sources at every launch.
     artifacts = main["tool"]["hatch"]["build"]["artifacts"]
     assert any("badge_app/mpy" in entry for entry in artifacts), artifacts
 
@@ -78,9 +69,9 @@ def test_the_version_is_written_down_once():
 
 
 def test_every_package_here_can_be_published():
-    """Four packages share this repository. PyPI's trusted publishing matches on a workflow
-    filename, so an extension with no workflow cannot be published at all, and every
-    release fires every workflow, so each has to test its tag prefix or they all try."""
+    """Every package here has a publish workflow, and each one fires on its tag prefix
+    alone."""
+    # Trusted publishing matches on a workflow filename, and a release fires them all.
     workflows = pathlib.Path(".github/workflows")
     main = (workflows / "publish.yml").read_text(encoding="utf-8")
     # The top-level package takes the plain tags, and lets an extension's release alone.
@@ -102,14 +93,13 @@ def test_every_package_here_can_be_published():
         settings = workflow["env"]
         assert settings["PACKAGE"] == name, (path.name, settings)
         assert settings["DIRECTORY"] == f"extensions/{name}", (path.name, settings)
-        # The prefix appears twice in each workflow: the guard that gates the run, and
-        # the strip that checks the version. Both have to match.
+        # Twice in each workflow: the guard that gates the run and the strip that checks
+        # the version.
         assert settings["TAG_PREFIX"] == f"{short}-v", (path.name, settings)
         job = workflow["jobs"]["publish"]
         assert f"startsWith(github.event.release.tag_name, '{short}-v')" in job["if"], path.name
 
-        # Every step that runs something runs it in the extension's directory, not the
-        # repository root, and the publish is the trusted one.
+        # Every step runs in the extension's directory, not the repository root.
         running = [step for step in job["steps"] if "run" in step]
         assert running, path.name
         for step in running:
@@ -126,13 +116,9 @@ def test_every_package_here_can_be_published():
 
 
 def test_a_published_readme_links_to_somewhere_that_exists():
-    """A README is the project page on PyPI as well as on GitHub, and PyPI resolves a
-    relative link against pypi.org: `shots/cpu.png` is a broken image and `DEVELOPMENT.md`
-    a 404.
-
-    So every target is absolute, which makes the repository name part of the text. This
-    repository has been renamed once, so the names are checked against the URLs the
-    packages declare."""
+    """Every link in a published README is absolute, names this repository, and resolves."""
+    # PyPI serves the README as the project page and resolves a relative link against
+    # pypi.org, where `shots/cpu.png` is a broken image and `DEVELOPMENT.md` a 404.
     for pyproject in [pathlib.Path("pyproject.toml"),
                       *sorted(pathlib.Path("extensions").glob("*/pyproject.toml"))]:
         with open(pyproject, "rb") as handle:
@@ -146,12 +132,10 @@ def test_a_published_readme_links_to_somewhere_that_exists():
         for label, target in re.findall(r"\[([^\]]*)\]\(([^)\s]+)\)", text):
             where = f"{readme}: [{label}]({target})"
             assert target.startswith(("http", "#")), f"{where} does not resolve on PyPI"
-            # Every picture is one of ours, so the repository name is in the URL: renaming the
-            # repository and leaving a README behind leaves a broken image.
+            # A picture carries the repository name, so a rename leaves it broken.
             if target.startswith("https://raw.githubusercontent.com/"):
                 assert target.startswith(raw), where
-            # A link naming a path in this tree can be looked at, so it is: a 404 for a reader
-            # passes silently otherwise. Anything else - the repository itself, another project -
+            # A link naming a path in this tree can be looked at, so it is. Anything else
             # belongs to whoever owns it.
             for prefix in (f"{repository}/blob/main/", f"{repository}/tree/main/", raw):
                 if target.startswith(prefix):
@@ -159,18 +143,16 @@ def test_a_published_readme_links_to_somewhere_that_exists():
 
 
 def test_the_mark_is_the_same_one_everywhere(h, ui):
-    """The badge draws it from splash.py's numbers, the config UI links a file and the site
-    inlines a copy so it needs no request. Three expressions of one mark, so each is checked
-    against the geometry every time."""
+    """The badge, the config UI, the site and the tray all draw one mark, to one
+    geometry."""
     # As bytes: the server hands the file over unchanged, and a Windows checkout with CRLF
     # line endings would not match text read back through universal newlines.
     icon = pathlib.Path("src/statsbadge/web/icon.svg").read_bytes().decode("utf-8")
     page = ui.markup
     site = pathlib.Path("index.html").read_text(encoding="utf-8")
 
-    # The UI asks for the file, and the server hands it over with the right type: a favicon
-    # served as octet-stream is a favicon the browser ignores. Safari reads no SVG favicon at
-    # all, so a raster of the same mark is offered first and it takes that.
+    # A favicon served as octet-stream is one the browser ignores. Safari reads no SVG
+    # favicon at all, so a raster of the same mark is offered first.
     assert '<link rel="icon" href="/icon.svg"' in page
     assert page.index('href="/icon.png"') < page.index('href="/icon.svg"'), \
         "the fallback is behind the SVG Safari cannot read"
@@ -182,9 +164,8 @@ def test_the_mark_is_the_same_one_everywhere(h, ui):
         assert response.headers.get("content-type") == "image/svg+xml", response.headers
         assert response.read().decode() == icon
 
-    # The site inlines the same geometry, so a change to one shows up here before the two
-    # marks drift apart. Its data URI quotes attributes with apostrophes, so the numbers
-    # are compared and not the markup around them.
+    # The site's data URI quotes attributes with apostrophes, so the numbers are compared
+    # and not the markup around them.
     assert 'rel="icon"' in site, "the site has no mark to be the same as"
     for outline in re.findall(r'd="([^"]+)"', icon):
         assert outline in site, outline
@@ -193,8 +174,7 @@ def test_the_mark_is_the_same_one_everywhere(h, ui):
         for number in numbers:
             assert f"'{number}'" in site, (numbers, number)
 
-    # The proportions come from splash.py, which the badge draws before it has a
-    # font. The bars carry it: three widths, two gaps and the tallest of them.
+    # splash.py is what the badge draws before it has a font, and the bars carry the mark.
     splash = (pathlib.Path(install.app_source_dir()) / "splash.py").read_text(encoding="utf-8")
     numbers = {}
     for line in splash.splitlines():
@@ -211,8 +191,7 @@ def test_the_mark_is_the_same_one_everywhere(h, ui):
     assert abs(radii[0] / scale - numbers["INNER"]) < 0.5, radii
     assert abs(radii[-1] / scale - numbers["OUTER"]) < 0.5, radii
 
-    # And the tray's, off the same generator. A template is shape in the alpha alone:
-    # AppKit paints it to suit the menu bar, and any colour left in it is ignored.
+    # A template icon is shape in the alpha alone: AppKit paints it to suit the menu bar.
     from PIL import Image
     assets = pathlib.Path("src/statsbadge/tray/assets")
     for name in ("tray", "tray-attention", "tray-template", "tray-template-attention"):

@@ -5,8 +5,9 @@ import struct
 import tempfile
 
 
-def test_icon_font_corpus_and_packing():
-    """The icon font tool's parsing and packing, which need no font libraries."""
+def test_a_glyph_the_font_format_cannot_hold_is_refused():
+    """A malformed corpus line, a point outside a signed byte, and a codepoint past a u16
+    are each refused by name."""
 
     import make_icon_font as tool
 
@@ -31,8 +32,8 @@ def test_icon_font_corpus_and_packing():
                 continue
             raise AssertionError(f"accepted a line with a {why}")
 
-    # Points and the advance are signed bytes, so anything outside is clamped and the
-    # caller gets told which glyphs were affected.
+    # Points and the advance are signed bytes, so the caller is told which glyphs are
+    # outside that.
     glyph = tool.Glyph(ord("a"))
     glyph.contours = [[(0, 0), (200, -50), (10, -300)]]
     assert tool.out_of_range([glyph]) == [ord("a")]
@@ -51,8 +52,8 @@ def test_icon_font_corpus_and_packing():
     # Header, glyph table, one contour length, then the points.
     assert len(blob) == 12 + 8 + 2 + 5 * 2, len(blob)
 
-    # The format stores codepoints in a u16, so a Material Symbol above that has to be
-    # remapped, and reported where it cannot be.
+    # Codepoints are a u16, so a Material Symbol above that has to be remapped in the
+    # corpus.
     high = tool.Glyph(0x1FFF0)
     high.contours = [[(0, 0), (10, 0), (10, -10), (0, 0)]]
     try:

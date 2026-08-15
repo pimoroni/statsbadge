@@ -16,10 +16,8 @@ from statsbadge import extensions, install, model
 
 
 def test_a_source_keeps_what_it_worked_out():
-    """Settings are what a source is told; a store holds what it found out.
-
-    A resolved location, a token, a high-water mark. Namespaced by the entry point name and
-    written by the host, so an extension asks for a value and the filename stays here."""
+    """A store holds what a source worked out: one file per source, oldest keys dropped
+    at the cap."""
     from statsbadge import state
 
     directory = tempfile.mkdtemp(prefix="statsbadge-state-")
@@ -36,8 +34,8 @@ def test_a_source_keeps_what_it_worked_out():
     # A different source cannot see it, or read it by accident.
     assert state.for_source(directory, "other").all() == {}
 
-    # Nowhere to write is a store all the same, so a source needs no special case: `install`
-    # loads every extension only to ask what it ships, so what it learns can go.
+    # Nowhere to write is still a store: `install` loads every extension only to read what
+    # it ships, and can drop what it learns.
     memory = state.for_source(None, "clock")
     memory.set("geocoded", {})
     assert memory.get("geocoded") == {} and memory.path is None
@@ -58,8 +56,7 @@ def test_a_source_keeps_what_it_worked_out():
     assert len(store.all()) == state.MAX_KEYS
     assert store.get(f"key{state.MAX_KEYS + 7}") == state.MAX_KEYS + 7, "dropped the newest"
 
-    # Setting a key again keeps it, so the one dropped at the cap is the longest untouched
-    # and a place looked up every launch outlives a typo made once.
+    # Setting a key again keeps it, so the one dropped at the cap is the longest untouched.
     kept, dropped = f"key{state.MAX_KEYS + 4}", f"key{state.MAX_KEYS + 5}"
     store.set(kept, "still wanted")
     for index in range(state.MAX_KEYS - 1):
@@ -71,7 +68,7 @@ def test_a_source_keeps_what_it_worked_out():
     assert state.for_source(directory, "../etc/passwd").path == os.path.join(
         directory, "___etc_passwd.json")
 
-    # Every source has one from the start, in memory until the host hands over a better.
+    # Every source has one from the start, in memory until the host hands one over.
     from statsbadge.sources import base
 
     class Nothing(base.Source):
@@ -83,12 +80,8 @@ def test_a_source_keeps_what_it_worked_out():
 
 
 def test_a_slow_lookup_does_not_hold_up_a_frame():
-    """Sources share the collector's thread and the first sample is taken while the server
-    is starting up.
-
-    A weather lookup on that thread stalled the launch for as long as the geocoder took to
-    answer, which on a flaky connection outlasts urlopen's timeout, since that leaves name
-    resolution uncovered."""
+    """A weather lookup runs off the collector's thread, so sampling returns before it
+    lands."""
     clock = pytest.importorskip("statsbadge_clock")
 
     source = clock.Clock({"place": "Sheffield"})
@@ -121,8 +114,7 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
         source.stop()
     assert asked, "nothing was ever fetched"
 
-    # A refused lookup is tried again, and does not give up until the next save: the timer used
-    # to be set before the attempt, so one failure at startup left the page with no weather.
+    # A refused lookup waits out the retry timer and is then tried again.
     refused = clock.Clock({"place": "Sheffield"})
     tries = []
 
@@ -136,9 +128,8 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
     refused._retry_at = 0.0
     assert refused._where() is None and len(tries) == 2, "never tried again"
 
-    # A town stays put, so a name is looked up once ever, once a launch being wasteful: with the
-    # coordinates in the store, a badge comes up knowing where it is looking even if the
-    # geocoder is refusing everyone.
+    # A town stays put, so coordinates in the store outlive a launch and the badge comes up
+    # knowing where it is looking even while the geocoder is refusing everyone.
     from statsbadge import state
 
     directory = tempfile.mkdtemp(prefix="statsbadge-clock-")
@@ -166,8 +157,9 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
     shutil.rmtree(directory, ignore_errors=True)
 
 
-def test_clock_weather_units_and_icons():
-    """Units travel with the readings, and each condition has a symbol."""
+def test_a_weather_reading_carries_its_units_and_a_symbol():
+    """Units travel with the readings, and every condition the table can produce has an
+    icon."""
     clock = pytest.importorskip("statsbadge_clock")
 
     assert "wind_units" in [setting["key"] for setting in clock.Clock.settings]
@@ -178,8 +170,6 @@ def test_clock_weather_units_and_icons():
     assert clock.Clock({"wind_units": "furlongs"}).wind_units == "kmh"
     assert clock.Clock({}).wind_units == "kmh"
 
-    # Every condition the code table can produce needs a symbol, or the page draws a
-    # blank where the weather should be.
     for condition in set(clock.CONDITIONS.values()):
         assert condition in clock.ICONS, f"no icon for {condition!r}"
     letters = set(clock.ICONS.values()) | set(clock.NIGHT_ICONS.values())
@@ -217,11 +207,7 @@ def test_the_reported_disk_is_the_one_with_your_files_on():
 
 
 def test_a_rate_is_scaled_by_what_it_has_reached():
-    """Throughput has no full scale, and a fixed one showed as pegged.
-
-    12.5MB/s was assumed, so anything over that filled the ring: a 40MB/s transfer and a
-    200MB/s one looked the same. The collector tracks what each rate has reached instead.
-    """
+    """A throughput ring is scaled by the peak that rate has reached, and the peak decays."""
     from statsbadge.collect import PEAK_FLOOR, PEAK_HALF_LIFE_S, Collector
 
     def run(rates, interval):
@@ -237,8 +223,7 @@ def test_a_rate_is_scaled_by_what_it_has_reached():
     # already full.
     assert (1.5e6 / peak) < 0.05
 
-    # The peak comes down again, so one busy night does not flatten it for good, and it
-    # halves in the same wall-clock time whatever the sample interval is set to.
+    # It halves in the same wall-clock time whatever the sample interval is set to.
     halved = run([40e6, *[1.0] * int(PEAK_HALF_LIFE_S)], 1.0)
     slower = run([40e6, *[1.0] * int(PEAK_HALF_LIFE_S / 4)], 4.0)
     assert abs(halved - 20e6) < 1e5, halved
@@ -249,9 +234,8 @@ def test_a_rate_is_scaled_by_what_it_has_reached():
 
 
 def test_the_clock_only_syncs_from_a_fresh_reading():
-    """A frame is drawn forty-five times a second and holds the time it was polled at, so a
-    stale reading treated as authority drags the hands back to it. Measured on the badge: with
-    the reading reconsidered every frame the clock jumped back 30s at 31s, and again after."""
+    """The clock is set once per reading, so a frame redrawn 45 times a second cannot drag
+    the hands back."""
     badge = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
     source = (badge / "clockface.py").read_text(encoding="utf-8")
 
@@ -261,22 +245,19 @@ def test_the_clock_only_syncs_from_a_fresh_reading():
     assert resync.index("_synced_seq") < resync.index("RTC()"), (
         "the clock is set before the reading is checked for being a new one")
 
-    # Synced from the host's clock alone: there is one hardware clock and two pages
-    # in two zones would set it to theirs each time you turned to them.
+    # Synced from the host's clock alone: there is one hardware clock, and two pages in two
+    # zones would each set it to theirs on being turned to.
     render = source[source.index("def render(page"):]
     render = render[:render.index("\n\n\n") if "\n\n\n" in render else len(render)]
     assert "_resync(host," in render, render[:400]
     assert "_zone_offset(host, here)" in render, "a page elsewhere is not offset from the host"
 
 
-def test_a_frame_is_walked_past_its_own_scalars(h, ui):
-    """A frame carries a few scalars beside the groups of readings, so anything
-    walking one has to step over them.
-
-    `probe` kept a second list, which never gained `slow_rev`, and printed it as a group -
-    `_fmt` then iterating an int. app.js keeps a copy too, JavaScript being unable to import
-    this one, so both are held to it here.
-    """
+def test_everything_that_walks_a_frame_steps_over_the_same_scalars(h, ui):
+    """A frame carries scalars beside the groups of readings, and every walker skips the
+    same list."""
+    # app.js keeps a copy, JavaScript being unable to import this one, so it is held to it
+    # here.
     from statsbadge import collect
 
     _status, frame = h.raw("GET", "/api/stats")
@@ -284,7 +265,8 @@ def test_a_frame_is_walked_past_its_own_scalars(h, ui):
     assert loose == set(collect.FRAME_SCALARS), loose
 
     source = pathlib.Path(install.__file__).parent / "__main__.py"
-    assert "collect.FRAME_SCALARS" in source.read_text(encoding="utf-8"), "probe keeps a second list again"
+    assert "collect.FRAME_SCALARS" in source.read_text(encoding="utf-8"), \
+        "probe keeps a second list"
 
     script = ui.script
     named = re.search(r"const FRAME_SCALARS = \[(.*?)\]", script).group(1)
@@ -292,9 +274,7 @@ def test_a_frame_is_walked_past_its_own_scalars(h, ui):
 
 
 def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
-    """An upstream 503 or a subprocess that took too long is a blip on a source that goes on
-    working, so the count is kept and the reason is dropped. Left permanently set, a fault
-    replaced what the source provides with the name of a Python exception."""
+    """A fault keeps its count and drops its reason as soon as the source works again."""
     from statsbadge.sources import base
 
     source = base.Source({})
@@ -306,7 +286,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
     source.note_ok()
     assert source.last_fault is None and source.faults == 1, vars(source)
 
-    # The ones sources actually hit, in the words of the thing that failed.
+    # The failures sources actually hit, in the words of the thing that failed.
     said = {}
     for exc in (urllib.error.URLError("_ssl.c:1063: The handshake operation timed out"),
                 subprocess.TimeoutExpired(["ioreg", "-r", "-c", "IOAccelerator"], 4),
@@ -340,11 +320,8 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
 
 
 def test_the_cpu_temperature_linux_reports_is_the_hottest_one():
-    """A sensor is ranked by its label, and blank labels all fall back to the chip name.
-
-    Every entry then ranks the same, and taking the first is taking core 0: an idle core
-    beside a busy one, reported as the CPU temperature.
-    """
+    """A labelled sensor outranks a hotter unlabelled one, and unlabelled sets report their
+    hottest."""
     import types
 
     from statsbadge.sources import linux
@@ -361,8 +338,7 @@ def test_the_cpu_temperature_linux_reports_is_the_hottest_one():
             "coretemp": [entry("", 41.0), entry("", 78.4), entry("", 52.0)]}
         assert source._cpu_temp() == 78.4, "reported an idle core"  # noqa: SLF001
 
-        # A better label still wins, hotter reading or not: k10temp offers Tctl as a
-        # control value that runs above the die it sits on.
+        # k10temp offers Tctl as a control value that runs above the die it sits on.
         linux.psutil.sensors_temperatures = lambda: {
             "k10temp": [entry("Tdie", 60.0), entry("Tctl", 91.0)]}
         assert source._cpu_temp() == 91.0, "Tctl outranks Tdie"  # noqa: SLF001
@@ -381,7 +357,7 @@ def test_the_cpu_temperature_linux_reports_is_the_hottest_one():
 
 
 def test_the_help_tab_is_told_what_this_platform_needs(h):
-    """Every platform hides its sensors somewhere else, and two of them need a human."""
+    """The help block names what this platform needs before it can read its sensors."""
     status, block = h.raw("GET", "/api/help")
     assert status == 200, (status, block)
     assert block["platform"] in ("Darwin", "Windows", "Linux"), block
@@ -396,12 +372,10 @@ def test_the_help_tab_is_told_what_this_platform_needs(h):
 
 
 def test_core_voltages_come_back_as_a_bar_each():
-    """LibreHardwareMonitor reports a voltage per rail, which is a list and not a reading:
-    a bar each, labelled, the way per-core load is drawn."""
+    """A voltage per rail arrives as a labelled list, scaled by the highest CPU rail seen."""
     from statsbadge.sources import windows
 
-    # Shaped like a real reply: hardware named after the part, sections under it, and
-    # the sensor labels LHM uses.
+    # Shaped like a real reply, down to the sensor labels LHM uses.
     tree = {"Text": "Sensor", "Children": [{
         "Text": "DESKTOP-1", "ImageURL": "images_icon/computer.png",
         "Children": [
@@ -447,18 +421,16 @@ def test_core_voltages_come_back_as_a_bar_each():
         windows._fetch = was
 
     assert frame["cpu"]["volts"] == [1.325, 1.294, 1.1], frame["cpu"]["volts"]
-    # The highest LHM has seen a CPU rail reach is the full scale for the bars. Drawn
-    # against 100 they sit against the left edge, and a board's 12V rail is not it.
+    # The full scale is the highest LHM has seen a CPU rail reach, and not the board's 12V.
     assert frame["peaks"]["cpu.volts"] == 1.456, frame.get("peaks")
-    # Short enough for a lane, and the badge reads them off the field beside it.
+    # Short enough for a lane, read off the field beside the readings.
     assert frame["cpu"]["volts_names"] == ["Core #1", "Core #2", "SoC"], \
         frame["cpu"]["volts_names"]
 
-    # The package figure is the CPU temperature by convention, and the one every other
-    # monitor shows.
+    # The package figure is the CPU temperature by convention.
     assert frame["cpu"]["temp"] == 91.0, frame["cpu"]
 
-    # VRAM comes as figures in MB, and how full it is has to be worked out.
+    # VRAM comes as two figures in MB, so the percentage is worked out here.
     assert frame["gpu"][0]["mem_used_mb"] == 236
     assert frame["gpu"][0]["mem_pct"] == 2.9
 
@@ -468,9 +440,9 @@ def test_core_voltages_come_back_as_a_bar_each():
 
 
 def test_a_source_that_can_run_now_is_taken_up_without_a_restart():
-    """`available()` is asked once, at startup. LibreHardwareMonitor answers no while its
-    server is down or on another port, so a URL typed in the browser reached a source that
-    was never built and nothing read it until statsbadge was started again."""
+    """A source that becomes available is built by `reconfigure`, without a restart."""
+    # `available()` is called once at startup, and LibreHardwareMonitor says no while its
+    # server is down or on another port.
     from statsbadge import collect
 
     class Late:
@@ -503,7 +475,7 @@ def test_a_source_that_can_run_now_is_taken_up_without_a_restart():
         # Not started, since nothing is sampling: `Collector.start` does that for all.
         assert collector.sources[0].started == 0
 
-        # Asked again, it is not taken up twice.
+        # Reconfigured again, it is not built twice.
         assert collector.reconfigure() == []
         assert len(collector.sources) == 1
     finally:
@@ -511,9 +483,7 @@ def test_a_source_that_can_run_now_is_taken_up_without_a_restart():
 
 
 def test_a_sensor_url_typed_in_the_browser_is_kept_and_read():
-    """A Windows host reads its temperatures from LibreHardwareMonitor, which need not be
-    on the usual port. Stored beside the layout, and handed to the source where it stands
-    rather than at the next start."""
+    """A sensor URL reaches the running source at once, and is stored for the next start."""
     from statsbadge import server as server_module
 
     with tempfile.TemporaryDirectory() as directory:
@@ -531,15 +501,14 @@ def test_a_sensor_url_typed_in_the_browser_is_kept_and_read():
             service.set_host_settings({"lhm_url": " http://10.0.0.5:9000/data.json "})
             assert told == ["http://10.0.0.5:9000/data.json"], told
 
-            # Kept where the next start will find it, under a name of its own so a
-            # layout save cannot tread on it.
+            # Under a name of its own, so a layout save cannot tread on it.
             stored = service.config.snapshot()["settings"][server_module.HOST]
             assert stored == {"lhm_url": "http://10.0.0.5:9000/data.json"}, stored
             again = server_module.Service(directory, interval=5.0)
             assert again.collector.config["lhm_url"] == stored["lhm_url"]
             again.stop()
 
-            # Nothing else a browser sends is kept: the block reaches the sources.
+            # Nothing else a browser sends is stored, though the block reaches the sources.
             service.set_host_settings({"powermetrics": True, "lhm_url": ""})
             assert "powermetrics" not in service.config.snapshot()["settings"][
                 server_module.HOST]
@@ -548,9 +517,7 @@ def test_a_sensor_url_typed_in_the_browser_is_kept_and_read():
 
 
 def test_powermetrics_is_tried_and_says_nothing_when_refused():
-    """`sudo -n` prompts for nothing, so the cost of asking is a refusal. A Mac without
-    the rule is the ordinary case and not worth colouring the Stats tab red over, but a
-    flag typed on purpose deserves an answer."""
+    """powermetrics is tried under `sudo -n`, so a Mac without the rule refuses silently."""
     from statsbadge.sources import macos
 
     tried = macos.MacPowermetrics({})
@@ -563,7 +530,7 @@ def test_powermetrics_is_tried_and_says_nothing_when_refused():
     off = macos.MacPowermetrics({"powermetrics": False})
     assert off._enabled is False, "--no-powermetrics still ran it"
 
-    # The rule names one command and this user, since that is what sudoers matches on.
+    # The rule names one command and this user, which is what sudoers matches on.
     line = macos.sudoers_line()
     assert "NOPASSWD:" in line and "ALL=(root)" in line, line
     assert macos.powermetrics_argv()[0] in line, line

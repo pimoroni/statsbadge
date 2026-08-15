@@ -51,8 +51,7 @@ def test_a_dials_page_takes_up_to_four_fields():
     except ValueError:
         pass
 
-    # Pruned like any multi-field page: what the host cannot answer goes, and the page
-    # stays for what is left
+    # Pruned like any multi-field page: what the host cannot report goes, the page stays
     caps = {"available": {"cpu": ["pct"], "mem": ["pct"]}}
     page = {"id": "g", "kind": "dials",
             "fields": ["cpu.pct", "gpu.pct", "mem.pct"]}
@@ -60,8 +59,7 @@ def test_a_dials_page_takes_up_to_four_fields():
 
 
 def test_every_kind_has_a_badge_layout_and_a_ui_shape(ui):
-    """A kind the server accepts has to be drawable and configurable, or it is a page
-    that validates, reaches the badge and shows a message saying it cannot be drawn."""
+    """A kind the server accepts has a renderer on the badge and a shape in the UI."""
     app = pathlib.Path(install.app_source_dir())
     pages_source = (app / "pages.py").read_text(encoding="utf-8")
     ui_source = ui.script
@@ -73,14 +71,12 @@ def test_every_kind_has_a_badge_layout_and_a_ui_shape(ui):
 
 
 def test_a_full_scale_is_offered_where_it_is_read(ui):
-    """A page carries where full is, and the UI has to offer that for exactly the kinds whose
-    renderer looks at it. Offered too widely it is a control that does nothing; too narrowly
-    and a page of counts is stuck being scaled by the busiest reading the host has seen."""
+    """The UI offers a full scale for exactly the kinds whose renderer reads one."""
     app = pathlib.Path(install.app_source_dir())
     pages_source = (app / "pages.py").read_text(encoding="utf-8")
     ui_source = ui.script
 
-    # fraction_of reads the page's max for its caller, so those kinds count too.
+    # fraction_of reads the page's max for its caller, so those kinds count as reading it.
     reads = set()
     for kind in layout.KINDS:
         start = pages_source.find(f"def _{kind}(")
@@ -116,21 +112,21 @@ def test_caselights_take_a_field_or_a_flag(ui):
     def stored(value):
         return layout.validate({**base, "caselights": value})["caselights"]
 
-    # Offered as following the backlight now, though the flag is still stored as it was.
+    # The UI offers it as following the backlight; the stored value is still a flag.
     page = ui.script
     assert "Follow the Backlight" in page and "Follow the Theme" not in page
 
     assert stored("cpu.pct") == "cpu.pct"
     assert stored(True) is True
     assert stored(False) is False
-    # Anything other than a "group.field" falls back to a flag, and stops before the
-    # badge as a reference it cannot look up.
+    # Anything other than a "group.field" falls back to a flag, so the badge never sees a
+    # reference it cannot look up.
     assert stored("bogus") is True
     assert stored("too.many.dots") is True
     assert stored(None) is False
 
 
-def test_a_reading_carries_its_unit():
+def test_a_reading_prints_as_one_string_with_its_unit():
     """A grid or a sparkline row has one slot, so the unit has to be in the text."""
 
     sys.path.insert(0, install.app_source_dir())
@@ -152,9 +148,8 @@ def test_a_reading_carries_its_unit():
     assert draw.reading(12600, "used_mb") == "12.3GB"
     assert draw.reading(3 * 1024 ** 2, "total_mb") == "3.0TB"
 
-    # A field can arrive as a list - a load average, per-core loads - and a list has no
-    # hash, so it stops before the table keyed on a value. A load average prints as its
-    # three figures, bare.
+    # A field can arrive as a list - a load average, per-core loads - which has no hash and
+    # cannot reach the table keyed on a value.
     assert draw.reading([1.52, 1.18, 0.94], "load") == "1.5 1.2 0.9"
     # Sixteen per-core loads overflow a slot, and three of the sixteen misreport it.
     assert draw.reading([31.0] * 16, "cores") == "16 values"
@@ -167,11 +162,8 @@ def test_a_reading_carries_its_unit():
 
 
 def test_a_page_carries_only_what_its_kind_declared():
-    """Page-scoped settings, so two clock pages can show two cities.
-
-    An extension page could not carry anything but fields before this: validate dropped
-    every other key, so there was nowhere for a per-page place to live.
-    """
+    """A page keeps the settings its kind declared, at the declared type, and drops the
+    rest."""
     schema = {"clockface": [{"key": "place", "label": "Place", "type": "text"},
                             {"key": "big", "label": "Big", "type": "bool"}]}
     config = {"pages": [{"id": "a", "kind": "clockface", "title": "Tokyo",
@@ -183,17 +175,15 @@ def test_a_page_carries_only_what_its_kind_declared():
     assert page["big"] is True, "declared type not applied"
     assert "smuggled" not in page, "an undeclared key reached the badge"
 
-    # Without a schema an extension page keeps its fields alone, as before.
+    # Without a schema an extension page keeps its fields alone.
     plain = layout.validate(config, extra_kinds=("clockface",))["pages"][0]
     assert "place" not in plain
 
 
 def test_the_field_picker_offers_each_reading_once(ui):
-    """numericRefs is a subset of availableRefs, so concatenating them listed every
-    number twice - once qualified by its group and once again below it."""
+    """numericRefs is a subset of availableRefs, so every join of the two is deduplicated."""
     ui = ui.script
-    # Joining the two lists is fine, so long as the result is deduplicated where it is
-    # joined. Checked per line so this cannot pass by matching the fix itself.
+    # Checked per line, so a Set anywhere else in the script cannot satisfy it.
     for line in ui.splitlines():
         if "concat(availableRefs())" in line:
             assert "new Set(" in line, f"undeduplicated: {line.strip()}"
@@ -203,8 +193,8 @@ def test_the_field_picker_offers_each_reading_once(ui):
 
 
 def test_every_kind_picks_from_a_pool_that_suits_it(ui):
-    """A gauge offered uptime drew an empty ring, and a grid offered cpu.cores printed a
-    list. Each slot now draws from a pool, and every kind has to name one."""
+    """Every kind with a slot names the pool it picks from, and one with none has no
+    fields."""
     ui = ui.script
     shape = ui[ui.index("const SHAPE = {"):ui.index("async function api(")]
     pools = ui[ui.index("const POOLS = {"):]
@@ -213,14 +203,12 @@ def test_every_kind_picks_from_a_pool_that_suits_it(ui):
              if name in pools}
 
     for kind in layout.KINDS:
-        # An entry may be wrapped over two lines, so take it up to its closing brace
-        # and the whole of it.
+        # An entry may be wrapped over two lines, so take it up to its closing brace.
         start = shape.find(f"  {kind}: {{")
         assert start != -1, f"{kind} has no shape"
         entry = shape[start:shape.index("},", start)]
         if 'one: "' not in entry and 'many: "' not in entry:
-            # A kind with no slots has an empty pool: the badge page reads the
-            # badge, so there is no field to offer.
+            # The badge page reads the badge, so it has no field to offer.
             assert "max: 0" in entry, f"{kind} has no slots but a field maximum"
             continue
         for slot, key in (("one", "pool"), ("many", "manyPool")):
@@ -234,7 +222,8 @@ def test_every_kind_picks_from_a_pool_that_suits_it(ui):
 
 
 def test_the_ui_is_told_what_a_gauge_can_scale():
-    """It cannot filter uptime out of a gauge without knowing what has a top end."""
+    """The described model says which fields have a top end, so the UI can keep uptime off
+    a gauge."""
     described = model.describe()
     assert "full_scale" in described and described["full_scale"], described.keys()
     assert "temp" in described["full_scale"]
@@ -244,10 +233,9 @@ def test_the_ui_is_told_what_a_gauge_can_scale():
     assert set(described["list_fields"]) >= {"cores", "load"}
 
 
-def test_each_badge_has_its_own_layout(h, ui):
-    """Everything on the page is configured per badge: two badges on one host draw different
-    pages, and a save for one is not a save for the other. A badge that has not been given a
-    layout draws the default, which is also what there is to edit before anything is paired."""
+def test_a_layout_is_stored_per_badge(h, ui):
+    """A save for one badge is not a save for another, and a badge without one draws the
+    default."""
     other = "badgetwo00000002"
     other_secret = h.service.badges.provision(other, "second badge")
     try:
@@ -266,12 +254,11 @@ def test_each_badge_has_its_own_layout(h, ui):
                              _headers(other, 1, other_secret, path="/v1/layout"))
         assert status == 200, (status, sent)
         assert sent["theme"] == "mono" and sent["interval_ms"] == 2000
-        # The table stays behind. It names every other badge paired with this host,
-        # which is nothing to do with the one asking.
+        # The table stays behind: it names every other badge paired with this host.
         assert "badges" not in sent, "a badge is told about every other badge here"
 
-        # The first is still on the default, and its revision has not moved - or every badge
-        # would refetch a layout that had not changed.
+        # The first is still on the default, and its revision has not moved, or every badge
+        # refetches a layout that did not change.
         _status, mine = h.signed("GET", "/v1/layout")
         assert mine["theme"] == default["theme"], mine["theme"]
         assert mine["rev"] == default["rev"], "a save for one badge moved another's revision"
@@ -288,8 +275,8 @@ def test_each_badge_has_its_own_layout(h, ui):
         assert listing[other]["configured"] is True
         assert listing[h.badge_id]["configured"] is False
 
-        # The list also carries what each is drawing, so a reader need not open it. Read off
-        # the merged layout: a badge on the default reports the default's settings.
+        # The list carries what each is drawing, read off the merged layout, so a badge on
+        # the default reports the default's settings.
         assert listing[other]["theme"] == "mono", listing[other]
         assert listing[other]["interval_ms"] == 2000, listing[other]
         assert listing[h.badge_id]["theme"] == default["theme"], listing[h.badge_id]
@@ -300,20 +287,20 @@ def test_each_badge_has_its_own_layout(h, ui):
         _status, edited = h.raw("GET", f"/api/config?badge={other}")
         assert edited["theme"] == "mono"
 
-        # A layout cannot be stored against a badge that is not paired here, or a typo in a
-        # query string would configure a phantom.
+        # A layout cannot be stored against a badge that is not paired here, or a typo in
+        # the query string configures a phantom.
         status, refused = h.raw("PUT", "/api/config?badge=nobody",
                                 json.dumps(theirs).encode(),
                                 {"Content-Type": "application/json"})
         assert status == 404, (status, refused)
 
-        # An extension doing per-page work is told about every badge's pages: it fetches for
-        # all of them at once and keys what it fetched by page id.
+        # An extension doing per-page work fetches for every badge at once, so it is told
+        # about all their pages.
         everywhere = {page["id"] for page in h.service.config.all_pages()}
         assert {page["id"] for page in default["pages"]} <= everywhere
 
-        # Forgetting a badge takes its layout with it, or the layout would sit in the file
-        # naming an unreachable badge and be handed to whatever next held that id.
+        # Forgetting a badge takes its layout with it, or the next badge to hold that id is
+        # handed it.
         assert h.service.config.configured() == [other]
         h.raw("DELETE", f"/api/badges/{other}")
         assert h.service.config.configured() == []
@@ -321,8 +308,7 @@ def test_each_badge_has_its_own_layout(h, ui):
         h.service.badges.forget(other)
         h.service.config.forget(other)
 
-    # A single-badge file is taken as the default, so every badge carries on showing
-    # what it showed.
+    # A file with no badge blocks is taken as the default for all of them.
     path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-layout-"), "layout.json")
     with open(path, "w", encoding="utf-8") as handle:
         json.dump({"rev": 7, "theme": "mono", "pages": layout.DEFAULT_PAGES}, handle)
@@ -338,24 +324,19 @@ def test_each_badge_has_its_own_layout(h, ui):
     assert old.layout_for("anybadge")["pages"], "a badge's layout was lost"
     shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
-    # The picker is in the header, where it says what everything below belongs to.
+    # The picker is in the header, above everything it applies to.
     page, script = ui.markup, ui.script
     header = page[page.index("<header>"):page.index("</header>")]
     for control in ("<label>Badge", 'id="pair"', 'id="save"'):
         assert control in header, control
-    # Naming one and forgetting one belong with the badge itself, not beside the picker.
+    # Naming and forgetting sit with the badge itself, not beside the picker.
     assert '"Forget"' in script and "function rename(" in script, "no way to forget or name one"
     assert "?badge=" in script, "the UI saves without saying whose layout it is"
     assert "ownIds" in script, "a badge's pages can collide with another's"
 
 
-def test_a_badge_s_own_layout_falls_back_to_the_default():
-    """A badge's block sits over the default, not instead of it.
-
-    A block saved before a setting existed carries none, and returning it whole handed the
-    badge a layout with holes: no tint to build a palette from, and a theme of None that
-    drew the boot colours whatever was chosen.
-    """
+def test_a_badge_block_sits_over_the_default():
+    """A badge block overrides what it names and inherits everything it does not."""
     path = os.path.join(tempfile.mkdtemp(prefix="statsbadge-blocks-"), "layout.json")
     with open(path, "w", encoding="utf-8") as handle:
         json.dump({"rev": 4, "theme": "sakura", "brightness": 0.8,
@@ -378,12 +359,9 @@ def test_a_badge_s_own_layout_falls_back_to_the_default():
 
 
 def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
-    """A field named kwh has no suffix to read a unit off, so a graph of it had none.
-
-    The badge answers for the families `fmt` rescales, the suffix pairing with what it
-    printed: `_mb` shows as 11.1G, which takes a B and not the MB it arrived in.
-    Everything else takes what the host sent.
-    """
+    """A field with no suffix to read a unit off is sent its unit with the layout."""
+    # The badge keeps the families `fmt` rescales: `_mb` prints as 11.1G, which takes a B
+    # and not the MB it arrived in.
     import ast
 
     from statsbadge.sources.base import Source
@@ -410,14 +388,14 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
                   "fields": ["mem.used_mb", "sys.uptime_s", "fans.rpm"]}]
         units = layout.field_units(pages, caps)
         assert units.get("kwh") == "kWh", units
-        # The model's travel too: a fan's rpm was a bare number on the page.
+        # The model's fields travel the same way.
         assert units.get("rpm") == "rpm", units
         # A field no page draws is not sent.
         assert "spend_p" not in units, units
     finally:
         collector.extensions.remove(source)
 
-    # The badge keeps the rescaled families to itself, or 11.1G would print as 11.1GMB.
+    # A rescaled family takes the short unit, or 11.1G prints as 11.1GMB.
     src = pathlib.Path(install.app_source_dir(), "draw.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     wanted = {"fmt", "_several", "_rate", "_size", "_duration", "short_unit", "use_units"}
@@ -437,13 +415,8 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
     assert 'draw.use_units(self.setting("units"))' in app
 
 
-def test_a_figure_carries_its_unit_or_is_handed_one():
-    """A battery read 86 on the host page, where every other page says 86%.
-
-    `fmt` prints the number and `short_unit` what follows it. A slot with somewhere to put
-    the unit passes them separately - a dial has the line under the needle, a trend the
-    space beside the big reading. A row that is only a name and a figure has neither, and
-    has to ask for the two together."""
+def test_a_page_that_prints_a_figure_prints_its_unit():
+    """Every kind calling `draw.fmt` calls `draw.short_unit` too, wherever it puts it."""
     import ast
 
     sys.path.insert(0, install.app_source_dir())
@@ -459,10 +432,11 @@ def test_a_figure_carries_its_unit_or_is_handed_one():
                      "sys": {"uptime_s": 273600, "host": "workshop-pc"}}, None, None)
     finally:
         draw.lines = was
-    # A duration prints its own units and takes none, and a string is not a reading at all.
+    # A duration prints its units in the figure and takes none; a string is not a reading.
     assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
 
-    # Nowhere else either: a page kind printing a figure has to place the unit somewhere.
+    # A slot with room passes the two separately; a row that is a name and a figure asks
+    # for them together.
     source = pathlib.Path(install.app_source_dir(), "pages.py").read_text(encoding="utf-8")
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.FunctionDef):
@@ -474,11 +448,8 @@ def test_a_figure_carries_its_unit_or_is_handed_one():
 
 
 def test_an_api_key_is_masked_until_it_is_asked_for(ui):
-    """The config page sits open on a desk all day, and a token is readable across a room.
-
-    Masked and not hidden: "not set" and "set to the wrong one" have to be told apart,
-    and the first few characters are enough for somebody checking to recognise.
-    """
+    """A secret setting is masked rather than hidden, so unset and wrong can be told
+    apart."""
     ui = ui.script
     assert "function masked(" in ui and "Edit secrets" in ui
     # A secret does not go in the ordinary run of rows, or it would be on screen anyway
@@ -486,8 +457,8 @@ def test_an_api_key_is_masked_until_it_is_asked_for(ui):
     # Reopened by name, so a redraw does not close the box under someone's typing
     assert "editingSecrets" in ui
 
-    # Whatever declares one is stored and coerced like any other setting: masking is the
-    # UI's business, and the host has to hand the value back or it could not be edited.
+    # Stored and coerced like any other setting: masking is the UI's business, and the host
+    # hands the value back or it could not be edited.
     schema = {"thing": [{"key": "api_token", "type": "text", "secret": True}]}
     stored = layout.validate({**layout.DEFAULT_CONFIG,
                               "settings": {"thing": {"api_token": "sekrit"}}},
@@ -496,12 +467,8 @@ def test_an_api_key_is_masked_until_it_is_asked_for(ui):
 
 
 def test_a_number_setting_is_held_to_its_bounds(ui):
-    """A reading's units, and how far it can go, are the extension's to declare.
-
-    The browser stops the spinner and marks a field out of range, but a value typed straight
-    into one still arrives, so the floor is held to on this side as well. It said "Seconds"
-    and why in a note under the field before, which is neither enforceable nor brief.
-    """
+    """A number setting is clamped to the bounds its extension declared, on this side as
+    well as in the browser."""
     schema = {"thing": [{"key": "every", "type": "number", "min": 60, "max": 3600,
                          "unit": "seconds"},
                         {"key": "loose", "type": "number"}]}

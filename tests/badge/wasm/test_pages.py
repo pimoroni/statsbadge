@@ -1,12 +1,8 @@
 """Every page kind, drawn.
 
 Run under the WASM port, against real picovector and the real fonts, by
-`node tools/wasm/run.mjs`. On a host these could only be read as text: `pages.render`
-reaches `screen`, `image` and `tween`, none of which a stand-in can honestly provide.
-
-What this covers that no amount of matching source could: that a kind draws at all, that
-it leaves the clip and the pen as it found them, and that an extension's kind is reached
-through the same dispatch as a built-in.
+`node tools/wasm/run.mjs`. `pages.render` reaches `screen`, `image` and `tween`, so on a
+host these could only be read as text.
 """
 
 import unittest
@@ -29,8 +25,8 @@ FRAME = {
     "sys": {"host": "desk", "os": "macOS 15.5", "up_s": 384000},
 }
 
-# One page per kind, each carrying what that kind needs. The refs are all in FRAME, so a
-# kind drawing "unknown" everywhere would still pass; what is under test is that it draws.
+# One page per kind, each carrying what that kind needs. Every ref is in FRAME, though a
+# kind drawing "unknown" everywhere would still pass: what is under test is that it draws.
 PAGES = (
     {"kind": "dial", "title": "CPU", "field": "cpu.pct", "readouts": ["cpu.temp"]},
     {"kind": "dials", "title": "Load", "fields": ["cpu.pct", "mem.pct", "disk.pct"]},
@@ -49,7 +45,7 @@ PAGES = (
 
 
 def body_pixels():
-    """The page's own band, sampled. RGB only: alpha does not move here."""
+    """The page band, sampled. RGB only: alpha does not move here."""
     raw = screen.raw  # noqa: F821
     stride = look.W * 4
     out = bytearray()
@@ -66,10 +62,8 @@ def body_pixels():
 def chrome_only(theme, title, index, total):
     """The band with the chrome drawn and no handler after it.
 
-    What a kind draws has to be measured against this and not against a cleared screen:
-    `pages.render` draws the background, the title and the pips before it dispatches, and
-    the background covers the band, so a band that merely changed says nothing about the
-    handler. Against the chrome, a handler that draws nothing measures zero.
+    `pages.render` covers the band with the background before it dispatches, so a kind
+    measured against a cleared screen would pass having drawn nothing.
     """
     draw.background(theme, title, index, total, None)
     return body_pixels()
@@ -98,9 +92,8 @@ class PageKinds(unittest.TestCase):
             chrome = chrome_only(self.theme, page["title"], index, len(PAGES))
             pages.render(page, FRAME, {}, self.theme, index, len(PAGES))
             drawn = differing(chrome, body_pixels())
-            # Low, because the bar is "drew anything at all" and one kind genuinely draws
-            # very little: the waterfall adds a column a frame, so a single render is one
-            # stripe, at 0.36%. A handler that returned would be 0.00%.
+            # Low, because the waterfall adds a column a frame and one render is a single
+            # stripe at 0.36%. A handler that returned measures 0.00%.
             self.assertTrue(
                 drawn > 0.001,
                 f"{page['kind']} drew {drawn * 100:.2f}% of its band beyond the chrome")
@@ -127,9 +120,9 @@ class PageKinds(unittest.TestCase):
 def load_extensions():
     """Import the staged extension modules, the way the app does at startup.
 
-    `badge_app/__init__.py` owns the real one, and it cannot be imported here: it calls
-    main() at module scope. Same rule though - sorted, skipping anything underscored - so
-    what registers, and in what order, is what would register on the badge.
+    The app's own walk is in `badge_app/__init__.py`, which calls main() at module scope
+    and cannot be imported. Sorted and skipping underscored names, as that one is, so the
+    registration order matches the badge.
     """
     import os
     loaded = []

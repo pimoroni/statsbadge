@@ -72,13 +72,9 @@ def find(items, label):
 
 # -- the menu ---------------------------------------------------------------
 
-def test_a_waiting_badge_is_approved_by_its_own_code():
-    """Two steps and one decision each, the same contract the CLI and the UI keep.
-
-    Nothing approves every badge at once: a human compares the code on the screen with
-    the code on the badge, and a menu that just repopulated must not pair one on a
-    stray click.
-    """
+def test_a_waiting_badge_is_approved_one_at_a_time_by_its_code():
+    """Approving takes two steps and names one badge, so there is no menu item that
+    pairs every badge waiting."""
     stack = FakeStack(pending=[WAITING])
     app = TrayApp(stack)
     waiting = find(app.model(), "Waiting to pair")
@@ -151,7 +147,7 @@ def _reads_back(backend, where):
         with open(where, "rb") as handle:
             plist = plistlib.load(handle)
         assert plist["RunAtLoad"] is True
-        # No KeepAlive: quitting from the menu means it.
+        # No KeepAlive, or quitting from the menu starts it again.
         assert "KeepAlive" not in plist
         return plist["ProgramArguments"]
 
@@ -199,9 +195,9 @@ def test_windows_keeps_its_entry_in_the_registry():
 
 
 def test_the_gui_entry_point_still_takes_a_command():
-    """A packaged app has this as its only entry point, so a bare word has to reach the
-    command it names: `ext` and `status` are how CI asks the built app whether it works.
-    A flag is the tray's, which is what a login entry passes."""
+    """A bare word reaches the command it names, and a flag goes to the tray."""
+    # A packaged app has this as its only entry point: `ext` and `status` are how CI asks
+    # the built app whether it works, and a login entry passes flags.
     from statsbadge import PIP_VERB, __main__ as cli
 
     ran = []
@@ -219,8 +215,9 @@ def test_the_gui_entry_point_still_takes_a_command():
 
 
 def test_the_packaged_app_names_files_that_are_there():
-    """Briefcase falls back to its own mascot for an icon it cannot find, and says so in
-    one line among hundreds of them."""
+    """Every source and icon the briefcase config names is on disk."""
+    # Briefcase falls back to its mascot for an icon it cannot find, and says so in one
+    # line among hundreds.
     root = pathlib.Path(__file__).resolve().parent.parent
     with open(root / "pyproject.toml", "rb") as handle:
         config = tomllib.load(handle)["tool"]["briefcase"]
@@ -231,14 +228,13 @@ def test_the_packaged_app_names_files_that_are_there():
     for suffix in (".icns", ".ico"):
         icon = (root / app["icon"]).with_suffix(suffix)
         assert icon.is_file(), f"{icon} is what the bundle would fall back from"
-    # statsbadge goes in as a wheel and not as copied sources. Without its .dist-info the
-    # bundle can report no version and find no extensions.
+    # statsbadge goes in as a wheel: without its .dist-info the bundle reports no version
+    # and finds no extensions.
     assert "." in app["requires"], app["requires"]
 
 
 def test_a_packaged_app_runs_itself_at_login():
-    """A bundle's sys.executable is the app, which takes no `-m`, and a statsbadge-tray
-    found on PATH beside it would be another install of it entirely."""
+    """A bundle runs its sys.executable at login, not a statsbadge-tray found on PATH."""
     was = sys.executable
     try:
         sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
@@ -253,8 +249,7 @@ def test_what_runs_at_login_is_a_real_path():
     argv = autostart.command()
     assert argv, "nothing to run"
     assert os.path.isabs(argv[0]), argv
-    # A relative directory is made absolute. Login starts this from somewhere else
-    # entirely, and a path relative to where `autostart enable` was run is nowhere.
+    # Login starts this from somewhere else, so a relative directory is made absolute.
     with_flags = autostart.command(config_dir=os.path.join("some", "where"), port=9000)
     assert with_flags[-4] == "--config-dir", with_flags
     assert os.path.isabs(with_flags[-3]), with_flags
@@ -264,11 +259,8 @@ def test_what_runs_at_login_is_a_real_path():
 # -- the log ----------------------------------------------------------------
 
 def test_a_terminal_still_sees_everything_the_log_does():
-    """Redirecting a terminal wholesale left `tray` looking hung.
-
-    Without a tray it says why and serves anyway, and that sentence went to the log file
-    where nobody was looking. A terminal is echoed to, and the log keeps the record.
-    """
+    """A line goes to the terminal as well as the log, and the terminal still reports as
+    one."""
     class Terminal(io.StringIO):
         def isatty(self):
             return True
@@ -289,7 +281,7 @@ def test_a_terminal_still_sees_everything_the_log_does():
 
 
 def test_a_print_survives_having_nowhere_to_print():
-    """sys.stdout is None under pythonw, and inside an .app bundle. Every print raises."""
+    """A print still lands in the log where sys.stdout is None, as under pythonw."""
     was = (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__)
     directory = tempfile.mkdtemp()
     try:
@@ -317,8 +309,8 @@ def test_a_print_survives_having_nowhere_to_print():
 # -- the port ---------------------------------------------------------------
 
 def test_a_port_nobody_holds_answers_nothing():
-    """The single-instance check, and the only guard on Windows, where SO_REUSEADDR
-    lets a second bind succeed."""
+    """A free port answers nothing, which is what the single-instance check reads."""
+    # The only guard on Windows, where SO_REUSEADDR lets a second bind succeed.
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         free = sock.getsockname()[1]

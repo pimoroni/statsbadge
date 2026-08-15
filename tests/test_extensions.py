@@ -17,8 +17,8 @@ def test_extensions_describe_finds_the_clock(h, ui):
     assert clock["badge_module"] == "clockface.py", clock
     assert "clock" in clock["provides"], clock
 
-    # The UI gets all of them, not only the ones with settings: an extension that asks to be
-    # told nothing had no box on the page, and a failed import went unreported.
+    # The UI is sent all of them, not only the ones with settings, or an extension that
+    # declares none has nowhere to report a failed import.
     _status, caps = h.raw("GET", "/api/capabilities")
     described = {record["name"] for record in caps["extensions"]}
     assert described == set(found), (described, set(found))
@@ -54,7 +54,7 @@ def test_extension_settings_are_declared_stored_and_applied(h):
     assert clock.latitude == 52.4, clock.latitude
     assert clock.units == "fahrenheit", clock.units
 
-    # Host-side only: a location is no business of the badge's
+    # Host-side only: the badge has no use for a location
     _status, sent = h.raw("GET", "/api/preview")
     assert "settings" not in sent, sorted(sent)
 
@@ -78,13 +78,9 @@ def test_undeclared_settings_are_dropped_but_absent_extensions_are_kept():
 
 
 def test_an_extension_page_survives_without_fields():
-    """A map page draws from its extension's group and declares no fields, so there is
-    nothing in the host's field list to confirm it by.
-
-    Pruned on that list alone it stopped at the host, and the UI said the host reported
-    no data for it - while the same page added from the browser, which carries
-    `from_extension`, was sent. A page is sent once its extension is installed.
-    """
+    """A page survives pruning once its extension is installed, fields or no fields."""
+    # A map page draws from the extension's group and declares none, so there is nothing in
+    # the host's field list to confirm it by.
     capabilities = {"available": {"cpu": ["pct"]},
                     "extension_pages": [{"kind": "quakemap", "from_extension": "quakes"}]}
     pages = [{"id": "cpu", "kind": "dial", "field": "cpu.pct"},
@@ -95,12 +91,8 @@ def test_an_extension_page_survives_without_fields():
 
 
 def test_a_declared_group_is_offered_kept_and_recorded(h):
-    """What an extension declares has to reach the pickers, the rings and the peaks.
-
-    A group that arrives with a pip install is in none of the model's tables, so without
-    this an extension's readings cannot be chosen in the UI and a page drawing one is
-    pruned before it reaches the badge.
-    """
+    """A group an extension declares reaches the pickers, the rings and the peaks."""
+    # A group that arrives with a pip install is in none of the model's tables.
     from statsbadge.sources.base import Source
 
     class Site(Source):
@@ -126,7 +118,7 @@ def test_a_declared_group_is_offered_kept_and_recorded(h):
     assert "cached_pct" in caps["percent_fields"], caps["percent_fields"]
     assert "site.hits" in caps["graphed"], caps["graphed"]
 
-    # A ring, so a graph of it plots something, and a peak, so a gauge has a top end
+    # A ring, so a graph plots something, and a peak, so a gauge has a top end
     assert collector.history(["site.hits"])["site.hits"][-1] == 40.0
     assert collector.latest()["peaks"]["site.hits"] == 40, collector.latest()["peaks"]
 
@@ -136,13 +128,10 @@ def test_a_declared_group_is_offered_kept_and_recorded(h):
 
 
 def test_a_slow_group_travels_only_when_it_changes(h):
-    """A reading fetched once a minute should not be sent sixty times.
-
-    Six domains took a frame from 832 bytes to 4.7KB, all of it standing still between the
-    host's fetches. The badge says which revision it holds and the host leaves those
-    groups out; asking at all marks it as able to read them, so an app too old
-    to ask still gets every group inline.
-    """
+    """A slow group is left out until its revision moves, and an app that does not ask for
+    one still gets it inline."""
+    # Six domains took a frame from 832 bytes to 4.7KB, all of it standing still between
+    # the host's fetches.
     from statsbadge.sources.base import Source
 
     class Feed(Source):
@@ -168,11 +157,10 @@ def test_a_slow_group_travels_only_when_it_changes(h):
         assert status == 200, (status, body)
         return body
 
-    # An app that does not ask gets it inline, exactly as before any of this
     assert "feed" in stats(), "an app that cannot merge was sent a split frame"
 
-    # Asking, and behind: the group arrives under one key, so the badge keeps what it is
-    # handed without having to know which of the frame's groups are the slow ones
+    # Behind: the group arrives under one key, so the badge keeps what it is handed
+    # without knowing which of the frame's groups are the slow ones
     first = stats("?have=-1")
     rev = first["slow_rev"]
     assert "feed" not in first, sorted(first)
@@ -180,7 +168,7 @@ def test_a_slow_group_travels_only_when_it_changes(h):
     # The peak scales the reading, so it travels with it, on the slow half
     assert first["slow"]["peaks"] == {"feed.hits": 10}, first["slow"]
 
-    # Asking, and up to date, so the group and its peak both stay
+    # Up to date, so the group and its peak are both left out
     collector.sample_once()
     lean = stats(f"?have={rev}")
     assert "slow" not in lean and "feed" not in lean, sorted(lean)
@@ -194,8 +182,8 @@ def test_a_slow_group_travels_only_when_it_changes(h):
     assert moved["slow_rev"] == rev + 1, (moved["slow_rev"], rev)
     assert moved["slow"]["feed"] == {"hits": 40.0}, moved["slow"]
 
-    # The badge's side: what it holds goes back into every frame after the one that
-    # carried it, and `peaks` merges into the fast ones, keeping both.
+    # On the badge, what it holds goes back into every later frame, and `peaks` merges into
+    # the fast ones rather than replacing them.
     sys.path.insert(0, install.app_source_dir())
     import pages
 
@@ -212,10 +200,9 @@ def test_a_slow_group_travels_only_when_it_changes(h):
 
 
 def test_a_declared_group_is_named_on_the_badge_too():
-    """A badge names a reading after its field, and after its group where one page draws the
-    same field from several. That comes out CF_GADGETOID_COM for a group named after a domain:
-    the badge has only the key, and the dots cannot be put back. So the host's name for it
-    travels with the layout, where a name somebody chose belongs."""
+    """A group's host-side name travels with the layout, since the badge holds only the
+    key."""
+    # A key named after a domain draws as CF_GADGETOID_COM, and the dots cannot be put back.
     sys.path.insert(0, install.app_source_dir())
     import pages
 
@@ -229,13 +216,13 @@ def test_a_declared_group_is_named_on_the_badge_too():
     labels = layout.group_labels([page], caps)
     assert labels == {"cf_a_com": "a.com", "cf_b_com": "b.com"}, labels
 
-    # The model's groups are left out: "Processor" is read at a desk, the badge says CPU.
+    # The model's groups are left out: "Processor" is a desk label, the badge says CPU.
     assert layout.group_labels([{"kind": "dial", "field": "cpu.pct"}], caps) == {}
 
     was = pages.LABELS
     try:
         pages.LABELS = labels
-        # Two readings of the same field, told apart by the group as the reader named it
+        # Two readings of one field, told apart by the group name the reader chose
         assert pages.names_for(page["fields"]) == ["a.com", "b.com"]
     finally:
         pages.LABELS = was
@@ -244,12 +231,9 @@ def test_a_declared_group_is_named_on_the_badge_too():
 
 
 def test_a_bar_can_be_named_by_whoever_sent_it(h):
-    """Bars number their lanes, which suits a core and is no use for a domain.
-
-    A source sends the names beside the values, the way `peaks` are sent beside the readings
-    they scale. Nothing has to declare the companion: the picker offers the list field, and
-    the names ride along in the frame where only the renderer looks for them.
-    """
+    """A source sends lane names beside the values, and only the renderer reads them."""
+    # Numbered lanes suit a core and are no use for a domain. The companion field is
+    # declared nowhere: the picker offers the list, the names ride along in the frame.
     from statsbadge.sources.base import Source
 
     class Domains(Source):
@@ -293,11 +277,7 @@ def test_stored_settings_beat_the_command_line():
 
 
 def test_an_extension_page_can_be_added_and_reaches_the_badge(h):
-    """The UI's kind picker is built from this, and the config it PUTs has to validate.
-
-    Without it the page an extension offers is unreachable. The server carries it, the
-    badge can draw it, and nothing offers it to a reader.
-    """
+    """A page kind an extension offers validates in a PUT and comes back in the preview."""
     status, caps = h.raw("GET", "/api/capabilities")
     assert status == 200, status
     offered = caps.get("extension_pages") or []
@@ -318,8 +298,8 @@ def test_an_extension_page_can_be_added_and_reaches_the_badge(h):
     assert page["kind"] in kinds, kinds
 
 
-def test_an_extension_sees_only_its_own_pages():
-    """So a source can fetch per page without knowing about the rest of the layout."""
+def test_an_extension_is_told_only_about_pages_of_its_kind():
+    """A source can then fetch per page without knowing the rest of the layout."""
 
     seen = []
 
@@ -353,11 +333,9 @@ def test_an_extension_sees_only_its_own_pages():
 
 
 def test_an_extension_installed_since_start_is_taken_up_without_a_restart():
-    """entry_points() walks sys.path on every call, so a reload picks one up in place.
-
-    One already running is kept as it stands: building it again would throw away what it
-    has fetched and start its clock over. One that has gone is stopped.
-    """
+    """A reload builds what is new, keeps what is running, and stops what has gone."""
+    # entry_points() walks sys.path on every call, so a reload picks one up in place, and
+    # rebuilding a running source would throw away what it has fetched.
     from statsbadge import extensions as ext
     from statsbadge.collect import Collector
 
@@ -407,12 +385,10 @@ def test_an_extension_installed_since_start_is_taken_up_without_a_restart():
 
 
 def test_the_app_keeps_what_extensions_reach_into_it_for():
-    """A badge module reaches into draw, look, worldmap and pages by attribute.
-
-    Those resolve on the badge alone, so a helper whose callers are all extensions reads
-    as unused here, and taking it out is a crash dialog after launch. `draw.readable` is
-    one such helper.
-    """
+    """Every attribute a badge module reaches for in draw, look, worldmap or pages is
+    there."""
+    # Those resolve on the badge alone, so a helper whose only callers are extensions
+    # reads as unused here and taking it out is a crash dialog after launch.
     import ast
 
     app_dir = pathlib.Path(install.app_source_dir())
@@ -437,4 +413,4 @@ def test_the_app_keeps_what_extensions_reach_into_it_for():
                 reached.add((node.value.id, node.attr))
                 assert node.attr in defined[node.value.id], (
                     f"{path}: {node.value.id}.{node.attr} is not in the app")
-    assert ("draw", "readable") in reached, "the case this check was written for"
+    assert ("draw", "readable") in reached, "no extension reaches for draw.readable"

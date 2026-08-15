@@ -10,10 +10,7 @@ from statsbadge import install
 
 
 def test_a_stale_precompile_is_not_what_gets_installed():
-    """Bytecode built before an edit loads fine and is the older program.
-
-    Which looks like a change that did nothing, so the sources win instead.
-    """
+    """Bytecode older than the sources it was built from is refused, and the file named."""
     import hashlib
 
     app = pathlib.Path(install.app_source_dir())
@@ -62,8 +59,8 @@ def test_write_secrets_keeps_the_rest_of_the_file():
         assert install.secrets_file(volume) == path
         assert not install.wifi_configured(volume)
 
-        # A backslash and quotes in the password: a naive regex replacement writes these
-        # back out as escapes and the file stops being valid Python.
+        # A backslash and quotes in the password, which a regex replacement writes back out
+        # as escapes.
         password = 'p@ss "w0rd"\\'
         install.write_secrets(volume, "Some Network", password, region="us")
 
@@ -96,8 +93,8 @@ def test_write_secrets_keeps_the_rest_of_the_file():
         assert values["TIMEZONE"] == -7
 
 
-def test_app_files_and_pruning():
-    """What goes on the badge, and what an update has to take off it."""
+def test_an_update_prunes_the_files_it_owns_and_leaves_the_rest():
+    """An update takes off the files the installer put there, and nothing else."""
     import tempfile
 
     from statsbadge import install
@@ -119,8 +116,7 @@ def test_app_files_and_pruning():
         assert sorted(names) == ["__init__.mpy", "ext/clockface.py", "icon.png",
                                  "net.mpy"], names
 
-        # A stale .py beside an .mpy is the one that matters: it wins the import and
-        # silently undoes the precompile.
+        # A stale .py beside an .mpy wins the import and undoes the precompile.
         target = os.path.join(work, "stats")
         os.makedirs(os.path.join(target, "ext"))
         for name in ("__init__.mpy", "net.mpy", "net.py", "icon.png", "notes.txt"):
@@ -147,9 +143,9 @@ def test_app_files_and_pruning():
 
 
 def test_a_file_that_did_not_write_is_not_left_on_the_badge():
-    """A volume that has only just mounted can refuse the first write, and what it leaves
-    is an empty file rather than an error. An app whose __init__.py is zero bytes starts
-    and does nothing at all."""
+    """A copy that wrote nothing is retried, and one that never completes is an error."""
+    # A volume that has only just mounted refuses the first write and leaves an empty file
+    # behind rather than raising.
     import shutil as shutil_module
 
     with tempfile.TemporaryDirectory() as work:
@@ -164,8 +160,7 @@ def test_a_file_that_did_not_write_is_not_left_on_the_badge():
         def flaky(src, dst, **kwargs):
             tries.append(dst)
             if len(tries) == 1:
-                # What macOS reports when the volume is not ready: the file is created
-                # and nothing is written to it.
+                # What macOS reports when the volume is not ready.
                 with open(dst, "w", encoding="utf-8"):
                     pass
                 raise OSError(6, "Device not configured")
@@ -197,29 +192,24 @@ def test_a_file_that_did_not_write_is_not_left_on_the_badge():
 
 
 def test_the_installer_and_the_app_name_the_same_extension_directory(badge_constants):
-    """The installer writes badge modules into it and the app puts it on sys.path.
-
-    Disagreeing is an extension that installs and then draws nothing, with the page kind
-    it registers missing and no error anywhere.
-    """
+    """The directory the installer writes badge modules into is the one the app adds to
+    sys.path."""
     assert badge_constants("__init__.py")["EXT_DIR"] == install.EXT_DIR, install.EXT_DIR
     # `pages` would be a directory shadowing the app's pages.py on sys.path.
     assert install.EXT_DIR != "pages"
 
 
 def test_one_writer_owns_the_badge_state_file():
-    """The installer writes it over the REPL and the app writes it at runtime.
-
-    Two processes, so the path is a literal at each end and only a check holds them
-    together. Inside the app it is net.Config alone, which keeps the page index as well
-    as the pairing: two writers each had to merge, and either could have replaced.
-    """
+    """net.Config is the only writer inside the app, and the installer merges rather than
+    replaces."""
+    # Two processes write it, so the path is a literal at each end and only a check holds
+    # them together.
     app_dir = pathlib.Path(install.app_source_dir())
     net_source = (app_dir / "net.py").read_text(encoding="utf-8")
     assert f'STATE_FILE = "{install.STATE_FILE}"' in net_source, (
         f"the app does not write {install.STATE_FILE}")
 
-    # The installer merges, so a page index and a pairing with another host both survive.
+    # Merged, so a page index and a pairing with another host both survive an install.
     assert "data = json.load(open(path))" in (
         pathlib.Path("src/statsbadge/install.py").read_text(encoding="utf-8"))
 
@@ -247,8 +237,8 @@ def test_a_badge_is_called_behind_from_what_it_was_last_seen_holding():
         pushed.record(directory, "badge1", desired)
         assert pushed.behind(directory, "badge1")["behind"] is False
 
-        # Bytecode and sources hash differently, so a build this package cannot find
-        # again is left uncompared instead of read as a badge full of changes.
+        # Bytecode and sources hash differently, so a build this package cannot find again
+        # is left uncompared.
         pushed.record(directory, "badge2", desired, source="/nowhere/mpy")
         assert pushed.behind(directory, "badge2") is None
 
@@ -277,8 +267,10 @@ def test_wifi_details_are_kept_unless_replacing_them_was_asked_for():
 
 
 def test_a_region_the_firmware_does_not_know_is_refused():
-    """It sets the radio's country. An unknown one cannot associate, and all the badge can
-    say about that is that it cannot reach the host."""
+    """A region is checked against the list in secrets.py, and nothing is written if it
+    fails."""
+    # It sets the radio's country: an unknown one cannot associate, and all the badge can
+    # report is that it cannot reach the host.
     template = ('WIFI_SSID = ""\nWIFI_PASSWORD = ""\n'
                 'REGION = "eu"  # Options are us, cuba, eu, moldova, nz\n')
     with tempfile.TemporaryDirectory() as volume:
@@ -286,7 +278,7 @@ def test_a_region_the_firmware_does_not_know_is_refused():
         with open(os.path.join(volume, "system", "secrets.py"), "w", encoding="utf-8") as handle:
             handle.write(template)
 
-        # The file is the authority, and it lists what it takes beside the setting.
+        # The file is the authority, listing what it takes beside the setting.
         assert install.regions_on(volume) == ("us", "cuba", "eu", "moldova", "nz")
 
         try:
@@ -303,7 +295,7 @@ def test_a_region_the_firmware_does_not_know_is_refused():
         with open(os.path.join(volume, "system", "secrets.py"), encoding="utf-8") as handle:
             values = {}
             exec(compile(handle.read(), "secrets.py", "exec"), values)
-        assert values["REGION"] == "eu", "a region has to reach the badge as it writes it"
+        assert values["REGION"] == "eu", "the region was not written in the firmware's case"
 
     # A volume with no list falls back to what this package knows.
     with tempfile.TemporaryDirectory() as bare:
@@ -316,7 +308,8 @@ def test_a_port_that_will_not_open_is_not_called_a_reset():
 
 
 def test_the_install_endpoint_runs_one_and_reports_what_it_did(h):
-    """Driven with a port that is not there: a test must never touch a real badge."""
+    """An install runs one at a time and reports what happened when it is done."""
+    # Driven with a port that is not there: a test must never touch a real badge.
     status, body = h.raw("GET", "/api/install")
     assert status == 200 and body["running"] is False, (status, body)
     assert body["result"] is None and body["log"] == [], body

@@ -15,13 +15,9 @@ from statsbadge import extensions, library
 
 
 def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
-    """An extension asking for a newer statsbadge cannot have one: the library installs
-    beside statsbadge and never over it. What is checked here is that the installer's
-    prose comes out as something to act on.
-
-    Its last line is "your requirements are unsatisfiable", which is true of every
-    resolution failure and says nothing about the versions - and the versions are the whole
-    of it. uv wraps its prose to the terminal, so the phrase spans the fold."""
+    """A resolver failure comes out as the two versions and the name to blame."""
+    # uv's last line is "your requirements are unsatisfiable", which is true of every
+    # resolution failure, and it wraps its prose so the versions span the fold.
     from statsbadge import tooling
 
     said = (
@@ -35,20 +31,18 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
     line = tooling.explain(said)
     assert line == ("statsbadge-cloudflare needs statsbadge>=1.1.0, and this is "
                     "statsbadge==1.0.0"), line
-    # The extension is named, so the caller can tell a plugin just asked for from one
-    # that was already in the list.
+    # A build installs every entry, so the name it trips over need not be the one just
+    # asked for.
     assert tooling.blamed(line) == "statsbadge-cloudflare", tooling.blamed(line)
     assert tooling.blamed(said) == "statsbadge-cloudflare"
 
-    # An unknown name is answered as one. uv reports it as a resolver error, which
-    # otherwise reads as a version clash.
+    # uv reports an unknown name as a resolver error, which otherwise reads as a clash.
     assert tooling.explain("error: Because nosuchthing was not found in the package "
                            "registry and you require nosuchthing, we can conclude that "
                            "your requirements are unsatisfiable.") == (
         "no such package: nosuchthing")
 
-    # The build refuses before it promotes anything, so a generation is never left
-    # holding an extension that cannot run.
+    # The build refuses before it promotes anything.
     with tempfile.TemporaryDirectory() as directory:
         where, why = library.build(directory, ["statsbadge-quakes>=99"])
         assert where is None and why, (where, why)
@@ -56,12 +50,9 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
 
 
 def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs():
-    """Installed against a host too old, `groups` and `series` are read by nothing.
-
-    It stays quiet: an older collector leaves them alone, so the readings are absent
-    from the pickers and a slow group goes out sixty times a minute, both silently. A floor
-    in the dependency turns that into a resolver error somebody can act on.
-    """
+    """An extension declaring `groups` or `series` pins a statsbadge floor."""
+    # An older collector reads neither and says nothing about it, so the failure is a
+    # missing group and a slow one polled every second.
     marks = ("groups = {", "def series(self)")
     for directory in sorted(pathlib.Path("extensions").iterdir()):
         pyproject = directory / "pyproject.toml"
@@ -80,11 +71,8 @@ def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs():
 
 
 def test_the_list_is_what_every_build_is_made_from():
-    """`extensions.txt` is the record, and one extension can be named three ways.
-
-    A list holding two spellings of one plugin asks the installer for it twice, so
-    everything is compared by the short name `ext add` would have been given.
-    """
+    """One extension can be named three ways, so `extensions.txt` is compared by short
+    name."""
     from statsbadge import tooling
 
     work = tempfile.mkdtemp(prefix="statsbadge-list-")
@@ -109,9 +97,7 @@ def test_the_list_is_what_every_build_is_made_from():
         assert tooling.explain("error: no internet") == "no internet"
         assert tooling.explain("") == "uv did not say why"
 
-        # Which package it was, out of either form. The caller holds the explained line,
-        # and a build installs every entry, so the name it trips over need not be the one
-        # just asked for. Saying which makes the message actionable.
+        # Which package it was, out of either form: the caller holds the explained line.
         assert tooling.blamed(resolver) == "statsbadge-nope"
         assert tooling.blamed(tooling.explain(resolver)) == "statsbadge-nope"
         assert tooling.blamed("no internet") is None
@@ -137,11 +123,8 @@ def test_the_list_is_what_every_build_is_made_from():
 
 
 def test_an_extension_asked_for_but_absent_is_built_back():
-    """A Python upgrade leaves the library unread, so the list asks for what is not here.
-
-    Asking for it again builds it back instead of reporting an install nothing can see.
-    The whole list is built, not only the name just given.
-    """
+    """Asking for an extension the list already names rebuilds the whole list."""
+    # A Python upgrade leaves the library unread, so the list asks for what is not here.
     from statsbadge import __main__ as cli
     from statsbadge import tooling
 
@@ -192,11 +175,8 @@ def test_an_extension_asked_for_but_absent_is_built_back():
 
 
 def test_an_extension_already_in_the_environment_is_recorded_and_reported():
-    """A checkout runs from a virtualenv where an extension may be pip installed already.
-
-    It is reported as present and written down, so a later build asks for it too. Taking
-    one out of the list cannot take it out of the environment, which the caller is told.
-    """
+    """An extension pip installed in the environment is written down, and a removal that
+    cannot reach it says where it is."""
     from statsbadge import __main__ as cli
     from statsbadge import tooling
 
@@ -232,9 +212,8 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported():
                 assert cli._change_extensions(Args, "add") == 0  # noqa: SLF001
             assert tooling.read_wanted(work) == ["statsbadge-bluesky"]
 
-            # Removing cannot take, so nothing is written and nothing is built. The list
-            # goes on asking for it, since it goes on being installed: dropping the line
-            # made a second attempt report success over an extension that was still there.
+            # Removing cannot take, so nothing is written and nothing is built: the list
+            # goes on asking for it because it goes on being installed.
             built = []
             cli.tooling.library.build = lambda _d, r, **_k: (built.append(list(r))
                                                              or "/lib/gen", None)
@@ -248,7 +227,7 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported():
             assert "/venv/site-packages" in spoken, spoken
             assert "Removed" not in said.getvalue(), said.getvalue()
 
-            # And again, since the list still asks for it: the same answer, not a success.
+            # And again: the same answer, not a success.
             complained = io.StringIO()
             with contextlib.redirect_stdout(io.StringIO()), \
                     contextlib.redirect_stderr(complained):
@@ -263,13 +242,9 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported():
 
 
 def test_a_generation_is_asked_about_by_name_and_not_by_prefix():
-    """A dist-info separates name from version with the same hyphen a name spells as an
-    underscore, so normalising the whole stem matched nothing.
-
-    Everything asking what a generation holds went through this: the library reported
-    nothing as its own, so a Remove button became Disable, and the check refusing an
-    extension that wants a newer statsbadge never fired.
-    """
+    """A dist-info is matched by name, not by the stem it shares with a version."""
+    # The separator before the version is the hyphen a package name spells as an
+    # underscore, so normalising the whole stem matches nothing.
     work = tempfile.mkdtemp(prefix="statsbadge-named-")
     try:
         for stem in ("statsbadge_clock-1.2.0", "statsbadge-1.3.3", "statsbadge_iss-1.0.3"):
@@ -286,12 +261,9 @@ def test_a_generation_is_asked_about_by_name_and_not_by_prefix():
 
 
 def test_upgrading_one_extension_leaves_the_others_where_they_are():
-    """A build resolves every unpinned name to its latest, so naming one to upgrade would
-    carry the whole list up with it. The rest are pinned to what the library holds.
-
-    Naming one is asking for it to move, so a version it was pinned to stops being the
-    answer, and the list records that. A bare upgrade leaves every pin alone.
-    """
+    """Naming one extension to upgrade leaves every other pinned to what the library
+    holds."""
+    # A build resolves every unpinned name to its latest, so an unpinned list moves whole.
     from statsbadge import tooling
 
     assert tooling.without_pin("statsbadge-clock==1.1.0") == "statsbadge-clock"
@@ -327,8 +299,7 @@ def test_upgrading_one_extension_leaves_the_others_where_they_are():
 
 
 def test_the_generation_a_build_replaced_comes_off_the_path():
-    """Appending the new one is not enough: the old one is earlier in sys.path and would
-    go on answering the import."""
+    """The replaced generation comes off sys.path, where it sits ahead of the new one."""
     work = tempfile.mkdtemp(prefix="statsbadge-path-")
     try:
         first = os.path.join(work, "lib", f"{library.tag()}-0001")
@@ -349,12 +320,8 @@ def test_the_generation_a_build_replaced_comes_off_the_path():
 
 
 def test_a_rebuild_does_not_prune_away_what_it_is_installing():
-    """The generation being replaced is on sys.path, and every build resolves against an
-    empty directory and prunes what this environment already has.
-
-    Counting the live generation as "already here" pruned each extension straight back
-    out of the generation installing it, so a rebuild emptied the library.
-    """
+    """A build ignores the live generation when pruning, or it prunes what it just
+    installed."""
     work = tempfile.mkdtemp(prefix="statsbadge-prune-")
     try:
         live = os.path.join(work, "lib", "gen-0001")
@@ -374,7 +341,8 @@ def test_a_rebuild_does_not_prune_away_what_it_is_installing():
         try:
             importlib.invalidate_caches()
             assert library.prune(target, ignore=os.path.join(work, "lib")) == []
-            assert os.path.isdir(os.path.join(target, "madeup_ext")), "pruned its own build"
+            assert os.path.isdir(os.path.join(target, "madeup_ext")), \
+                "pruned the build it was installing"
             # Without the library ignored, the live generation counts and it goes.
             assert library.prune(target) == ["madeup_ext"]
             assert not os.path.isdir(os.path.join(target, "madeup_ext"))
@@ -386,33 +354,31 @@ def test_a_rebuild_does_not_prune_away_what_it_is_installing():
 
 
 def test_the_catalogue_says_what_each_extension_is_and_what_it_needs():
-    """The published list, so the config UI can offer them without asking PyPI.
-
-    A page's badge module travels over USB alone, so the entry saying so is what keeps
-    someone from installing one and waiting for a page that cannot arrive.
-    """
+    """A catalogue entry says what an extension does, whether it ships a badge page, and
+    what it needs typed in."""
     listed = extensions.catalogue()
     named = {entry["name"] for entry in listed}
     assert {"clock", "iss", "quakes"} <= named, named
     for entry in listed:
         assert entry["summary"], entry
-    # The three in this repo ship badge modules, and the entry has to say so.
+    # A badge module travels over USB, so the entry says whether there is one to install.
     ships = {entry["name"] for entry in listed if entry["page"]}
     assert ships == {"clock", "iss", "quakes"}, ships
-    # And what has to be typed in before it reports anything.
     assert next(e for e in listed if e["name"] == "cloudflare")["needs"]
 
 
 def test_an_extension_asked_for_but_absent_is_offered_as_such():
-    """`uv tool install` replaces the environment whole and leaves `extensions.txt` alone,
-    so the two part company without either being edited. The UI has to show that."""
+    """An extension on the list but not installed, or installed but not on the list, still
+    appears in the tab."""
+    # `uv tool install` replaces the environment whole and leaves `extensions.txt` alone,
+    # so the two part company without either being edited.
     offered = {entry["name"]: entry for entry in
                extensions.offered(installed=[], wanted=["statsbadge-quakes"])}
     assert offered["quakes"]["asked"] and not offered["quakes"]["installed"]
     assert not offered["clock"]["asked"]
 
-    # Anything installed that the catalogue does not name is still listed, or a
-    # third-party one would be invisible and unremovable.
+    # Anything the catalogue does not name is listed too, or a third-party extension is
+    # invisible and unremovable.
     offered = {entry["name"]: entry for entry in extensions.offered(
         installed=[{"name": "weather", "version": "2.0", "badge_module": "w.py"}],
         wanted=[])}
@@ -420,7 +386,8 @@ def test_an_extension_asked_for_but_absent_is_offered_as_such():
 
 
 def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h):
-    """Loopback only, since this installs and then runs arbitrary packages."""
+    """An install naming nothing, or naming a package no index has, is refused before
+    anything is written."""
     status, body = h.raw("GET", "/api/extensions")
     assert status == 200, (status, body)
     assert body["offered"] and "manageable" in body, body
@@ -439,9 +406,9 @@ def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h):
 
 
 def test_uv_is_found_where_it_lives_and_not_only_on_the_path():
-    """A tray started at login carries the PATH it was given then, and a uv tool
-    environment has no pip behind it: the Extensions tab offered nothing at all on a
-    machine that plainly had uv."""
+    """uv is found under the home directory when PATH does not carry it."""
+    # A tray started at login carries the PATH it was given then, and a uv tool environment
+    # has no pip behind it to fall back on.
     was_which, was_home = shutil.which, os.environ.get("HOME")
     with tempfile.TemporaryDirectory() as home:
         beside = os.path.join(home, ".local", "bin")
@@ -467,8 +434,8 @@ def test_uv_is_found_where_it_lives_and_not_only_on_the_path():
 
 
 def test_a_packaged_app_installs_with_a_version_and_not_an_interpreter():
-    """There is no interpreter in a bundle to point uv at: briefcase ships the library
-    and not the binary. uv takes the version to resolve for instead."""
+    """A bundle has no interpreter to point uv at, so the installer passes a version
+    instead."""
     was_executable, was_uv = sys.executable, library._uv
     try:
         sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
@@ -481,14 +448,13 @@ def test_a_packaged_app_installs_with_a_version_and_not_an_interpreter():
     finally:
         sys.executable, library._uv = was_executable, was_uv
 
-    # Anywhere else it is the interpreter that is running, whose environment is the one
-    # being built against.
+    # Anywhere else it is the running interpreter, whose environment is being built against.
     assert "--python" in library.installer()
 
 
-def test_a_packaged_app_is_its_own_pip():
-    """`-m pip` there would start a second copy of the app, icon and all, and answer
-    nothing. It spawns itself under a verb that is not the tray instead."""
+def test_a_packaged_app_spawns_itself_as_pip():
+    """`-m pip` in a bundle starts a second copy of the app, so it spawns itself under a
+    verb the tray ignores."""
     from statsbadge import PIP_VERB, __main__ as cli
 
     app = os.path.join(os.sep, "Applications", "statsbadge.app", "Contents", "MacOS",
@@ -501,7 +467,7 @@ def test_a_packaged_app_is_its_own_pip():
         assert library.tool() == ("pip", [app, PIP_VERB])
         assert "-m" not in library.installer(), library.installer()
 
-        # And nothing to install with, where pip did not travel with the app.
+        # Nothing to install with, where pip did not travel with the app.
         library._packaged_pip = lambda: False
         assert library.tool() is None
     finally:

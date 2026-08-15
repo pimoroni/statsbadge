@@ -5,15 +5,16 @@ import sys
 
 
 def test_a_bundle_with_no_trust_store_is_given_one():
-    """Inside a packaged app there are no roots at all, and every HTTPS request an
-    extension makes cannot find an issuer."""
+    """A process that loads no roots is pointed at certifi's bundle."""
+    # Inside a packaged app there are no roots at all, so every HTTPS request an extension
+    # makes fails to find an issuer.
     import ssl
 
     from statsbadge import __main__ as cli
 
     class Store:
-        """A context with as many roots as it was told, since the runner's own count is
-        not the thing under test: uv's Python on Linux loads none."""
+        """A context with as many roots as it is told: the count this host happens to
+        have is not the thing under test, and uv's Python on Linux loads none."""
 
         def __init__(self, roots):
             self.roots = roots

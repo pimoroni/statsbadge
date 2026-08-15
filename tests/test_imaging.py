@@ -5,17 +5,15 @@ import struct
 
 
 def test_a_picture_is_cropped_to_what_is_in_it():
-    """A feed's picture, small enough to send and indexed so a theme can own it.
-
-    Indices on a ramp the badge assigns travel, and not colours, so one image suits
-    every badge whatever theme it is on, and the host never has to know which.
-    """
+    """A picture is cropped to the busiest part and sent as indices on a ramp, not
+    colours."""
+    # One image then suits every badge whatever theme it is on.
     from PIL import Image
 
     from statsbadge import imaging
 
-    # A wide picture with everything happening down the right-hand end. A crop by the middle
-    # would take the flat grey, which on a photograph is the wall behind the subject.
+    # Everything happens down the right-hand end, so a crop by the middle takes the flat
+    # grey that on a photograph is the wall behind the subject.
     source = Image.new("L", (400, 100), 128)
     for x in range(320, 400):
         for y in range(0, 100, 2):
@@ -34,17 +32,16 @@ def test_a_picture_is_cropped_to_what_is_in_it():
         got_w, got_h, depth, colour = struct.unpack(">IIBB", png[16:26])
         assert (got_w, got_h) == (width, height), (preset, orientation, got_w, got_h)
         assert colour == 3, "not an indexed PNG"
-        # Two bits a pixel at four colours, which is the quarter-size the point of this,
-        # and four at eight - PNG has no three-bit depth.
+        # Two bits a pixel at four colours and four at eight: PNG has no three-bit depth.
         assert depth == imaging.DEPTHS[imaging.LEVELS[preset]], (preset, depth)
         assert b"PLTE" in png
 
-        # Pillow reads back what was written, every index landing inside the palette
+        # Read back, every index lands inside the palette
         back = Image.open(io.BytesIO(png))
         assert back.mode == "P" and back.size == (width, height), (back.mode, back.size)
         assert max(back.tobytes()) < imaging.LEVELS[preset], "an index past the ramp"
 
-    # An unreadable one is a line somebody can act on, in place of a traceback out of Pillow
+    # An unreadable one is a line to act on rather than a traceback out of Pillow
     try:
         imaging.thumbnail(b"not a picture at all")
     except imaging.ImagingError as exc:

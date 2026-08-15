@@ -11,9 +11,6 @@ class FakeBoard:
     """The board's half of the raw REPL, enough to answer what repl.py asks of it.
 
     Stands in for a serial port, so the framing is checked with no badge on the cable.
-
-    The protocol is four control characters and two end markers, and getting one wrong is
-    a hang, which an error would at least surface.
     """
 
     def __init__(self, printed="ok\r\n", failed=""):
@@ -65,12 +62,9 @@ class FakeBoard:
 
 
 def test_the_badge_is_sent_back_out_of_disk_mode():
-    """The firmware reboots on the SCSI stop an eject sends, and Windows has no eject
-    command to send one with. It came back anyway, by accident: the REPL check in
-    wait_for_port soft resets the badge, with the volume still mounted.
-
-    So the reset is asked for there, and the flush before it is the point. A reset pulls
-    the volume out from under Windows, and a write still cached goes with it."""
+    """Windows has no eject to send, so the volume is flushed and the badge hard reset."""
+    # Elsewhere the eject itself is the SCSI stop the firmware reboots on. A reset pulls
+    # the volume out from under Windows, and a write still cached goes with it.
     ran, reset = [], []
     was = (install.platform, install.subprocess, install.hard_reset)
     install.platform = type(sys)("platform")
@@ -92,8 +86,8 @@ def test_the_badge_is_sent_back_out_of_disk_mode():
                 assert not reset, (system, reset)
                 assert "eject" in words or "unmount" in words, words
 
-        # A flush that will not take stays swallowed: it is reported already, as the port
-        # failing to come back, and there is nothing the caller can do differently.
+        # A flush that will not take is swallowed: it surfaces as the port failing to come
+        # back, and there is nothing the caller can do differently.
         def refuse(*_argv, **_kwargs):
             raise OSError(5, "no such volume")
 
@@ -110,10 +104,9 @@ class FakePort:
 
 
 def test_a_badge_is_found_by_the_product_id_it_declares():
-    """Every board here is on Raspberry Pi's vendor id, badges included, so that alone
-    finds a debug probe and offers it a REPL that never answers. A badge sets its own
-    product id, which is the whole of the test: 0x1101 is a Tufty 2350, read off a
-    plugged-in one and off MICROPY_HW_USB_PID in the board definition it was built from."""
+    """A badge is picked out by product id, since every board here shares one vendor id."""
+    # 0x1101 is a Tufty 2350, read off a plugged-in one and off MICROPY_HW_USB_PID in the
+    # board definition it was built from.
     plugged = [
         FakePort("/dev/probe", 0x000C, "Debug Probe (CMSIS-DAP)"),
         FakePort("/dev/tufty", 0x1101, "Pimoroni Tufty 2350 MicroPython"),
@@ -143,14 +136,9 @@ def test_a_badge_is_found_by_the_product_id_it_declares():
 
 
 def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else():
-    """Only the raw REPL, with mpremote off the PATH and no interpreter spawned.
-
-    `statsbadge install` is how a badge is set up, and a dependency's console script is
-    off PATH when this is installed as a uv tool. So the two things ever asked of a badge,
-    run a script and hard reset, are spoken here.
-
-    The board's side is faked, because the failure this guards against is a protocol that
-    hangs, as against one that raises."""
+    """Running a script and hard resetting are spoken here, with no mpremote and no
+    interpreter spawned."""
+    # A dependency's console script is off PATH when this is installed as a uv tool.
     from statsbadge import repl
 
     board = FakeBoard(printed="2e8a01\r\n")
@@ -162,8 +150,8 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else():
     sys.modules["serial"] = stub
     try:
         assert repl.run("/dev/fake", "print(badge.uid)") == "2e8a01\r\n"
-        # Interrupt what was running, raw mode, then a soft reset for a clean interpreter:
-        # without that the app is still in memory, holding the screen.
+        # Interrupt, raw mode, then a soft reset for a clean interpreter, or the app is
+        # still in memory holding the screen.
         assert board.written.startswith(b"\r\x03\x03\r\x01\x04"), board.written
         assert board.scripts == ["print(badge.uid)"], board.scripts
         # The badge is handed back out of raw mode, which otherwise blanks the screen.

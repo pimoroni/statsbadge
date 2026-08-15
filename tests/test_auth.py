@@ -13,11 +13,8 @@ from statsbadge import auth, server
 
 
 def test_badge_provisioned_by_another_process_is_accepted(h):
-    """`statsbadge install` writes badges.json while the server is already up.
-
-    The running server holds a copy in memory, so without a reload the badge it
-    just provisioned would get 403 "unknown badge" forever.
-    """
+    """A badge provisioned by the CLI while the server runs is accepted without a
+    restart."""
     other = auth.Store(os.path.join(h.dir, "badges.json"))
     secret = other.provision("latecomer0001", "written by the CLI")
     seq = 500
@@ -31,11 +28,8 @@ def test_badge_provisioned_by_another_process_is_accepted(h):
 
 
 def test_rotated_secret_is_picked_up(h):
-    """`install --new-secret` replaces the secret of an already-known badge.
-
-    The server keeps a copy in memory, so it re-reads on every verify. Uses a badge id of
-    its own, leaving the shared harness counter alone.
-    """
+    """A rotated secret works from the next request, and the old one stops."""
+    # A badge id of its own, leaving the shared harness counter alone.
     who = "rotator00001"
     other = auth.Store(os.path.join(h.dir, "badges.json"))
     first = other.provision(who, "before")
@@ -53,11 +47,8 @@ def test_rotated_secret_is_picked_up(h):
 
 
 def test_counter_refusal_offers_a_resync(h):
-    """A refusal over the counter must say what to use next.
-
-    The badge cannot guess: too low is refused as a replay, too high as out of window. The
-    signature is verified before this check, so telling the caller is safe.
-    """
+    """A counter refused as a replay or as out of window says what to use next."""
+    # The signature is verified before this check, so telling the caller is safe.
     who = "resyncer00001"
     other = auth.Store(os.path.join(h.dir, "badges.json"))
     time.sleep(0.01)
@@ -101,11 +92,9 @@ def test_reload_never_lowers_a_counter(h):
 
 
 def test_counter_is_persisted(h):
-    """The counter must reach disk, or a restart makes old requests replayable.
-
-    Batched, a badge polling once a second, so this drives it past the
-    threshold and checks the file caught up.
-    """
+    """The counter on disk stays within SEQ_PERSIST_EVERY of the one in memory."""
+    # Writes are batched, a badge polling once a second, so this drives it past the
+    # threshold and checks the file caught up.
     who = "persister0001"
     other = auth.Store(os.path.join(h.dir, "badges.json"))
     time.sleep(0.01)
@@ -123,7 +112,7 @@ def test_counter_is_persisted(h):
     assert on_disk > 0, "the counter never reached disk"
     assert on_disk >= seq - auth.SEQ_PERSIST_EVERY, (on_disk, seq)
 
-    # A fresh Store, standing in for a restarted server, must refuse a used counter.
+    # A fresh Store, standing in for a restarted server, refuses a used counter.
     restarted = server.Service(h.dir, interval=0.2)
     try:
         assert restarted.badges.badges[who]["seq"] == on_disk
@@ -140,8 +129,7 @@ def test_counter_is_persisted(h):
 
 
 def test_pairing_is_off_until_asked_for(h):
-    """A server leaves pairing mode closed: it is opened on request and closed
-    again, from the UI or by running out of time."""
+    """Pairing starts closed, opens on request, and closes again from the UI."""
     h.service.badges.cancel_pairing()
     state = h.raw("GET", "/api/pair")[1]
     assert state["active"] is False, state
@@ -167,7 +155,7 @@ def test_pairing_is_off_until_asked_for(h):
 
 
 def test_hello_carries_the_identity(h):
-    """The badge keys credentials on this."""
+    """The badge keys its credentials on the id and name /v1/hello carries."""
     status, body = h.raw("GET", "/v1/hello")
     assert status == 200
     assert body["id"] == h.service.identity["id"], body
@@ -243,7 +231,7 @@ def test_codes_are_unique_per_request(h):
                       {"Content-Type": "application/json"})[1]
         codes.add(asked["code"])
     assert len(codes) == 3, codes
-    # Minted per request, the badge id being public.
+    # Minted per request, since the badge id is public.
     for i, code in enumerate(codes):
         assert f"unique{i}" not in code.lower()
 
@@ -307,8 +295,8 @@ def test_unreadable_badge_store_is_not_treated_as_empty():
 
 
 def test_a_badge_can_be_given_a_name(h):
-    """A badge announces itself by whatever its setup screen was told, which is its id
-    until somebody names it - so two badges on one host read the same in the picker."""
+    """A badge takes the name it is given, and falls back to its id when that is
+    cleared."""
     assert h.service.badges.list_badges()[h.badge_id]["name"] == "test"
 
     status, body = h.raw("PUT", f"/api/badges/{h.badge_id}",
@@ -325,9 +313,7 @@ def test_a_badge_can_be_given_a_name(h):
                           json.dumps({"name": "x"}).encode())
     assert status == 404, status
 
-    # `serve` and `status` report the name somebody chose, so a host with two badges says
-    # which is which. A badge nobody has named is recorded under its id, and one of those is
-    # all there is to print for it.
+    # A badge nobody has named is recorded under its id, and that is all there is to print.
     assert auth.display_names({}) == []
     assert auth.display_names({
         "e661badge0000001": {"name": "Desk badge"},

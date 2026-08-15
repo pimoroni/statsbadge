@@ -168,11 +168,8 @@ def test_layout_rev_moves_on_change(h):
 
 
 def test_response_is_one_write(h):
-    """Why the framing exists: headers and body in a single segment.
-
-    Reads with a short timeout after the first recv, so a body that arrives in a
-    later segment shows up as a short read.
-    """
+    """Headers and body leave in a single segment, which is what the framing is for."""
+    # A short timeout after the first recv, so a body in a later segment reads short.
     sock = socket.create_connection(("127.0.0.1", h.port), timeout=5)
     sock.sendall(b"GET /v1/hello HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n")
     first = sock.recv(65536)
@@ -188,11 +185,10 @@ def test_response_is_one_write(h):
 
 
 def test_a_dropped_connection_is_not_reported(h):
-    """SO_LINGER at 0 resets and does not close, matching the badge.
-
-    The handler thread is parked in readline waiting for a following request, so the
-    reset surfaces there with nothing in flight. Only a real fault gets a traceback.
-    """
+    """A connection reset between requests leaves stderr quiet, and a real fault does
+    not."""
+    # SO_LINGER at 0 resets rather than closing, as the badge does. The handler thread is
+    # parked in readline, so the reset surfaces there with nothing in flight.
     sock = socket.create_connection(("127.0.0.1", h.port), timeout=5)
     sock.sendall(b"GET /v1/hello HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n")
     sock.recv(65536)
@@ -225,9 +221,8 @@ def test_nodelay_is_set():
 def caller(h, address, path):
     """A handler far enough along to be dispatched to, without a socket behind it.
 
-    Built off the running server's own handler class, so it carries the service that
-    `make_server` bound to it. Binding a second address to prove the guard is awkward, so
-    the request arrives by hand: what it answers is recorded instead of written.
+    Built off the running server's handler class, so it carries the service `make_server`
+    bound to it, and records what it answers instead of writing it.
     """
     class Caller(h.httpd.RequestHandlerClass):
         def __init__(self):
