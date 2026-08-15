@@ -222,8 +222,9 @@ def badge_constants():
     constants evaluated in order, each seeing the ones above it.
     """
     def constants(module):
-        # A name for one of the app's modules, or a path for an extension's.
-        where = (pathlib.Path(module) if "/" in module
+        # A name for one of the app's modules, or a Path for an extension's. Not sniffed
+        # out of the string: a Windows path has no forward slash in it.
+        where = (module if isinstance(module, pathlib.Path)
                  else pathlib.Path(install.app_source_dir()) / module)
         source = where.read_text(encoding="utf-8")
         found = {}

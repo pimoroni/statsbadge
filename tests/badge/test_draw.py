@@ -12,6 +12,9 @@ import pytest
 
 from statsbadge import install, layout, themes
 
+# The clock extension's badge-side modules and fonts, as a checkout has them.
+CLOCK_BADGE = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
+
 
 def test_the_gauge_and_its_column_sit_on_one_gap(badge_constants):
     """One gap left of the dial, one between it and the column, one at the right edge."""
@@ -395,8 +398,7 @@ def test_a_symbol_centres_on_the_words_beside_it():
     # The placement holds only while an icon's ink is centred in a box sat on the baseline.
     # Read through the tool, so a font repacked wide is read as wide.
     fonts = (pathlib.Path(install.app_source_dir()) / "icons.af",
-             pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge"
-                          "/icons.af"))
+             CLOCK_BADGE / "icons.af")
     for path in fonts:
         font = read_af.read(str(path))
         box = draw.ICON_BOX * font["units_per_em"]
@@ -435,7 +437,7 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(badge_constants):
 
     # The LCD face's digits stand where a capital does, or the clock sizes one of its faces
     # by numbers that do not describe it.
-    lcd = read_af.read("extensions/statsbadge-clock/src/statsbadge_clock/badge/lcd.af")
+    lcd = read_af.read(str(CLOCK_BADGE / "lcd.af"))
     eight = next(g for g in lcd["glyphs"] if g["codepoint"] == ord("8"))
     assert abs(eight["bbox_h"] / lcd["units_per_em"] - draw.CAP) < 0.01, (
         eight["bbox_h"], lcd["units_per_em"], draw.CAP)
@@ -443,8 +445,7 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(badge_constants):
     # The other digital face draws its colon as two circles, at the positions this one's
     # glyph puts them. The pair sits low and is not symmetric about the digits, so the
     # numbers are measured and not chosen.
-    clockface = badge_constants("extensions/statsbadge-clock/src/statsbadge_clock/badge"
-                                "/clockface.py")
+    clockface = badge_constants(CLOCK_BADGE / "clockface.py")
     at, radius = clockface["COLON_AT"], clockface["COLON_DOT"]
 
     colon = next(g for g in lcd["glyphs"] if g["codepoint"] == ord(":"))
@@ -459,8 +460,7 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(badge_constants):
 
     # The digital face draws the app's face at a finer grid, so it has to agree on the cap
     # it is sized from and the width it is placed by.
-    digits = read_af.read(
-        "extensions/statsbadge-clock/src/statsbadge_clock/badge/digits.af")
+    digits = read_af.read(str(CLOCK_BADGE / "digits.af"))
     assert digits["wide"], "the face that draws digits 84pt tall wants the finer grid"
     for char in "0123456789:":
         assert any(g["codepoint"] == ord(char) for g in digits["glyphs"]), char
@@ -480,18 +480,17 @@ def test_every_clock_face_the_ui_offers_has_a_renderer(badge_constants):
     `ClockFaces` in tests/badge/wasm/test_draw.py draws each of them, and checks no two
     faces draw the same thing.
     """
-    badge = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
     Clock = pytest.importorskip("statsbadge_clock").Clock
 
     offered = next(s for s in Clock.page_settings if s["key"] == "face")["options"]
     # The dials and the dial-less faces are two tables; between them they are the renderers.
-    tables = badge_constants(str(badge / "clockface.py"))
+    tables = badge_constants(CLOCK_BADGE / "clockface.py")
     drawn = set(tables["FACES"]) | set(tables["DIGITAL"])
     assert set(offered) == drawn, (sorted(offered), sorted(drawn))
 
     # The seven-segment face needs a font, and an asset travels only if it is declared.
     assert any(path.endswith("lcd.af") for path in Clock.badge_assets), Clock.badge_assets
-    assert (badge / "lcd.af").exists(), "the LCD face's font is not built"
+    assert (CLOCK_BADGE / "lcd.af").exists(), "the LCD face's font is not built"
     # Shipped, so its licence ships with it.
     licence = pathlib.Path("licences/OFL-DSEG.txt").read_text(encoding="utf-8")
     assert "keshikan" in licence and "SIL Open Font License" in licence
