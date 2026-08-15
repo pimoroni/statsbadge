@@ -63,6 +63,39 @@ class ColumnWidth(unittest.TestCase):
         self.assertTrue(big > small, (small, big))
 
 
+class Gauges(unittest.TestCase):
+    """The sweep is the reading; the colour is where that reading sits on the ramp."""
+
+    def setUp(self):
+        draw.prepare()
+        self.theme = look.get(look.DEFAULT)
+
+    def drawn(self, fraction, hot=None):
+        draw.background(self.theme, "CPU", 0, 1, None)
+        chrome = body_pixels()
+        draw.gauge(self.theme, look.DIAL_C, look.DIAL_OUTER, look.DIAL_INNER,
+                   fraction, "", hot=hot)
+        return differing(chrome, body_pixels())
+
+    def test_a_fuller_reading_sweeps_further(self):
+        quiet, busy = self.drawn(0.1), self.drawn(0.9)
+        self.assertTrue(quiet > 0.001, f"a gauge at 10% drew {quiet * 100:.2f}%")
+        self.assertTrue(busy > quiet, (quiet, busy))
+
+    def test_the_colour_comes_from_severity_and_the_sweep_from_the_reading(self):
+        """A battery at 100% is a machine doing well, and draws a full calm ring."""
+        asked = []
+        real = self.theme.at
+        self.theme.at = lambda fraction: asked.append(fraction) or real(fraction)
+        try:
+            full = self.drawn(1.0, hot=0.0)
+        finally:
+            self.theme.at = real
+        self.assertTrue(0.0 in asked, f"the ramp was read at {asked}, not at the severity")
+        self.assertTrue(1.0 not in asked, f"the reading coloured the sweep: {asked}")
+        self.assertTrue(full > self.drawn(0.1, hot=0.0), "the severity shortened the sweep")
+
+
 class ClockFaces(unittest.TestCase):
     """A face in the settings but not in FACES or DIGITAL draws the default, silently."""
 

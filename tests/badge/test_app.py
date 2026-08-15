@@ -1,6 +1,11 @@
-"""The app on the badge: paging, buttons, backlight and pairing."""
+"""The host's half of what the app does: the settings it sends, and the figures both
+sides have to agree on.
 
-import ast
+The app itself is built and driven in tests/badge/wasm/test_app.py. Three tests here
+still read source, and each is code that cannot be run: `__init__.py` starts the app on
+import, `main()` never returns, and `net._connect` wants a socket this port has not got.
+"""
+
 import json
 import pathlib
 import re
@@ -13,8 +18,8 @@ from statsbadge import install, layout
 def test_the_entry_point_starts_the_app_and_can_be_quit():
     """__init__.py runs the app, and binds `on_exit` before main() blocks.
 
-    Read rather than run: this is the module that starts the app, so importing it here
-    would. That app.py starts nothing is `tests/badge/wasm/test_app.py`, which imports it.
+    Read rather than run: importing this module here would start the app. app.py
+    starting nothing is checked by tests/badge/wasm/test_app.py, which imports it.
     """
     entry = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(
         encoding="utf-8")
@@ -81,10 +86,13 @@ def test_the_badge_never_waits_on_a_socket_the_screen_is_behind():
 
 
 def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
-    """A scan runs for two beacon intervals, so it cannot fall between two beacons."""
+    """A scan runs for two beacon intervals, so it cannot fall between two beacons.
+
+    The two sides never import each other, and `badge_constants` evaluates the badge's
+    numbers rather than matching them as text.
+    """
     from statsbadge import beacon
 
-    source = (pathlib.Path(install.app_source_dir()) / "net.py").read_text(encoding="utf-8")
     badge = badge_constants("net.py")
     assert badge["BEACON_PORT"] == beacon.PORT, "the badge listens on another port"
     assert badge["BEACON_EVERY_MS"] == int(beacon.INTERVAL * 1000), (
@@ -96,23 +104,14 @@ def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
     sent = beacon.Beacon(8420, "here", server_id="abc", interval=5.0).payload()
     assert sent["every_ms"] == 5000, sent
     assert len(json.dumps(sent)) < 256, "the packet is read into a 256 byte buffer"
-    assert 'beacon.get("every_ms"' in source, "the badge drops what it is told"
-
-    # Setup's countdown repeats a short scan until its six seconds are up, so the brief
-    # ones there add up to the same cover.
-    menu = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text(encoding="utf-8")
-    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
-    for call in ast.walk(ast.parse(app)):
-        if not isinstance(call, ast.Call) or getattr(call.func, "attr", "") != "discover":
-            continue
-        given = [word.arg for word in call.keywords]
-        assert "timeout_ms" not in given, f"a scan of its own at line {call.lineno}"
-    assert "deadline" in menu, "the countdown is what makes setup's short scans add up"
 
 
 def test_a_full_battery_is_not_an_alarm():
-    """A battery is read the other way up from a load, so a full one is drawn calm."""
-    import sys
+    """A battery is read the other way up from a load, so a full one is calm.
+
+    `Gauges` in tests/badge/wasm/test_draw.py covers the drawing: the severity picks
+    the colour, the reading sets the sweep.
+    """
 
     sys.path.insert(0, install.app_source_dir())
     import pages
@@ -124,21 +123,12 @@ def test_a_full_battery_is_not_an_alarm():
         assert pages.severity_of(ref, 0.9) == 0.9, ref
     assert pages.severity_of("cpu.pct", None) is None
 
-    # It is only the colour: the sweep and the bar are the reading itself.
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
-    body = source[source.index("def gauge("):]
-    body = body[:body.index("\ndef ", 1)]
-    assert "theme.at(fraction if hot is None else hot)" in body
-    assert "shape.arc(middle, inner, outer, start, sweep)" in body, (
-        "the sweep is no longer drawn from the reading")
-
 
 def test_the_badge_dims_to_suit_the_room(ui):
     """The scale tells a dark room, a curtained one and a lit one apart, and tops out below
     the sensor's rail."""
     # Measured on the badge as raw u16 stepping in sixteens: darkness 48, curtains closed
     # 320, a lit room 4500. A phone torch and a sunny sill both read 61400, railed.
-    import sys
 
     sys.path.insert(0, install.app_source_dir())
     import look
@@ -164,9 +154,8 @@ def test_the_badge_dims_to_suit_the_room(ui):
     assert ui.bindings.get("autobright") == "auto_brightness", ui.bindings
 
 
-def test_the_badge_pages_on_its_own_when_left_alone(ui):
-    """Idle paging is off by default, and a turn the badge makes for itself does not reset
-    the timer."""
+def test_idle_paging_is_off_by_default_and_bounded(ui):
+    """The badge side is `IdleAdvance` in tests/badge/wasm/test_app.py."""
     config = layout.validate({"pages": layout.DEFAULT_PAGES})
     assert config["idle_advance_s"] == 0, config["idle_advance_s"]
     assert config["advance_every_s"] == 10
@@ -179,115 +168,17 @@ def test_the_badge_pages_on_its_own_when_left_alone(ui):
     assert ui.bindings.get("idle") == "idle_advance_s", ui.bindings
     assert ui.bindings.get("advance") == "advance_every_s", ui.bindings
 
-    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
-    advance = app[app.index("    def advance_if_idle"):]
-    advance = advance[:advance.index("\n    # --", 1)]
-    # The timer is left alone here, or the first turn stops the rest.
-    assert "_pressed_at" in advance and "self._pressed_at =" not in advance, advance
-    assert "len(self.page_list) < 2" in advance, "one page would turn to itself"
 
-    # A press resets it, wherever one is noticed - including HOME, since opening
-    # the menu is somebody using the badge.
-    for method in ("    def buttons(self):", "    def home(self):"):
-        body = app[app.index(method):]
-        body = body[:body.index("\n    def ", 1)]
-        assert "self._pressed_at = time.ticks_ms()" in body, method
-    # Above turn(), which both the buttons and the badge itself go through.
-    turn = app[app.index("    def turn(self"):]
-    turn = turn[:turn.index("\n    # --", 1)]
-    assert "_pressed_at" not in turn, turn
+def test_the_host_offers_three_actions_the_badge_answers_itself():
+    """The three actions `LocalActions` drives in tests/badge/wasm/test_app.py.
 
-
-def test_a_button_can_do_something_without_the_host():
-    """Paging and the panel are handled on the badge, so a press works with the host
-    away."""
+    Written out on both sides: the badge cannot import this, and the prefix is what keeps
+    a press for one of them off the wire.
+    """
     actions = dict(layout.LOCAL_ACTIONS)
     assert set(actions) == {"badge.prev", "badge.next", "badge.brightness"}, actions
-
-    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
-    press = app[app.index("    def press(self"):]
-    press = press[:press.index("\n    def ", 1)]
-    assert "LOCAL_PREFIX" in press and "send_command" in press, press
-    # Every action the host offers is one the badge answers, or a button does nothing.
-    handler = app[app.index("    def local(self"):]
-    handler = handler[:handler.index("\n    def ", 1)]
-    for action in actions:
-        assert f'"{action}"' in handler, action
-    # The prefix keeps them off the wire, so it has to match what the host offers.
     for action in actions:
         assert action.startswith("badge."), action
-
-
-def test_a_press_waits_for_the_poll_rather_than_losing_to_it():
-    """A press is queued and goes out ahead of the next poll, rather than needing an idle
-    connection."""
-    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
-    send = app[app.index("    def send_command(self"):]
-    send = send[:send.index("\n    def ", 1)]
-    # Held until the connection frees, so a press outlives a request in flight.
-    assert "self._commands.append" in send, send
-    assert "_pending" not in send, send
-
-    poll = app[app.index("    def poll(self"):]
-    poll = poll[:poll.index("\n    def ", 1)]
-    # Sent ahead of what the badge asks for itself, or the press waits out the interval.
-    assert poll.index("if self._commands:") < poll.index("if self._queued is not None:"), poll
-    assert poll.index("if self._commands:") < poll.index("self._next_poll"), poll
-
-
-def test_the_notice_screen_offers_a_way_out():
-    """The notice screen says what went wrong and offers a retry, setup and the hosts
-    menu."""
-    # Polls back off to fifteen seconds apart while a host is quiet, which is no use to
-    # somebody who has just woken the PC.
-    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
-
-    notice = app[app.index("    def render(self):"):]
-    notice = notice[:notice.index("\n    def ", 1)]
-    for action in ("C retry", "B set up", "HOME hosts"):
-        assert action in notice, action
-    assert "self.detail" in notice, "the reason is not shown"
-
-    # C retries from here, where the host commands are out of reach.
-    pressed = app[app.index("    def buttons(self):"):]
-    pressed = pressed[:pressed.index("\n    def ", 1)]
-    assert "self.retry()" in pressed and "current_page() is None" in pressed
-
-    # Retrying drops the backoff without waiting it out, and clears what was in flight.
-    retry = app[app.index("    def retry(self):"):]
-    retry = retry[:retry.index("\n    def ", 1)]
-    for cleared in ("self.client.failures = 0", "self._next_poll", "self._queued = None",
-                    "self._pending = None"):
-        assert cleared in retry, cleared
-
-    # One failed poll is enough to offer setup, since every control on this screen needs it.
-    setup = app[app.index("    def needs_setup(self):"):]
-    setup = setup[:setup.index("\n    def ", 1)]
-    assert "self.client.failures >= SETUP_AFTER" in setup, setup
-    assert "SETUP_AFTER = 1" in app, "more than one failed poll before setup is offered"
-
-
-def test_switching_host_forgets_the_old_one_the_same_way():
-    """All three ways to leave one host for another reset through forget_host()."""
-    # The beacon in hunt(), the hosts menu, and setup reached from the app. Readings,
-    # series and revisions are numbered by whoever sent them.
-    app_dir = pathlib.Path(install.app_source_dir())
-    app = (app_dir / "app.py").read_text(encoding="utf-8")
-    menu = (app_dir / "setup.py").read_text(encoding="utf-8")
-
-    forget = app[app.index("    def forget_host(self):"):]
-    forget = forget[:forget.index("\n    def ", 1)]
-    for cleared in ("self.layout = None", "self.layout_rev = NO_REV", "self.history = {}",
-                    "self.slow = {}", "self.slow_rev = NO_REV", "self._queued = None",
-                    "self._commands = []", "self._series_age = 0", "self._series_at = 0",
-                    "self.rejected = False", "draw.clear_cache()"):
-        assert cleared in forget, cleared
-
-    # Twice in the app: once as a starting value and once here, and nowhere else.
-    for cleared in ("self.slow = {}", "self.history = {}", "self.slow_rev = NO_REV"):
-        assert app.count(cleared) == 2, cleared
-    assert "app.layout" not in menu, "the menu resets app state itself"
-    assert menu.count("forget_host()") == 2, "a host joined is a host switched to"
 
 
 def test_a_press_that_closes_a_modal_screen_stops_there():
@@ -302,34 +193,12 @@ def test_a_press_that_closes_a_modal_screen_stops_there():
         "the menu press reaches buttons(): " + handled)
 
 
-def test_a_brightness_the_ui_offers_stays_a_fraction():
-    """Every brightness the panel is asked for is a fraction above zero and at most one."""
-    # `display.backlight` casts to a byte, so a value over 1.0 wraps to a dark panel over a
-    # framebuffer that still dumps perfectly. `LIGHT_FLOOR` keeps the other end off zero.
-    sys.path.insert(0, install.app_source_dir())
-    import look as look_module
-
-    def sent(wanted):
-        """What `backlight` passes on, which is the clamp."""
-        return max(0.0, min(1.0, wanted))
-
-    # The slider is 5 to 100 in fives; see web/index.html.
-    for percent in range(5, 101, 5):
-        asked = percent / 100.0
-        assert 0.0 < sent(asked) <= 1.0, f"{percent}% leaves the range as {sent(asked)}"
-
-    # Auto-brightness scales the configured level by the room, so the dimmest the badge can
-    # ask for is the bottom of the slider in the dark.
-    darkest = 0.05 * look_module.LIGHT_FLOOR
-    assert 0.0 < sent(darkest) <= 1.0, f"a dark room asks for {sent(darkest)}"
-    assert look_module.LIGHT_FLOOR > 0.0, "a dark room would switch the panel off"
-
-    # The clamp is what stops a fraction above 1.0 from wrapping.
-    assert sent(2.463) == 1.0, "an out-of-range brightness reaches the panel"
-
-
 def test_the_badge_can_report_on_itself_with_no_host(ui):
-    """The badge page reads the badge, so a prune on what the host can fill keeps it."""
+    """The badge page reads the badge, so a prune on what the host can fill keeps it.
+
+    `PageKinds` in tests/badge/wasm/test_pages.py renders every kind the app has a
+    handler for, this one included.
+    """
     config = layout.validate({"pages": [{"id": "b1", "kind": "badge", "title": "Badge"},
                                         {"id": "cpu", "kind": "dial", "field": "cpu.pct"}]})
     page = config["pages"][0]
@@ -346,13 +215,3 @@ def test_the_badge_can_report_on_itself_with_no_host(ui):
     for kind in layout.KINDS:
         assert kind in offered, f"{kind} is not in the kind picker"
         assert f"  {kind}: {{" in app, f"{kind} has no field slots declared in app.js"
-
-    # The kind is in the app's table, reads no fields, and is not animated.
-    source = (pathlib.Path(install.app_source_dir()) / "pages.py").read_text(encoding="utf-8")
-    table = source[source.index("_KINDS = {"):]
-    table = table[:table.index("}")]
-    assert '"badge": _badge_page' in table, table
-    body = source[source.index("def _badge_page("):]
-    body = body[:body.index("\ndef ", 1)]
-    assert "_frame" in body.split(")")[0], "the badge page reads the frame"
-    assert 'ANIMATED.add("badge")' not in source
