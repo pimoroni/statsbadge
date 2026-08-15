@@ -1,0 +1,123 @@
+"""Measuring and drawing, against the real font.
+
+Column widths come out of `screen.measure_text`, so on a host there is no answer to
+check - only the source to read. Here the metrics are the badge's.
+"""
+
+import unittest
+
+import draw
+import look
+
+EXT_DIR = "/system/apps/stats/ext"
+
+CLOCK_FRAME = {
+    "v": 1, "seq": 7,
+    "clock": {"time": "09:41", "date": "Fri 15 Aug", "epoch": 1786000000},
+    "weather": {"temp": 17.5, "code": 3, "wind": 11.0, "units": "celsius"},
+    "places": {},
+}
+
+
+def body_pixels():
+    raw = screen.raw  # noqa: F821
+    stride = look.W * 4
+    out = bytearray()
+    for y in range(look.BODY_TOP, look.BODY_TOP + look.BODY_H, 2):
+        row = y * stride
+        for x in range(0, look.W, 4):
+            index = row + x * 4
+            out.append(raw[index])
+            out.append(raw[index + 1])
+            out.append(raw[index + 2])
+    return bytes(out)
+
+
+def differing(first, second):
+    moved = 0
+    for index in range(0, len(first), 3):
+        if first[index:index + 3] != second[index:index + 3]:
+            moved += 1
+    return moved / (len(first) / 3)
+
+
+class ColumnWidth(unittest.TestCase):
+    """A row of names beside a plot: the column is measured, not fixed.
+
+    Fixed, it either leaves a gap after short names or runs long ones into the plot, and
+    which of the two depends on the fields a page happens to carry.
+    """
+
+    def setUp(self):
+        draw.prepare()
+
+    def test_nothing_takes_no_room(self):
+        self.assertEqual(draw.column_width([], look.SIZE_SMALL), 0)
+
+    def test_a_column_is_as_wide_as_its_widest_line(self):
+        widest = draw.text_width("wwwwwwww", look.SIZE_SMALL)
+        column = draw.column_width(["i", "wwwwwwww", "il"], look.SIZE_SMALL)
+        self.assertEqual(column, widest)
+
+    def test_longer_names_take_a_wider_column(self):
+        short = draw.column_width(["cpu", "mem"], look.SIZE_SMALL)
+        long = draw.column_width(["cpu", "a much longer field name"], look.SIZE_SMALL)
+        self.assertTrue(short > 0, "a column of names measured zero")
+        self.assertTrue(long > short, (short, long))
+
+    def test_a_bigger_size_takes_a_wider_column(self):
+        small = draw.column_width(["cpu.pct"], look.SIZE_SMALL)
+        big = draw.column_width(["cpu.pct"], look.SIZE_BIG)
+        self.assertTrue(big > small, (small, big))
+
+
+class ClockFaces(unittest.TestCase):
+    """Every face the clock offers, drawn.
+
+    The face list is a host-side setting and the renderers are two tables here, so a face
+    in one and not the other is a page that draws the default and says nothing.
+    """
+
+    def setUp(self):
+        draw.prepare()
+        self.theme = look.get(look.DEFAULT)
+        import sys
+        if EXT_DIR not in sys.path:
+            sys.path.insert(0, EXT_DIR)
+
+    def clockface(self):
+        try:
+            import clockface
+        except ImportError:
+            self.skipTest("the clock extension was not staged")
+        return clockface
+
+    def test_every_face_draws_something_of_its_own(self):
+        clockface = self.clockface()
+        faces = list(clockface.FACES) + list(clockface.DIGITAL)
+        self.assertTrue(faces, "no faces are declared")
+
+        drawn = {}
+        for face in faces:
+            page = {"kind": "clockface", "id": "clock1", "title": face, "face": face}
+            draw.background(self.theme, face, 0, 1, None)
+            chrome = body_pixels()
+            clockface.render(page, CLOCK_FRAME, {}, self.theme)
+            band = body_pixels()
+            moved = differing(chrome, band)
+            self.assertTrue(moved > 0.001,
+                            f"the {face} face drew {moved * 100:.2f}% of its band")
+            drawn[face] = band
+
+        # And each is a different drawing: two names in the table pointing at one
+        # rendering is the same silent default the tables exist to avoid.
+        names = list(drawn)
+        for first in range(len(names)):
+            for second in range(first + 1, len(names)):
+                self.assertTrue(
+                    drawn[names[first]] != drawn[names[second]],
+                    f"{names[first]} and {names[second]} draw the same face")
+
+
+if __name__ == "__main__":
+    unittest.main()

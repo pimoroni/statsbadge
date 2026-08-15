@@ -13,21 +13,23 @@ import pytest
 from statsbadge import install, layout, themes
 
 
-def test_a_row_of_text_and_a_plot_measures_its_columns():
-    """A fixed column either leaves a gap after the names or runs the readings into the
-    plots, and which of the two it does depends on the fields the page carries."""
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
-    for widget in ("def bars", "def sparklines", "def graph"):
-        body = source[source.index(widget):]
-        body = body[:body.index("\ndef ", 1)]
-        assert "column_width(" in body, f"{widget} still lays out to a fixed column"
+def test_the_gauge_and_its_column_sit_on_one_gap(badge_constants):
+    """The band holds a dial and a column of readings, spaced by DIAL_GAP throughout.
 
-    # The gauge and its column sit in the band on one gap, so no part of the pair can be
-    # placed on a number it picked.
-    look_source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text(encoding="utf-8")
-    for name in ("DIAL_C = (DIAL_GAP", "READOUT_X = DIAL_C[0]",
-                 "READOUT_W = W - READOUT_X - DIAL_GAP"):
-        assert name in look_source, f"{name} is not derived from the dial's gap"
+    Checked as the arithmetic and not as the expressions that produce it: no part of the
+    pair may be placed on a number of its own, or a change to the gap moves one and not
+    the other. What the column is *measured* at is tests/badge/wasm/test_draw.py.
+    """
+    look = badge_constants("look.py")
+    gap, outer = look["DIAL_GAP"], look["DIAL_OUTER"]
+
+    # One gap in from the left edge, so the dial's own left edge lands on it.
+    assert look["DIAL_C"][0] - outer == gap, (look["DIAL_C"], outer, gap)
+    # A gap between the dial and the column beside it.
+    assert look["READOUT_X"] == look["DIAL_C"][0] + outer + gap, look["READOUT_X"]
+    # And the same gap again at the right edge.
+    assert look["READOUT_W"] == look["W"] - look["READOUT_X"] - gap, look["READOUT_W"]
+    assert look["READOUT_W"] > 0, "the column has no room left"
 
 
 def test_a_split_page_takes_the_layout_it_is_given():
