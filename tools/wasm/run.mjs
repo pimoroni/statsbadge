@@ -24,8 +24,8 @@ const RUNTIME = process.env.BADGEWARE_RUNTIME
 // finds lexend at the first candidate instead of the fallbacks.
 const APP_DIR = "/system/apps/stats"
 const TEST_DIR = "/tests"
-// What this port has no hardware for: socket, select, wifi, secrets. Last on sys.path,
-// so anything the runtime really carries answers first.
+// What this port has nothing behind: socket, wifi, secrets. `select` is not here - the
+// runtime carries one, and a shim on sys.path wins over it.
 const SHIM_DIR = "/shims"
 
 if (!fileExists(RUNTIME)) {

@@ -3,7 +3,8 @@
 Nothing here reaches a network, and everything that would raises. A test that believes
 it polled a host fails, where a stand-in that answered would have it pass.
 
-Last on sys.path, so a port that grows a real socket module answers instead.
+`select` is not shimmed: the runtime has one, and a module on sys.path is imported ahead
+of it. Anything added here shadows the real thing, so add nothing that exists.
 """
 
 AF_INET = 2

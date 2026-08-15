@@ -1,8 +1,8 @@
 """The app itself, built and driven.
 
 Run under the WASM port by `node tools/wasm/run.mjs`. app.py reaches the firmware at
-import, and `socket`, `select`, `wifi` and `secrets` come from tools/wasm/shims: nothing
-here touches a network, and anything that tried would raise.
+import, and `socket`, `wifi` and `secrets` come from tools/wasm/shims: nothing here touches a
+network, and anything that tried would raise.
 
 A layout is assigned rather than fetched. That is what `apply_layout` does with the
 host's reply, and `setting()` reads it, so an App with one is an App that has polled.
