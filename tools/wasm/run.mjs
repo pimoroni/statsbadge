@@ -11,8 +11,9 @@
 //
 // DEVELOPMENT.md says where to get the runtime.
 
-import { execFileSync } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
 import { readFileSync, readdirSync, statSync } from "node:fs"
+import { Socket } from "node:net"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
@@ -56,6 +57,54 @@ globalThis.blitrgba = () => {}
 globalThis.backlight = () => {}
 globalThis.sim_buttons = () => 0
 
+// The other side of tools/wasm/shims/socket.py. Node holds the connections and fills
+// their buffers on its own event loop; the shim asks after them. Bytes cross as base64.
+const connections = new Map()
+let nextHandle = 1
+
+globalThis.sb_connect = (host, port) => {
+  const handle = nextHandle++
+  const held = { chunks: [], connected: false, ended: false, failed: false }
+  held.sock = new Socket()
+  held.sock.on("connect", () => { held.connected = true })
+  held.sock.on("data", (chunk) => held.chunks.push(chunk))
+  held.sock.on("error", () => { held.failed = true })
+  held.sock.on("close", () => { held.ended = true })
+  held.sock.connect(port, host)
+  connections.set(handle, held)
+  return handle
+}
+
+// 1 connected, 2 readable, 4 ended, 8 failed. Same numbers as the shim's constants.
+globalThis.sb_state = (handle) => {
+  const held = connections.get(handle)
+  if (!held) return 8
+  return (held.connected ? 1 : 0) | (held.chunks.length ? 2 : 0)
+       | (held.ended ? 4 : 0) | (held.failed ? 8 : 0)
+}
+
+globalThis.sb_send = (handle, base64) => {
+  connections.get(handle)?.sock.write(Buffer.from(base64, "base64"))
+  return 1
+}
+
+globalThis.sb_recv = (handle) => {
+  const held = connections.get(handle)
+  if (!held?.chunks.length) return ""
+  const chunk = Buffer.concat(held.chunks)
+  held.chunks = []
+  return chunk.toString("base64")
+}
+
+globalThis.sb_close = (handle) => {
+  const held = connections.get(handle)
+  if (held) {
+    held.sock.destroy()
+    connections.delete(handle)
+  }
+  return 1
+}
+
 const mp = await loadMicroPython({
   stdout: (line) => process.stdout.write(line + "\n"),
   stderr: (line) => process.stderr.write(line + "\n"),
@@ -77,6 +126,12 @@ if (staged.length) {
 }
 stage(join(ROOT, "tests", "badge", "wasm"), TEST_DIR, (name) => name !== "__pycache__")
 stage(join(ROOT, "tools", "wasm", "shims"), SHIM_DIR, (name) => name !== "__pycache__")
+
+let hostChild = null
+const host = await serveHost()
+if (host) {
+  console.log(`host: statsbadge on 127.0.0.1:${host.port}, badge ${host.badge_id}`)
+}
 
 const wanted = process.argv[2]
 const modules = mp.FS.readdir(TEST_DIR)
@@ -100,6 +155,10 @@ sys.path.append("${SHIM_DIR}")
 import badgeware                     # badge, screen, image, tween, the buttons
 import os
 os.chdir("${APP_DIR}")
+
+# Where the real server is, for the tests that talk to one. None if it would not start.
+import hostinfo
+hostinfo.HOST = ${JSON.stringify(host)}
 
 # What badge_app/app.py does at import, which the tests cannot do for themselves: it
 # imports net, and this port has no socket module. Without the mode the screen is LORES
@@ -125,8 +184,42 @@ raise SystemExit(1 if failed else 0)
   const message = String(error?.message ?? error)
   if (!/SystemExit: 0\b/.test(message)) {
     console.error(message)
-    process.exit(1)
+    done(1)
   }
+}
+done(0)
+
+/** The served host holds the event loop open, so leaving is deliberate. */
+function done(code) {
+  hostChild?.kill()
+  process.exit(code)
+}
+
+/** A real statsbadge on a loopback port, with one badge paired to it. */
+async function serveHost() {
+  const child = spawn("uv", ["run", "--no-sync", "python", "tools/wasm/host.py"],
+                      { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] })
+  hostChild = child
+  const said = await new Promise((done) => {
+    let seen = ""
+    const giveUp = setTimeout(() => done(null), 20000)
+    child.stdout.on("data", (chunk) => {
+      seen += chunk
+      if (seen.includes("\n")) {
+        clearTimeout(giveUp)
+        done(seen.split("\n")[0])
+      }
+    })
+    child.on("error", () => { clearTimeout(giveUp); done(null) })
+    child.on("exit", () => { clearTimeout(giveUp); done(null) })
+  })
+  if (!said) {
+    console.error("no statsbadge to serve: the tests that need a host will skip")
+    child.kill()
+    return null
+  }
+  process.on("exit", () => child.kill())
+  return JSON.parse(said)
 }
 
 function fileExists(path) {

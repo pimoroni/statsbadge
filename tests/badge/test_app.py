@@ -1,9 +1,10 @@
 """The host's half of what the app does: the settings it sends, and the figures both
 sides have to agree on.
 
-The app itself is built and driven in tests/badge/wasm/test_app.py. Three tests here
-still read source, and each is code that cannot be run: `__init__.py` starts the app on
-import, `main()` never returns, and `net._connect` wants a socket this port has not got.
+The app itself is built and driven in tests/badge/wasm/test_app.py, and its HTTP client
+against a real server in tests/badge/wasm/test_net.py. Two tests here still read source,
+both on code that cannot be run: `__init__.py` starts the app on import, and `main()`
+never returns.
 """
 
 import json
@@ -66,23 +67,6 @@ def test_a_beacon_goes_out_on_every_interface_it_can_name():
     finally:
         psutil.net_if_addrs = was
     assert addresses == ["255.255.255.255", "10.10.1.255"], addresses
-
-
-def test_the_badge_never_waits_on_a_socket_the_screen_is_behind():
-    """A connect is non-blocking, so a host that is not there cannot hold the draw loop."""
-    # A blocking one stops the screen for as long as lwIP takes to give up, and HOME is
-    # never sampled.
-    source = (pathlib.Path(install.app_source_dir()) / "net.py").read_text(encoding="utf-8")
-    connect = source[source.index("def _connect"):source.index("def _connecting")]
-    assert "setblocking(False)" in connect, "the connect blocks the loop"
-    assert "EINPROGRESS" in connect, "a connect that only started is an error to this"
-    assert "yield from self._connecting()" in source, "nothing waits for the connect"
-
-    # Measured on the board: POLLOUT and POLLHUP come back together for an address with
-    # nothing at it, so the error flag has to be read first.
-    waiting = source[source.index("for _sock, flags in"):source.index("# -- requests")]
-    assert waiting.index("POLLERR") < waiting.index("POLLOUT"), \
-        "a failed connect would read as a connected one"
 
 
 def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
