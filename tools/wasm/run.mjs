@@ -62,10 +62,8 @@ const mp = await loadMicroPython({
 
 stage(join(ROOT, "src", "statsbadge", "badge_app"), APP_DIR, (name) =>
   name !== "mpy" && name !== "__pycache__")
-// ext/ is the installer's, not part of the app source, so it has to be made here. The
-// paths come from the installed extensions, which is what `statsbadge install` would
-// push - and so not the checkout, unless it was installed editable. Printed, because a
-// page edited in extensions/ and not reinstalled is otherwise silently the old one.
+// From the installed extensions, not from extensions/ in the checkout. Printed, or a page
+// edited there and not reinstalled is silently the old one.
 mkdirp(`${APP_DIR}/ext`)
 const staged = extensionModules()
 for (const module of staged) {

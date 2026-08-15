@@ -1,8 +1,4 @@
-"""Measuring and drawing, against the real font.
-
-Column widths come out of `screen.measure_text`, so on a host there is no answer to
-check - only the source to read. Here the metrics are the badge's.
-"""
+"""Measuring and drawing, against the real font."""
 
 import unittest
 
@@ -42,11 +38,7 @@ def differing(first, second):
 
 
 class ColumnWidth(unittest.TestCase):
-    """A row of names beside a plot: the column is measured, not fixed.
-
-    Fixed, it either leaves a gap after short names or runs long ones into the plot, and
-    which of the two depends on the fields a page happens to carry.
-    """
+    """A fixed column leaves a gap after short names and clips long ones."""
 
     def setUp(self):
         draw.prepare()
@@ -72,11 +64,7 @@ class ColumnWidth(unittest.TestCase):
 
 
 class ClockFaces(unittest.TestCase):
-    """Every face the clock offers, drawn.
-
-    The face list is a host-side setting and the renderers are two tables here, so a face
-    in one and not the other is a page that draws the default and says nothing.
-    """
+    """A face in the settings but not in FACES or DIGITAL draws the default, silently."""
 
     def setUp(self):
         draw.prepare()

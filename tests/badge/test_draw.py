@@ -14,12 +14,7 @@ from statsbadge import install, layout, themes
 
 
 def test_the_gauge_and_its_column_sit_on_one_gap(badge_constants):
-    """The band holds a dial and a column of readings, spaced by DIAL_GAP throughout.
-
-    Checked as the arithmetic and not as the expressions that produce it: no part of the
-    pair may be placed on a number of its own, or a change to the gap moves one and not
-    the other. What the column is *measured* at is tests/badge/wasm/test_draw.py.
-    """
+    """One gap left of the dial, one between it and the column, one at the right edge."""
     look = badge_constants("look.py")
     gap, outer = look["DIAL_GAP"], look["DIAL_OUTER"]
 
