@@ -4,6 +4,7 @@ import unittest
 
 import draw
 import look
+from pixels import body_pixels, differing
 
 EXT_DIR = "/system/apps/stats/ext"
 
@@ -13,28 +14,6 @@ CLOCK_FRAME = {
     "weather": {"temp": 17.5, "code": 3, "wind": 11.0, "units": "celsius"},
     "places": {},
 }
-
-
-def body_pixels():
-    raw = screen.raw  # noqa: F821
-    stride = look.W * 4
-    out = bytearray()
-    for y in range(look.BODY_TOP, look.BODY_TOP + look.BODY_H, 2):
-        row = y * stride
-        for x in range(0, look.W, 4):
-            index = row + x * 4
-            out.append(raw[index])
-            out.append(raw[index + 1])
-            out.append(raw[index + 2])
-    return bytes(out)
-
-
-def differing(first, second):
-    moved = 0
-    for index in range(0, len(first), 3):
-        if first[index:index + 3] != second[index:index + 3]:
-            moved += 1
-    return moved / (len(first) / 3)
 
 
 class ColumnWidth(unittest.TestCase):
@@ -61,6 +40,74 @@ class ColumnWidth(unittest.TestCase):
         small = draw.column_width(["cpu.pct"], look.SIZE_SMALL)
         big = draw.column_width(["cpu.pct"], look.SIZE_BIG)
         self.assertTrue(big > small, (small, big))
+
+
+class SplitPages(unittest.TestCase):
+    """Anything round takes its centre and radius from look.py, so paging between a
+    gauge, a ring stack and a clock face moves nothing under the reader."""
+
+    def test_four_rings_fit_the_radius_a_single_gauge_draws_in(self):
+        innermost = look.DIAL_OUTER - 4 * draw.RING_BAND - 3 * draw.RING_GAP
+        self.assertTrue(innermost >= 8, f"the fourth ring is {innermost} across")
+
+    def test_the_clock_face_takes_the_geometry_it_is_given(self):
+        try:
+            import clockface
+        except ImportError:
+            self.skipTest("the clock extension was not staged")
+        self.assertEqual(clockface.CENTRE, look.DIAL_C)
+        self.assertEqual(clockface.RADIUS, look.DIAL_OUTER)
+
+
+class Fitting(unittest.TestCase):
+    """`fit` shortens one line to a width, for a name off a feed that is whatever
+    length it is."""
+
+    def setUp(self):
+        draw.prepare()
+
+    def test_a_string_that_fits_is_left_alone(self):
+        self.assertEqual(draw.fit("cpu", look.SIZE_SMALL, 300), "cpu")
+
+    def test_a_string_that_does_not_is_cut_to_the_room(self):
+        long = "a place name far longer than the column it has to sit in"
+        short = draw.fit(long, look.SIZE_SMALL, 60)
+        self.assertTrue(len(short) < len(long), short)
+        self.assertTrue(draw.text_width(short, look.SIZE_SMALL) <= 60, short)
+
+    def test_a_cut_string_ends_in_an_ellipsis(self):
+        short = draw.fit("a place name far longer than its column", look.SIZE_SMALL, 60)
+        self.assertTrue(short.endswith("..."), short)
+
+    def test_a_string_that_cannot_be_cut_to_fit_comes_back_whole(self):
+        """Nothing of the name is worse than too much of it, and an ellipsis alone is
+        not a name."""
+        self.assertEqual(draw.fit("cpu", look.SIZE_SMALL, 1), "cpu")
+
+
+class Flowing(unittest.TestCase):
+    """A post is whatever length it is, and the block has room for two or three lines."""
+
+    def setUp(self):
+        draw.prepare()
+        self.theme = look.get(look.DEFAULT)
+
+    def band(self, text):
+        draw.background(self.theme, "Feed", 0, 1, None)
+        draw.flow(text, look.SIZE_SMALL, self.theme.ink,
+                  rect(look.PAD, look.BODY_TOP, look.W - 2 * look.PAD, 40))  # noqa: F821
+        return body_pixels()
+
+    def test_a_message_too_long_for_its_block_stays_inside_it(self):
+        """Whether the firmware truncates or merely clips does not show in the pixels:
+        both cut the same prefix at the same place. What is checked is the block."""
+        blank = self.band("")
+        long = self.band(" ".join(["a post that runs on and on"] * 40))
+        self.assertTrue(differing(blank, long) > 0.001, "the long message drew nothing")
+        # Sampled every other row, so the 40px block is the first 20 rows of the band.
+        below = 20 * (look.W // 4) * 3
+        self.assertEqual(long[below:], blank[below:],
+                         "the message ran past the bottom of its block")
 
 
 class Gauges(unittest.TestCase):
@@ -113,7 +160,7 @@ class ClockFaces(unittest.TestCase):
             self.skipTest("the clock extension was not staged")
         return clockface
 
-    def test_every_face_draws_something_of_its_own(self):
+    def test_every_face_draws_a_different_face(self):
         clockface = self.clockface()
         faces = list(clockface.FACES) + list(clockface.DIGITAL)
         self.assertTrue(faces, "no faces are declared")

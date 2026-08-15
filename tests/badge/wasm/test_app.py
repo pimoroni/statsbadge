@@ -11,6 +11,10 @@ host's reply, and `setting()` reads it, so an App with one is an App that has po
 import unittest
 
 import app
+import draw
+import look
+import pages
+from pixels import body_pixels, differing
 
 PAGES = [{"id": "one", "kind": "text", "title": "One", "fields": ["sys.host"]},
          {"id": "two", "kind": "text", "title": "Two", "fields": ["sys.host"]},
@@ -150,7 +154,7 @@ class Commands(unittest.TestCase):
         self.assertEqual(len(one._commands), app.COMMAND_QUEUE)
         self.assertEqual(one.toast_text, "busy", "nothing said the press was dropped")
 
-    def test_a_press_goes_out_before_anything_the_badge_asks_for_itself(self):
+    def test_a_press_goes_out_before_the_badge_polls(self):
         """Both are due; the press is what a reader is waiting on."""
         one = paired(interval_ms=1000)
         one.send_command("media_next")
@@ -272,6 +276,131 @@ class Backlight(unittest.TestCase):
         one = built(brightness=0.8)
         one.dimmed = 0.24
         self.assertAlmostEqual(one.wanted_brightness(), 0.24)
+
+
+class Settings(unittest.TestCase):
+    """A layout setting reaching the switch that draws it."""
+
+    def setUp(self):
+        self.was = (draw.SMOOTH, draw.ROWS, draw.GAUGE_FILL, pages.PLOT_ANIMATION,
+                    pages.ANIMATE)
+
+    def tearDown(self):
+        (draw.SMOOTH, draw.ROWS, draw.GAUGE_FILL, pages.PLOT_ANIMATION,
+         pages.ANIMATE) = self.was
+        pages.sweep_reset()
+
+    def test_a_layout_moves_the_drawing_switches(self):
+        one = built(smooth=False, rows="none", gauge_fill="ramp", plot_animation=True)
+        one.apply_layout()
+        self.assertFalse(draw.SMOOTH, "graphs are still smoothed")
+        self.assertEqual(draw.ROWS, "none")
+        self.assertEqual(draw.GAUGE_FILL, "ramp")
+        self.assertTrue(pages.PLOT_ANIMATION)
+
+    def test_a_layout_that_names_nothing_leaves_the_defaults(self):
+        built().apply_layout()
+        self.assertTrue(draw.SMOOTH)
+        self.assertEqual(draw.ROWS, "zebra")
+        self.assertEqual(draw.GAUGE_FILL, "solid")
+        self.assertFalse(pages.PLOT_ANIMATION)
+
+    def test_a_page_turn_drops_the_positions_everything_was_drawn_at(self):
+        """A turn is not a change in the machine, so the needles start where they land."""
+        one = built(animate=True)
+        one.apply_layout()
+        pages.fraction_of("cpu.pct", 0.4)
+        self.assertTrue(pages._sweeps, "nothing was sweeping to begin with")
+        one.turn(1)
+        self.assertFalse(pages._sweeps, "a needle kept its position across a page turn")
+
+
+class Series(unittest.TestCase):
+    """Which fields a poll asks for a ring of."""
+
+    def plotting(self, *kinds):
+        one = app.App()
+        one.layout = {"pages": [
+            {"id": f"p{index}", "kind": kind, "title": kind, "fields": [f"g{index}.value"]}
+            for index, kind in enumerate(kinds)]}
+        return one
+
+    def test_a_series_is_requested_only_for_the_pages_that_plot_one(self):
+        """A sparkline and a trend draw one too, not only the graph pages."""
+        one = self.plotting("graph", "dial", "spark", "text")
+        self.assertEqual(one._plot_refs(), ["g0.value", "g2.value"])
+
+    def test_the_request_starts_at_the_page_on_screen(self):
+        """In page order, the refs at the end are never fetched, and the page holding
+        them draws its live reading twice."""
+        one = self.plotting("graph", "graph", "graph")
+        one.turn(1)
+        self.assertEqual(one._graph_keys()[0], "g1.value")
+
+    def test_the_request_is_capped(self):
+        one = self.plotting(*(["graph"] * (app.GRAPH_KEYS + 4)))
+        self.assertEqual(len(one._graph_keys()), app.GRAPH_KEYS)
+        self.assertTrue(len(one._plot_refs()) > app.GRAPH_KEYS, "nothing was left out")
+
+
+class DrawingElsewhere(unittest.TestCase):
+    def setUp(self):
+        draw.prepare()      # main() does this before anything is drawn
+
+    def test_a_page_drawn_into_an_image_puts_the_screen_back(self):
+        """`screen` is a builtin, so it is rebound: an extension's renderer draws through
+        the same name and would otherwise draw to the screen while the app drew the image.
+        """
+        one = built()
+        one.theme = look.get(look.DEFAULT)
+        was = screen  # noqa: F821
+        target = image(look.W, look.H)  # noqa: F821
+        one.draw_page_into(target, one.current_page())
+        self.assertTrue(screen is was, "the page left itself bound to the image")  # noqa: F821
+
+    def test_the_image_is_given_the_font_the_screen_has(self):
+        """An image starts with none, and a page that labels anything wants one."""
+        one = built()
+        target = image(look.W, look.H)  # noqa: F821
+        one.draw_page_into(target, one.current_page())
+        self.assertTrue(target.font is not None)
+
+
+class Rendering(unittest.TestCase):
+    """A press answers on the frame it lands on, and the body catches up after it."""
+
+    def setUp(self):
+        draw.prepare()
+        self.was_connected = app.wifi.is_connected
+        # There is no radio here, and render() draws "No WiFi" before it draws a page.
+        app.wifi.is_connected = lambda: True
+        self.app = paired(slide="over")
+        self.app.layout["pages"] = [
+            {"id": "one", "kind": "dial", "title": "One", "field": "cpu.pct"},
+            {"id": "two", "kind": "text", "title": "Two", "fields": ["sys.host"]}]
+        self.app.theme = look.get(look.DEFAULT)
+
+    def tearDown(self):
+        app.wifi.is_connected = self.was_connected
+
+    def test_a_turn_that_is_waiting_leaves_the_body_standing(self):
+        """The title and the pip move on the press; redrawing the body as well is what
+        the wait is holding off."""
+        self.app.render()
+        standing = body_pixels()
+        self.app.turn(1)
+        self.app.render()
+        self.assertEqual(differing(standing, body_pixels()), 0.0,
+                         "the body was redrawn while the turn was still waiting")
+
+    def test_the_body_catches_up_once_the_wait_is_over(self):
+        self.app.render()
+        standing = body_pixels()
+        self.app.turn(1)
+        self.app._slide_at = 0          # the wait ran out and no slide was started
+        self.app.render()
+        self.assertTrue(differing(standing, body_pixels()) > 0.001,
+                        "the second page never reached the screen")
 
 
 class Slides(unittest.TestCase):

@@ -7,12 +7,14 @@ host these could only be read as text.
 
 import unittest
 
+import app
 import draw
 import look
 import pages
+from pixels import body_pixels, differing
 
-# Where the installer puts an extension's badge modules, and where the runner staged them.
-EXT_DIR = "/system/apps/stats/ext"
+# Where the runner staged the app, which is where an install puts it.
+APP_DIR = "/system/apps/stats"
 
 FRAME = {
     "v": 1, "seq": 7, "layout_rev": 3,
@@ -44,21 +46,6 @@ PAGES = (
 )
 
 
-def body_pixels():
-    """The page band, sampled. RGB only: alpha does not move here."""
-    raw = screen.raw  # noqa: F821
-    stride = look.W * 4
-    out = bytearray()
-    for y in range(look.BODY_TOP, look.BODY_TOP + look.BODY_H, 2):
-        row = y * stride
-        for x in range(0, look.W, 4):
-            index = row + x * 4
-            out.append(raw[index])
-            out.append(raw[index + 1])
-            out.append(raw[index + 2])
-    return bytes(out)
-
-
 def chrome_only(theme, title, index, total):
     """The band with the chrome drawn and no handler after it.
 
@@ -67,15 +54,6 @@ def chrome_only(theme, title, index, total):
     """
     draw.background(theme, title, index, total, None)
     return body_pixels()
-
-
-def differing(first, second):
-    """How much of the sampled band the two disagree on."""
-    moved = 0
-    for index in range(0, len(first), 3):
-        if first[index:index + 3] != second[index:index + 3]:
-            moved += 1
-    return moved / (len(first) / 3)
 
 
 class PageKinds(unittest.TestCase):
@@ -117,30 +95,15 @@ class PageKinds(unittest.TestCase):
                              f"{page['kind']} left a clip behind")
 
 
-def load_extensions():
-    """Import the staged extension modules, the way the app does at startup.
-
-    The app's walk is `app.load_extensions`, which cannot be reached here: importing
-    app.py imports net, and this port has no socket module. Sorted and skipping
-    underscored names, as that one is, so the registration order matches the badge.
-    """
-    import os
-    loaded = []
-    for name in sorted(os.listdir(EXT_DIR)):
-        if not name.endswith(".py") or name.startswith("_"):
-            continue
-        __import__(name[:-3])
-        loaded.append(name[:-3])
-    return loaded
-
-
 class ExtensionKinds(unittest.TestCase):
     """Whatever the installed extensions registered, through the same dispatch."""
 
     def setUp(self):
         draw.prepare()
         self.theme = look.get(look.DEFAULT)
-        load_extensions()
+        # The app's own walk, so what registers and in what order is what would on the
+        # badge. `load_extensions` swallows a broken module, as it does there.
+        app.load_extensions(APP_DIR)
 
     def test_an_extension_kind_draws_through_the_same_dispatch(self):
         if not pages.EXTRA:

@@ -222,19 +222,27 @@ def badge_constants():
     constants evaluated in order, each seeing the ones above it.
     """
     def constants(module):
-        source = (pathlib.Path(install.app_source_dir()) / module).read_text(encoding="utf-8")
+        # A name for one of the app's modules, or a path for an extension's.
+        where = (pathlib.Path(module) if "/" in module
+                 else pathlib.Path(install.app_source_dir()) / module)
+        source = where.read_text(encoding="utf-8")
         found = {}
         for node in ast.parse(source).body:
             if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                 continue
             target = node.targets[0]
-            if not isinstance(target, ast.Name):
+            names = target.elts if isinstance(target, ast.Tuple) else [target]
+            if not all(isinstance(name, ast.Name) for name in names):
                 continue
             try:
-                found[target.id] = eval(  # noqa: S307  a module in this repo, constants only
+                value = eval(  # noqa: S307  a module in this repo, constants only
                     compile(ast.Expression(node.value), module, "eval"), {}, dict(found))
             except Exception:  # noqa: BLE001  anything needing the firmware is not a constant
                 continue
+            if isinstance(target, ast.Tuple):
+                found.update(zip((name.id for name in names), value, strict=True))
+            else:
+                found[target.id] = value
         return found
     return constants
 
