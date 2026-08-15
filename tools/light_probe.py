@@ -42,7 +42,7 @@ WANTED = ("BACKLIGHT_STEP", "BACKLIGHT_MS", "LIGHT_FOLLOW", "LIGHT_READS",
 
 # The app's own settings, so this cannot drift from what it ships with.
 SETTINGS = {}
-with open("/remote/src/statsbadge/badge_app/__init__.py") as handle:
+with open("/remote/src/statsbadge/badge_app/app.py") as handle:
     for line in handle:
         name, _, rest = line.partition(" = ")
         if name in WANTED:

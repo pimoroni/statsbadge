@@ -15,7 +15,7 @@ import builtins
 import time
 
 # Declared in ci/ruff.toml but not provided here, and why. Everything that draws belongs to
-# the badge test suite; the rest is used only inside `badge_app/__init__.py`, which cannot be
+# the badge test suite; the rest is used only inside `badge_app/app.py`, which cannot be
 # imported on a host at all.
 NOT_FAKED = {
     "screen": "draws",
@@ -54,20 +54,20 @@ NOT_FAKED = {
     "MIDDLE": "unused by this app",
     "BOTTOM": "unused by this app",
     "CLIP": "unused by this app",
-    "LORES": "used only in badge_app/__init__.py",
-    "HIRES": "used only in badge_app/__init__.py",
-    "VSYNC": "used only in badge_app/__init__.py",
-    "FAST_UPDATE": "used only in badge_app/__init__.py",
-    "FULL_UPDATE": "used only in badge_app/__init__.py",
-    "MEDIUM_UPDATE": "used only in badge_app/__init__.py",
-    "NON_BLOCKING": "used only in badge_app/__init__.py",
-    "DITHER": "used only in badge_app/__init__.py",
-    "BUTTON_A": "an object with .irq(), used in __init__.py and setup.py",
-    "BUTTON_B": "an object with .irq(), used in __init__.py and setup.py",
-    "BUTTON_C": "an object with .irq(), used in __init__.py and setup.py",
-    "BUTTON_UP": "an object with .irq(), used in __init__.py and setup.py",
-    "BUTTON_DOWN": "an object with .irq(), used in __init__.py and setup.py",
-    "BUTTON_HOME": "an object with .irq(), used in __init__.py and setup.py",
+    "LORES": "used only in badge_app/app.py",
+    "HIRES": "used only in badge_app/app.py",
+    "VSYNC": "used only in badge_app/app.py",
+    "FAST_UPDATE": "used only in badge_app/app.py",
+    "FULL_UPDATE": "used only in badge_app/app.py",
+    "MEDIUM_UPDATE": "used only in badge_app/app.py",
+    "NON_BLOCKING": "used only in badge_app/app.py",
+    "DITHER": "used only in badge_app/app.py",
+    "BUTTON_A": "an object with .irq(), used in app.py and setup.py",
+    "BUTTON_B": "an object with .irq(), used in app.py and setup.py",
+    "BUTTON_C": "an object with .irq(), used in app.py and setup.py",
+    "BUTTON_UP": "an object with .irq(), used in app.py and setup.py",
+    "BUTTON_DOWN": "an object with .irq(), used in app.py and setup.py",
+    "BUTTON_HOME": "an object with .irq(), used in app.py and setup.py",
 }
 
 

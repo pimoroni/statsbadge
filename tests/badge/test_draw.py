@@ -123,7 +123,7 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
         pages.sweep_reset()
         pages.__dict__.pop("tween", None)
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     assert "pages_module.sweep_reset()" in app[app.index("def turn"):], (
         "a page turn keeps the last page's needle positions")
     assert "pages_module.moving" in app, "nothing asks for a frame while a gauge is moving"
@@ -145,7 +145,7 @@ def test_a_page_can_slide_on_like_a_card(ui):
     for style in layout.SLIDE_STYLES:
         assert f'value="{style}"' in ui.markup, style
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     sliding = app[app.index("def render_sliding"):]
     sliding = sliding[:sliding.index("\n    def ", 1)]
     # A window cannot start at a negative origin, so the direction is a flag and not a sign.
@@ -197,7 +197,7 @@ def test_smooth_graphs_are_a_setting_that_reaches_the_badge(ui):
     assert 'id="smooth"' in ui.markup, "no control in the UI"
     assert "config.smooth" in ui.script, "the control is not bound"
     # The badge applies it where it applies the rest of the layout.
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.SMOOTH" in applied[:applied.index("\n    def ", 1)]
 
@@ -215,7 +215,7 @@ def test_the_big_gauge_can_show_the_whole_ramp(ui):
                             "pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid"
     assert 'id="gaugefill"' in ui.markup, "no control in the UI"
     assert "config.gauge_fill" in ui.script, "the control is not bound"
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.GAUGE_FILL" in applied[:applied.index("\n    def ", 1)]
 
@@ -447,7 +447,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui):
     assert draw.line(0, 0, 470, 30, [5.0], 47.0) is None
 
     # Every page kind that plots a series is in PLOTS, not only the graph pages.
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     refs = app[app.index("    def _plot_refs(self"):]
     refs = refs[:refs.index("\n    def ", 1)]
     assert "pages_module.PLOTS" in refs, "only the graph pages ask for a series"
@@ -506,7 +506,7 @@ def test_sparkline_rows_can_be_told_apart(ui):
         assert f'value="{style}"' in ui.markup, style
 
     # The badge applies it where it applies the rest of the layout.
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     applied = app[app.index("def apply_layout"):]
     assert "draw.ROWS" in applied[:applied.index("\n    def ", 1)]
 

@@ -96,9 +96,9 @@ import badgeware                     # badge, screen, image, tween, the buttons
 import os
 os.chdir("${APP_DIR}")
 
-# What badge_app/__init__.py does at import, which the tests cannot do for themselves:
-# importing it would run main(). Without the mode the screen is LORES and half the size
-# look.py lays out for.
+# What badge_app/app.py does at import, which the tests cannot do for themselves: it
+# imports net, and this port has no socket module. Without the mode the screen is LORES
+# and half the size look.py lays out for.
 badge.mode(HIRES | VSYNC)
 screen.antialias = image.X4
 badge.default_clear = None

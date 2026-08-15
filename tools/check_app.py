@@ -14,6 +14,7 @@ import tomllib
 
 WANTED = (
     "__init__.py",
+    "app.py",
     "icon.png",
     "draw.py",
     "look.py",

@@ -194,7 +194,7 @@ def test_a_file_that_did_not_write_is_not_left_on_the_badge():
 def test_the_installer_and_the_app_name_the_same_extension_directory(badge_constants):
     """The directory the installer writes badge modules into is the one the app adds to
     sys.path."""
-    assert badge_constants("__init__.py")["EXT_DIR"] == install.EXT_DIR, install.EXT_DIR
+    assert badge_constants("app.py")["EXT_DIR"] == install.EXT_DIR, install.EXT_DIR
     # `pages` would be a directory shadowing the app's pages.py on sys.path.
     assert install.EXT_DIR != "pages"
 
@@ -213,7 +213,7 @@ def test_one_writer_owns_the_badge_state_file():
     assert "data = json.load(open(path))" in (
         pathlib.Path("src/statsbadge/install.py").read_text(encoding="utf-8"))
 
-    app = (app_dir / "__init__.py").read_text(encoding="utf-8")
+    app = (app_dir / "app.py").read_text(encoding="utf-8")
     assert "State." not in app, "the app is writing state behind Config's back"
     for owned in ("self.config.page = self.page_index", "self.config.save()"):
         assert owned in app, owned

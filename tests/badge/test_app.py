@@ -10,6 +10,26 @@ import sys
 from statsbadge import install, layout
 
 
+def test_only_the_entry_point_starts_the_app():
+    """app.py starts nothing by being imported; __init__.py is what runs it.
+
+    Read rather than run: importing app.py needs the firmware, and under the WASM runner
+    it needs `socket`, which that port does not carry.
+    """
+    app_dir = pathlib.Path(install.app_source_dir())
+    module = ast.parse((app_dir / "app.py").read_text(encoding="utf-8"))
+    ran = [node for node in module.body
+           if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+           and getattr(node.value.func, "id", "") == "main"]
+    assert not ran, f"app.py runs the app at import, on line {ran[0].lineno if ran else 0}"
+
+    entry = (app_dir / "__init__.py").read_text(encoding="utf-8")
+    assert "app.main(APP_DIR)" in entry, "nothing starts the app"
+    # The launcher reads this off the module it imported, while main() is still blocking.
+    assert entry.index("on_exit = app.on_exit") < entry.index("app.main("), \
+        "HOME would quit without saving the page"
+
+
 def test_setup_waves_through_a_server_already_paired():
     """Setup joins a host this badge already holds credentials for without enrolling
     again."""
@@ -87,7 +107,7 @@ def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
     # Setup's countdown repeats a short scan until its six seconds are up, so the brief
     # ones there add up to the same cover.
     menu = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text(encoding="utf-8")
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     for call in ast.walk(ast.parse(app)):
         if not isinstance(call, ast.Call) or getattr(call.func, "attr", "") != "discover":
             continue
@@ -165,7 +185,7 @@ def test_the_badge_pages_on_its_own_when_left_alone(ui):
     assert ui.bindings.get("idle") == "idle_advance_s", ui.bindings
     assert ui.bindings.get("advance") == "advance_every_s", ui.bindings
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     advance = app[app.index("    def advance_if_idle"):]
     advance = advance[:advance.index("\n    # --", 1)]
     # The timer is left alone here, or the first turn stops the rest.
@@ -190,7 +210,7 @@ def test_a_button_can_do_something_without_the_host():
     actions = dict(layout.LOCAL_ACTIONS)
     assert set(actions) == {"badge.prev", "badge.next", "badge.brightness"}, actions
 
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     press = app[app.index("    def press(self"):]
     press = press[:press.index("\n    def ", 1)]
     assert "LOCAL_PREFIX" in press and "send_command" in press, press
@@ -207,7 +227,7 @@ def test_a_button_can_do_something_without_the_host():
 def test_a_press_waits_for_the_poll_rather_than_losing_to_it():
     """A press is queued and goes out ahead of the next poll, rather than needing an idle
     connection."""
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     send = app[app.index("    def send_command(self"):]
     send = send[:send.index("\n    def ", 1)]
     # Held until the connection frees, so a press outlives a request in flight.
@@ -226,7 +246,7 @@ def test_the_notice_screen_offers_a_way_out():
     menu."""
     # Polls back off to fifteen seconds apart while a host is quiet, which is no use to
     # somebody who has just woken the PC.
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
 
     notice = app[app.index("    def render(self):"):]
     notice = notice[:notice.index("\n    def ", 1)]
@@ -258,7 +278,7 @@ def test_switching_host_forgets_the_old_one_the_same_way():
     # The beacon in hunt(), the hosts menu, and setup reached from the app. Readings,
     # series and revisions are numbered by whoever sent them.
     app_dir = pathlib.Path(install.app_source_dir())
-    app = (app_dir / "__init__.py").read_text(encoding="utf-8")
+    app = (app_dir / "app.py").read_text(encoding="utf-8")
     menu = (app_dir / "setup.py").read_text(encoding="utf-8")
 
     forget = app[app.index("    def forget_host(self):"):]
@@ -279,9 +299,9 @@ def test_switching_host_forgets_the_old_one_the_same_way():
 def test_a_press_that_closes_a_modal_screen_stops_there():
     """A modal screen returns with its button still down, so the press is rolled forward
     before `buttons()` sees it."""
-    app = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
 
-    loop = app[app.index("def main():"):]
+    loop = app[app.index("def main("):]
     menu = loop[loop.index("pairing_ui().hosts_menu(app)"):]
     handled = menu[:menu.index("app.buttons()")]
     assert "badge.poll()" in handled, (

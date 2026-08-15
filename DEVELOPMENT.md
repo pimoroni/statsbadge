@@ -4,7 +4,8 @@ Two halves sharing one small contract. The host picks *what* to show and the bad
 
 | File | What is in it |
 | ---- | ------------- |
-| [`badge_app/__init__.py`](src/statsbadge/badge_app/__init__.py) | the app: paging, buttons, the poll loop, exit |
+| [`badge_app/__init__.py`](src/statsbadge/badge_app/__init__.py) | the entry point the launcher imports, which runs the app |
+| [`badge_app/app.py`](src/statsbadge/badge_app/app.py) | the app: paging, buttons, the poll loop, exit |
 | [`badge_app/net.py`](src/statsbadge/badge_app/net.py) | the HTTP client, request signing, discovery, pairing |
 | [`badge_app/draw.py`](src/statsbadge/badge_app/draw.py) | every widget, the text cache, the band cache |
 | [`badge_app/pages.py`](src/statsbadge/badge_app/pages.py) | a page descriptor to a drawn page |
@@ -167,7 +168,7 @@ accent chosen, and a special case cannot be written into a data file.
 
 ## The heap, the panel and the light sensor
 
-Measured on the board. The constants they settle live in `badge_app/__init__.py`.
+Measured on the board. The constants they settle live in `badge_app/app.py`.
 
 Left alone the collector runs only when an allocation fails, which on 8MB of PSRAM lets megabytes pile up and leaves the free list in pieces: 71KB largest contiguous run with 7MB free, from `tools/mem_probe.py`. A collect is 3.9ms. `GC_THRESHOLD` covers an animated page, where a frame allocates up to 15KB and a collect every seventeen frames amortises to 0.23ms. `COLLECT_EVERY_MS` sweeps a resting page, where the pause costs nothing.
 

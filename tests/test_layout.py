@@ -411,7 +411,7 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
                      "rpm": "2200rpm", "kwh": "0.2kWh"}, shown
 
     # The app takes them where it takes the group names.
-    app = pathlib.Path(install.app_source_dir(), "__init__.py").read_text(encoding="utf-8")
+    app = pathlib.Path(install.app_source_dir(), "app.py").read_text(encoding="utf-8")
     assert 'draw.use_units(self.setting("units"))' in app
 
 

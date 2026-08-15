@@ -216,7 +216,7 @@ def ui(web_dir):
 def badge_constants():
     """Read a badge module's module-level constants without importing it.
 
-    Several of these have to agree with a host-side figure, and `badge_app/__init__.py`
+    Several of these have to agree with a host-side figure, and `badge_app/app.py`
     cannot be imported on a host at all. Matching the assignment as text breaks on a
     comment or a reflow and says nothing about the value, so the source is parsed and the
     constants evaluated in order, each seeing the ones above it.

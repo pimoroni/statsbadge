@@ -120,9 +120,9 @@ class PageKinds(unittest.TestCase):
 def load_extensions():
     """Import the staged extension modules, the way the app does at startup.
 
-    The app's own walk is in `badge_app/__init__.py`, which calls main() at module scope
-    and cannot be imported. Sorted and skipping underscored names, as that one is, so the
-    registration order matches the badge.
+    The app's walk is `app.load_extensions`, which cannot be reached here: importing
+    app.py imports net, and this port has no socket module. Sorted and skipping
+    underscored names, as that one is, so the registration order matches the badge.
     """
     import os
     loaded = []

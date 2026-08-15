@@ -314,7 +314,7 @@ def test_a_re_tinted_theme_is_a_different_theme_to_a_cache():
     # Every cache that holds something baked in a theme's colours keys on that.
     app = pathlib.Path(install.app_source_dir())
     clock = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge/clockface.py")
-    for source in [app / "draw.py", app / "worldmap.py", app / "__init__.py", clock]:
+    for source in [app / "draw.py", app / "worldmap.py", app / "app.py", clock]:
         body = source.read_text(encoding="utf-8")
         assert "theme.name" not in body, f"{source.name} still keys a cache on the name"
 
@@ -335,7 +335,7 @@ def test_the_case_lights_follow_the_backlight():
     assert not hasattr(look.THEMES[look.DEFAULT], "case")
     assert look.from_palette("d", {**_palette_of("dark"), "case": 0.9}).__dict__.get("case") is None
 
-    source = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(encoding="utf-8")
+    source = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     bodies = {node.name: node for node in ast.walk(tree)
               if isinstance(node, ast.FunctionDef)}
