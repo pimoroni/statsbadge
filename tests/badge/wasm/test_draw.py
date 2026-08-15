@@ -4,7 +4,7 @@ import unittest
 
 import draw
 import look
-from pixels import body_pixels, differing
+from pixels import body_pixels, chrome_pixels, differing
 
 EXT_DIR = "/system/apps/stats/ext"
 
@@ -108,6 +108,47 @@ class Flowing(unittest.TestCase):
         below = 20 * (look.W // 4) * 3
         self.assertEqual(long[below:], blank[below:],
                          "the message ran past the bottom of its block")
+
+
+class Chrome(unittest.TestCase):
+    """The title rule and the current pip take the second accent, which leaves the first
+    for what a reading is drawn in."""
+
+    def setUp(self):
+        draw.prepare()
+
+    def chrome(self, accent_b):
+        palette = {"bg": (16, 16, 20), "panel": (28, 28, 34), "ink": (235, 235, 240),
+                   "dim": (130, 130, 140), "grid": (60, 60, 70), "accent": (0, 200, 120),
+                   "accent_b": accent_b,
+                   "ramp": [(0.0, (60, 160, 220)), (1.0, (220, 70, 60))]}
+        draw.background(look.from_palette("t", palette), "CPU", 1, 4, None)
+        return chrome_pixels()
+
+    def test_the_title_rule_moves_with_the_second_accent(self):
+        # chrome_pixels samples the rows above the band first, then the ones below, so
+        # the header and the footer can be told apart.
+        above = (look.BODY_TOP // 2) * (look.W // 4) * 3
+        one, other = self.chrome((255, 0, 0)), self.chrome((0, 0, 255))
+        self.assertNotEqual(one[:above], other[:above],
+                            "the title rule is drawn in the first accent")
+
+    def test_the_current_pip_moves_with_the_second_accent(self):
+        above = (look.BODY_TOP // 2) * (look.W // 4) * 3
+        one, other = self.chrome((255, 0, 0)), self.chrome((0, 0, 255))
+        self.assertNotEqual(one[above:], other[above:],
+                            "the current pip is drawn in the first accent")
+
+    def test_a_palette_with_one_accent_still_draws_it(self):
+        """A palette naming no second gets the accent again, and the chrome is the same
+        either way."""
+        one = look.from_palette("t", {
+            "bg": (16, 16, 20), "panel": (28, 28, 34), "ink": (235, 235, 240),
+            "dim": (130, 130, 140), "grid": (60, 60, 70), "accent": (0, 200, 120),
+            "ramp": [(0.0, (60, 160, 220)), (1.0, (220, 70, 60))]})
+        self.assertEqual(one.accent_b, one.accent)
+        draw.background(one, "CPU", 1, 4, None)
+        self.assertEqual(chrome_pixels(), self.chrome((0, 200, 120)))
 
 
 class Gauges(unittest.TestCase):

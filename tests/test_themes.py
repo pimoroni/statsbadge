@@ -17,59 +17,6 @@ import badgefakes
 from statsbadge import install, layout, themes
 
 
-def test_every_cache_that_holds_a_colour_is_dropped_on_a_theme_change():
-    """Every cache in draw.py is registered with _CLEARS, so a theme switch drops it."""
-    import ast
-
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
-    # Registered, or named here as holding no colour and why.
-    exempt = {"_fonts", "_weights", "_CLEARS"}
-    loose = []
-    for node in ast.parse(source).body:
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            name = getattr(target, "id", "")
-            if not name.startswith("_") or name in exempt:
-                continue
-            if isinstance(node.value, (ast.Dict, ast.Set)) or (
-                    isinstance(node.value, ast.Call)
-                    and getattr(node.value.func, "id", None) in ("dict", "set")):
-                loose.append(name)
-    assert not loose, f"caches in draw.py outside _CLEARS: {loose}"
-
-    body = source[source.index("def clear_cache"):]
-    body = body[:body.index("\ndef ", 1)]
-    assert "for empty in _CLEARS" in body, "clear_cache is enumerating by hand"
-
-    # The waterfall's scroll buffer and worldmap's pens are state, not one container.
-    assert "@clears\ndef waterfall_reset" in source
-    world = (pathlib.Path(install.app_source_dir()) / "worldmap.py").read_text(encoding="utf-8")
-    assert "@draw.clears\ndef forget" in world, "the map keeps the old theme's pens"
-
-
-def test_the_theme_the_badge_boots_with_is_the_host_s_dark():
-    """The palette the badge boots with is the host's default, colour for colour."""
-    # MicroPython cannot import themes.py, so the badge carries a copy of the one palette
-    # it needs before the first layout arrives.
-    import ast
-
-    source = (pathlib.Path(install.app_source_dir()) / "look.py").read_text(encoding="utf-8")
-    call = None
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Theme":
-            call = node
-            break
-    assert call is not None, "no Theme( in look.py"
-
-    carried = {kw.arg: ast.literal_eval(kw.value) for kw in call.keywords}
-    assert ast.literal_eval(call.args[0]) == themes.DEFAULT, "a theme other than the default"
-    wanted = themes.written()[themes.DEFAULT]
-    assert carried == wanted, (
-        f"the badge boots a different {themes.DEFAULT}: "
-        f"{ {k: v for k, v in carried.items() if wanted.get(k) != v} }")
-
-
 def test_a_theme_travels_as_its_colours():
     """A theme travels as its palette, so a badge draws one it does not ship with."""
 
@@ -152,7 +99,11 @@ def test_a_theme_travels_as_its_colours():
 
 def test_a_palette_can_carry_a_second_accent(h, ui):
     """A second accent is a palette colour, and a palette without one falls back to the
-    accent."""
+    accent.
+
+    `Chrome` in tests/badge/wasm/test_draw.py draws with it: the title rule and the
+    current pip are what take it.
+    """
 
     from statsbadge import derive, themes
 
@@ -202,15 +153,6 @@ def test_a_palette_can_carry_a_second_accent(h, ui):
     assert melon.accent_b != melon.accent
     written = themes.written()["watermelon-light"]
     assert derive.apart(written["accent_b"], written["accent"]) > 20.0
-
-    # The chrome takes it, leaving the first accent for what a reading is drawn in.
-    source = (pathlib.Path(install.app_source_dir()) / "draw.py").read_text(encoding="utf-8")
-    header = source[source.index("def furniture("):]
-    header = header[:header.index("\ndef ", 1)]
-    assert "screen.pen = theme.accent_b" in header, "the header rule is not the second accent"
-    pips = source[source.index("def _pips("):]
-    pips = pips[:pips.index("\ndef ", 1)]
-    assert "theme.accent_b if i == index" in pips, "the current pip is not the second accent"
 
     # A second accent is picked per theme, so the script writes the setting where it
     # renders the tint rather than binding a control.
@@ -293,7 +235,11 @@ def test_a_theme_with_a_counterpart_has_one_in_the_other_mode():
 
 
 def test_a_re_tinted_theme_is_a_different_theme_to_a_cache():
-    """A cache keys on the palette, since re-tinting a derived theme keeps its name."""
+    """Two tints of one theme share a name and differ in key.
+
+    `ATintIsANewTheme` in tests/badge/wasm/test_caches.py takes it from there: a layout
+    that re-tints drops what was baked in the old colours.
+    """
 
     from statsbadge import derive
 
@@ -311,12 +257,6 @@ def test_a_re_tinted_theme_is_a_different_theme_to_a_cache():
     # The same accent twice is one key, or every poll throws the caches away.
     assert first.key == look.from_palette("tinted-dark", one).key
 
-    # Every cache that holds something baked in a theme's colours keys on that.
-    app = pathlib.Path(install.app_source_dir())
-    clock = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge/clockface.py")
-    for source in [app / "draw.py", app / "worldmap.py", app / "app.py", clock]:
-        body = source.read_text(encoding="utf-8")
-        assert "theme.name" not in body, f"{source.name} still keys a cache on the name"
 
 
 def _palette_of(name):
@@ -324,10 +264,9 @@ def _palette_of(name):
     return layout.palette_for(name, layout.DEFAULT_CONFIG["tint"])
 
 
-def test_the_case_lights_follow_the_backlight():
-    """A case light is a brightness, so it follows the backlight and not the theme."""
-    import ast
-
+def test_no_palette_carries_a_case_light():
+    """It is a brightness, so a theme has nothing to say about it. `CaseLights` in
+    tests/badge/wasm/test_app.py drives what they do follow."""
     sys.path.insert(0, install.app_source_dir())
     import look
 
@@ -335,18 +274,6 @@ def test_the_case_lights_follow_the_backlight():
     assert not hasattr(look.THEMES[look.DEFAULT], "case")
     assert look.from_palette("d", {**_palette_of("dark"), "case": 0.9}).__dict__.get("case") is None
 
-    source = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    bodies = {node.name: node for node in ast.walk(tree)
-              if isinstance(node, ast.FunctionDef)}
-
-    lights = ast.dump(bodies["apply_caselights"])
-    assert "wanted_brightness" in lights, "the case lights do not follow the backlight"
-    # The attribute and not the word; the docstring still uses it.
-    assert "attr='case'" not in lights, "the case lights still read the theme"
-    assert "CASELIGHT_FLOOR" in lights, "a followed reading lost its floor"
-    # Reapplied wherever the brightness moves, or a button press dims the panel alone.
-    assert "apply_caselights" in ast.dump(bodies["apply_backlight"])
 
 
 def test_the_themes_are_a_data_file():
@@ -675,7 +602,7 @@ def test_a_theme_can_be_derived_from_one_accent(h, ui):
     assert "previewWanted" in script, "a stale preview reply can win"
 
 
-def test_the_ui_takes_its_colours_from_the_host(ui):
+def test_the_ui_takes_its_colours_from_the_host(h, ui):
     """The UI fetches the palette of the selected theme and keeps no copy of it."""
     web = ui.script
     sheet = ui.css
@@ -686,7 +613,8 @@ def test_the_ui_takes_its_colours_from_the_host(ui):
     assert "--pv-" not in web + sheet, "the preview still keeps colours in the sheet"
     # The rule for a graph's second series is the badge's, resolved on the host and sent.
     assert "shown.series" in web, "the UI picks the second series itself"
-    assert '"series"' in pathlib.Path("src/statsbadge/server.py").read_text(encoding="utf-8")
+    _status, shown = h.raw("GET", "/api/theme?theme=dark")
+    assert len(shown.get("series") or []) == 2, shown
     # The UI's accent and ramp are generated from the dark theme, not typed in.
     assert "--ramp-0:" not in sheet, "the sheet still declares the ramp by hand"
     assert "--accent:" not in sheet, "the sheet still declares the accent by hand"

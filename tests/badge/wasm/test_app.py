@@ -403,6 +403,62 @@ class Rendering(unittest.TestCase):
                         "the second page never reached the screen")
 
 
+class CaseLights(unittest.TestCase):
+    """Four lights beside the screen, which are a brightness and not a colour."""
+
+    def setUp(self):
+        self.asked = []
+        real, asked = badge, self.asked  # noqa: F821  the firmware's, shadowed below
+
+        class Watched:
+            """The badge, with what the lights are asked for written down."""
+
+            def __getattr__(self, name):
+                return getattr(real, name)
+
+            def caselights(self, level):
+                asked.append(level)
+
+        app.badge = Watched()
+
+    def tearDown(self):
+        del app.badge       # back to the builtin
+
+    def test_the_setting_off_is_dark(self):
+        built(caselights=False).apply_caselights()
+        self.assertEqual(self.asked, [0.0])
+
+    def test_they_follow_the_backlight(self):
+        """A dark room dims the screen; lights left burning are the wrong way round."""
+        one = built(caselights=True, brightness=0.6)
+        one.apply_caselights()
+        self.assertAlmostEqual(self.asked[-1], one.wanted_brightness())
+
+    def test_a_reading_moves_them_between_the_floor_and_that(self):
+        one = built(caselights="cpu.pct", brightness=1.0)
+        one.frame = {"cpu": {"pct": 100.0}}
+        one.apply_caselights()
+        self.assertAlmostEqual(self.asked[-1], 1.0)
+        one.frame = {"cpu": {"pct": 0.0}}
+        one.apply_caselights()
+        self.assertAlmostEqual(self.asked[-1], app.CASELIGHT_FLOOR)
+
+    def test_a_field_the_host_stopped_sending_sits_at_the_floor(self):
+        one = built(caselights="cpu.pct", brightness=1.0)
+        one.frame = {}
+        one.apply_caselights()
+        self.assertAlmostEqual(self.asked[-1], app.CASELIGHT_FLOOR)
+
+    def test_the_brightness_button_takes_them_with_it(self):
+        """Reapplied wherever the panel moves, or a press dims the screen alone."""
+        one = built(caselights=True, brightness=1.0)
+        one.apply_backlight()
+        first = self.asked[-1]
+        one.dimmed = 0.3
+        one.apply_backlight()
+        self.assertTrue(self.asked[-1] < first, self.asked)
+
+
 class Slides(unittest.TestCase):
     def test_a_page_turn_with_the_setting_off_starts_no_slide(self):
         one = built(slide="off")
