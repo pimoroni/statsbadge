@@ -123,8 +123,6 @@ class Config:
         self._flushed = 0
         self.load()
 
-    # -- persistence --------------------------------------------------------
-
     def load(self):
         try:
             with open(STATE_FILE) as handle:
@@ -190,8 +188,6 @@ class Config:
         except OSError:
             return False
 
-    # -- the host in use ----------------------------------------------------
-
     @property
     def entry(self):
         return self.hosts.get(self.active) or {}
@@ -231,8 +227,6 @@ class Config:
         if value - self._flushed >= self.SEQ_FLUSH:
             self.save()
         return value
-
-    # -- adding and switching -----------------------------------------------
 
     def remember(self, server_id, host, port, secret, name=None, seq=0):
         """Store credentials for a host and make it the active one."""
@@ -302,8 +296,6 @@ class Client:
         self._started = 0
         self._buf = bytearray(2048)
 
-    # -- connection ---------------------------------------------------------
-
     def close(self):
         if self.sock is not None:
             try:
@@ -346,8 +338,6 @@ class Client:
                     raise OSError(ECONNABORTED)
                 if flags & select.POLLOUT:
                     return
-
-    # -- requests -----------------------------------------------------------
 
     def get(self, path):
         self._begin("GET", path, None)

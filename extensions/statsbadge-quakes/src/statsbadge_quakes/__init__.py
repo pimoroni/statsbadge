@@ -1,12 +1,11 @@
 """Recent earthquakes, for the badge to draw on a world map.
 
-The map is the firmware's. `/system/assets/world.geo.json` ships with badgeware, so no
-geometry travels: the events go in the frame with their coordinates. Data is the USGS feed,
-which needs no key and no account.
+`/system/assets/world.geo.json` ships with badgeware, so no geometry travels: the events go
+in the frame with their coordinates. Data is the USGS feed, which needs no key and no
+account.
 
-The events are a list, which no built-in page kind can draw, so this ships a page of its
-own in `badge/quakemap.py`. The scalars beside them suit anything drawing a number, and
-`quakes.biggest` in a text page gives the largest of the set.
+The events are a list, which no built-in page kind can draw, so this ships
+`badge/quakemap.py`. The scalars beside them suit anything drawing a number.
 """
 
 import json
@@ -22,23 +21,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 FEED = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
-# How often the feed is asked. USGS publishes about once a minute and asks callers to be
-# reasonable; the map holds on each event for seconds, so nothing here is waiting on it.
+# USGS publishes about once a minute and asks callers to be reasonable.
 INTERVAL = 300.0
-# A failure waits this long rather than the whole interval, a connection dropping on a
-# laptop being over in seconds, and rather than never.
 RETRY_AFTER = 60.0
-# How often the fetcher looks for something due.
+# How often the fetch thread wakes to check timers.
 FETCH_POLL = 1.0
-# The last good set, kept so a badge switched on before the network is up has something to
-# draw.
+# Store key: a badge switched on before the network is up still has events to draw.
 EVENTS = "events"
-# What the badge is given to draw. USGS place strings run past eighty characters and the band
-# they are drawn in holds about forty, so the rest is neither useful nor worth sending every
-# second.
+# USGS place strings run past eighty characters; the band they are drawn in holds about forty.
 PLACE_MAX = 48
 
-# What the setting is called against what the feed calls it.
+# Setting name to the feed's `orderby` value.
 ORDERS = {"recent": "time", "biggest": "magnitude"}
 
 
@@ -47,11 +40,10 @@ class Quakes(Source):
     label = "Earthquakes"
     provides = ("quakes",)
 
-    # The scalars, for a page drawing a number and not a map. `events` is left out: it is
-    # the list the map draws from, and offering it as a field would put a row of Python in
-    # a text page.
+    # `events` is left out: it is the list the map draws from, and offering it as a field
+    # would put a row of Python in a text page.
     #
-    # Declared slow, the feed being asked every five minutes where the badge polls every
+    # Declared slow: the feed is polled every five minutes where the badge polls every
     # second. That works because `age_s` below is drawn to the minute.
     groups = {"quakes": {"label": "Earthquakes", "slow": True, "fields": {
         "biggest": {"label": "Largest magnitude", "full_scale": 9.0},
@@ -73,7 +65,7 @@ class Quakes(Source):
          "hint": "Recent is the last few hours, biggest is the largest of the past month"},
     )
 
-    # No field slots. `quakemap` draws from the `quakes` group and ignores `fields`.
+    # `quakemap` draws from the `quakes` group and ignores `fields`.
     badge_page = {
         "kind": "quakemap",
         "title": "Quakes",
@@ -93,8 +85,6 @@ class Quakes(Source):
 
     def __init__(self, config):
         super().__init__(config)
-        # What the fetcher last brought back, read while sampling and replaced on the
-        # fetcher's thread, so both go through the lock.
         self._records = []
         self._lock = threading.Lock()
         self._next = 0.0
@@ -124,8 +114,7 @@ class Quakes(Source):
             try:
                 self._refresh()
             except Exception as exc:
-                # The fetcher must not die, or the map would go on drawing the same set
-                # with nothing ever replacing it.
+                # The fetcher must not die: the map would continue drawing the same set.
                 self.note_fault(exc)
             self._wake.wait(FETCH_POLL)
             self._wake.clear()
@@ -145,39 +134,28 @@ class Quakes(Source):
             self.order = "recent"
 
     def configure(self, settings):
-        """Take settings while running, and fetch again rather than waiting out the interval.
-
-        A magnitude typed in the browser changes which events are in the set, so it should
-        show up on the badge and not in five minutes.
-        """
+        """Take settings while running. Zeroing the timer refetches, since a magnitude
+        changes which events are in the set."""
         super().configure(settings)
         self._read_settings()
         self._next = 0.0
         self._wake.set()
 
     def sample(self, frame, dt):
-        """The events the fetcher has brought back, aged and sorted."""
+        """The events last stored by the fetcher, aged and sorted."""
         with self._lock:
             records = list(self._records)
-        # Aged against the minute just gone rather than against this instant. The badge
-        # never draws an age finer than a minute, and this group is declared slow, so what
-        # matters is how often the set *changes*.
-        #
-        # Rounding each age to its own minute moves the revision ten times a minute.
-        # Moving the clock moves all of them together, once.
+        # Aged against the minute just gone: rounding each age to its own minute bumps
+        # slow_rev ten times a minute, where moving the clock moves all of them together.
         now = int(time.time()) // 60 * 60
         events = []
         for record in records:
-            # The age is what the badge draws and the timestamp is only what it is worked
-            # out from, so the timestamp stays here.
             event = dict(record)
             event["age_s"] = max(0, now - event.pop("at"))
             events.append(event)
         frame["quakes"] = {
             "events": events,
             "count": len(events),
-            # One number out of the set, for a dial or a text page to read without
-            # knowing what an event looks like.
             "biggest": max((event["mag"] for event in events), default=None),
             "latest": events[0]["mag"] if events else None,
         }
@@ -193,8 +171,6 @@ class Quakes(Source):
             return
         with self._lock:
             self._records = records
-        # Kept for the next launch, not as a cache for this one: the badge should have
-        # something to draw before the first fetch lands.
         self.store.set(EVENTS, records)
         self._next = time.monotonic() + INTERVAL
         self.note_ok()
@@ -217,10 +193,9 @@ class Quakes(Source):
 
 
 def _event(feature):
-    """One feature in the shape the badge draws, or None where it has no place or size.
+    """One feature in the shape the badge draws, or None without a magnitude and coordinates.
 
-    An event with no magnitude or no coordinates cannot be drawn on a map or measured, and
-    the feed returns both. A magnitude is null while it is still being reviewed.
+    The feed returns a null magnitude while an event is still being reviewed.
     """
     properties = feature.get("properties") or {}
     coordinates = (feature.get("geometry") or {}).get("coordinates") or ()
@@ -234,6 +209,6 @@ def _event(feature):
         "lat": round(float(coordinates[1]), 3),
         # Kilometres, and negative for the handful of events placed above sea level.
         "depth": round(float(coordinates[2]), 1) if len(coordinates) > 2 else None,
-        # Seconds, since the feed reports milliseconds and the age is worked out per sample.
+        # The feed reports milliseconds.
         "at": int(properties.get("time", 0)) // 1000,
     }

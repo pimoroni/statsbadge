@@ -57,8 +57,6 @@ class TrayApp:
         self._announced = set()
         self._stop = threading.Event()
 
-    # -- what the menu shows ------------------------------------------------
-
     def refresh(self):
         self.status = self.stack.status()
         self.at_login = autostart.enabled()
@@ -131,8 +129,6 @@ class TrayApp:
             Item("Deny", lambda request=entry["request_id"]: self.deny(request)),
         ])
 
-    # -- what the menu does -------------------------------------------------
-
     def open_ui(self):
         webbrowser.open(f"http://127.0.0.1:{self.status['port']}/")
 
@@ -172,8 +168,6 @@ class TrayApp:
         self._stop.set()
         if self.tray:
             self.tray.stop()
-
-    # -- keeping it current -------------------------------------------------
 
     def wake(self):
         """Redraw now, rather than at the end of the next poll."""

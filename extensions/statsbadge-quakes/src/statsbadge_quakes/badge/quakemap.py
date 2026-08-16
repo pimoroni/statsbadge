@@ -1,14 +1,10 @@
-"""The badge side of the quakes extension: a world map with the last few on it.
+"""The badge side of the quakes extension: a world map showing recent notable quakes.
 
 Installed into the app's `ext/` directory by `statsbadge install` and imported by the app,
 at which point it registers itself.
 
-The map itself is the app's `worldmap`. The firmware ships the coastlines and two pages draw
-them, so the shapes and their pens live there and this draws what goes on top.
-
-Code and not a picture over the wire, because the map travels. It closes in on the event it
-is naming and pulls back out to cross an ocean, at the badge's frame rate, off a list that
-arrives once every five minutes.
+The coastlines and their pens are the app's `worldmap`. This draws an epicentre per event,
+reticle rings over the one the camera is on, and the band naming it.
 """
 
 import math
@@ -19,48 +15,42 @@ import look
 import pages
 import worldmap
 
-# The map takes the page's band less a strip at the bottom that names what it is pointing at.
-# The header and footer stay where every other page has them.
 BAND_H = 34
 MAP_TOP = look.BODY_TOP
 MAP_H = look.BODY_H - BAND_H
 BAND_TOP = MAP_TOP + MAP_H
 
-# Pixels per degree, close in and pulled out. The camera closes in when the next event is
-# nearby and pulls out when it is across the planet, and the travel between two says how far
-# apart they are.
+# Pixels per degree at the closest and furthest zoom.
 SCALE_NEAR = 1.9
 SCALE_FAR = 1.05
-# Degrees of separation the change is centred on, and how sharply it happens there.
+# _travel sets the zoom on a logistic curve against the degrees to the next event: KNEE is
+# the distance where the zoom lands midway between the two scales, RATE how steep it is.
 SCALE_KNEE = 10.0
 SCALE_RATE = 0.4
 # The camera's time constant in ms.
 EASE_MS = 420
 
-# The magnitudes the ramp is stretched over. Under 3 is not in the feed at all, and over 7
-# there is no ramp left to say it with.
+# The magnitude range _mag_fraction normalises over, for the colour ramp and the dot and
+# ring sizes. Clamped, so anything outside lands on an end.
 MAG_LOW = 3.0
 MAG_HIGH = 7.0
 
-# The reticle: rings a third of a turn apart, each fading as it grows.
+# Rings are offset by RING_MS / RINGS, so they leave one after another.
 RING_MS = 2000
 RINGS = 3
-# How far one reaches, from the low magnitude to the high, in pixels. A marker and not the
-# ground that shook: a magnitude 5 is strongly felt for some 60km, half a pixel here.
+# How far one reaches, from the low magnitude to the high, in pixels. Sized as a marker: a
+# magnitude 5 is strongly felt for some 60km, half a pixel here.
 RING_PX_LOW = 3.0
 RING_PX_HIGH = 8.0
-# Below this a ring is a blob on top of the epicentre rather than a ring around it.
+# Below this a ring is a blob on top of the epicentre.
 RING_MIN_PX = 1.0
 
-# The epicentre, from the low magnitude to the high. The same size wherever it is drawn, so
-# the active event and the rest of the feed can be compared.
+# The epicentre, from the low magnitude to the high.
 DOT_PX_LOW = 1.0
 DOT_PX_HIGH = 2.5
-# How much the active one breathes, which marks it as something happening.
 DOT_PULSE_PX = 0.5
 
-# Where each page is looking and which event it is on, keyed by page id: two map pages hold
-# their own places rather than fighting over one.
+# Keyed by page id, so two map pages hold separate places.
 _state = {}
 
 
@@ -80,8 +70,6 @@ def _page_state(page):
     state = _state.get(key)
     if state is None:
         now = time.ticks_ms()
-        # Opens on the whole world with nothing selected, which is where it sits until the
-        # first list arrives.
         state = _state[key] = {
             "index": 0, "held": now, "drawn": now,
             "view": worldmap.View(MAP_TOP, MAP_H, lon=0.0, lat=15.0, scale=SCALE_FAR),
@@ -100,7 +88,7 @@ def _travel(view, active, elapsed):
 
 
 def _others(theme, view, events, active):
-    """The rest of the set, sized by magnitude: what else has happened, and where."""
+    """The rest of the set, sized by magnitude."""
     was = screen.clip
     screen.clip = view.box
     screen.pen = theme.dim
@@ -115,12 +103,12 @@ def _others(theme, view, events, active):
 
 
 def _reticle(theme, view, event):
-    """Rings leaving the epicentre, in the magnitude's own colour off the ramp."""
+    """Rings leaving the epicentre, coloured by magnitude off the theme's colour ramp."""
     x, y = view.at(event["lon"], event["lat"])
     pen = theme.at(_mag_fraction(event["mag"]))
     now = time.ticks_ms()
     reach = RING_PX_LOW + (RING_PX_HIGH - RING_PX_LOW) * _mag_fraction(event["mag"])
-    # One pixel: a ring eight across takes a hairline, where three would be a disc.
+    # A ring eight across takes a hairline, where three would be a disc.
     width = 1
     was = screen.clip
     screen.clip = view.box
@@ -132,8 +120,6 @@ def _reticle(theme, view, event):
         # Squared, so a ring is bright where it leaves and gone well before the edge.
         screen.pen = pen.with_alpha(int((1.0 - progress) ** 2 * 255))
         screen.shape(shape.circle(vec2(x, y), radius).stroke(width))
-    # The epicentre pulses, which marks it as something happening and not a printed dot. The
-    # same size as it has in the rest of the feed, give or take the breath.
     dot = _dot_px(event["mag"]) + DOT_PULSE_PX * math.sin(now / 1000.0 * math.pi * 2.0)
     screen.pen = pen
     screen.shape(shape.circle(vec2(x, y), dot + 1.0))
@@ -146,11 +132,10 @@ def _band(theme, event, index, total, note="waiting for the feed"):
     """The strip under the map: how big, where, how deep and how long ago."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
-    # A hairline in the chrome colour, marking the band off from the map above it.
+    # Use the header's underline accent colour to make the band look like UI.
     screen.pen = theme.accent_b
     screen.rectangle(rect(0, BAND_TOP, look.W, 1))
     if event is None:
-        # Nothing to say where the map itself is carrying the message.
         if note:
             draw.blit_label(note, look.SIZE_VALUE, theme.dim, look.PAD, BAND_TOP + 9)
         return
@@ -195,8 +180,6 @@ def render(page, frame, _history, theme):
     elapsed = time.ticks_diff(now, state["drawn"])
     state["drawn"] = now
 
-    # No interaction. The page moves on unprompted, and a button on a map suggests panning
-    # and zooming, not a step to the next event.
     hold = max(1.0, float((page or {}).get("hold") or 6))
     if events and time.ticks_diff(now, state["held"]) > int(hold * 1000.0):
         state["index"] += 1
@@ -204,8 +187,8 @@ def render(page, frame, _history, theme):
 
     active = None
     if events:
-        # Taken modulo the set each frame, so a list that came back shorter cannot leave the
-        # page pointing past the end of it.
+        # Modulo the set each frame, so a list that came back shorter cannot leave the page
+        # pointing past the end of it.
         state["index"] %= len(events)
         active = events[state["index"]]
         _travel(view, active, elapsed)
@@ -218,6 +201,5 @@ def render(page, frame, _history, theme):
 
 
 pages.EXTRA["quakemap"] = render
-# The rings grow and the camera travels between readings, so this page takes every frame
-# it can have.
+# Register as an animated page: the rings grow and the camera travels between readings.
 pages.ANIMATED.add("quakemap")

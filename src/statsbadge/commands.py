@@ -33,8 +33,6 @@ def _osascript(script):
     return _run(["osascript", "-e", script])
 
 
-# -- volume -----------------------------------------------------------------
-
 def _volume_delta(step):
     if _SYSTEM == "Darwin":
         current = int(_osascript("output volume of (get volume settings)"))
@@ -77,8 +75,6 @@ def mute():
         raise CommandError("no pactl")
     raise CommandError("unsupported platform")
 
-
-# -- media ------------------------------------------------------------------
 
 # MediaRemote's MRCommand numbers. Private, so they come from the framework's order and
 # not from anything documented: next is 4 and previous is 5, that way round.
@@ -140,8 +136,6 @@ def previous_track():
 def next_track():
     return _media("next_track")
 
-
-# -- session ----------------------------------------------------------------
 
 def lock():
     if _SYSTEM == "Darwin":

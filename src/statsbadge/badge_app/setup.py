@@ -147,8 +147,6 @@ def run(app):
             return False          # backed out, and nowhere else to try
 
 
-# -- steps ------------------------------------------------------------------
-
 def _find_hosts(app):
     """Listen for beacons, with a visible countdown."""
     draw.banner(app.theme, "Looking", "for a host on the network",

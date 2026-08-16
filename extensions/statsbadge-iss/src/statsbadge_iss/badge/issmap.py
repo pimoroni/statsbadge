@@ -3,13 +3,9 @@
 Installed into the app's `ext/` directory by `statsbadge install` and imported by the app,
 at which point it registers itself.
 
-The map and the day and night wash are `worldmap`, which is the app's. What is here is the
-station: an orbit of ground track with the flown half drawn behind it, a marker that says
-whether it is in sunlight, and the readouts under the map.
-
-Code and not a picture over the wire. The station moves 0.066 degrees a second and the
-terminator a quarter of a degree a minute, so both are carried forward from a reading that
-arrives every five seconds. A picture would cost a fetch a frame.
+The map and the day and night wash are the app's `worldmap`. This draws the station: an
+orbit of ground track with the flown half behind it, a marker saying whether it is in
+sunlight, and the readouts under the map.
 """
 
 from array import array
@@ -19,46 +15,35 @@ import look
 import pages
 import worldmap
 
-# The map takes the page's band less a strip that says where the station is. The header and
-# footer stay where every other page has them.
 BAND_H = 34
 MAP_TOP = look.BODY_TOP
 MAP_H = look.BODY_H - BAND_H
 BAND_TOP = MAP_TOP + MAP_H
 
-# Pixels per degree. The whole world is 360 degrees across 320 pixels, and the poles go past
-# the band either way: the station never leaves 51.6 degrees, so what is cropped is ice.
+# 360 degrees across 320 pixels. The poles fall outside the band, cropping off the polar
+# ice caps; the station never leaves 51.6 degrees.
 SCALE_WORLD = look.W / 360.0
-# Closed in, for the camera that travels with it.
 SCALE_FOLLOW = 1.6
 
-# How wide the track is drawn, flown and still to come.
 TRACK_W = 1.6
-# How many points the curve is drawn with between each pair the host sent. Five minutes of
-# orbit is twenty degrees of longitude, so four is a chord of five: past the point where a
-# curve reads as one.
+# Points drawn between each pair the host sent. Five minutes of orbit is twenty degrees of
+# longitude, so four is a chord of five.
 TRACK_STEPS = 4
-# What is left of the flown half, against the accent the part ahead is drawn in. It has been
-# and gone, and it gives the marker somewhere to have come from.
+# Alpha for the part already flown.
 FLOWN_ALPHA = 96
-# What the part in shadow keeps, letting the track say where the station is in daylight and the
-# terminator says why.
+# Alpha for the part in shadow.
 DARK_ALPHA = 110
 
-# The marker: a body and two solar panels, in degrees of arc so it holds its size on screen
-# whatever the zoom. Drawn and not blitted, letting it take the theme and point along the
-# track.
+# The marker, in degrees of arc so it holds its size on screen whatever the zoom.
 BODY = 3.0
 PANEL_LONG = 7.0
 PANEL_SHORT = 1.6
-# The halo behind it, which makes a 12px marker the subject of the page.
 HALO = 6.0
 
-# Where each page is looking, keyed by page id.
+# Keyed by page id.
 _state = {}
 # The track projected to the screen, x and y a point, grown once and reused every frame.
 _path = array("f", b"")
-# The marker's four shapes, built on the first frame that draws them.
 _parts = None
 
 
@@ -72,11 +57,10 @@ def _page_state(page):
     return state
 
 
-# How much of the gap to the track's position is closed each draw, so a new prediction is a
-# few slightly fast seconds and not a hop. The lag left is a quarter of a pixel.
+# How much of the gap to the track's position is closed each draw. The lag left is a quarter
+# of a pixel.
 CATCH_UP = 0.25
-# Past this the gap is a different place and not drift: a first draw, or a page come back to
-# after an orbit.
+# Past this the gap is a jump: a first draw, or a page returned to after an orbit.
 CATCH_UP_MAX = 5.0
 
 
@@ -95,11 +79,7 @@ def eased(held, target):
 def flown_at(dense, flown):
     """Where along the track `flown` falls, as (lon, lat, sunlit).
 
-    The host sends a prediction and says where now sits in it, so the station's position is
-    already here: asking the feed for it again says what this can work out. Between two
-    dense points, which are a quarter of a five minute step apart, so a straight line
-    between them is under a pixel of the curve they came from.
-
+    Interpolated between two dense points, which are a quarter of a five minute step apart.
     Longitude comes back unwrapped, as the spline needed it, and is put back in range.
     """
     if not dense:
@@ -120,8 +100,8 @@ def _marker(theme, view, lon, lat, sunlit):
     was = screen.clip
     screen.clip = view.box
 
-    # Built once and re-aimed: the marker is the same size every frame, and a circle is a path
-    # of thirty-odd points to allocate for the sake of moving it a pixel.
+    # Built once and re-aimed: a circle is a path of thirty-odd points to allocate for the
+    # sake of moving it a pixel.
     global _parts
     if _parts is None:
         _parts = (shape.circle(vec2(0, 0), HALO),
@@ -145,15 +125,13 @@ def _marker(theme, view, lon, lat, sunlit):
 
 
 def _smoothed(points):
-    """The track resampled to a curve through every point the host sent.
+    """The ISS ground track, resampled to a curve through every point the host sent.
 
     Five minutes of orbit is twenty-odd degrees of longitude, and the samples drawn as chords
-    show as a fan of straight lines. Catmull-Rom passes through each of them, which is the
-    same curve the graph pages are drawn with, and an orbit is exactly the smooth thing it
-    suits: nothing moves, the corners just stop being corners.
+    show as a fan of straight lines. Catmull-Rom, as the graph pages use.
 
-    Longitude is unwrapped first. The run crosses the date line, and a spline through 179 then
-    -179 would swing back round the whole world to get there.
+    Longitude is unwrapped first: the run crosses the date line, and a spline through 179
+    then -179 would swing back round the whole world to get there.
     """
     lons, lats, lit = [], [], []
     turns = 0.0
@@ -167,8 +145,7 @@ def _smoothed(points):
         return list(zip(lons, lats, lit))
     dense_lon = draw.curve(lons, TRACK_STEPS)
     dense_lat = draw.curve(lats, TRACK_STEPS)
-    # A point takes the light of the sample it came from, and a crossing lands on a sample
-    # and never somewhere the host did not report.
+    # A point takes the light of the sample it came from, so a crossing lands on a sample.
     return [(dense_lon[index], dense_lat[index],
              lit[min(len(lit) - 1, index // TRACK_STEPS)])
             for index in range(len(dense_lon))]
@@ -183,13 +160,10 @@ def _curve(state, points):
 
 
 def _track(theme, view, state, points, flown):
-    """The ground track, an orbit of it, with the part already flown left behind.
+    """The ground track, split at `flown`, the host's index for now within the run.
 
-    Split at `flown`, where the host says now is in the run. The points are a
-    prediction made when it was asked for, so the station walks along them between fetches.
-
-    Drawn as a stroked path per stretch, and not a shape per segment. One open contour is
-    0.08ms plus its edges where seventy-six lines are 0.08ms each.
+    Drawn as a stroked path per stretch: one open contour is 0.08ms plus its edges, where
+    seventy-six lines are 0.08ms each.
     """
     if len(points) < 2:
         return
@@ -197,12 +171,10 @@ def _track(theme, view, state, points, flown):
     dense = state["curve"]
     cut = max(0, min(len(dense) - 1, int(flown * TRACK_STEPS)))
 
-    # Nothing about the drawn track changes between most frames: the run arrives every two
-    # minutes, the split moves every thirty seconds, and on the whole-world camera the projection
-    # never moves at all. So the stroked shapes are kept and only rebuilt when one of those
-    # actually moves - the camera to the nearest pixel, since below that it is the same picture.
-    # Stroking is the dear half: an open contour of 77 points becomes an outline of four times
-    # that, six times a frame.
+    # The stroked shapes are kept until the run, the split or the projection moves - the
+    # camera to the nearest pixel, since below that it is the same picture. Stroking is the
+    # dear half: an open contour of 77 points becomes an outline of four times that, six
+    # times a frame.
     drawn_for = (state["curve_for"], cut, int(view.lon * view.scale),
                  int(view.lat * view.scale), int(view.scale * 100.0))
     if state.get("runs_for") != drawn_for:
@@ -222,11 +194,10 @@ def _track(theme, view, state, points, flown):
 
 
 def _project(view, dense, cut):
-    """The track as stroked shapes, one per run of it that is drawn the same way.
+    """The ground track as stroked shapes, one per run drawn the same way.
 
-    Projected into one buffer that outlives the frame and stroked out of slices of it. A
-    vec2 a point and a list a run would be 77 objects, which is the allocation that leaves
-    a heap in pieces. Same idiom as draw.line.
+    Projected into one buffer that outlives the frame and stroked out of slices of it. A vec2
+    a point and a list a run would be 77 objects. Same idiom as draw.line.
     """
     global _path
     wanted = len(dense) * 2
@@ -238,16 +209,15 @@ def _project(view, dense, cut):
     at = 0
     previous_x = None
     for index, (lon, lat, sunlit) in enumerate(dense):
-        # What this point is drawn as, and not the pen itself. A run ends where the answer
-        # changes, and comparing two colours is not something a pen can be asked.
+        # A comparable tuple, since two pens cannot be compared.
         want = (index >= cut, bool(sunlit))
         x, y = view.at(lon, lat)
-        # A jump wider than half the screen is the seam, not a move.
+        # A jump wider than half the screen is the date-line seam.
         seam = previous_x is not None and abs(x - previous_x) > look.W * 0.5
         if at and (seam or want != stretch):
             bounds.append((start, at, stretch))
-            # A change of colour carries the last point over, so the join is drawn; a seam does
-            # not, because the two ends are not next to each other.
+            # A change of colour repeats the last point so the join is drawn. A seam
+            # starts clean, the two ends not being next to each other.
             start = at if seam else at - 2
         stretch = want
         _path[at] = x
@@ -271,7 +241,7 @@ def _band(theme, where, aboard, at=None, note="waiting for the feed"):
     """The strip under the map: how high, how fast, in sun or shadow, and who is aboard."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
-    # The header's rule, in the header's colour, which makes the band furniture.
+    # Use the header's underline accent colour to make the band look like UI.
     screen.pen = theme.accent_b
     screen.rectangle(rect(0, BAND_TOP, look.W, 1))
     if not where:
@@ -284,8 +254,8 @@ def _band(theme, where, aboard, at=None, note="waiting for the feed"):
     draw.blit_label(altitude, look.SIZE_BIG, theme.ink, look.PAD, BAND_TOP + 3)
     left = look.PAD + draw.text_width(altitude, look.SIZE_BIG) + 10
 
-    # Sunlight is the one state here among the numbers, so it takes the
-    # accent when it is on and the dim when it is not.
+    # Sunlight is the one state among the numbers, so it is drawn in the theme's accent
+    # colour.
     sunlit = at[2] if at else where.get("sunlit", True)
     lit = "in sunlight" if sunlit else "in shadow"
     pen = draw.readable(theme.accent, theme.panel, theme.ink) if sunlit else theme.dim
@@ -314,7 +284,7 @@ def _grouped(value):
 
 
 def _where_text(lat, lon):
-    """"51.6N 30.2E", which is the headline: everything else about the station is constant."""
+    """"51.6N 30.2E", or "position unknown"."""
     if lat is None or lon is None:
         return "position unknown"
     return (f"{abs(lat):.1f}{'N' if lat >= 0 else 'S'} "
@@ -335,9 +305,7 @@ def render(page, frame, _history, theme):
     track = iss.get("track") or ()
     flown = iss.get("flown") or 0
 
-    # Where the station is, off the track the host already sent. The feed is asked for its
-    # position every few minutes and this moves every draw, so the marker walks instead of
-    # hopping. Without a track there is only what the feed last said.
+    # The position off the track the host already sent, moved every draw so the marker walks.
     if len(track) >= 2:
         _curve(state, track)
         state["at"] = eased(state.get("at"), flown_at(state["curve"], flown))
@@ -360,6 +328,5 @@ def render(page, frame, _history, theme):
 
 
 pages.EXTRA["issmap"] = render
-# Not animated, unlike the quake map. Nothing here moves between readings: the station covers
-# 0.06 pixels a second on a whole-world map, and a frame is 78ms with all 288 polygons in view.
-# So it is drawn when a reading lands, and the halo holds still instead of breathing.
+# Deliberately not in pages.ANIMATED: the station covers 0.06 pixels a second on a
+# whole-world map, and a frame is 78ms with all 288 polygons in view.

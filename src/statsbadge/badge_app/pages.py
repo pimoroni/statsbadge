@@ -18,7 +18,6 @@ EXTRA = {}
 # Kinds with something that moves unprompted, so they get a frame with no new data.
 ANIMATED = set()
 
-# -- sweeping gauges --------------------------------------------------------
 
 # Whether a gauge sweeps to each new reading or steps to it, from the layout. The number
 # beside it steps either way, or a sprite is baked every frame.
@@ -33,7 +32,6 @@ BEHIND = 0.0
 EVERY_MS = 1000
 LEAD = 1
 BEHIND_MAX = 12.0
-
 
 
 def note_spacing(every_ms, interval_ms):
@@ -291,8 +289,6 @@ def render(page, frame, history, theme, index, total, subtitle=None):
         return
     handler(page, frame, history, theme)
 
-
-# -- the kinds --------------------------------------------------------------
 
 def _dial(page, frame, _history, theme):
     ref = page.get("field", "")

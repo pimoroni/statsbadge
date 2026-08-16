@@ -31,7 +31,6 @@ badge.mode(HIRES | VSYNC)
 screen.antialias = image.X4
 badge.default_clear = None
 
-
 import splash  # noqa: E402  a tiny module, imported before the expensive ones
 
 splash.show()
@@ -249,8 +248,6 @@ class App:
         layout = self.layout
         return fallback if layout is None else layout.get(key, fallback)
 
-    # -- pages --------------------------------------------------------------
-
     @property
     def page_list(self):
         return self.setting("pages") or []
@@ -343,8 +340,6 @@ class App:
         if self._was_stale:
             return self.detail or "offline"
         return self.frame.get("sys", {}).get("host") or self.config.name
-
-    # -- polling ------------------------------------------------------------
 
     def poll(self):
         """Advance whatever request is in flight, or start the next one due."""
@@ -680,8 +675,6 @@ class App:
             level *= CASELIGHT_FLOOR + (1.0 - CASELIGHT_FLOOR) * fraction
         badge.caselights(level)
 
-    # -- input --------------------------------------------------------------
-
     def buttons(self):
         touched = False
         if badge.pressed(BUTTON_UP):
@@ -846,8 +839,6 @@ class App:
         self._advanced_at = now
         self.turn(1)
 
-    # -- drawing ------------------------------------------------------------
-
     def render(self):
         theme = self.theme
         if not self.config.paired:
@@ -920,8 +911,6 @@ class App:
                 screen.blit(self.leaving.window(rect(travel, top, rest, deep)),
                             vec2(0, top))
             screen.blit(self.arriving.window(rect(0, top, travel, deep)), vec2(rest, top))
-
-    # -- exit ---------------------------------------------------------------
 
     def home(self):
         """What HOME did this frame: None, "menu" or "exit"."""
@@ -1046,7 +1035,6 @@ def main(app_dir):
             app.dirty = False
         badge.update()
         app.sweep()
-
 
 _app = None
 

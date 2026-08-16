@@ -1,15 +1,9 @@
-"""The badge side of the clock extension: a Swiss railway station clock.
+"""The badge side of the clock extension.
 
-Installed into the app's `ext/` directory by `statsbadge install`, and registers itself
-on import.
+Installed into the app's `ext/` directory by `statsbadge install`, and registers itself on
+import.
 
-Code and not pictures: the second hand sweeps at the badge's frame rate off one reading
-a second, where an image over the wire would tick once and cost a fetch each time.
-
-The dials keep their own liveries, being pictures of particular objects; the readouts
-beside them stay themed. `lcd` is DSEG7 Classic Bold, under the SIL Open Font License.
-
-The badge's clock is set from the host once and then left alone; see RESYNC_S.
+`lcd` is DSEG7 Classic Bold, under the SIL Open Font License.
 """
 
 import machine
@@ -20,20 +14,12 @@ import draw
 import look
 import pages
 
-# The weather symbols this extension ships, under a name of their own: the sprite cache
-# would otherwise hand one to the app's icons.af.
 WEATHER_FONT = "weather"
-# The symbol shares a row with the temperature on every face, and is sized to what the
-# two of them have room for together.
 ICON_SIZE = 32
 
 
 def _high_low(weather):
-    """The day's range, or None where the forecast carried neither end.
-
-    One end alone is still worth drawing: a high with no low is a forecast that reaches
-    this far, and blanking the line leaves the day with no shape on it at all.
-    """
+    """The day's range as "H 24 L 12", or None."""
     unit = weather.get("temp_unit") or ""
     parts = []
     for mark, key in (("H", "high"), ("L", "low")):
@@ -42,28 +28,26 @@ def _high_low(weather):
             parts.append(f"{mark} {value:.0f}\u00b0{unit}")
     return "   ".join(parts) or None
 
-# DSEG7 Classic Bold, packed --wide --cap-from 8: a face with no H to measure a cap
-# height from. Its digits stand where a capital does, so it drops in at the same size.
+# Packed --wide --cap-from 8: DSEG7 has no H to measure a cap height from.
 LCD_FONT = "lcd"
 LCD_FILE = "lcd.af"
 
-# Lexend's ten digits and a colon, packed --wide. The app's copy is narrow, which
-# visibly flattens the counter of a nought at the 84pt this draws. Thirteen glyphs, 3KB.
+# Lexend's digits and colon, packed --wide. The app's narrow copy visibly flattens the
+# counter of a nought at the 84pt this draws. 3KB.
 DIGITS_FONT = "digits"
 DIGITS_FILE = "digits.af"
 
-# The app's split layout: paging from a dial to a clock leaves the subject put.
 CENTRE = look.DIAL_C
 RADIUS = look.DIAL_OUTER
 
-# The dials, each a palette and proportions of the radius.
+# Keys beyond the colours:
 #
-#   plate    what the dial sits on: "disc", "squircle" or None for the page background
-#   marks    "bars" for the railway's blocks, "dots" for a dotted minute track
-#   star     a spike opposite each hand, as the Koppel hub has
+#   plate          what the dial sits on: "disc", "squircle", or None for the background
+#   marks_style    "bars" for the railway's blocks, "dots" for a dotted minute track
+#   star           a spike opposite each hand, as the Koppel hub has
+#   *_mark/*_hand  (length, half-width), as fractions of RADIUS
 FACES = {
-    # Hilfiker's station clock, in the Mondaine colourway: red hands over a black
-    # second. The original had black hands throughout.
+    # Hilfiker's station clock in the Mondaine colourway.
     "railway": {
         "label": "Railway",
         "face": (245, 245, 242), "marks": (16, 16, 18),
@@ -73,8 +57,7 @@ FACES = {
         "hour_hand": (0.55, 0.062), "min_hand": (0.86, 0.048),
         "sec_hand": (0.76, 0.011), "tail": 0.13, "hub": 4,
     },
-    # Koppel's dial for Georg Jensen: a dotted minute track, bigger dots at the five
-    # minutes, needle hands with a spike opposite each so the hub reads as a star.
+    # Koppel's dial for Georg Jensen.
     "dots": {
         "label": "Dots",
         "face": (250, 250, 248), "marks": (18, 18, 20),
@@ -84,8 +67,8 @@ FACES = {
         "hour_hand": (0.52, 0.019), "min_hand": (0.88, 0.015),
         "sec_hand": (0.88, 0.009), "tail": 0.24, "hub": 7,
     },
-    # Every colour None, so this one is built out of the theme. A fixed dark plate lands
-    # within a few counts of a dark theme's background and turns to mud.
+    # Colours from the theme: a fixed dark plate lands within a few counts of a dark
+    # theme's background.
     "squircle": {
         "label": "Squircle",
         "face": None, "marks": None,
@@ -98,8 +81,7 @@ FACES = {
 }
 DEFAULT_FACE = "railway"
 
-# The faces with no dial. `ghost` is what an unlit pair looks like, a pair of eights for
-# seven segments.
+# `ghost` is the unlit pair drawn behind the digits, a pair of eights for seven segments.
 DIGITAL = {
     "digital": {"label": "Digital", "font": DIGITS_FONT, "file": DIGITS_FILE,
                 "ghost": None, "colon": "dots"},
@@ -107,23 +89,13 @@ DIGITAL = {
             "ghost": "88", "colon": "glyph"},
 }
 
-# Baked dials and hand geometry, per face: a page each side of the list can ask for a
-# different one. Dropped on a theme change rather than kept per theme, which would be
-# forty dials at 113KB each across ten themes.
+# Cleared on a theme change: keyed by theme, ten themes would hold forty dials at 113KB each.
 _face_cache = {}
 _hands_cache = {}
 _baked_for = None
 
 
 def _colours(spec, theme):
-    """A face's colours, with None meaning "whatever the theme says".
-
-    The dials above carry theirs as plain palette data, and are built here. A
-    theme's are already `color` objects.
-
-    panel for the plate, because that is what the header and footer are drawn in, so a
-    themed dial sits against the page like the rest of the furniture.
-    """
     return {
         "face": color.rgb(*spec["face"]) if spec["face"] else theme.panel,
         "marks": color.rgb(*spec["marks"]) if spec["marks"] else theme.dim,
@@ -133,41 +105,30 @@ def _colours(spec, theme):
 
 
 def _bar(inner, outer, half_width):
-    """A blunt-ended bar pointing at twelve, measured out from the origin.
-
-    Where it ends up is left to _aim, so one bar serves every angle it is drawn at.
-    """
+    """A blunt-ended bar pointing at twelve, from the origin for _aim to place."""
     return shape.rectangle(rect(-half_width, -outer, half_width * 2.0, outer - inner))
 
 
 def _aim(bar, centre, degrees):
-    """Point a bar at a clock angle.
+    """Point a bar at a clock angle. Translate before rotate, since each call right-multiplies.
 
-    Angles run clockwise from twelve, which is how a clock is read and which way
-    rotate() turns, so the angle goes in as it comes. Translate before rotate, because
-    each call right-multiplies: the bar turns about the origin, then moves to centre.
-
-    Bars are built once and re-aimed, never rebuilt, which is 653us against 958us
-    a draw. That relies on shape and mat3 both fitting one GC block, since only
-    single-block allocations advance MicroPython's free-block hint (py/gc.c,
-    n_free == 1). It holds with 32-byte blocks and a six-float mat3; on a build with
-    either of those changed, rebuilding each bar is the faster way round.
-    See tools/bench_clockface.py.
+    Re-aiming a baked bar beats rebuilding it, 653us against 958us a draw, but only while
+    shape and mat3 each fit one GC block: MicroPython advances its free-block hint on
+    single-block allocations only (py/gc.c, n_free == 1). True at 32-byte blocks and a
+    six-float mat3. See tools/bench_clockface.py.
     """
     bar.transform = mat3().translate(centre[0], centre[1]).rotate(degrees)
     return bar
 
 
 def _dot(radius_at, size):
-    """A dot on the minute track, at twelve, for _aim to point wherever it belongs."""
+    """A dot on the minute track, at twelve, for _aim to place."""
     return shape.circle(vec2(0, -radius_at), size)
 
 
 def _bake_face(spec, pens):
-    """The dial. Static, so it is baked once per face and blitted.
+    """The dial, baked per face: sixty anti-aliased marks cost most of a frame, every frame.
 
-    Sixty anti-aliased marks costs milliseconds, which would be most of a frame every
-    frame. Baked, the dial costs one small blit and only the hands are drawn live.
     Timed by tools/bench_clockface.py.
     """
     size = RADIUS * 2 + 4
@@ -187,13 +148,11 @@ def _bake_face(spec, pens):
     hour_len, hour_half = spec["hour_mark"]
     min_len, min_half = spec["min_mark"]
     if spec["marks_style"] == "dots":
-        # A dotted minute track: the five-minute dots larger, everything on one circle.
         track = RADIUS * 0.85
         big, small = _dot(track, RADIUS * hour_half), _dot(track, RADIUS * min_half)
         for tick in range(60):
             face.shape(_aim(big if tick % 5 == 0 else small, middle, tick * 6.0))
     else:
-        # Two bars, re-aimed and drawn sixty times between them
         hour_mark = _bar(RADIUS * (1.0 - hour_len), RADIUS * 0.97, RADIUS * hour_half)
         minute_mark = _bar(RADIUS * (1.0 - min_len), RADIUS * 0.97, RADIUS * min_half)
         for tick in range(60):
@@ -204,7 +163,6 @@ def _bake_face(spec, pens):
 
 
 def _bake_hands(spec):
-    """Hand geometry holds still; only the angle it is drawn at moves."""
     tail = spec["tail"]
     return tuple(
         _bar(-RADIUS * tail, RADIUS * length, RADIUS * half)
@@ -213,7 +171,7 @@ def _bake_hands(spec):
 
 
 def _face(name, theme):
-    """A face's colours, its baked dial and its hands, baking on first use."""
+    """(spec, pens, dial, hands), baking on first use."""
     global _baked_for
     if _baked_for != theme.key:
         _face_cache.clear()
@@ -234,47 +192,30 @@ def _hand(bar, degrees, pen):
 
 
 def _register_font():
-    """Point draw at this extension's symbols. Called once, on the first render.
-
-    The installed copy comes first for the reason draw.add_font describes, and this
-    module's directory second, for a checkout run over `mpremote mount`.
-    """
+    """The installed copy first, then this module's directory for a checkout over
+    `mpremote mount`."""
     here = globals().get("__file__") or ""
     beside = here.rsplit("/", 1)[0] + "/icons.af" if "/" in here else "icons.af"
     draw.add_font(WEATHER_FONT, look.APP_DIR + "/ext/icons.af", beside)
 
 
-# What the digits are sized against: 4 is the widest in the app's face. The seven-segment
-# face is monospaced, where any time measures the same.
 WIDEST_TIME = "44:44"
 
-# The dot colon, in fractions of the digit height: the column it takes, and a dot's radius.
 COLON_W, COLON_DOT = 0.20, 0.061
-# How far below the top of the digits the two dots sit. Measured off the seven-segment
-# face's colon with tools/read_af.py, so paging between the digital faces leaves it put.
+# Measured off the seven-segment face's colon with tools/read_af.py.
 COLON_AT = (0.309, 0.720)
 
-# How far the colon dims at the half second, of 255. A beat and not a blink, because a
-# colon that goes out entirely reads as a fault.
+# Alpha floor at the half second, of 255.
 COLON_DIM = 90
 
 
 def _colon_alpha():
-    """How lit the colon is, over one turn of the second.
-
-    A sine off the badge's clock, the same reading the second hand sweeps on, so the beat
-    lands on the second and not on whenever the page was first drawn.
-    """
     lit = 0.5 + 0.5 * math.cos(_local_time()[2] % 1.0 * math.pi * 2.0)
     return int(COLON_DIM + (255 - COLON_DIM) * lit)
 
 
 def _digits_font(spec):
-    """The font a digital face sets its numbers in, loading it on first use.
-
-    Both faces carry one, shipped beside this module, and an install predating the file
-    falls back to the app's text font: the same numbers, coarser or without the segments.
-    """
+    """The font name for a digital face, loading it on first use."""
     wanted = spec["font"]
     if not draw.has_font(wanted):
         here = globals().get("__file__") or ""
@@ -285,15 +226,10 @@ def _digits_font(spec):
 
 
 def _digital(clock, weather, label, theme, spec):
-    """The whole band with no dial, laid out as a desk clock and drawn in the theme.
+    """The band with no dial, laid out as a desk clock.
 
-    The two pairs are drawn as separate strings with the colon between them. A
-    proportional font kerns a colon into the digits, and the point here is that the
-    numbers line up.
-
-    The seven-segment face has a colon sat where a display puts it. A text face gets two
-    dots, its colon being typographic and on the baseline, which between numbers this
-    size looks as though it has dropped off them.
+    Hours and minutes are drawn as separate strings, so a proportional font cannot kern the
+    colon into them.
     """
     left, right = look.PAD + 2, look.W - look.PAD - 2
     top = look.BODY_TOP + 6
@@ -305,20 +241,16 @@ def _digital(clock, weather, label, theme, spec):
 
     text = clock.get("time") or "--:--"
     hours, _, minutes = text.partition(":")
-    # Sized by the ink, not the sprite: a digit stands draw.CAP of the size asked for, where
-    # the sprite is size * 1.35, mostly room for a descender.
     gap = 8
     digits_top = look.BODY_TOP + 26
     room = (look.BODY_TOP + look.BODY_H - 38) - digits_top
+    # A digit stands draw.CAP of the requested size; the sprite is size * 1.35.
     size = int(room / draw.CAP)
-    # Measured against the widest time it could show, not the one it is showing. The digits
-    # then hold their size from one minute to the next.
     name = _digits_font(spec)
     dots = spec["colon"] == "dots"
     span = right - left
     widest = draw.text_width(WIDEST_TIME, size, name) + gap * 2
     if dots:
-        # Two dots take a column to themselves, narrower than a glyph colon's advance.
         widest += int(size * draw.CAP * COLON_W) - draw.text_width(":", size, name)
     if widest > span:
         size = int(size * span / widest)
@@ -326,20 +258,16 @@ def _digital(clock, weather, label, theme, spec):
     right_w = draw.text_width(minutes or "--", size, name)
     ink = int(size * draw.CAP)
     colon_w = int(ink * COLON_W) if dots else draw.text_width(":", size, name)
-    # Justified, not centred. In a proportional face 10:09 is 89% of the width of 44:44,
-    # which centring would inset 16px each side.
+    # Left-justified, so the digits hold position from one minute to the next.
     x = left
     minutes_x = right - right_w
-    # The sprite's baseline sits `size` from its top, which the second term takes off.
     y = digits_top + (room - ink) // 2 - (size - ink)
-    # The unlit segments first, as a real display shows them.
     ghosting = spec["ghost"] and name == spec["font"]
     if ghosting:
         draw.blit_label(spec["ghost"], size, theme.grid, x, y, name=name)
         draw.blit_label(spec["ghost"], size, theme.grid, minutes_x, y, name=name)
     draw.blit_label(hours, size, theme.ink, x, y, name=name)
     draw.blit_label(minutes or "--", size, theme.ink, minutes_x, y, name=name)
-    # Between the two, wherever justifying them left the middle, beating the second.
     colon_x = (x + left_w + minutes_x) / 2.0
     if dots:
         ink_top = y + size - ink
@@ -349,14 +277,12 @@ def _digital(clock, weather, label, theme, spec):
             screen.shape(shape.circle(vec2(colon_x, ink_top + ink * at), ink * COLON_DOT))
     else:
         colon_left = colon_x - colon_w / 2.0
-        # Its unlit segments too, so what dims is the colon and not the gap it leaves.
         if ghosting:
             draw.blit_label(":", size, theme.grid, colon_left, y, name=name)
         screen.alpha = _colon_alpha()
         draw.blit_label(":", size, theme.accent, colon_left, y, name=name)
     screen.alpha = 255
 
-    # The weather along the bottom, symbol first.
     y = look.BODY_TOP + look.BODY_H - 34
     x = left
     icon = weather.get("icon")
@@ -369,8 +295,6 @@ def _digital(clock, weather, label, theme, spec):
         unit = weather.get("temp_unit") or ""
         x += draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
                              look.SIZE_BIG, theme.ink, x, y) + 12
-    # The condition names what it is doing, the range how far the day goes, stacked beside
-    # the temperature so the row stays as tall as the number it sits next to.
     span = _high_low(weather)
     if weather.get("condition"):
         draw.blit_label(weather["condition"], look.SIZE_SMALL, theme.dim, x,
@@ -388,11 +312,10 @@ def _digital(clock, weather, label, theme, spec):
 
 
 def render(page, frame, _history, theme):
-    # A place's clock arrives with its weather, keyed by page id; empty falls back to the
-    # host's.
+    # `places` holds a clock and weather per location, keyed by page id.
     host = frame.get("clock") or {}
     here = (frame.get("places") or {}).get((page or {}).get("id"))
-    # The offset comes from the forecast: a place has no time until that lands.
+    # A location has no hour until its forecast lands.
     clock = here if (here or {}).get("hour") is not None else host
     weather = here or frame.get("weather") or {}
     label = here.get("place") if here else None
@@ -400,8 +323,7 @@ def render(page, frame, _history, theme):
     _register_font()
     chosen = ((page or {}).get("face") or DEFAULT_FACE)
     if chosen in DIGITAL:
-        # The numbers come from the host, but the colon beats on the badge's clock: never
-        # set, it keeps 1Hz against a second unrelated to the time on the screen.
+        # The colon beats on the badge's clock, which has to be set for it to beat in step.
         _resync(host, frame.get("seq"))
         _digital(clock, weather, label, theme, DIGITAL[chosen])
         return
@@ -414,9 +336,7 @@ def render(page, frame, _history, theme):
         draw.blit_label("no time", look.SIZE_VALUE, theme.dim,
                         CENTRE[0], CENTRE[1] - 8, align=1)
     else:
-        # From the host's clock only: there is one hardware clock, and two pages in two zones
-        # would each set it to theirs. A page elsewhere adds the difference, which is in the
-        # frame already.
+        # One hardware clock, so it holds host time and a page elsewhere adds _zone_offset.
         _resync(host, frame.get("seq"))
         hour, minute, second = _local_time(_zone_offset(host, here))
         hour_hand, minute_hand, second_hand = hands
@@ -426,7 +346,7 @@ def render(page, frame, _history, theme):
         screen.pen = pens["second"]
         screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
 
-    # In the badge's theme rather than the clock's, down the app's column.
+    # The readout takes theme colours, down the app's column.
     x = look.READOUT_X
     y = draw.column_lines((
         (clock.get("time"), look.SIZE_BIG, theme.ink),
@@ -435,7 +355,6 @@ def render(page, frame, _history, theme):
     ))
     y += 6
 
-    # Beside the reading: stacked, the column ran to within a few pixels of the page pips.
     icon = weather.get("icon")
     if weather.get("temp") is not None or icon:
         drawn = draw.blit_label(icon or "", ICON_SIZE, theme.ink, x,
@@ -448,9 +367,6 @@ def render(page, frame, _history, theme):
                             x + (drawn + 8 if drawn else 0), y)
         y += ICON_SIZE + 4
 
-    # The day's range under the number it is the range of, so the reading beside the symbol
-    # reads as now and this as the rest of the day. Lined up with the temperature and not
-    # the symbol, the symbol being taller than the text beside it.
     span = _high_low(weather)
     if span:
         draw.blit_label(span, look.SIZE_SMALL, theme.dim, x, y)
@@ -465,26 +381,22 @@ def render(page, frame, _history, theme):
                        (wind, look.SIZE_SMALL, theme.dim)), top=y)
 
 
-# How far the clocks may disagree before the badge's is set again. A PCF85063A drifts a
-# second or two a day, which is also how stale a reading is by the time it lands.
+# A PCF85063A drifts a second or two a day, about as stale as a reading by the time it
+# lands.
 RESYNC_S = 30
 
 _synced = False
-# The reading the last sync was considered against; a redraw does not count as one.
+# The seq the last sync was measured against.
 _synced_seq = None
 
-# Where the local second last changed, for working out a fraction of it.
+# When the local second last changed, for the fraction within it.
 _phase_second = None
 _phase_at = 0
 
 
 def _zone_offset(host, there):
-    """Seconds between the host's local time and the place a page is showing.
-
-    Worked out from the two readings in the frame and not from a stored offset, so it
-    costs nothing and cannot go stale, and the shortest way round the day so that either side
-    of midnight is not twenty-three hours.
-    """
+    """Seconds between the host's local time and the location a page shows, within twelve
+    hours of zero."""
     if not host or not there or there.get("hour") is None or host.get("hour") is None:
         return 0
     theirs = there["hour"] * 3600 + there["minute"] * 60 + there.get("seconds", 0)
@@ -493,16 +405,10 @@ def _zone_offset(host, there):
 
 
 def _local_time(offset=0):
-    """Hour, minute and a fractional second, off the badge's clock.
+    """Hour, minute and a fractional second, off the badge's hardware clock.
 
-    The hands run on hardware, not on the frame. `time.localtime()` costs 14us and its
-    seconds arrive 1000ms apart, where a reading comes once a second at best and only when
-    a poll spent itself on stats and not on history or a layout. Reading the local
-    clock is what makes the sweep even, and it keeps time if the host goes away.
-
-    Whole seconds come from the clock and the fraction from the ticks since that second
-    was seen to change. Clamped at one, so a clock that stops parks the hand instead of
-    running it past a second that never arrived.
+    Whole seconds from time.localtime(), which costs 14us; the fraction from ticks since that
+    second changed, clamped at one.
     """
     global _phase_second, _phase_at
     parts = time.localtime()
@@ -517,23 +423,10 @@ def _local_time(offset=0):
 
 
 def _resync(clock, seq=None):
-    """Set the badge's clock from the host's, on the first reading and rarely after.
+    """Set the badge's clock from the host's: the first reading, then only past RESYNC_S.
 
-    The host is the authority, being the machine with a network time source, but a reading
-    is stale and unevenly so by the time it arrives. Setting the clock from every one of
-    them walks it backwards a second at a time, which is a hand that sweeps smoothly and
-    then jumps: the correction, not the drift, is what is visible.
-
-    So the first reading sets it and the rest are ignored until they disagree by RESYNC_S,
-    which no amount of pipeline latency can account for.
-
-    Only new readings count. A frame is drawn forty-five times a second and holds the time
-    it was polled at throughout, so with the host away the badge's clock runs on against a
-    frozen one. Left alone, the disagreement reaches RESYNC_S after half a minute and the
-    hands are dragged back to where the last poll left them, every thirty seconds after.
-
-    Setting the clock also lands the sub-second at zero, restarting the sweep part-way
-    through a second, so a sync nobody needed shows as a stumble.
+    Setting it lands the sub-second at zero, which shows as a stumble in the sweep. `seq`
+    gates on new readings, one poll's time being redrawn forty-five times a second.
     """
     global _synced, _synced_seq
     if _synced and seq == _synced_seq:
@@ -547,18 +440,17 @@ def _resync(clock, seq=None):
     parts = time.localtime()
     theirs = hour * 3600 + minute * 60 + second
     ours = parts[3] * 3600 + parts[4] * 60 + parts[5]
-    # Shortest way round the day, so either side of midnight is not a 24 hour drift
+    # Within twelve hours of zero.
     drift = (theirs - ours + 43200) % 86400 - 43200
     if _synced and -RESYNC_S <= drift <= RESYNC_S:
         return
-    # (year, month, day, weekday, hour, minute, second, subsecond). The weekday is
-    # recomputed from the date, so what goes in that slot does not matter.
+    # (year, month, day, weekday, hour, minute, second, subsecond). The weekday is recomputed
+    # from the date, so what goes in that slot does not matter.
     machine.RTC().datetime((parts[0], parts[1], parts[2], parts[6],
                             hour, minute, second, 0))
     _synced = True
 
 
 pages.EXTRA["clockface"] = render
-# A sweeping hand needs a frame even when no new data arrived, so the app has to know
-# not to skip the redraw.
+# Register the clock face as an animated page, so it is redrawn every frame.
 pages.ANIMATED.add("clockface")

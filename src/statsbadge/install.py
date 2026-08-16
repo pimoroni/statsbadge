@@ -40,8 +40,6 @@ class PortBusy(InstallError):
     """
 
 
-# -- finding the badge ------------------------------------------------------
-
 # MICROPY_HW_USB_PID from each board definition. The vendor id is Raspberry Pi's, shared
 # with every other RP2350 board and with a debug probe attached to one.
 BADGE_VID = 0x2E8A
@@ -167,8 +165,6 @@ def check_precompiled(directory, badge_mpy):
         )
     return built, len(found)
 
-
-# -- credentials ------------------------------------------------------------
 
 def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
                 name=None):
@@ -426,8 +422,6 @@ def secret_in_state(state, server_id=None):
         return entry.get("secret")
     return state.get("secret")
 
-
-# -- the app itself ---------------------------------------------------------
 
 def app_source_dir():
     """Where the badge app lives.

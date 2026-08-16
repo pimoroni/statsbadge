@@ -136,8 +136,6 @@ def use_font(name):
     return True
 
 
-# -- text cache -------------------------------------------------------------
-
 # Text this size and over is drawn live and never kept: at 104pt a blit is 3.01ms against
 # 1.27ms to draw it, for a 130KB sprite. Under it the cache wins, 0.08ms against 0.22ms.
 CACHE_UNDER = 40
@@ -239,8 +237,6 @@ def clear_cache():
         empty()
 
 
-# -- measuring --------------------------------------------------------------
-
 COLUMN_GAP = 8
 
 
@@ -297,8 +293,6 @@ def column_width(texts, size, name=TEXT):
 # A column can also be drawn as one bounded `screen.text` call. Measured, that loses to
 # the sprite cache: cores 24.2ms against 22.6, the text page 14.4 against 10.3.
 
-
-# -- formatting -------------------------------------------------------------
 
 def fmt(value, field):
     """A number as a badge should show it: short, and never wider than its box."""
@@ -445,8 +439,6 @@ def reading(value, field):
     return text + short_unit(field)
 
 
-# -- chrome -----------------------------------------------------------------
-
 def background(theme, title, index, total, subtitle=None):
     """The header, the footer and a cleared body, drawn where they stand.
 
@@ -517,8 +509,6 @@ def _pips(theme, index, total):
     _pip_rows[key] = row
     return row
 
-
-# -- widgets ----------------------------------------------------------------
 
 # How the big gauge fills, from the layout. "solid" is the ramp's colour for the reading.
 # "ramp" lays the ramp round the arc and leaves the part past the reading faint.
@@ -844,7 +834,6 @@ def curve(values, steps=CURVE_STEPS):
             out.append(low if value < low else (high if value > high else value))
     out.append(values[last])
     return out
-
 
 _points = array("f", b"")
 
@@ -1474,8 +1463,6 @@ def toast(theme, message, fade=1.0):
     screen.alpha = 255
 
 
-# -- rings ------------------------------------------------------------------
-
 # Thin enough that four fit the dial's radius, keeping this page on a gauge's bounds.
 RING_BAND = 14
 RING_GAP = 4
@@ -1508,8 +1495,6 @@ def rings(theme, entries):
         # The legend doubles as the reading, so the rings carry no labels.
         readout(theme, y, name, value_text, fraction, note, chip=pen if note else None)
 
-
-# -- sparklines -------------------------------------------------------------
 
 # How one row is told from the next. Banded by default: six lines otherwise read as one
 # plot with six traces.
@@ -1569,8 +1554,6 @@ def sparklines(theme, entries):
                    align=2)
 
 
-# -- radar ------------------------------------------------------------------
-
 def radar(theme, entries):
     """A polygon over normalised axes: the shape of the machine's load right now.
 
@@ -1625,8 +1608,6 @@ def radar(theme, entries):
                    align=align)
 
 
-# -- trend ------------------------------------------------------------------
-
 def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
           hot=None, shift=None):
     """One big reading, which way it is going, and where it has been."""
@@ -1644,7 +1625,6 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
         # Drawn, not written: the text font has no arrows, and a missing glyph is a silent gap.
         _arrow(theme, x - 46, look.BODY_TOP + 34, delta,
                fraction if hot is None else hot)
-
 
     top = look.BODY_TOP + 92
     height = look.BODY_H - 100
@@ -1679,8 +1659,6 @@ def _arrow(theme, x, y, delta, fraction):
         screen.pen = theme.dim
         screen.rectangle(rect(x - half, y - height // 2 - 2, half * 2, 4))
 
-
-# -- waterfall --------------------------------------------------------------
 
 # The scroll buffer, its write cursor, and the lane count it was built for. One column a
 # frame, shown as two windowed blits: copying the image onto itself is 11ms against 7ms.

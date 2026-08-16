@@ -119,8 +119,6 @@ def extension_modules(args):
     return extensions.badge_modules(extensions.load(source_config_from(args)))
 
 
-# -- serve ------------------------------------------------------------------
-
 def _extension_line(record):
     """One extension on the startup line: its name, and what went wrong if anything did.
 
@@ -184,8 +182,6 @@ def _report_in_use(exc):
         print(f"  try --port {exc.port + 1}", file=sys.stderr)
     return 2
 
-
-# -- pair -------------------------------------------------------------------
 
 def cmd_pair(args):
     """Serve with a pairing window open from the start.
@@ -257,8 +253,6 @@ def _approve_loop(service, auto):
         time.sleep(0.5)
 
 
-# -- install ----------------------------------------------------------------
-
 def cmd_install(args):
     """Push the app and credentials to a USB-connected badge."""
     directory = config_dir(args.config_dir)
@@ -319,8 +313,6 @@ def _confirm_mass_storage():
     print("mass storage mode.")
     return input("Continue? [y/N] ").strip().lower() in ("y", "yes")
 
-
-# -- status -----------------------------------------------------------------
 
 def cmd_status(args):
     """What is on the badge and what this host has, without touching anything."""
@@ -397,8 +389,6 @@ def _badge_status(args, port, directory):
             entry.get("seq"), mark))
     return 0
 
-
-# -- extensions -------------------------------------------------------------
 
 def cmd_extensions(args):
     """List the extensions on this host, or change which ones are installed."""
@@ -540,8 +530,6 @@ def _change_extensions(args, verb):
     return 1
 
 
-# -- probe ------------------------------------------------------------------
-
 def cmd_probe(args):
     """Print one frame of what this host can measure, and stop."""
     service = build_service(args)
@@ -597,8 +585,6 @@ def _fmt(mapping):
     return "  ".join(parts)
 
 
-# -- badges -----------------------------------------------------------------
-
 def cmd_badges(args):
     directory = config_dir(args.config_dir)
     badges = auth.Store(os.path.join(directory, "badges.json"))
@@ -615,8 +601,6 @@ def cmd_badges(args):
             time.strftime("%Y-%m-%d", time.localtime(record.get("paired_at", 0)))))
     return 0
 
-
-# -- tray -------------------------------------------------------------------
 
 def cmd_tray(args):
     from . import tray as tray_app
@@ -676,8 +660,6 @@ def _asked_port(args):
     return args.port if args.port != DEFAULT_PORT else None
 
 
-# -- autostart --------------------------------------------------------------
-
 def cmd_autostart(args):
     # Only what was asked for, or a login start would pin this run's defaults.
     kept = args.config_dir
@@ -699,8 +681,6 @@ def cmd_autostart(args):
     print(f"  runs:    {tooling.quoted(state['command'])}")
     return 0
 
-
-# -- argument parsing -------------------------------------------------------
 
 INSTALL_EXAMPLES = """
 examples:
@@ -931,7 +911,6 @@ def tray_main(argv=None):
     if asked and (asked[0] == PIP_VERB or not asked[0].startswith("-")):
         return main(asked)
     return main(["tray", *asked])
-
 
 if __name__ == "__main__":
     sys.exit(main())

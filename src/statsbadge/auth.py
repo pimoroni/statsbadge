@@ -77,8 +77,6 @@ class Store:
         self._persisted = {}      # badge_id -> counter last written to disk
         self.load()
 
-    # -- persistence --------------------------------------------------------
-
     def load(self):
         # An unreadable store is remembered and not treated as empty, or saving over it takes
         # the real pairings with it. Happens after the server has been run with sudo.
@@ -150,8 +148,6 @@ class Store:
             self._mtime = os.path.getmtime(self.path)
         except OSError:
             self._mtime = None
-
-    # -- pairing ------------------------------------------------------------
 
     def begin_pairing(self, ttl=300):
         """Open a window during which badges may ask to be let in."""
@@ -349,8 +345,6 @@ class Store:
                 bid: {k: v for k, v in record.items() if k != "secret"}
                 for bid, record in self.badges.items()
             }
-
-    # -- verifying ----------------------------------------------------------
 
     def verify(self, method, path, headers, body):
         """Check a signed request. Returns the badge id, or raises AuthError."""

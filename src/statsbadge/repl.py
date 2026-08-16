@@ -122,8 +122,6 @@ class Repl:
         self._send("import time, machine; time.sleep_ms(100); machine.reset()",
                    self._deadline(timeout))
 
-    # -- the protocol -------------------------------------------------------
-
     def _enter_raw(self):
         """Interrupt whatever is running, then soft reset into a clean interpreter.
 

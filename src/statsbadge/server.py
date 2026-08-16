@@ -156,8 +156,6 @@ class Service:
                 ) if verb == "upgrade" else []
             return answer
 
-    # -- what this host needs set up by hand -------------------------------
-
     def help(self):
         """What the Help tab shows: this platform, and where its sensors stand.
 
@@ -267,9 +265,6 @@ class Service:
         extensions.configure_pages(self.collector.extensions, self.config.all_pages())
         return rev
 
-
-    # -- over USB -----------------------------------------------------------
-
     def badge_modules(self):
         return extensions.badge_modules(self.collector.extensions)
 
@@ -345,8 +340,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     service = None      # set by make_server
 
-    # -- plumbing -----------------------------------------------------------
-
     def log_message(self, fmt, *args):
         if self.server.verbose:
             super().log_message(fmt, *args)
@@ -402,8 +395,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         from urllib.parse import parse_qs
         return {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1]).items()}
 
-    # -- routing ------------------------------------------------------------
-
     def do_GET(self):
         self._dispatch("GET")
 
@@ -443,8 +434,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if self.server.verbose:
                 traceback.print_exc()
             return self._fail(500, f"{type(exc).__name__}: {exc}")
-
-    # -- the badge ----------------------------------------------------------
 
     def _badge_api(self, method, path, body):
         service = self.service
@@ -555,8 +544,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._fail(400, str(exc))
 
         return self._fail(404, "no such endpoint")
-
-    # -- the config UI ------------------------------------------------------
 
     def _config_api(self, method, path, body):
         service = self.service
@@ -729,8 +716,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, service.install_state())
 
         return self._fail(404, "no such endpoint")
-
-    # -- static -------------------------------------------------------------
 
     def _tokens(self):
         """The UI's accent and ramp, generated from the dark theme.
