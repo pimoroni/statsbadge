@@ -33,10 +33,9 @@ ENROL_CODE_HEX = 6
 MAX_PENDING = 6
 ENROL_TTL = 180.0
 
-PAIRING_BACKOFF_BASE = 1.0
-PAIRING_BACKOFF_CAP = 30.0
-# A strike is forgiven per this many seconds of quiet.
-PAIRING_FORGIVE_AFTER = 30.0
+# Between one badge asking and the next being allowed to. Enough to stop a tight loop,
+# and no more: pairing already needs a human to open the window and approve the code.
+PAIRING_RETRY_AFTER = 1.0
 
 SIGNED_HEADER_ID = "x-badge-id"
 SIGNED_HEADER_SEQ = "x-badge-seq"
@@ -152,9 +151,7 @@ class Store:
     def begin_pairing(self, ttl=300):
         """Open a window during which badges may ask to be let in."""
         with self._lock:
-            self.pairing = {"expires": time.monotonic() + ttl,
-                            "strikes": 0, "not_before": 0.0,
-                            "last_attempt": time.monotonic()}
+            self.pairing = {"expires": time.monotonic() + ttl, "not_before": 0.0}
         return True
 
     def cancel_pairing(self):
@@ -178,7 +175,6 @@ class Store:
             return {
                 "active": True,
                 "expires_in": max(0, int(offer["expires"] - time.monotonic())),
-                "asked": offer.get("strikes", 0),
             }
 
     def request_enrolment(self, badge_id, name=None):
@@ -209,16 +205,7 @@ class Store:
             if len(self.enrolments) >= MAX_PENDING:
                 raise AuthError("too many badges waiting; approve or deny one first", 429)
 
-            # Each request extends the delay, so a flood slows itself down. Strikes lapse
-            # while nothing is asking, or one retry would hold a badge at the cap for the
-            # rest of the pairing window.
-            quiet = now - offer.get("last_attempt", now)
-            lapsed = int(quiet / PAIRING_FORGIVE_AFTER)
-            offer["strikes"] = max(0, offer.get("strikes", 0) - lapsed) + 1
-            offer["not_before"] = now + min(
-                PAIRING_BACKOFF_BASE * (2 ** (offer["strikes"] - 1)),
-                PAIRING_BACKOFF_CAP)
-            offer["last_attempt"] = now
+            offer["not_before"] = now + PAIRING_RETRY_AFTER
 
             request_id = secrets.token_hex(16)
             self.enrolments[request_id] = {

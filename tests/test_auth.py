@@ -322,32 +322,21 @@ def test_a_badge_can_be_given_a_name(h):
     }) == ["Desk badge (e661badge0000001)", "e661badge0000002", "e661badge0000003"]
 
 
-def test_a_quiet_spell_forgives_pairing_strikes(h):
-    """The backoff doubles per attempt and decays while nothing is asking.
+def test_the_pairing_delay_does_not_escalate(h):
+    """One flat wait between attempts, however many there have been.
 
-    Without the decay a badge that retried once during a pairing window sits at the cap
-    for as long as that window is open, however long it then waits.
+    The delay used to double per attempt to a 30s cap, which a badge retrying after a
+    dropped reply reached in five tries and then sat at. Pairing needs a human to open the
+    window and approve the code, so the wait is only here to stop a tight loop.
     """
     badges = h.service.badges
     badges.begin_pairing(ttl=300)
     try:
-        # Three attempts in a row, each clearing the wait so the next is allowed through.
-        for _ in range(3):
+        waits = []
+        for index in range(6):
             badges.pairing["not_before"] = 0.0
-            badges.request_enrolment(f"striker{_:04d}", "striker")
-        assert badges.pairing["strikes"] == 3, badges.pairing
-
-        # Quiet for two forgiveness periods, so two of the three lapse.
-        badges.pairing["not_before"] = 0.0
-        badges.pairing["last_attempt"] -= auth.PAIRING_FORGIVE_AFTER * 2
-        badges.request_enrolment("striker0009", "striker")
-        assert badges.pairing["strikes"] == 2, badges.pairing
-
-        # Quiet for longer than every strike is worth, and the count floors at the one
-        # just taken rather than going negative.
-        badges.pairing["not_before"] = 0.0
-        badges.pairing["last_attempt"] -= auth.PAIRING_FORGIVE_AFTER * 99
-        badges.request_enrolment("striker0010", "striker")
-        assert badges.pairing["strikes"] == 1, badges.pairing
+            badges.request_enrolment(f"steady{index:04d}", "steady")
+            waits.append(round(badges.pairing["not_before"] - time.monotonic(), 1))
+        assert waits == [auth.PAIRING_RETRY_AFTER] * 6, waits
     finally:
         badges.cancel_pairing()
