@@ -571,7 +571,7 @@ def _coerce_setting(value, entry):
             number = float(value)
         except (TypeError, ValueError):
             return None
-        # A browser's min and max only mark the field, so a typed value still reaches here.
+        # A browser does not enforce min and max on a typed value, so clamp here.
         if entry.get("min") is not None:
             number = max(float(entry["min"]), number)
         if entry.get("max") is not None:
@@ -625,7 +625,6 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
             raise ValueError(f"page {page_id} needs a field")
         clean["field"] = field
     elif kind == "badge":
-        # Nothing to configure: the badge page reads the badge's vitals.
         pass
     elif kind in ("dials", "graph", "grid", "text", "rings", "spark", "radar"):
         fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
