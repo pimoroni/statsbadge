@@ -4,10 +4,11 @@
     mpremote connect PORT mount . run tools/probe.py
 
 Mount the repo root, not the app directory: frames go to /remote/build/shots, which is
-ignored - `tools/shots.py --publish` copies the README's out of there. Draws
-every
-page kind against a canned frame, so it needs no server, then times a real poll if
-the badge happens to be paired.
+ignored - `tools/shots.py --publish` copies the README's out of there.
+
+Every page kind against a canned frame, so it needs no server, then every palette the host
+has, then a sparse frame: "unknown" drawn as `0` is the easiest thing here to break. What a
+real poll costs is tools/live.py's to measure, this having neither wifi nor net.
 """
 
 import gc

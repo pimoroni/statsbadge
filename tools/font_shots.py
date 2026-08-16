@@ -2,6 +2,7 @@
 
     python3 tools/font_shots.py                 copy the fonts, then run the badge side
     mpremote connect PORT mount . run tools/font_shots.py     the badge side alone
+    python3 tools/shots.py build/shots                        the frames, as PNGs
 
 Fonts have to be on the badge's own filesystem: `font.load()` on a file under
 `mpremote mount` dies in a UnicodeDecodeError partway through, because the mount serves it
@@ -88,11 +89,17 @@ def run_on_badge():
     except OSError:
         print("  nothing in /fonts; run the host half first")
 
+    for directory in ("/remote/build", "/remote/build/shots"):
+        try:
+            os.mkdir(directory)
+        except OSError:
+            pass
+
     for name in candidates:
         draw.use_font(name)
         pages_module.render(page, frame, {}, theme, 0, 4, frame["sys"]["host"])
         badge.update()                                           # noqa: F821
-        with open(f"/remote/shots/font_{name}.raw", "wb") as handle:
+        with open(f"/remote/build/shots/font_{name}.raw", "wb") as handle:
             handle.write(screen.raw)                             # noqa: F821
         print(f"  shot font_{name}")
 
