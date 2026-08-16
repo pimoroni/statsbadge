@@ -459,3 +459,52 @@ def test_a_number_setting_is_held_to_its_bounds(ui):
     ui = ui.script
     assert 'setting.type === "number"' in ui, "a number setting is still a text box"
     assert "setting.unit" in ui, "nowhere to put what it is counted in"
+
+
+def test_every_display_setting_lands_on_a_known_value():
+    """A flag, a choice and a bounded number each come back usable however they arrive.
+
+    validate() is the only thing between the HTTP API and a badge that cannot show a
+    traceback, so every setting is pinned here: what it is when absent, what junk falls
+    back to, and where a number is clamped.
+    """
+    def stored(**sent):
+        return layout.validate({**layout.DEFAULT_CONFIG, **sent})
+
+    absent = stored()
+    assert {key: absent[key] for key in
+            ("smooth", "animate", "plot_animation", "auto_brightness")} == {
+        "smooth": True, "animate": False,
+        "plot_animation": False, "auto_brightness": False}
+    assert {key: absent[key] for key in ("slide", "rows", "gauge_fill", "accent_b")} == {
+        "slide": "off", "rows": "zebra", "gauge_fill": "solid", "accent_b": "same"}
+    assert {key: absent[key] for key in
+            ("interval_ms", "graph_points", "idle_advance_s", "advance_every_s")} == {
+        "interval_ms": 1000, "graph_points": 48,
+        "idle_advance_s": 0, "advance_every_s": 10}
+
+    # A flag takes anything, since the UI is not the only caller.
+    assert stored(smooth=0)["smooth"] is False
+    assert stored(animate="x")["animate"] is True
+
+    # A choice the badge has no renderer for falls back rather than reaching it.
+    for key, fallback in (("slide", "off"), ("rows", "zebra"),
+                          ("gauge_fill", "solid"), ("accent_b", "same")):
+        assert stored(**{key: "nonsense"})[key] == fallback, key
+
+    # `slide` was a bool before it was a choice, and a config saved then still loads.
+    assert stored(slide=True)["slide"] == "over"
+    assert stored(slide=False)["slide"] == "off"
+
+    # Caselights take a field reference to follow, or a plain on and off.
+    assert stored(caselights="cpu.pct")["caselights"] == "cpu.pct"
+    assert stored(caselights=1)["caselights"] is True
+
+    # Numbers are clamped and never refused, so a hand-edited file still loads.
+    for key, low, high in (("interval_ms", 250, 60000),
+                           ("brightness", 0.05, 1.0),
+                           ("graph_points", 8, 160),
+                           ("idle_advance_s", 0, 3600),
+                           ("advance_every_s", 1, 600)):
+        assert stored(**{key: -10**6})[key] == low, key
+        assert stored(**{key: 10**6})[key] == high, key
