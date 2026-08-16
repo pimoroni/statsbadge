@@ -3,8 +3,8 @@ import globals from "globals"
 
 export default [
   {
-    // The config UI is the only JavaScript worth checking. tools/callgraph_web is
-    // generated, and a virtualenv holds whatever the packages in it happen to ship.
+    // The config UI is the only JavaScript that ships. tools/ is development tooling, and
+    // a virtualenv holds whatever the packages in it happen to ship.
     ignores: ["tools/**", "build/**", "dist/**", ".venv/**", "index.html"],
   },
   js.configs.recommended,

@@ -332,7 +332,6 @@ mpremote connect PORT mount . run tools/run.py             # the whole app
 mpremote connect PORT mount . run tools/multihost_test.py  # pairing config
 mpremote connect PORT mount . run tools/failover_test.py   # a changed host IP
 uv run python tools/shots.py build/shots --publish         # PNGs, then the README's
-uv run python tools/callgraph.py --open                    # the call graph, drawn
 ```
 
 The config UI in [`src/statsbadge/web`](src/statsbadge/web) is three files the server hands
@@ -345,9 +344,3 @@ needs no server, including a sparse frame, since "unknown" rendering as `0` is t
 thing here to break. [`tools/check_app.py`](tools/check_app.py) is the one CI runs: it walks
 the AST for names that are neither defined, imported, nor badge builtins, these modules being
 unimportable on the host.
-
-[`tools/callgraph.py`](tools/callgraph.py) reads both sides into one graph and writes a
-self-contained page that draws it. That finds the parts of this that no one file makes
-obvious: the page renderers behind `pages._KINDS`, the extension renderers in `pages.EXTRA`,
-the subcommands hung off argparse. Targets live in
-[`tools/callgraph.toml`](tools/callgraph.toml).
