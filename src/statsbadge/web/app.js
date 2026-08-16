@@ -2185,7 +2185,42 @@ async function renderHelp() {
   const reading = el("section", null,
                      el("h2", { textContent: "Reading now" }),
                      el("p", { textContent: (facts.sources || []).join(", ") || "nothing" }))
-  node.replaceChildren(intro, ...helpFor(facts), reading)
+  node.replaceChildren(intro, ...helpFor(facts), locationHelp(facts.location || {}),
+                       reading)
+}
+
+/** Where the badge is. One answer per install, and an extension needs no settings of its
+ * own on a badge with a location already set. A page naming a location overrides it. */
+function locationHelp(state) {
+  const place = el("input", { type: "text", id: "place", value: state.place || "",
+                              placeholder: "Sheffield, GB" })
+  const number = (id, value, limit) =>
+    el("input", { type: "number", id, step: "0.001", min: -limit, max: limit,
+                  value: value === null || value === undefined ? "" : value })
+  const latitude = number("latitude", state.latitude, 90)
+  const longitude = number("longitude", state.longitude, 180)
+  const save = el("button", { type: "button", className: "primary", textContent: "Save" })
+  save.onclick = () => api("/api/help", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ place: place.value.trim(), latitude: latitude.value,
+                           longitude: longitude.value }),
+  }).then(() => {
+    toast("Saved")
+    return renderHelp()
+  }).catch((error) => toast(error.message, true))
+
+  return el("section", null,
+            el("h2", { textContent: "Location" }),
+            el("p", { textContent: "A town or city, and a country if the name is a common "
+                                   + "one: Sheffield, or Sheffield, US. Looked up once and "
+                                   + "kept, so every extension asking gets the same answer." }),
+            el("label", { htmlFor: "place", textContent: "Location" }), place,
+            el("label", { htmlFor: "latitude", textContent: "Latitude" }), latitude,
+            el("label", { htmlFor: "longitude", textContent: "Longitude" }), longitude,
+            el("menu", null, save),
+            el("p", { textContent: "Coordinates win over the name, for a spot no name lands "
+                                   + "on. Clear all three to set nowhere." }))
 }
 
 function helpFor(facts) {

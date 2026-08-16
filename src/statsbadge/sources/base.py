@@ -13,7 +13,7 @@ import subprocess
 import urllib.error
 import urllib.parse
 
-from .. import state
+from .. import geocode, state
 
 
 def readable(exc):
@@ -92,6 +92,10 @@ class Source:
     # page of its kinds whenever the config changes.
     page_settings = ()
 
+    # Where the badge is: `place`, `latitude` and `longitude`, set by the host. One per
+    # install, and a page naming a location overrides it.
+    home = {}
+
     def __init__(self, config):
         self.config = config
         self.faults = 0
@@ -100,6 +104,28 @@ class Source:
         # name and written by the host. This one is in memory; the persistent one is in
         # place by the time `start` runs.
         self.store = state.Store()
+        # Shared with every other source, so a town is looked up once for the install. In
+        # memory here too, replaced by the host's before `start`.
+        self.geocode = geocode.Geocoder()
+
+    def location(self, page=None):
+        """Where a page is set to, or where the badge is: (latitude, longitude, label).
+
+        Coordinates beat a name, and a page beats the badge, so one badge holds a clock for
+        Sheffield and a clock for Tokyo. None where neither names a location, and while a
+        failed geocode is backed off.
+
+        Geocoding waits on the network, so call this from a fetch thread and not `sample`.
+        """
+        for where in (page, self.home):
+            where = where or {}
+            latitude, longitude = where.get("latitude"), where.get("longitude")
+            if latitude is not None and longitude is not None:
+                return (float(latitude), float(longitude), None)
+            place = (where.get("place") or "").strip()
+            if place:
+                return self.geocode.lookup(place)
+        return None
 
     def configure(self, settings):
         """Take settings while running, on every save and not only on a change.

@@ -22,8 +22,8 @@ import threading
 import time
 import traceback
 
-from . import (auth, commands, derive, extensions, identity, install, layout, library,
-               push, pushed, themes, tooling)
+from . import (auth, commands, derive, extensions, geocode, identity, install, layout,
+               library, push, pushed, state, themes, tooling)
 from .collect import Collector
 
 # Normalised and absolute, since `_static` compares a normalised target against this.
@@ -39,11 +39,22 @@ REASONS = {
 # Lines of install progress kept for the UI to poll.
 INSTALL_LOG = 400
 
-# Settings the host keeps for itself, under this name in layout.json's settings. Only
-# these: the block is handed to the sources, and a stored key nobody declared would be
-# whatever a browser felt like sending.
+# Settings the host keeps for itself, under this name in layout.json's settings. Declared
+# in the shape an extension declares its settings: the block is handed to the sources, and
+# a stored key nobody declared would be whatever a browser felt like sending.
 HOST = "host"
-HOST_SETTINGS = ("lhm_url",)
+HOST_SETTINGS = (
+    {"key": "lhm_url", "label": "Its address", "type": "text"},
+    {"key": "place", "label": "Location", "type": "text",
+     "hint": "A town or city, and a country if the name is a common one: Sheffield, or "
+             "Sheffield, US"},
+    {"key": "latitude", "label": "Latitude", "type": "number",
+     "min": -90, "max": 90, "step": 0.001, "unit": "degrees",
+     "hint": "Instead of the name, for a spot no name lands on"},
+    {"key": "longitude", "label": "Longitude", "type": "number",
+     "min": -180, "max": 180, "step": 0.001, "unit": "degrees"},
+)
+HOST_KEYS = tuple(entry["key"] for entry in HOST_SETTINGS)
 
 TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -74,10 +85,16 @@ class Service:
             source_config.get("extensions"), stored)
         # What the browser saved beats the flag, the same way an extension's settings do.
         for key, value in (stored.get(HOST) or {}).items():
-            if key in HOST_SETTINGS and value:
+            if key in HOST_KEYS and value not in (None, ""):
                 source_config[key] = value
+        # One cache for every source that resolves a location: a town is looked up once for
+        # the install. Beside the config and not under extensions/, which holds one file
+        # per extension.
+        self.geocoder = geocode.Geocoder(
+            state.Store(os.path.join(config_dir, "geocode.json")))
         self.collector = Collector(interval=interval, config=source_config,
-                                   state_dir=os.path.join(config_dir, "extensions"))
+                                   state_dir=os.path.join(config_dir, "extensions"),
+                                   geocoder=self.geocoder)
         self.started = threading.Event()
         self._installing = threading.Lock()
         self._usb = threading.Lock()
@@ -163,6 +180,9 @@ class Service:
         """
         system = platform.system()
         block = {"platform": system, "sources": [s.name for s in self.collector.sources]}
+        # Where the badge is, which no platform hides and every extension wanting a
+        # location reads.
+        block["location"] = {key: self.collector.config.get(key) for key in geocode.KEYS}
         if system == "Darwin":
             from .sources import macos
             block["powermetrics"] = {
@@ -184,8 +204,8 @@ class Service:
 
     def set_host_settings(self, asked):
         """Store what the Help tab changed, and hand it to the sources now."""
-        block = {key: str(value).strip() for key, value in asked.items()
-                 if key in HOST_SETTINGS and str(value).strip()}
+        block = layout.coerce_settings(asked if isinstance(asked, dict) else {},
+                                       HOST_SETTINGS)
         if not block:
             return self.help()
         self.config.set_settings(HOST, block)
@@ -208,6 +228,14 @@ class Service:
     def extension_page_settings(self):
         """What an extension's pages can be told, keyed by page kind."""
         return extensions.page_settings_schema(self.collector.extensions)
+
+    def settings_schema(self):
+        """Every settings block `validate` checks, the host's among the extensions'.
+
+        Kept apart from `extension_settings`, which is the UI's list of extensions to draw
+        a form for. The host's settings are edited in the Help tab instead.
+        """
+        return {**self.extension_settings(), HOST: list(HOST_SETTINGS)}
 
     def announce_pages(self):
         """Tell the sources about the pages already stored, at startup.
@@ -254,7 +282,7 @@ class Service:
         it is the default.
         """
         rev = self.config.replace(incoming, self.extension_kinds(),
-                                 self.extension_settings(),
+                                 self.settings_schema(),
                                  self.extension_page_settings(), badge_id)
         # One answer per machine, so settings are read back from the store and not from a badge.
         extensions.configure(self.collector.extensions,

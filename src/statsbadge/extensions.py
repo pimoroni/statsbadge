@@ -21,17 +21,20 @@ import os
 import sys
 from importlib.metadata import entry_points
 
-from . import state
+from . import geocode, state
 
 GROUP = "statsbadge.sources"
 
 
-def load(config=None, state_dir=None):
+def load(config=None, state_dir=None, geocoder=None):
     """Every installed extension that loads cleanly.
 
     `state_dir` is where each one's store is kept, one file per extension named after it.
     Without one they get a store that keeps what they learn in memory, which suits a
     one-shot load: `install` builds these only to ask what badge modules they ship.
+
+    `geocoder` is shared by every extension: one lookup for the install, not one per
+    extension asking.
     """
     config = config or {}
     disabled = set(config.get("disabled_extensions", ()))
@@ -58,8 +61,17 @@ def load(config=None, state_dir=None):
         # the entry point is what pip installed and what --without names, so it is the one
         # thing that cannot collide with another extension's.
         source.store = state.for_source(state_dir, entry.name)
+        if geocoder is not None:
+            source.geocode = geocoder
         loaded.append(source)
     return loaded
+
+
+def set_home(sources, config):
+    """Hand every source the badge-wide location, at startup and on every change to it."""
+    home = geocode.home_from(config)
+    for source in sources:
+        source.home = home
 
 
 def _entries():

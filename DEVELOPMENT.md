@@ -195,6 +195,11 @@ reads the same list, so a page on an undeclared group is dropped before it reach
 one answer per host. `page_settings` builds fields on each page of that extension's kinds, so
 two pages can point at two places.
 
+**Where the badge is belongs to the badge.** Help holds one location for the install, and
+`self.location(page)` answers `(latitude, longitude, label)`: the page's location where it
+names one, the badge's where it does not. Names go through `geocode.Geocoder`, one cache for
+every extension, so a town costs one lookup and not one per extension asking.
+
 **`ext add` rebuilds a uv tool**, having no way to add to one: `uv tool install
 --with-requirements` replaces the environment, hence the list in `extensions.txt`. An
 extension requiring a newer statsbadge is therefore a constraint on the tool itself, and takes

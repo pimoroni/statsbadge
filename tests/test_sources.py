@@ -496,6 +496,40 @@ def test_a_sensor_url_typed_in_the_browser_is_kept_and_read():
             service.stop()
 
 
+def test_a_location_typed_in_the_browser_reaches_every_source():
+    """One location per install, so an extension wanting one needs no settings of its own.
+
+    Stored under the host's name beside the sensor URL, and handed to the sources on the
+    save rather than at the next start.
+    """
+    from statsbadge import server as server_module
+
+    with tempfile.TemporaryDirectory() as directory:
+        service = server_module.Service(directory, interval=5.0)
+        try:
+            service.set_host_settings({"place": " Sheffield, GB ", "latitude": "",
+                                       "longitude": ""})
+            stored = service.config.snapshot()["settings"][server_module.HOST]
+            assert stored == {"place": "Sheffield, GB", "latitude": None,
+                              "longitude": None}, stored
+            for source in service.collector.sources + service.collector.extensions:
+                assert source.home == {"place": "Sheffield, GB"}, source.name
+
+            # A browser does not enforce min and max on a typed value, so the host clamps.
+            service.set_host_settings({"latitude": 120, "longitude": -400})
+            assert service.collector.config["latitude"] == 90.0
+            assert service.collector.config["longitude"] == -180.0
+
+            # A cache of its own, so a town is looked up once and not once per extension.
+            assert service.geocoder.store.path == os.path.join(directory, "geocode.json")
+
+            again = server_module.Service(directory, interval=5.0)
+            assert again.collector.config["place"] == "Sheffield, GB"
+            again.stop()
+        finally:
+            service.stop()
+
+
 def test_powermetrics_is_tried_and_says_nothing_when_refused():
     """powermetrics is tried under `sudo -n`, so a Mac without the rule declines silently."""
     from statsbadge.sources import macos

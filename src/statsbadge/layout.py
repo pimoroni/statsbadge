@@ -545,20 +545,26 @@ def _validate_settings(incoming, schema):
     for name, block in incoming.items():
         if not isinstance(block, dict):
             continue
-        declared = {entry["key"]: entry
-                    for entry in (schema or {}).get(name, ())
-                    if entry.get("key")}
-        if not declared:
+        declared = (schema or {}).get(name) or ()
+        if not any(entry.get("key") for entry in declared):
             stored[name] = {key: value for key, value in block.items()
                             if value is None or isinstance(value, (str, int, float, bool))}
             continue
-        kept = {}
-        for key, entry in declared.items():
-            if key in block:
-                kept[key] = _coerce_setting(block[key], entry)
+        kept = coerce_settings(block, declared)
         if kept:
             stored[name] = kept
     return stored
+
+
+def coerce_settings(block, declared):
+    """One block of settings in the types declared for it, anything undeclared dropped.
+
+    The host's own settings go through this as well as the extensions', so the two are
+    normalised the same way whether a save or the Help tab wrote them.
+    """
+    entries = {entry["key"]: entry for entry in (declared or ()) if entry.get("key")}
+    return {key: _coerce_setting(block[key], entry)
+            for key, entry in entries.items() if key in block}
 
 
 def _coerce_setting(value, entry):
@@ -589,7 +595,7 @@ def _coerce_setting(value, entry):
         return text if text in options else entry.get("default")
     if value is None:
         return None
-    return str(value)[:200]
+    return str(value).strip()[:200]
 
 
 def merge_settings(from_command_line, stored):

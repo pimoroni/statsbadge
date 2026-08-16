@@ -9,7 +9,7 @@ import importlib
 import threading
 import time
 
-from . import extensions, model
+from . import extensions, geocode, model
 from .sources import discover
 
 # A frame's other values are groups of readings, so a walk over the groups skips these four.
@@ -44,13 +44,16 @@ PEAK_FLOOR = 64 * 1024.0
 
 
 class Collector:
-    def __init__(self, interval=1.0, config=None, history=90, state_dir=None):
+    def __init__(self, interval=1.0, config=None, history=90, state_dir=None,
+                 geocoder=None):
         self.interval = interval
         self._history_at = 0
         self.config = config or {}
         self.sources = discover(self.config)
         self.state_dir = state_dir
-        self.extensions = extensions.load(self.config, state_dir)
+        self.geocoder = geocoder or geocode.Geocoder()
+        self.extensions = extensions.load(self.config, state_dir, self.geocoder)
+        extensions.set_home(self.sources + self.extensions, self.config)
         self.frame = model.empty_frame()
         self.seq = 0
         self.started_at = time.time()
@@ -92,6 +95,7 @@ class Collector:
         down or on another port. The `discover` pass below builds those, so a URL typed in
         the browser reaches a source that startup passed over.
         """
+        extensions.set_home(self.sources + self.extensions, self.config)
         told = []
         for source in list(self.sources):
             handler = getattr(source, "reconfigure", None)
@@ -129,7 +133,7 @@ class Collector:
         importlib.invalidate_caches()
         running = {source.name: source for source in self.extensions}
         kept = []
-        for source in extensions.load(self.config, self.state_dir):
+        for source in extensions.load(self.config, self.state_dir, self.geocoder):
             already = running.pop(source.name, None)
             if already is not None:
                 kept.append(already)
@@ -140,6 +144,7 @@ class Collector:
                 source.note_fault(exc)
             kept.append(source)
         self.extensions = kept
+        extensions.set_home(kept, self.config)
         for gone in running.values():
             try:
                 gone.stop()
