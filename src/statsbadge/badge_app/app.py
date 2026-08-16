@@ -77,7 +77,7 @@ def load_extensions(app_dir):
 BUTTON_HOME.irq(None)
 HOLD_TO_EXIT_MS = 700
 
-# The bindable buttons, paired with the names the layout knows them by. Built here because
+# The bindable buttons, paired with the names the layout refers to them by. Built here since
 # the buttons are runtime globals, so the literal was four tuples on every frame.
 BINDABLE = (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C))
 
@@ -86,9 +86,8 @@ BINDABLE = (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C))
 GC_THRESHOLD = 256 * 1024
 COLLECT_EVERY_MS = 1000
 
-# How many series one poll asks for. The ask is a query string and the reply is that many
-# rings held here, so a layout with a dozen plotted pages does not fetch the lot; what it
-# does fetch starts at the page on screen. Twelve covers every built-in layout twice over.
+# How many series one poll asks for, starting at the page on screen, so a layout with a
+# dozen plotted pages does not fetch the lot. Twelve covers every built-in layout twice.
 GRAPH_KEYS = 12
 
 # A revision nothing has, so the first poll asks the host for everything.
@@ -495,8 +494,8 @@ class App:
         if self.client.status != net.DONE:
             self.status = "offline"
             self.detail = self.client.error
-            # 403 is the host refusing this badge. It has to be paired again, so say so
-            # instead of sitting on "Connecting" forever.
+            # 403 is the host refusing this badge. It has to be paired again, which the
+            # screen states instead of sitting on "Connecting" forever.
             if self.client.http_status == 403:
                 self.rejected = True
             self.dirty = True
@@ -521,14 +520,15 @@ class App:
             self.frame["layout_rev"] = self.layout_rev
             self.apply_layout()
         elif what == "history":
-            # v=2 wraps the series in the two things a plot needs to place it in time: how far
-            # apart the points are, and how old the newest was when the host answered. v=3
-            # adds a pair for any ring a source answers for itself, those being on
-            # whatever clock the readings are really on - an hour, for a domain's traffic.
-            # Merged, not replaced: the ask is capped and starts at the page on screen, so
-            # a ring fetched a poll ago for a page further along is still the newest thing
-            # there is for it. What the layout has stopped plotting is dropped, or a
-            # retired page's series is held for as long as the app runs.
+            # v=2 wraps the series in the two things a plot needs to place it in time: how
+            # far apart the points are, and how old the newest was when the host answered.
+            # v=3 adds a pair for any ring a source answers for itself, on whatever clock
+            # the readings are really on - an hour, for a domain's traffic.
+            #
+            # Merged, not replaced: the ask is capped and starts at the page on screen, so a
+            # ring fetched a poll ago for a page further along is still the newest there is.
+            # What the layout has stopped plotting is dropped, or a retired page's series
+            # would be held for as long as the app runs.
             self.history.update(payload.get("series", payload) or {})
             plotted = self._plot_refs()
             for ref in [ref for ref in self.history if ref not in plotted]:
@@ -543,7 +543,7 @@ class App:
     def _plot_refs(self, first=0):
         """Every field a page draws a series of, walking the pages from `first`.
 
-        Which is not only the graph pages: a sparkline and a trend draw one too, and asking
+        Which is not only the graph pages, a sparkline and a trend drawing one too. Asking
         only for the graphs' fields left those plotting the live value twice - a flat line
         whatever the machine was doing.
         """
@@ -591,7 +591,7 @@ class App:
         pages_module.LABELS = self.setting("labels") or {}
         # With what it measures their fields in, for the ones no suffix betrays.
         draw.use_units(self.setting("units"))
-        # Names and fields worked out from the old layout's refs, and read off LABELS.
+        # Names and fields worked out from the old layout's refs, read off LABELS.
         pages_module.forget_layout()
         animate = bool(self.setting("animate", False))
         if animate != pages_module.ANIMATE:
@@ -787,8 +787,8 @@ class App:
     def tick(self):
         """Notice the things that change with time and not with an event.
 
-        Without this a page would keep a toast forever and never admit the host had
-        gone away, because nothing would mark it for redraw.
+        Without this a page would hold a toast indefinitely, with the host gone and
+        nothing marking the page for redraw.
         """
         now = time.ticks_ms()
         if self.toast_text:

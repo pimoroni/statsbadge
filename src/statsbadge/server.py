@@ -26,8 +26,7 @@ from . import (auth, commands, derive, extensions, identity, install, layout, li
                push, pushed, themes, tooling)
 from .collect import Collector
 
-# Normalised and absolute: `_static` compares a normalised target against this, so a `..`
-# left in here would refuse everything instead.
+# Normalised and absolute, since `_static` compares a normalised target against this.
 STATIC_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"))
 
 REASONS = {
@@ -93,7 +92,7 @@ class Service:
         self.collector.stop()
 
     def reload_extensions(self):
-        """Take up whatever is installed now, and tell it about the pages already stored."""
+        """Take up whatever is installed now, and hand it the pages already stored."""
         names = self.collector.reload_extensions()
         self.announce_pages()
         return names
@@ -184,7 +183,7 @@ class Service:
         return block
 
     def set_host_settings(self, asked):
-        """Store what the Help tab changed, and tell the sources now."""
+        """Store what the Help tab changed, and hand it to the sources now."""
         block = {key: str(value).strip() for key, value in asked.items()
                  if key in HOST_SETTINGS and str(value).strip()}
         if not block:
@@ -485,9 +484,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # This badge's revision. It refetches when the number moves, so a save for one badge
             # must not send the others after a layout nothing changed.
             frame["layout_rev"] = service.config.rev_for(badge_id)
-            # A badge names the slow readings it holds, so a domain's traffic is not sent sixty
-            # times a minute. The state travels in the query, leaving the host one frame for all
-            # badges.
+            # A badge names the slow readings it already has, so a domain's traffic is not
+            # sent sixty times a minute. The state travels in the query, leaving the host one
+            # frame for all badges.
             #
             # Asking also marks the badge as able to read the answer; an older app gets every group
             # inline.
@@ -518,7 +517,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             points = max(1, min(160, int(query.get("points") or 48)))
             # v=2 carries the spacing of the points and the age of the newest, which puts them
             # on a time axis. v=3 adds `spacing` for each ring a source answers for itself,
-            # those being on their own clock.
+            # those being on a clock of their own.
             #
             # Asked for and not assumed: an older app would hand the wrapper straight to a graph
             # and animate an hourly series as though it arrived every second.
@@ -595,7 +594,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/stats" and method == "GET":
             return self._json(200, service.collector.latest())
 
-        # The readings behind the preview's graph. The badge asks for its own over /v1; this
+        # The readings behind the preview's graph. The badge asks over /v1 for itself; this
         # is the same rings, for a UI that is already loopback-only.
         if path == "/api/history" and method == "GET":
             query = self._query()
@@ -682,7 +681,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/extensions" and method == "GET":
             return self._json(200, service.extension_catalogue())
 
-        # Asks an index, so it is its own request: the tab draws without waiting on it.
+        # Asks an index, so it is a separate request: the tab draws without waiting on it.
         if path == "/api/extensions/outdated" and method == "GET":
             return self._json(200, {"outdated": library.outdated(service.config_dir)})
 
@@ -786,7 +785,7 @@ def _lower(headers):
 # request that shows them or bakes one into a badge would otherwise pay for the lookup
 # below again.
 ADDRESSES_FOR = 30.0
-# Long enough for a resolver that is going to answer. A host whose own name is in neither
+# Long enough for a resolver that is going to answer. A host whose name is in neither
 # DNS nor mDNS blocks for seconds, and a request must not wait for that.
 NAME_LOOKUP = 1.0
 
@@ -818,7 +817,7 @@ def _local_addresses():
 
 
 def _named_addresses(timeout=NAME_LOOKUP):
-    """What this host's own name resolves to, given a moment to answer.
+    """What this host's name resolves to, given a moment to answer.
 
     On a thread, since the call has no timeout of its own: a macOS box whose hostname
     nothing can resolve takes it past the point where the browser has given up on the

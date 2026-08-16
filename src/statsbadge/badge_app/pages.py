@@ -314,7 +314,7 @@ def _bars(page, frame, _history, theme):
     values = value_of(frame, ref)
     if not isinstance(values, list):
         values = [] if values is None else [values]
-    # What the page says, else the full scale the host sent for it, else a percentage.
+    # The scale the page sets, else the full scale the host sent for it, else a percentage.
     maximum = float(page.get("max") or peak_of(ref, frame) or SCALE.get(field_of(ref))
                     or 100.0)
     names = value_of(frame, ref + LANE_NAMES)
@@ -420,7 +420,7 @@ def icon_for(ref, by_group):
 def _dials(page, frame, _history, theme):
     refs = page.get("fields", [])[:4]
     groups = [ref.split(".")[0] for ref in refs]
-    # Named by whatever tells them apart: CPU and GPU where NAMES would call both LOAD,
+    # Named by whatever separates them: CPU and GPU where NAMES would call both LOAD,
     # LOAD and TEMP where they share a subsystem.
     by_group = len(set(groups)) == len(groups)
     entries = []
@@ -458,7 +458,7 @@ def _notify(page, frame, _history, theme):
         if isinstance(value, dict):
             items.append(value)
         elif value is not None or not items:
-            # An empty counter still gets its label, so a page of them says what it is for.
+            # An empty counter still gets its label, naming what a page of them is for.
             counters.append((name_for(ref), draw.reading(value, field_of(ref))))
     draw.notification(theme, items[:3], counters)
 
@@ -594,7 +594,7 @@ def _badge_page(_page, _frame, _history, theme):
 
 
 def names_for(refs):
-    """Display names that tell these readings apart.
+    """Display names that separate these readings.
 
     The field name where that is already unique - LOAD, TEMP - the group where it is
     not, and both where neither is: a page of cpu.pct and gpu.pct would otherwise be
@@ -704,7 +704,7 @@ def _waterfall(page, frame, history, theme):
     global _wf_from, _wf_to, _wf_seq, _wf_at, _wf_labels
     ref = page.get("field", "cpu.cores")
     values = value_of_list(frame, ref)
-    # What the page says, else the full scale the host sent for it, else a percentage.
+    # The scale the page sets, else the full scale the host sent for it, else a percentage.
     maximum = float(page.get("max") or peak_of(ref, frame) or SCALE.get(field_of(ref))
                     or 100.0)
 
