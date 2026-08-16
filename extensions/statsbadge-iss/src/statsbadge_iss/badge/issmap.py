@@ -160,7 +160,7 @@ def _curve(state, points):
 
 
 def _track(theme, view, state, points, flown):
-    """The ground track, split at `flown`, the host's index of where it is in the run.
+    """The ground track, split at `flown`, the index the host currently reports.
 
     Drawn as a stroked path per stretch: one open contour is 0.08ms plus its edges, where
     seventy-six lines are 0.08ms each.

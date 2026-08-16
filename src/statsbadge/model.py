@@ -144,7 +144,7 @@ def describe():
         "groups": {name: list(fields) for name, fields in GROUPS.items()},
         "percent_fields": sorted(PERCENT_FIELDS),
         # Which fields have a top end, so the UI can keep uptime out of a gauge: a
-        # reading with no full scale draws an empty ring, carrying no number.
+        # reading with no full scale has no fraction to fill the ring with.
         "full_scale": dict(FULL_SCALE),
         "list_fields": sorted(LIST_FIELDS),
         # What a `notify` page draws, and what every other kind has to be kept away from.

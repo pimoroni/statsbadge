@@ -610,8 +610,8 @@ def cmd_tray(args):
         import ssl
         stopped = backend.why_not()
         print(stopped or f"tray backend: {backend.name()}")
-        # What an extension can verify a certificate against. A packaged app has no roots
-        # to verify against, and this line reports whether it was given some.
+        # What an extension can verify a certificate against. A packaged app has none of
+        # its own, so this prints whether any were found.
         given = trust_store()
         paths = ssl.get_default_verify_paths()
         print("certificates: {} from {}".format(
@@ -725,8 +725,8 @@ def main(argv=None):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--host", default="0.0.0.0")
     common.add_argument("--port", type=int, default=DEFAULT_PORT)
-    # Tried by default on macOS and quiet when sudo declines. Named here to record it out
-    # loud, or to keep it from being tried at all.
+    # Tried by default on macOS, and quiet where sudo is not permitted. Named here to make
+    # the attempt explicit, or to prevent it.
     common.add_argument("--powermetrics", dest="powermetrics", action="store_true",
                         default=None,
                         help="macOS: report the sudoers rule if powermetrics is refused")

@@ -134,7 +134,7 @@ class LaunchAgent:
                  "RunAtLoad": True, "ProcessType": "Interactive"}
         if log:
             # Anything printed before logs.start replaces the streams, which is where
-            # a missing extra or a broken import would surface here.
+            # a missing extra or a broken import shows up.
             os.makedirs(os.path.dirname(log), exist_ok=True)
             entry["StandardOutPath"] = entry["StandardErrorPath"] = log
         with open(self.where(), "wb") as handle:

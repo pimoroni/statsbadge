@@ -319,7 +319,7 @@ class Store:
             return secret
 
     def rename(self, badge_id, name):
-        """A name the operator chose for a badge, or its id back when they clear it.
+        """The name set for a badge, or its id back when that name is cleared.
 
         A badge announces itself by whatever its setup screen was told, which is its id
         until somebody names it - and two badges on one host then read the same.

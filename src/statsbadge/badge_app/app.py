@@ -77,7 +77,7 @@ def load_extensions(app_dir):
 BUTTON_HOME.irq(None)
 HOLD_TO_EXIT_MS = 700
 
-# The bindable buttons, paired with the names the layout refers to them by. Built here since
+# The bindable buttons, paired with the names the layout refers to them by. Built here because
 # the buttons are runtime globals, so the literal was four tuples on every frame.
 BINDABLE = (("a", BUTTON_A), ("b", BUTTON_B), ("c", BUTTON_C))
 
