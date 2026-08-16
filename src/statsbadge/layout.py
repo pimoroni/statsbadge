@@ -445,8 +445,7 @@ def _flag(value):
 
 
 def _number(bounds, cast=int):
-    # The cast is left to raise, as it did before this was a table: a number that is not
-    # one is a bad request, not a value to guess at.
+    # A value that will not cast is a bad request, so the cast is left to raise.
     def rule(value):
         return _clamped(cast(value), bounds)
     return rule
@@ -458,10 +457,6 @@ def _one_of(options, fallback):
     return rule
 
 
-# Each display setting and the rule that normalises it. Defaults come from DEFAULT_CONFIG,
-# so a setting is declared in one place. `caselights` and `slide` are handled in validate()
-# instead: one takes a field reference as well as a bool, the other still accepts the bool
-# it was before it became a choice.
 DISPLAY_SETTINGS = {
     "interval_ms": _number(INTERVAL_MS),
     "brightness": _number(BRIGHTNESS, float),
