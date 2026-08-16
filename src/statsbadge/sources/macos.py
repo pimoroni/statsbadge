@@ -9,7 +9,7 @@ Die temperatures, fan RPM and package power all live behind the SMC or powermetr
 which needs root. `MacPowermetrics` covers those, and is tried on every start: `sudo -n`
 prompts for nothing, so the cost of asking is a refusal.
 
-Refused, it carries on without those fields and says nothing, since nobody asked for
+Refused, it carries on without those fields and stays quiet, since nobody asked for
 them. Asked for with `--powermetrics` it prints the sudoers rule to add instead: a flag
 that quietly does nothing is worse than no flag.
 """
@@ -42,7 +42,7 @@ def powermetrics_argv():
 
 # What sudoers reads as syntax inside a command, per sudoers(5). The comma is the one
 # that bites: it separates commands in a rule, so `--samplers cpu_power,gpu_power` reads
-# as three of them and visudo refuses the second as not a path.
+# as three of them and visudo rejects the second as not a path.
 SUDOERS_SPECIAL = ("\\", ",", ":", "=")
 
 
@@ -88,7 +88,7 @@ class MacIOKit(Source):
 
     def sample(self, frame, dt):
         # Both readings are subprocesses, so either can time out on a machine busy enough
-        # to be worth looking at. Neither failure is lasting: the next poll tries again.
+        # to be worth looking at. Neither failure is lasting; the next poll has another go.
         worked = True
         try:
             gpus = self._read_accelerators()
@@ -207,7 +207,7 @@ class MacPowermetrics(Source):
 
         Asked of the command itself and not of sudo in general. A rule that allows
         powermetrics alone, which is the rule to write, does not allow `sudo -n true`, so
-        testing with that would refuse the very setup worth having.
+        testing with that would reject the very setup worth having.
         """
         try:
             return subprocess.run(["sudo", "-n", "-l", *powermetrics_argv()],

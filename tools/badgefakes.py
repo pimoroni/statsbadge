@@ -1,6 +1,6 @@
 """Stand-ins for the badge's builtins, so the app's pure-logic modules import on a host.
 
-The firmware injects `color`, `shape`, `vec2` and the rest into builtins, and `look` builds
+The firmware injects `color`, `shape`, `vec2` and the rest into builtins. `look` builds
 a Theme at import, so nothing under `badge_app/` can be imported without them. These cover
 the surfaces that are arithmetic and layout; what rasterises is left alone. Faking a
 rasteriser proves nothing about the one on the badge, so anything that draws is tested

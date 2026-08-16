@@ -17,7 +17,7 @@ class Registered(unittest.TestCase):
     def test_every_container_in_draw_is_registered(self):
         """`_cached` returns what it registers, so a cache is declared by being built
         through it. One built by hand is what this finds."""
-        # Named as holding no colour: a face and its measurements, and the list itself.
+        # Named as holding no colour: a face with its measurements, and the list itself.
         exempt = {"_fonts", "_weights", "_CLEARS"}
         loose = []
         for name in dir(draw):

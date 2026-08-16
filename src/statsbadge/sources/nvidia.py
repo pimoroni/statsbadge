@@ -1,6 +1,6 @@
 """NVIDIA GPUs via NVML, which is the same library nvidia-smi uses.
 
-Works on Windows and Linux, and gives everything an Afterburner panel shows without
+Works on Windows and Linux, giving everything an Afterburner panel shows without
 privileges. Needs `pynvml` (`pip install statsbadge[nvidia]`).
 """
 

@@ -202,7 +202,7 @@ def test_a_slow_group_travels_only_when_it_changes(h):
 def test_a_declared_group_is_named_on_the_badge_too():
     """A group's host-side name travels with the layout, since the badge holds only the
     key."""
-    # A key named after a domain draws as CF_GADGETOID_COM, and the dots cannot be put back.
+    # A key named after a domain draws as CF_GADGETOID_COM, and the dots cannot be recovered.
     sys.path.insert(0, install.app_source_dir())
     import pages
 
@@ -216,7 +216,7 @@ def test_a_declared_group_is_named_on_the_badge_too():
     labels = layout.group_labels([page], caps)
     assert labels == {"cf_a_com": "a.com", "cf_b_com": "b.com"}, labels
 
-    # The model's groups are left out: "Processor" is a desk label, the badge says CPU.
+    # The model's groups are left out: "Processor" is a desk label, the badge shows CPU.
     assert layout.group_labels([{"kind": "dial", "field": "cpu.pct"}], caps) == {}
 
     was = pages.LABELS
@@ -384,7 +384,7 @@ def test_an_extension_installed_since_start_is_taken_up_without_a_restart():
 
 
 def test_the_app_keeps_what_extensions_reach_into_it_for():
-    """Every attribute a badge module reaches for in draw, look, worldmap or pages is
+    """Every attribute a badge module uses from draw, look, worldmap or pages is
     there."""
     # Those resolve on the badge alone, so a helper whose only callers are extensions
     # reads as unused here and taking it out is a crash dialog after launch.

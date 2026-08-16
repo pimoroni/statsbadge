@@ -40,7 +40,7 @@ _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
 
 # The widest a setting may be, as (low, high). validate() clamps to these rather than
 # refusing, so a config edited by hand still loads. The sliders in the UI offer a narrower
-# range inside them, which is what someone is likely to want.
+# range inside them, which someone is likely to want.
 #   Under 250ms the badge spends its whole frame budget on HTTP; a minute is the longest
 #   gap where a reading still reads as live.
 INTERVAL_MS = (250, 60000)
@@ -55,7 +55,7 @@ BRIGHTNESS = (0.05, 1.0)
 # "over" draws the incoming page over the outgoing one; "deck" moves them together.
 SLIDE_STYLES = ("off", "over", "deck")
 
-# How the sparkline page tells one row from the next: a band behind every other row, a
+# How the sparkline page separates one row from the next: a band behind every other row, a
 # hairline between them, or nothing.
 ROW_STYLES = ("zebra", "rules", "none")
 
@@ -359,10 +359,10 @@ def group_labels(pages, capabilities):
 
     The badge falls back to the group key where one page draws a field from several, which is
     fine for `cpu` and comes out CF_GADGETOID_COM for a group named after a domain. The dots
-    cannot be put back from the key.
+    cannot be recovered from the key.
 
     So an extension's declared groups travel with the layout. The model's are left out: the
-    badge says CPU at arm's length.
+    badge shows CPU at arm's length.
     """
     owned = capabilities.get("group_source") or {}
     known = capabilities.get("group_labels") or {}

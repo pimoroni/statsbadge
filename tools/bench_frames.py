@@ -64,7 +64,7 @@ theme = look.get(look.DEFAULT)
 pages_module.PLOT_ANIMATION = True
 pages_module.note_spacing(1000, 1000)
 
-# A poll lands about this often, which is what the waterfall eases between and what moves
+# A poll lands about this often, which the waterfall eases between and what moves
 # a walking plot along.
 POLL_FRAMES = 90
 

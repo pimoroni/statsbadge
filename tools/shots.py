@@ -4,7 +4,7 @@
     python3 tools/shots.py build/shots              # convert what the badge dumped
     python3 tools/shots.py build/shots --publish    # and copy the ones the docs show
 
-The badge writes frames into build/shots, which is ignored: a render of every page and
+The badge writes frames into build/shots, which is ignored. A render of every page and
 every theme is a review artefact, and committing all of it means a drawing change shows up
 as forty modified images. Only what the README and the project page link is checked in,
 and --publish reads both to decide which those are, so the set maintains itself.
@@ -89,10 +89,10 @@ def shrink(path):
 
 
 def linked_shots():
-    """The shot names the README or the project page shows, which is what earns a place here.
+    """The shot names the README or the project page shows, which earns a place here.
 
     Both, because the page publishes out of the same `shots` directory: a figure added to
-    index.html and to nowhere else would never be copied in, and the site would ask for a file
+    index.html and to nowhere else would never be copied in, leaving the site asking for a file
     that is not there.
     """
     root = pathlib.Path(__file__).resolve().parent.parent
@@ -102,7 +102,7 @@ def linked_shots():
 
 
 def publish(source, target="shots"):
-    """Copy the shots the docs show out of a build directory, and say what is missing."""
+    """Copy the shots the docs show out of a build directory, and report what is missing."""
     target = pathlib.Path(target)
     target.mkdir(parents=True, exist_ok=True)
     missing = []

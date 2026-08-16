@@ -121,7 +121,7 @@ def write_cards(data):
         lines.append(f'{preset.upper()} = "{base64.b64encode(png).decode()}"\n')
     tint = layout.DEFAULT_CONFIG["tint"]
     # A few themes rather than all twenty: what the probe is checking is that a palette
-    # reaches an image's table, and three of them say that as well as every one would.
+    # reaches an image's table, and three of them show that as well as every one would.
     wanted = ("dark", "luminescence", "mono")
     lines.append("PALETTES = "
                  + json.dumps({name: layout.palette_for(name, tint) for name in wanted})
@@ -184,7 +184,7 @@ def main(argv=None):
         write_png(path, raster, sheet_w, sheet_h)
         print(f"{path}  {len(themes)} themes at {width}x{height}, {levels} shades")
 
-    # What each theme is actually asking for, since a sheet says which looks wrong and this
+    # What each theme is actually asking for: a sheet shows which looks wrong and this
     # says why: a picture is as colourful as the theme's own accent is.
     print()
     print(f"{'theme':22} {'accent share':>13} {'strongest shade':>16}")

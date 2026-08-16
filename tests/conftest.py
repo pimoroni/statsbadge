@@ -1,7 +1,7 @@
 """Fixtures for the suite, and the path and builtins setup every test file relies on.
 
-pytest imports this before any test module, which is what makes the badge stand-ins work:
-`look` builds a Theme at import and so cannot be imported without `color`, and every module
+pytest imports this before any test module, which makes the badge stand-ins work:
+`look` builds a Theme at import, so cannot be imported without `color`, and every module
 under `badge_app/` reaches `look`. Installing them here is the one ordering guarantee.
 """
 
@@ -138,7 +138,7 @@ class ConfigUI:
     """The config UI as data: what index.html defines, and what app.js binds each id to.
 
     Matching a binding as a substring - `'bindCheck("animate", "animate")' in script` -
-    breaks on a reformat and passes on a control that is bound to a setting the server
+    breaks on a reformat, and passes a control bound to a setting the server
     would refuse. Reading the calls out gives the pair to check against the real schema.
     """
 
@@ -218,7 +218,7 @@ def badge_constants():
 
     Several of these have to agree with a host-side figure, and `badge_app/app.py`
     cannot be imported on a host at all. Matching the assignment as text breaks on a
-    comment or a reflow and says nothing about the value, so the source is parsed and the
+    comment or a reflow, and proves nothing about the value, so the source is parsed and the
     constants evaluated in order, each seeing the ones above it.
     """
     def constants(module):

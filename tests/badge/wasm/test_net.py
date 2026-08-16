@@ -5,7 +5,7 @@ tests/test_server.py drives and pairs one badge with it. The socket is node's, t
 tools/wasm/shims - the requests, the signing and the parsing are the badge's own.
 
 `step()` is advanced from the draw loop a slice at a time, so these drive it the way a
-frame would: call it until it says the request is done.
+frame would: call it until the request comes back done.
 """
 
 import json
@@ -16,7 +16,7 @@ import net
 
 STEP_LIMIT = 400
 
-# One server for the run, and it refuses a counter it has already seen. Each client
+# One server for the run, rejecting a counter it has already seen. Each client
 # starts well above the last, the way a badge that has been away comes back.
 _from = [1000]
 
@@ -74,7 +74,7 @@ class Requests(unittest.TestCase):
             self.assertEqual(self.client.http_status, 200, self.client.body)
 
     def test_a_replayed_counter_is_refused(self):
-        """The host refuses a counter it has seen, which is the whole point of signing."""
+        """The host rejects a counter it has seen, which is the whole point of signing."""
         self.client.get("/v1/stats")
         self.finish()
         self.client.config.seq = self.client.config.seq - 1

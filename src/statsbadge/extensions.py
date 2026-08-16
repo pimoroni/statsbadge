@@ -10,7 +10,7 @@ a page can animate at 45fps instead of being a picture fetched over the wire.
 The class is a `sources.base.Source` with two extras:
 
     badge_module     path to a .py to install into the app's `pages/` directory
-    badge_assets     paths to further files the badge side needs, an .af icon font say
+    badge_assets     paths to further files the badge side needs, an .af icon font among them
     badge_page       the page descriptor the config UI should offer
 
 Anything under a group the frame already names is merged; an extension may also add a
@@ -176,7 +176,7 @@ def model_groups(sources):
     for source in sources:
         for name, group in (getattr(source, "groups", None) or {}).items():
             into = declared.setdefault(name, {"label": name, "fields": {}})
-            # Everything the group says about itself, `fields` apart: that one is merged so
+            # Everything the group declares, `fields` apart: that one is merged so
             # two sources can each contribute to a group.
             for key, value in group.items():
                 if key != "fields" and value is not None:

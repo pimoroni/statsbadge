@@ -1,4 +1,4 @@
-"""Draw the notifications page on a badge, with and without pictures, and dump the frames.
+"""Draw the notifications page on a badge, with pictures and without, dumping the frames.
 
     python3 tools/image_themes.py --cards            # writes build/probe_pictures.py
     mpremote connect PORT mount . run tools/notify_probe.py
@@ -9,7 +9,7 @@ build/probe_pictures.py, which is generated - a thumbnail is bytes, and bytes do
 in a source file.
 
 This covers the half that cannot be checked on the host. An indexed PNG has to decode on
-the firmware, its table has to come back the size the bit depth says, and writing the
+the firmware, its table has to come back the size the bit depth implies, and writing the
 theme's shades into it has to recolour the picture. Each of those is a print here.
 """
 

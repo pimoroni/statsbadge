@@ -78,13 +78,13 @@ def test_a_theme_travels_as_its_colours():
         adrift = max(abs(one - other) for one, other in zip(lightnesses, wanted, strict=True))
         assert adrift <= 0.015, f"{name} draws a picture {adrift:.3f} off the levels"
 
-    # How colourful it is comes off the theme: the same share of what the hue can hold that
+    # How colourful it is comes from the theme: the same share of what the hue can hold that
     # the accent takes of its, so a grey accent gives a grey picture.
     for name, coloured in (("mono", False), ("luminescence", True), ("eva01", True)):
         shades = layout.palette_for(name, layout.DEFAULT_CONFIG["tint"])["image"]["8"]
         chroma = max(derive.oklch(tuple(rgb))[1] for rgb in shades)
         assert (chroma > 0.05) is coloured, f"{name} midtone chroma {chroma:.3f}"
-    # Keyed by how many, which is what an indexed image's table length gives.
+    # Keyed by how many, which an indexed image's table length gives.
     built = look.from_palette("eva01", sent["palette"])
     assert sorted(built.image) == [4, 8], sorted(built.image)
     assert all(isinstance(pen, builtins.color) for pen in built.image[4])
@@ -220,7 +220,7 @@ def test_a_theme_with_a_counterpart_has_one_in_the_other_mode():
                         ("shell", "shell-light"), ("luminescence-dark", "luminescence")):
         assert modes[dark] == "dark" and modes[light] == "light", (dark, light)
 
-    # AAA for ink, which is what a reading is drawn in, and a hot end that shows against
+    # AAA for ink, the pen a reading is drawn in, and a hot end that shows against
     # the page at all.
     for name, palette in themes.written().items():
         ink = derive.contrast(palette["ink"], palette["bg"])
@@ -568,7 +568,7 @@ def test_a_theme_can_be_derived_from_one_accent(h, ui):
                             "pages": layout.DEFAULT_PAGES})
     assert tuple(kept["tint"]) in derive.offered()
 
-    # A palette like any other travels, and the badge cannot tell it was derived.
+    # A palette like any other travels, and the badge cannot distinguish a derived one.
     config = layout.Config(os.path.join(tempfile.mkdtemp(), "layout.json"))
     config.replace({"theme": "tinted-light", "pages": layout.DEFAULT_PAGES,
                     "tint": list(derive.accents("saturated")[8])})

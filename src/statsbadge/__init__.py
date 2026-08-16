@@ -11,7 +11,7 @@ from importlib.metadata import PackageNotFoundError, version as _installed
 
 
 def version():
-    """What this install says it is, or "unknown" from a checkout that is not installed."""
+    """The version recorded for this install, or "unknown" from an uninstalled checkout."""
     try:
         return _installed("statsbadge")
     except PackageNotFoundError:
@@ -40,7 +40,7 @@ def bundled():
     beside = os.path.dirname(sys.executable or "")
     if os.path.basename(sys.executable or "").lower().startswith("python"):
         return False
-    # A console script's launcher sits beside the interpreter it runs, which is what
+    # A console script's launcher sits beside the interpreter it runs, which
     # `statsbadge-tray.exe` in a venv's Scripts is. A bundle's binary has no such
     # neighbour: its Python is somewhere else inside the app.
     return not any(os.path.exists(os.path.join(beside, name)) for name in

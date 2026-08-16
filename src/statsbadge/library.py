@@ -72,7 +72,7 @@ def activate(config_dir):
     """
     where = current(config_dir)
     inside = os.path.normpath(root(config_dir)) + os.sep
-    # Any generation a build replaced comes off first. Left where it is, earlier in
+    # Any generation a build replaced is removed first. Left where it is, earlier in
     # sys.path, it would go on answering the import.
     for entry in list(sys.path):
         if entry != where and (os.path.normpath(entry) + os.sep).startswith(inside):
@@ -172,7 +172,7 @@ def installer():
     if kind != "uv":
         return argv
     # uv installs into the environment it is pointed at, and picks none by itself. A
-    # packaged app has no interpreter to point at - briefcase ships the library and not
+    # packaged app has no interpreter to point at, briefcase shipping the library without
     # the binary - so uv is told the version instead, and resolves for this machine.
     if bundled():
         return [*argv, "--python-version",
@@ -297,7 +297,7 @@ def resolved(target, name):
     """What version of `name` the installer put in the target, or None.
 
     The name is split off before it is normalised: a dist-info separates name from version
-    with the same hyphen that a name spells as an underscore, so normalising the whole
+    with the same hyphen a name writes as an underscore, so normalising the whole
     stem made `statsbadge_clock-1.2.0` match nothing at all.
     """
     wanted = name.lower().replace("-", "_")

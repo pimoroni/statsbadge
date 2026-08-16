@@ -43,7 +43,7 @@ try:
     print(f"broke the address: now {config.host}")
     client = net.Client(config)
 
-    # A few failed polls, which is what drives the app to go looking.
+    # A few failed polls, which drives the app to go looking.
     for attempt in range(3):
         client.get("/v1/stats")
         while not client.step():

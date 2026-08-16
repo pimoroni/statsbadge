@@ -113,7 +113,7 @@ def _walk(node, path):
     """Flatten LHM's tree into (path, label, value, unit, highest) readings.
 
     Every sensor carries the highest it has been seen to reach, which is the only full
-    scale a voltage has: nothing else says how far a rail can swing.
+    scale a voltage has: nothing else records how far a rail can swing.
     """
     label = str(node.get("Text", ""))
     here = path + [label] if label else path

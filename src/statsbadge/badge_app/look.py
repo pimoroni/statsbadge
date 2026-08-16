@@ -18,7 +18,7 @@ BODY_MID = BODY_TOP + BODY_H // 2
 
 PAD = 10
 
-# The gauge, its gap and the right margin are all DIAL_GAP, and the radius is as large
+# The gauge, its gap and the right margin are all DIAL_GAP. The radius is as large
 # as that leaves room for. The dial, the ring stack and a clock face all draw here.
 DIAL_GAP = 16
 DIAL_OUTER = 82
@@ -27,7 +27,7 @@ DIAL_INNER = 62
 # as though it sits above centre when it is on it.
 DIAL_C = (DIAL_GAP + DIAL_OUTER, BODY_TOP + BODY_H // 2 + 2)
 # A 270 degree sweep with the gap centred on the bottom, so it looks like a gauge.
-# Angles start at the top and run clockwise: 225 is lower-left, and 495 is 135 once
+# Angles start at the top, running clockwise: 225 is lower-left, and 495 is 135 once
 # round, which is lower-right.
 DIAL_FROM = 225.0
 DIAL_TO = 495.0

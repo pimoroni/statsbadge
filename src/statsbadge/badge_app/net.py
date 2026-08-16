@@ -7,7 +7,7 @@ firmware's `fetch.py` is not used because it is broken on this build and wedges
 permanently on the first socket error.
 
 Signing is HMAC-SHA256 over method, path, a counter and a digest of the body. The
-counter only ever goes up, and the host refuses anything it has already seen, so a
+counter only ever goes up, and the host rejects anything it has already seen, so a
 captured command cannot be replayed.
 """
 
@@ -105,7 +105,7 @@ class Config:
     Credentials are keyed on the server's id, not its address, so a host that gets a
     new DHCP lease is still the same host: the beacon carries the id, and the address
     is just the latest place it was seen. Several hosts can be paired at once and the
-    badge uses whichever is reachable, which is what makes a desk with two machines
+    badge uses whichever is reachable, which makes a desk with two machines
     work without re-pairing.
 
     Each host keeps its own counter, because the counter is a conversation between one
@@ -461,7 +461,7 @@ class Client:
                 return False
 
     def _resync(self):
-        """Take the counter the host says to use next.
+        """Take the counter the host named as next.
 
         A 401 over a counter means the two ends disagree - the badge rebooted and
         lost count, or it was provisioned against a different starting point. The

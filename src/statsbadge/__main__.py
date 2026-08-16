@@ -112,7 +112,7 @@ def extension_modules(args):
 
     Loaded directly instead of through a Service, so an install does not start a
     collector it will only stop again. --without NAME leaves that one out of both the
-    frame and the badge, which is what it should mean.
+    frame and the badge, which it should mean.
     """
     if getattr(args, "no_extensions", False):
         return []
@@ -611,7 +611,7 @@ def cmd_tray(args):
         stopped = backend.why_not()
         print(stopped or f"tray backend: {backend.name()}")
         # What an extension can verify a certificate against. A packaged app has no roots
-        # to verify against, and this line says whether it was given some.
+        # to verify against, and this line reports whether it was given some.
         given = trust_store()
         paths = ssl.get_default_verify_paths()
         print("certificates: {} from {}".format(
@@ -725,7 +725,7 @@ def main(argv=None):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--host", default="0.0.0.0")
     common.add_argument("--port", type=int, default=DEFAULT_PORT)
-    # Tried by default on macOS and quiet when sudo refuses. Named here to say so out
+    # Tried by default on macOS and quiet when sudo declines. Named here to record it out
     # loud, or to keep it from being tried at all.
     common.add_argument("--powermetrics", dest="powermetrics", action="store_true",
                         default=None,
@@ -799,7 +799,7 @@ def main(argv=None):
     inst.add_argument("--new-secret", action="store_true", help="mint a fresh secret")
     inst.add_argument("--no-extensions", action="store_true",
                      help="do not push badge-side modules from installed extensions")
-    # Accepted and ignored: extensions go on by default now, and scripts that passed
+    # Accepted and ignored. Extensions go on by default now, and scripts that passed
     # this should keep working.
     inst.add_argument("--with-extensions", action="store_true",
                      help=argparse.SUPPRESS)

@@ -27,7 +27,7 @@ Sheffield, US      Alabama
 Paris, US          Texas
 ```
 
-Which one you got comes back as `weather.place`, so the Live panel shows it. Latitude and longitude are there for a spot no name lands on, and win wherever both are set. Temperature reads in celsius or fahrenheit, wind in km/h, mph, m/s or knots.
+Which one you got comes back as `weather.place`, so the Live panel shows it. Latitude and longitude cover a spot no name lands on, and win wherever both are set. Temperature reads in celsius or fahrenheit, wind in km/h, mph, m/s or knots.
 
 Every clock page then has settings of its own, so two pages can show two cities. A place settles the time as well as the weather, since Open-Meteo returns a location's UTC offset with its forecast: point a page at Tokyo and it shows Tokyo's time, with no timezone to set anywhere. Each page picks a face:
 

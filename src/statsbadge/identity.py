@@ -6,7 +6,7 @@ looking for a host at a number nothing answers on.
 Each server mints an id once and puts it in the discovery beacon and `/v1/hello`. The
 badge keys its credentials on that, so it recognises the host wherever it turns up.
 
-The id is not a secret. It says which secret to sign with; the signature does the proving.
+The id is not a secret. It names which secret to sign with; the signature proves it.
 """
 
 import json

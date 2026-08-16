@@ -8,7 +8,7 @@ points it at the mount instead. UP/DOWN page, hold HOME to leave.
 
 import sys
 
-# Import it as a package so its __init__ runs, which is what the launcher does.
+# Import it as a package so its __init__ runs, which the launcher does.
 sys.path.insert(0, "/remote/src/statsbadge")
 
 import badge_app  # noqa: F401  the module runs the app on import

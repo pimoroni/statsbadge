@@ -4,9 +4,9 @@ A theme is a table of colours and one gradient rule, so it is config. It lives i
 file, where nobody can write a special case. The selected one travels in the layout, and
 the badge carries one to boot with.
 
-  bg / panel      the page, and the header, footer and tiles on it
+  bg / panel      the page, plus the header, footer and tiles on it
   ink / dim       text, and text that is only labelling something
-  accent          the one colour that says "this is the thing"
+  accent          the one colour marking "this is the thing"
   accent_b        chrome, and a graph's second series; the accent where a theme names none
   grid            the unfilled part of any gauge, and a graph's rules
   ramp            what a gauge fills with as it climbs, cold to hot

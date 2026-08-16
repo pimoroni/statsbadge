@@ -9,7 +9,7 @@
 // called: the runtime is a batteries-included badgeware-wasm build, which carries the
 // badgeware package and the fonts inside the wasm, so the only staging is the app itself.
 //
-// DEVELOPMENT.md says where to get the runtime.
+// DEVELOPMENT.md has the download for the runtime.
 
 import { execFileSync, spawn } from "node:child_process"
 import { readFileSync, readdirSync, statSync } from "node:fs"

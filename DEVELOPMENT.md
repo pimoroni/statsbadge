@@ -250,7 +250,7 @@ a bundle turns out to need:
 
 **certifi**, because a bundle arrives with an empty trust store. `get_default_verify_paths()` answers
 None to both and every HTTPS request an extension makes cannot find an issuer, which reaches
-the screen as a source that says it cannot be reached. `trust_store()` points `SSL_CERT_FILE`
+the screen as a source reported unreachable. `trust_store()` points `SSL_CERT_FILE`
 at certifi where a machine offers it nothing, and leaves a stocked one alone. Telling the
 two apart takes both halves: Windows loads 409 roots from the system store while naming a
 file it lacks, Linux names a directory it searches on demand, and a bundle has each empty.
@@ -303,7 +303,7 @@ ci/build-mpy.sh                                     # precompile the badge app
 `tests/badge/wasm/` runs the app's own modules against the real firmware under the
 badgeware WASM port: real picovector, real fonts, real `screen`. That is the only way
 to test what draws - `pages.render` reaches `screen`, `image` and `tween`, so on a host
-it can only be read as text, which is what the checks in `tests/badge/` still do.
+it can only be read as text, which the checks in `tests/badge/` still do.
 
 Fetch a runtime once (a batteries-included build, which carries the badgeware package
 and the fonts inside the wasm, so nothing else has to be staged):

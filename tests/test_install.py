@@ -1,4 +1,4 @@
-"""What an install puts on a badge, and what it takes off again."""
+"""What an install puts on a badge, and what it removes again."""
 
 import json
 import os
@@ -94,7 +94,7 @@ def test_write_secrets_keeps_the_rest_of_the_file():
 
 
 def test_an_update_prunes_the_files_it_owns_and_leaves_the_rest():
-    """An update takes off the files the installer put there, and nothing else."""
+    """An update removes the files the installer put there, and nothing else."""
     import tempfile
 
     from statsbadge import install
@@ -144,7 +144,7 @@ def test_an_update_prunes_the_files_it_owns_and_leaves_the_rest():
 
 def test_a_file_that_did_not_write_is_not_left_on_the_badge():
     """A copy that wrote nothing is retried, and one that never completes is an error."""
-    # A volume that has only just mounted refuses the first write and leaves an empty file
+    # A volume that has only just mounted rejects the first write and leaves an empty file
     # behind rather than raising.
     import shutil as shutil_module
 
@@ -226,7 +226,7 @@ def test_a_badge_is_called_behind_from_what_it_was_last_seen_holding():
     desired = install.desired_hashes()
     missing = sorted(desired)[0]
     with tempfile.TemporaryDirectory() as directory:
-        # Nothing recorded is not the same as up to date, and says so.
+        # Nothing recorded is not the same as up to date, and is reported apart from it.
         assert pushed.behind(directory, "badge1") is None
 
         held = {name: digest for name, digest in desired.items() if name != missing}

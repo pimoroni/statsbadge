@@ -157,7 +157,7 @@ def outline_contours(face, scale):
 def clean_contours(contours, tolerance):
     """Resolve overlapping and self-intersecting outlines into simple rings.
 
-    Fonts are not obliged to be tidy: contours overlap, wind either way and cross
+    Fonts are not obliged to be tidy: contours overlap, wind either way, cross
     themselves, and a renderer that just fills what it is given shows the seams. This
     is alright-fonts' shapely pipeline, which unions anything that genuinely overlaps
     and then takes the rings back out.
@@ -349,7 +349,7 @@ def build(font, entries, size, tolerance, axes, quiet=False):
 
 
 def default_output(extension):
-    """An extension's badge directory, which is what the installer pushes."""
+    """An extension's badge directory, which the installer pushes."""
     found = sorted(pathlib.Path(extension).glob("src/*/badge"))
     if not found:
         raise SystemExit(f"no src/*/badge directory under {extension}")

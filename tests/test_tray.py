@@ -196,7 +196,7 @@ def test_windows_keeps_its_entry_in_the_registry():
 
 def test_the_gui_entry_point_still_takes_a_command():
     """A bare word reaches the command it names, and a flag goes to the tray."""
-    # A packaged app has this as its only entry point: `ext` and `status` are how CI asks
+    # A packaged app has this as its only entry point. `ext` and `status` are how CI asks
     # the built app whether it works, and a login entry passes flags.
     from statsbadge import PIP_VERB, __main__ as cli
 
@@ -216,7 +216,7 @@ def test_the_gui_entry_point_still_takes_a_command():
 
 def test_the_packaged_app_names_files_that_are_there():
     """Every source and icon the briefcase config names is on disk."""
-    # Briefcase falls back to its mascot for an icon it cannot find, and says so in one
+    # Briefcase falls back to its mascot for an icon it cannot find, noted in one
     # line among hundreds.
     root = pathlib.Path(__file__).resolve().parent.parent
     with open(root / "pyproject.toml", "rb") as handle:
@@ -309,7 +309,7 @@ def test_a_print_survives_having_nowhere_to_print():
 # -- the port ---------------------------------------------------------------
 
 def test_a_port_nobody_holds_answers_nothing():
-    """A free port answers nothing, which is what the single-instance check reads."""
+    """A free port answers nothing, which the single-instance check reads."""
     # The only guard on Windows, where SO_REUSEADDR lets a second bind succeed.
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))

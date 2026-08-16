@@ -1,7 +1,7 @@
 """The normalised stats a badge can draw.
 
 One shape across every platform. A field a platform cannot answer is `None`, never
-zero and never absent, so the badge can tell "idle" from "unknown" and draw "--".
+zero and never absent, so the badge can separate "idle" from "unknown" and draw "--".
 Sources fill in what they know and leave the rest alone.
 """
 
@@ -144,7 +144,7 @@ def describe():
         "groups": {name: list(fields) for name, fields in GROUPS.items()},
         "percent_fields": sorted(PERCENT_FIELDS),
         # Which fields have a top end, so the UI can keep uptime out of a gauge: a
-        # reading with no full scale draws an empty ring and says nothing.
+        # reading with no full scale draws an empty ring, carrying no number.
         "full_scale": dict(FULL_SCALE),
         "list_fields": sorted(LIST_FIELDS),
         # What a `notify` page draws, and what every other kind has to be kept away from.

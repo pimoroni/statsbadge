@@ -23,7 +23,7 @@ from . import NO_WINDOW, repl
 APP_NAME = "stats"
 STATE_FILE = "/state/stats.json"
 # Where an extension's badge modules go under the app directory. The app names it too,
-# and says there why it is not `pages`.
+# and records there why it is not `pages`.
 EXT_DIR = "ext"
 
 
@@ -97,7 +97,7 @@ def check_board(port):
 
 
 def badge_id(port):
-    """The badge's uid, which is what it identifies itself as when signing."""
+    """The badge's uid, the name it signs under."""
     check_board(port)
     out = _exec(port, "import badgeware; print(badge.uid)")
     uid = out.strip().splitlines()[-1].strip() if out.strip() else ""
@@ -359,7 +359,7 @@ def _secret_value(text, key):
 def write_secrets(volume, ssid, password, region=None, timezone=None):
     """Set WiFi details in the badge's secrets.py, leaving the rest of the file alone.
 
-    This is the file the badge's error message tells people to edit, so it is the one
+    This is the file the badge's error message points at, so it is the one
     to change; a /secrets.py on the internal filesystem would take precedence over it and
     silently defeat that edit.
     """
@@ -577,7 +577,7 @@ def _stale_modules(built_dir):
     return stale
 
 
-# MPY_VERSION and BUILD_INFO are notes from the precompile, and stay on the host.
+# MPY_VERSION and BUILD_INFO are notes from the precompile. They stay on the host.
 # `mpy` is the built copy sitting inside the source directory.
 NOT_APP_FILES = ("__pycache__", "MPY_VERSION", "BUILD_INFO", "mpy")
 

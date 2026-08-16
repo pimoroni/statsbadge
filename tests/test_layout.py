@@ -222,7 +222,7 @@ def test_every_kind_picks_from_a_pool_that_suits_it(ui):
 
 
 def test_the_ui_is_told_what_a_gauge_can_scale():
-    """The described model says which fields have a top end, so the UI can keep uptime off
+    """The described model marks which fields have a top end, so the UI can keep uptime off
     a gauge."""
     described = model.describe()
     assert "full_scale" in described and described["full_scale"], described.keys()

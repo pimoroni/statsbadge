@@ -21,7 +21,7 @@ def test_the_world_map_is_parsed_on_demand_and_shared():
     import worldmap
 
     assert worldmap._shapes is None, "the map is parsed at import, not on first use"
-    # The first call arms the parse and says wait, so the frame that pays for it is not the
+    # The first call arms the parse and returns wait, so the frame that pays for it is not the
     # frame that draws the map.
     assert worldmap.ready() is False
     assert worldmap._shapes is None, "the parse happened in the frame that asked"

@@ -88,7 +88,7 @@ def test_layout_and_history(h):
     assert status == 200, status
     assert "cpu.pct" in body, body
 
-    # v=2 says where the points sit in time: their spacing, and how old the newest is. Without
+    # v=2 places the points in time: their spacing, and how old the newest is. Without
     # it the old shape comes back, so an app copy older than this host is unaffected.
     status, aged = h.signed("GET", "/v1/history?keys=cpu.pct&points=8&v=2")
     assert status == 200, status
@@ -168,7 +168,7 @@ def test_layout_rev_moves_on_change(h):
 
 
 def test_response_is_one_write(h):
-    """Headers and body leave in a single segment, which is what the framing is for."""
+    """Headers and body leave in a single segment, which the framing is for."""
     # A short timeout after the first recv, so a body in a later segment reads short.
     sock = socket.create_connection(("127.0.0.1", h.port), timeout=5)
     sock.sendall(b"GET /v1/hello HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n")

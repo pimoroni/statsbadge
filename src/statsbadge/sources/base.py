@@ -1,7 +1,7 @@
 """What a source has to implement.
 
 The class attributes here are declarations the config UI reads. `provides` and `groups`
-say what lands in the frame, `settings` and `page_settings` say what can be set, and
+say what lands in the frame, `settings` and `page_settings` say what can be set.
 `label` names the source in the picker.
 
 All four are read off the instance and not off the class. A source that only learns its
@@ -19,8 +19,8 @@ from .. import state
 def readable(exc):
     """A fault as one line somebody can act on.
 
-    `type(exc).__name__: exc` is what an exception says about itself, and for the ones a
-    source actually hits it says it twice: `HTTPError: HTTP Error 503: Service Unavailable`.
+    `type(exc).__name__: exc` is an exception's own repr, and for the ones a
+    source actually hits it appears twice: `HTTPError: HTTP Error 503: Service Unavailable`.
     The name is kept for anything not recognised here, since an unexpected fault is worth
     knowing the type of.
     """
@@ -176,10 +176,10 @@ class Source:
         self.last_fault = readable(exc)
 
     def note_ok(self):
-        """Record that the work succeeded, which is what clears a fault.
+        """Record that the work succeeded, which clears a fault.
 
-        A source has to call this itself, since nothing outside it can tell. One that
-        fetches on a thread fails and recovers on its own schedule, and `sample` handing
+        A source has to call this itself, nothing outside it being able to judge. One that
+        fetches on a thread fails and recovers on a schedule of its own, with `sample` handing
         over the last good reading is no evidence that the next fetch landed.
 
         So this goes at the point the work a fault was noted for succeeded. A fault that

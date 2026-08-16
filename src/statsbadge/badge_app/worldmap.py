@@ -190,7 +190,7 @@ def night_path(solar_lon, solar_lat):
 class View:
     """Where a map is drawn, and where it is looking.
 
-    `scale` is pixels per degree of longitude. A page holds one of these and moves it; two
+    `scale` is pixels per degree of longitude. A page holds one of these, moving it; two
     pages hold two, and share the shapes underneath.
     """
 

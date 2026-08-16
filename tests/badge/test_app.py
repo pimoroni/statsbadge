@@ -109,7 +109,7 @@ def test_a_full_battery_is_not_an_alarm():
 
 
 def test_the_badge_dims_to_suit_the_room(ui):
-    """The scale tells a dark room, a curtained one and a lit one apart, and tops out below
+    """The scale separates a dark room, a curtained one and a lit one, topping out below
     the sensor's rail."""
     # Measured on the badge as raw u16 stepping in sixteens: darkness 48, curtains closed
     # 320, a lit room 4500. A phone torch and a sunny sill both read 61400, railed.

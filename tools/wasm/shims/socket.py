@@ -50,7 +50,7 @@ class socket:
         host, port = address
         self._handle = int(js.sb_connect(host, int(port)))
         if not self._blocking:
-            # The handshake has only been started, which is what net.py expects to hear.
+            # The handshake has only been started, which net.py expects to hear.
             raise OSError(EINPROGRESS)
         while not (self._state() & (CONNECTED | FAILED)):
             pass

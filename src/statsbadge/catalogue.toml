@@ -2,7 +2,7 @@
 #
 # A list, not a search: PyPI has no reliable way to ask "what is a statsbadge extension",
 # and a name typed into the free-form box installs just as well. Anything here that has
-# been taken off PyPI fails to install, and says so.
+# been removed from PyPI fails to install, with a message saying so.
 #
 #   title     what the UI calls it, since a package name is not a heading
 #   summary   one line, in the UI's own words

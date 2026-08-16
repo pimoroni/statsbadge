@@ -5,7 +5,7 @@ change writes it and then rebuilds the library from all of it, so a removal is a
 without that line. `library.py` is where the build lands.
 
 The list is declarative for a reason: it outlives the environment. An upgrade of
-statsbadge itself replaces that environment and leaves the list alone, which is what
+statsbadge itself replaces that environment and leaves the list alone, which
 `ext sync` is for.
 """
 
@@ -183,7 +183,7 @@ def plan(verb, asking, wanted, present):
                 done["recorded"].append(requirement)
             continue
         if listed:
-            # On the list but absent from the environment, which is what a `uv tool
+            # On the list but absent from the environment, which a `uv tool
             # install` of statsbadge itself leaves behind. Asking for it is asking for it
             # back, so rebuild instead of reporting an install nothing can see.
             done["restored"].append(short)

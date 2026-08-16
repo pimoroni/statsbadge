@@ -135,7 +135,7 @@ def main():
 
     # Drawn at twice the size wanted and reduced, so this is not the 24 pixel mark
     # enlarged. macOS reads the .icns and Windows the .ico; briefcase falls back to its
-    # own mascot for a format it cannot find, and says so in one line nobody reads.
+    # own mascot for a format it cannot find, noted in one line nobody reads.
     APP_ICONS.mkdir(parents=True, exist_ok=True)
     inner = round(APP_SIZE * APP_INSET)
     art = Image.new("RGBA", (APP_SIZE, APP_SIZE), CLEAR)

@@ -47,7 +47,7 @@ def test_rotated_secret_is_picked_up(h):
 
 
 def test_counter_refusal_offers_a_resync(h):
-    """A counter refused as a replay or as out of window says what to use next."""
+    """A counter rejected as a replay or as out of window carries the next one to use."""
     # The signature is verified before this check, so telling the caller is safe.
     who = "resyncer00001"
     other = auth.Store(os.path.join(h.dir, "badges.json"))

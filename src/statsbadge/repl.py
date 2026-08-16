@@ -1,6 +1,6 @@
 """Talk to the badge over its serial REPL.
 
-Two things: run a short script and read what it printed, and hard reset so `main.py`
+Two things: run a short script and read what it printed, then hard reset so `main.py`
 starts again. Both are the raw REPL, four control characters and two end markers, which
 is why mpremote is not a dependency: its console script is off PATH under a uv tool
 install, and it spawns an interpreter per command.
@@ -17,7 +17,7 @@ import time
 
 # A USB CDC port ignores the line speed, but pyserial takes a number.
 BAUD = 115200
-# A script is written in chunks with a pause between them, which is what keeps it inside
+# A script is written in chunks with a pause between them, which keeps it inside
 # the board's USB buffer without raw-paste's flow control.
 CHUNK = 256
 CHUNK_PAUSE = 0.01

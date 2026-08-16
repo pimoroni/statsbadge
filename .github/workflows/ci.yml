@@ -316,7 +316,7 @@ jobs:
             platform: macOS
             built: build/statsbadge-tray/macos/app/statsbadge.app/Contents/MacOS/statsbadge
             # Ad-hoc signed, there being no Apple Developer account behind this. The .app
-            # runs, but the first launch needs Open from the context menu: Gatekeeper
+            # runs, but the first launch needs Open from the context menu, since Gatekeeper
             # refuses a double-click on anything unnotarised.
             sign: "--adhoc-sign"
           - os: windows-latest
@@ -343,7 +343,7 @@ jobs:
         run: uv sync --group packaging
 
       # From the same mark the tray and the badge draw. Briefcase falls back to its own
-      # mascot for an icon it cannot find, and says so in one line among hundreds.
+      # mascot for an icon it cannot find, noted in one line among hundreds.
       - name: Draw the icons
         run: uv run python tools/icon.py
 

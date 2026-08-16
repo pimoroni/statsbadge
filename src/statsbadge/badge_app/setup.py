@@ -155,7 +155,7 @@ def _find_hosts(app):
     found = []
     deadline = time.ticks_add(time.ticks_ms(), 6000)
     while time.ticks_diff(deadline, time.ticks_ms()) > 0:
-        # Short scans so the countdown moves, and six seconds of them, which is what
+        # Short scans so the countdown moves, and six seconds of them, which
         # outlasts the beacon interval here.
         found = net.discover(timeout_ms=600)
         if found:

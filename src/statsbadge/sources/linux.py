@@ -63,7 +63,7 @@ class LinuxHwmon(Source):
                     len(CPU_LABELS),
                 )
                 # Best-named first, then hottest. Several sensors rank the same where the
-                # labels are blank and every entry falls back to one chip name, and taking
+                # labels are blank and every entry falls back to one chip name. Taking
                 # the first of those is taking core 0.
                 if best is None or (rank, -entry.current) < (best[0], -best[1]):
                     best = (rank, entry.current)

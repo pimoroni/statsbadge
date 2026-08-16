@@ -80,7 +80,7 @@ def flown_at(dense, flown):
     """Where along the track `flown` falls, as (lon, lat, sunlit).
 
     Interpolated between two dense points, which are a quarter of a five minute step apart.
-    Longitude comes back unwrapped, as the spline needed it, and is put back in range.
+    Longitude comes back unwrapped, as the spline needed it, and is returned to range.
     """
     if not dense:
         return None

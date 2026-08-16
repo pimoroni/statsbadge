@@ -260,7 +260,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
     source = base.Source({})
     source.note_fault(urllib.error.HTTPError("https://api.open-meteo.com/v1/forecast", 503,
                                              "Service Unavailable", {}, None))
-    # The message says what happened and where, without repeating the exception's name.
+    # The message names what happened and where, without repeating the exception's name.
     assert source.last_fault == "HTTP 503 Service Unavailable from api.open-meteo.com", \
         source.last_fault
     source.note_ok()
@@ -277,7 +277,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
     # Anything unrecognised keeps its type, which is the clue to what went wrong.
     assert said["ValueError"] == "ValueError: something we did not expect", said
 
-    # The API reports both, so the UI can say "failing" and "recovered".
+    # The API reports both, so the UI can show "failing" and "recovered".
     _status, caps = h.raw("GET", "/api/capabilities")
     assert caps["sources"], caps
     for entry in caps["sources"]:
@@ -421,7 +421,7 @@ def test_core_voltages_come_back_as_a_bar_each():
 
 def test_a_source_that_can_run_now_is_taken_up_without_a_restart():
     """A source that becomes available is built by `reconfigure`, without a restart."""
-    # `available()` is called once at startup, and LibreHardwareMonitor says no while its
+    # `available()` is called once at startup, and LibreHardwareMonitor answers no while its
     # server is down or on another port.
     from statsbadge import collect
 
@@ -497,7 +497,7 @@ def test_a_sensor_url_typed_in_the_browser_is_kept_and_read():
 
 
 def test_powermetrics_is_tried_and_says_nothing_when_refused():
-    """powermetrics is tried under `sudo -n`, so a Mac without the rule refuses silently."""
+    """powermetrics is tried under `sudo -n`, so a Mac without the rule declines silently."""
     from statsbadge.sources import macos
 
     tried = macos.MacPowermetrics({})
@@ -510,13 +510,13 @@ def test_powermetrics_is_tried_and_says_nothing_when_refused():
     off = macos.MacPowermetrics({"powermetrics": False})
     assert off._enabled is False, "--no-powermetrics still ran it"
 
-    # The rule names one command and this user, which is what sudoers matches on.
+    # The rule names one command and this user, which sudoers matches on.
     line = macos.sudoers_line()
     assert "NOPASSWD:" in line and "ALL=(root)" in line, line
     assert macos.powermetrics_argv()[0] in line, line
 
     # A comma separates commands in a rule, so an unescaped one in `--samplers
-    # cpu_power,gpu_power,thermal` reads as three of them and visudo refuses the second
+    # cpu_power,gpu_power,thermal` reads as three of them and visudo rejects the second
     # as not a path. Checked by visudo itself where there is one.
     assert "\\," in line, f"visudo will not take this: {line}"
     assert "cpu_power\\,gpu_power\\,thermal" in line, line

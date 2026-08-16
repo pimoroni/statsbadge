@@ -291,7 +291,7 @@ for index, page in enumerate(PAGES):
     print(f"{page['id']:<8} {page['kind']:<6} {per_frame:6.2f} ms/frame")
 
 # The single dial again with the whole ramp swept round it. A second pass over the same
-# page, since the fill is a layout setting and not a page one, and it is worth a shot
+# page, the fill being a layout setting and not a page one, and it is worth a shot
 # because no other page can show it.
 draw.GAUGE_FILL = "ramp"
 draw.clear_cache()
