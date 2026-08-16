@@ -639,8 +639,7 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
             if key:
                 clean[key] = _coerce_setting(page.get(key), entry)
 
-    # Absent means the badge scales the page itself. Zero is already unset to every
-    # renderer and a negative would draw a bar backwards, so neither is stored.
+    # A max of zero or less is dropped: absent already means the badge scales the page.
     for optional in ("max", "min"):
         try:
             number = float(page[optional]) if page.get(optional) is not None else None
