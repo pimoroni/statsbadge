@@ -508,3 +508,14 @@ def test_every_display_setting_lands_on_a_known_value():
                            ("advance_every_s", 1, 600)):
         assert stored(**{key: -10**6})[key] == low, key
         assert stored(**{key: 10**6})[key] == high, key
+
+
+def test_a_setting_that_is_not_a_number_is_refused():
+    """Clamping is for a number out of range. A value that is not a number at all is a bad
+    request, and reaches the caller as one rather than as a guess."""
+    for bad in ("abc", None, [1]):
+        try:
+            layout.validate({**layout.DEFAULT_CONFIG, "interval_ms": bad})
+        except (TypeError, ValueError):
+            continue
+        raise AssertionError(f"accepted interval_ms={bad!r}")

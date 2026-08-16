@@ -440,6 +440,44 @@ def series_colours(palette):
     return [list(accent), list(palette["dim"])]
 
 
+def _flag(value):
+    return bool(value)
+
+
+def _number(bounds, cast=int):
+    # The cast is left to raise, as it did before this was a table: a number that is not
+    # one is a bad request, not a value to guess at.
+    def rule(value):
+        return _clamped(cast(value), bounds)
+    return rule
+
+
+def _one_of(options, fallback):
+    def rule(value):
+        return value if value in options else fallback
+    return rule
+
+
+# Each display setting and the rule that normalises it. Defaults come from DEFAULT_CONFIG,
+# so a setting is declared in one place. `caselights` and `slide` are handled in validate()
+# instead: one takes a field reference as well as a bool, the other still accepts the bool
+# it was before it became a choice.
+DISPLAY_SETTINGS = {
+    "interval_ms": _number(INTERVAL_MS),
+    "brightness": _number(BRIGHTNESS, float),
+    "graph_points": _number(GRAPH_POINTS),
+    "idle_advance_s": _number(IDLE_ADVANCE_S),
+    "advance_every_s": _number(ADVANCE_EVERY_S),
+    "smooth": _flag,
+    "animate": _flag,
+    "plot_animation": _flag,
+    "auto_brightness": _flag,
+    "rows": _one_of(ROW_STYLES, "zebra"),
+    "gauge_fill": _one_of(GAUGE_FILLS, "solid"),
+    "accent_b": _one_of(ACCENT_B_RULES, "same"),
+}
+
+
 def validate(incoming, extra_kinds=(), settings_schema=None,
              page_settings_schema=None):
     """Reject anything the badge could not draw, and normalise the rest.
@@ -464,45 +502,18 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # with it.
     out["tint"] = tint_accent(aliased or incoming.get("tint"), out["tint"])
 
-    interval = int(incoming.get("interval_ms", out["interval_ms"]))
-    out["interval_ms"] = _clamped(interval, INTERVAL_MS)
+    for key, rule in DISPLAY_SETTINGS.items():
+        out[key] = rule(incoming.get(key, DEFAULT_CONFIG[key]))
 
-    brightness = float(incoming.get("brightness", out["brightness"]))
-    out["brightness"] = _clamped(brightness, BRIGHTNESS)
-    # Off, the theme's level, or a field reference for the lights to follow.
+    # A field reference for the lights to follow, or a plain on and off.
     caselights = incoming.get("caselights", out["caselights"])
     out["caselights"] = caselights if _is_ref(caselights) else bool(caselights)
-    out["graph_points"] = _clamped(int(incoming.get("graph_points", 48)), GRAPH_POINTS)
-    # Whether a graph is a curve through its samples or a polyline between them.
-    out["smooth"] = bool(incoming.get("smooth", True))
-    # Whether a gauge sweeps to each new reading or steps to it. Off by default: on a noisy
-    # field the sweep looks like lag.
-    out["animate"] = bool(incoming.get("animate", False))
-    # Whether a plot moves between readings. Separate from `animate`, and off for the same
-    # reason.
-    out["plot_animation"] = bool(incoming.get("plot_animation", False))
-    # How a page turn moves. Off by default: it is a fifth of a second before what the reader
-    # pressed for can be read. A bool is taken too, from before there was a choice.
-    slide = incoming.get("slide", "off")
+
+    # `slide` was a bool before it was a choice, and a config saved then still loads.
+    slide = incoming.get("slide", DEFAULT_CONFIG["slide"])
     if isinstance(slide, bool):
         slide = "over" if slide else "off"
-    out["slide"] = slide if slide in SLIDE_STYLES else "off"
-    # How the sparkline page separates its rows. Banded by default, or six lines read as one
-    # plot with six traces.
-    rows = incoming.get("rows", "zebra")
-    out["rows"] = rows if rows in ROW_STYLES else "zebra"
-    # How the dial page's gauge fills. One colour by default.
-    fill = incoming.get("gauge_fill", "solid")
-    out["gauge_fill"] = fill if fill in GAUGE_FILLS else "solid"
-    # The colour used beside the accent. The same colour by default, as a palette naming
-    # none gets.
-    second = incoming.get("accent_b", "same")
-    out["accent_b"] = second if second in ACCENT_B_RULES else "same"
-    # Whether the badge dims to suit the room. Off by default: not every board has the sensor.
-    out["auto_brightness"] = bool(incoming.get("auto_brightness", False))
-    out["idle_advance_s"] = _clamped(int(incoming.get("idle_advance_s", 0)), IDLE_ADVANCE_S)
-    out["advance_every_s"] = _clamped(
-        int(incoming.get("advance_every_s", 10)), ADVANCE_EVERY_S)
+    out["slide"] = _one_of(SLIDE_STYLES, "off")(slide)
 
     pages = incoming.get("pages")
     if pages is None:
