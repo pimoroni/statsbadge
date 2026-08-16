@@ -764,5 +764,6 @@ _KINDS = {
     "badge": _badge_page,
 }
 
-# It interpolates between polls, so it needs a frame whether or not one landed.
+# The waterfall interpolates between polls, so it needs a frame whether or not a poll
+# landed.
 ANIMATED.add("waterfall")

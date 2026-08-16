@@ -232,7 +232,7 @@ def test_a_smoothed_graph_still_reads_as_the_data():
     # Anything else steps in tens, so a temperature plot tops out at 100 and not 81.6.
     assert draw.axis_top(71.0, "temp") == 100
     assert draw.axis_top(30.0, "temp") == 50
-    # It holds still while the busiest sample moves, which is the point.
+    # A byte-rate axis holds still while the busiest sample moves, which is the point.
     for peak in (6.1, 6.5, 7.0, 9.9):
         assert draw.axis_top(peak * 1024 ** 2, "down_bps") == 10 * 1024 ** 2, peak
 

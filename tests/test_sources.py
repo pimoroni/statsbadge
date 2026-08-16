@@ -223,7 +223,7 @@ def test_a_rate_is_scaled_by_what_it_has_reached():
     # already full.
     assert (1.5e6 / peak) < 0.05
 
-    # It halves in the same wall-clock time whatever the sample interval is set to.
+    # A peak halves in the same wall-clock time whatever the sample interval is set to.
     halved = run([40e6, *[1.0] * int(PEAK_HALF_LIFE_S)], 1.0)
     slower = run([40e6, *[1.0] * int(PEAK_HALF_LIFE_S / 4)], 4.0)
     assert abs(halved - 20e6) < 1e5, halved

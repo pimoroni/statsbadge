@@ -700,7 +700,7 @@ def wait_for_port(timeout=40, previous=None):
     while time.time() < deadline:
         for port in find_ports():
             if previous and port == previous:
-                # Same path: make sure it actually answers before trusting it.
+                # The port the badge was last on. Check it still answers before trusting it.
                 try:
                     badge_id(port)
                 except InstallError:

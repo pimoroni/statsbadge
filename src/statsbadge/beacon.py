@@ -42,7 +42,7 @@ class Beacon:
             "host": self.name,
             # The badge keys its credentials on this, not on the address.
             "id": self.server_id,
-            # So a scan can be made longer than the gap between two of these.
+            # The beacon interval, so a scan can be made longer than the gap between two.
             "every_ms": int(self.interval * 1000),
         }
 

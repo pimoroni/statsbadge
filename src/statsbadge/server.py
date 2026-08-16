@@ -220,8 +220,8 @@ class Service:
 
     def capabilities(self):
         caps = self.collector.capabilities()
-        # With each one's heading and label, so the picker can group them without knowing which
-        # is which.
+        # Each command's heading and label, so the picker can group the commands without
+        # knowing which is which.
         caps["commands"] = commands.records()
         # With each one's label, mode and whether it takes an accent, so the picker groups
         # them and offers the swatches without holding a list.
@@ -665,8 +665,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/api/badges/") and method == "DELETE":
             badge_id = path[len("/api/badges/"):]
-            # Its layout too, or it sits in the file naming an unreachable badge and is handed
-            # to whatever next holds that id. Same for what it was last seen holding.
+            # The forgotten badge's layout goes too, or it sits in the file naming an
+            # unreachable badge and is handed to whatever next holds that id. The same for
+            # what that badge was last seen holding.
             service.config.forget(badge_id)
             pushed.forget(service.config_dir, badge_id)
             return self._json(200, {"forgotten": service.badges.forget(badge_id)})

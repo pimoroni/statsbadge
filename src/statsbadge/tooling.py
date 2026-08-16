@@ -22,7 +22,7 @@ WANTED = "extensions.txt"
 # The ones to leave unloaded, by short name. Beside the list and not inside it: one the
 # environment installed is never on the list, and switching it off has to work anyway.
 DISABLED = "disabled.txt"
-# What a plugin is called if it is named by its short name.
+# What an extension is called when it is named by its short name.
 PREFIX = "statsbadge-"
 # Anything carrying one of these is already a requirement, a path or a URL.
 SPEC_MARKS = "/\\=<>@[]!~;: "
@@ -120,7 +120,7 @@ def names(requirements):
     """The short name of each, for asking whether one is already there.
 
     By short name and not by the string: the same extension can be named as `clock`, as
-    `statsbadge-clock` or as a path to it, and a list holding two spellings of one plugin asks
+    `statsbadge-clock` or as a path to it, and a list holding two spellings of one extension asks
     uv to install it twice.
     """
     return {short_name(requirement) for requirement in requirements}
@@ -366,7 +366,7 @@ def _collapsed(said):
 # part.
 MISSING = re.compile(r"Because (\S+) was not found in the package registry")
 
-# A plugin built against a newer host. Three things are kept: which extension, what it
+# An extension built against a newer host. Three things are kept: which extension, what it
 # needs, and what this tool is pinned to.
 CONFLICT = re.compile(
     r"Because (?:all versions of )?(\S+) depends? on (\S+) and you require (\S+?)[,\s]")

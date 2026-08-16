@@ -185,7 +185,7 @@ def test_enrolment_needs_a_human(h):
     assert status == 200 and outcome["status"] == "pending", outcome
     assert "asker0002" not in h.service.badges.list_badges()
 
-    # It shows up for a human, with the code the badge is displaying.
+    # The pending request shows up for a human, with the code the badge is displaying.
     pending = h.raw("GET", "/api/enrol")[1]["pending"]
     mine = [p for p in pending if p["badge_id"] == "asker0002"]
     assert len(mine) == 1 and mine[0]["code"] == asked["code"], pending
@@ -199,7 +199,7 @@ def test_enrolment_needs_a_human(h):
     # The secret is handed over once.
     assert h.raw("GET", f"/v1/enrol/{asked['request_id']}")[1]["status"] == "gone"
 
-    # It actually works.
+    # The handed-over secret signs a request the host accepts.
     seq = 50
     signature = auth.sign(outcome["secret"], "GET", "/v1/stats", seq, b"")
     status, _ = h.raw("GET", "/v1/stats", None, {

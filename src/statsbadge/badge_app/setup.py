@@ -244,7 +244,8 @@ def _ask_to_join(app, chosen):
     label = chosen.get("name") or host
 
     if _already_paired(app, chosen):
-        # Its address may have moved since, which is the other thing this screen is for.
+        # A paired host's address may have moved since, which is the other thing this
+        # screen is for.
         app.config.note_address(chosen["id"], host, port, chosen.get("name"))
         app.config.switch(chosen["id"])
         draw.banner(app.theme, "Already paired", label, "using the credentials it has")

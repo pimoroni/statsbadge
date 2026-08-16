@@ -120,13 +120,13 @@ def catalogue():
 def offered(installed=None, wanted=(), disabled=()):
     """The catalogue with each entry's state, then anything installed it does not name.
 
-    `wanted` is `extensions.txt`, so one asked for but absent reads as adrift rather than
-    as never having been asked for.
+    `wanted` is `extensions.txt`, so an extension asked for but absent reads as adrift
+    rather than as never having been asked for.
     """
     from . import tooling
     present = {record["name"]: record for record in
                (describe() if installed is None else installed)}
-    # extensions.txt holds requirements; a plugin is known here by its short name.
+    # extensions.txt holds requirements; an extension is keyed here by its short name.
     asked = {tooling.short_name(requirement) for requirement in wanted}
     listed = []
     for entry in catalogue():
@@ -137,7 +137,8 @@ def offered(installed=None, wanted=(), disabled=()):
                        "managed": (found or {}).get("managed", True),
                        "version": (found or {}).get("version"),
                        "error": (found or {}).get("error")})
-    # Whatever else is installed, so a third-party one is still listed and removable.
+    # Installed extensions the catalogue does not name, so a third-party extension is
+    # still listed and removable.
     for name, found in sorted(present.items()):
         listed.append({"name": name, "title": name, "summary": "",
                        "page": bool(found.get("badge_module")),

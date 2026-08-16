@@ -40,7 +40,7 @@ def test_a_theme_travels_as_its_colours():
             assert isinstance(built.at(fraction), builtins.color), (name, fraction)
         assert built.at(0.0) == stops[0][1] and built.at(1.0) == stops[-1][1], name
 
-    # The one the app boots with agrees with the host's copy of it.
+    # The theme the app boots with agrees with the host's copy of that theme.
     assert list(look.THEMES) == [themes.DEFAULT], list(look.THEMES)
     booted, sent = look.THEMES[themes.DEFAULT], themes.written()[themes.DEFAULT]
     for key in ("bg", "panel", "ink", "dim", "accent", "grid"):
@@ -135,7 +135,8 @@ def test_a_palette_can_carry_a_second_accent(h, ui):
     turn = derive.oklch(opposite)[2] - hue
     assert abs((turn - 180.0 + 180.0) % 360.0 - 180.0) < 2.0, turn
 
-    # It reaches the badge in the palette, where a second series takes it.
+    # The second accent reaches the badge in the palette, where a second graph series
+    # draws in it.
     palette = layout.palette_for("tinted-dark", accent, "contrasting")
     theme = look.from_palette("tinted", palette)
     assert theme is not None
