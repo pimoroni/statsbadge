@@ -278,6 +278,14 @@ The badge draws with two typefaces, both under the SIL Open Font License, packed
 - [Lexend](https://github.com/googlefonts/lexend) for everything, and again as thirteen digits packed wide for the clock face that draws numbers the height of the band. [Licence](https://github.com/pimoroni/statsbadge/blob/main/licences/OFL-Lexend.txt).
 - [DSEG](https://github.com/keshikan/DSEG) by keshikan, DSEG7 Classic Bold, for the LCD clock face's seven segments. [Licence](https://github.com/pimoroni/statsbadge/blob/main/licences/OFL-DSEG.txt).
 
+## Place names
+
+Some readings arrive as bare coordinates: a burnt area mapped from orbit, a quake, whatever the space station is over. `geocode.nearest()` names one, answering "44 km SE of Coimbra, PT" the way USGS names a quake.
+
+It reads `cities.tsv.gz`, every settlement over 15,000 people packed from [GeoNames](https://www.geonames.org/) by `tools/make_cities.py` and shipped in the wheel. Under [CC BY 4.0](https://github.com/pimoroni/statsbadge/blob/main/licences/CC-BY-4.0-GeoNames.txt). A local table rather than a reverse geocoding API: Open-Meteo has no reverse endpoint, and the services that do are shared ones with usage policies that software installed on many machines should not lean on. It also works with the network down.
+
+The nearest settlement is not always the one to name, so the largest within 25km of the closest wins. A fire in the hills above Los Angeles is nearest a suburb nobody outside the city could place.
+
 ## Names
 
 The repository, the package, the module and the command are all `statsbadge`. Keeping them identical is deliberate: name the distribution and the module differently and uv_build needs its `module-name` setting, which older uv treats as a fatal parse error rather than a warning. Extensions follow it - `statsbadge-clock` on PyPI, `statsbadge_clock` to import, `clock` to `statsbadge ext add`.

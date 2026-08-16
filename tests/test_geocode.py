@@ -167,6 +167,76 @@ def test_a_source_with_nowhere_set_says_so():
     assert source.location({"latitude": 0, "longitude": 0}) == (0.0, 0.0, None)
 
 
+TOWNS = [
+    ("Rosemead", "US", 34.081, -118.073, 54),
+    ("Los Angeles", "US", 34.052, -118.244, 3971),
+    ("Sheffield", "GB", 53.383, -1.467, 685),
+    ("Labasa", "FJ", -16.417, 179.383, 27),
+    # 64km apart, which is the other side of the tolerance from Rosemead and Los Angeles.
+    ("Ruteng", "ID", -8.611, 120.464, 41),
+    ("Labuan Bajo", "ID", -8.487, 119.887, 188),
+]
+
+
+@pytest.fixture
+def towns(monkeypatch):
+    """A handful of settlements in place of the packed table."""
+    monkeypatch.setattr(geocode, "_cities", list(TOWNS))
+    return geocode
+
+
+def test_a_coordinate_is_named_after_the_town_it_is_by(towns):
+    """The bearing runs from the town to the coordinate, as the USGS strings quakes draws
+    do: a fire north of Sheffield reads "N of Sheffield"."""
+    found = towns.nearest(53.6, -1.467)
+    assert found["name"] == "Sheffield" and found["country"] == "GB"
+    assert found["bearing"] == "N", found
+    assert found["km"] == 24, found
+    assert found["text"] == "24 km N of Sheffield, GB"
+
+
+def test_a_coordinate_on_a_town_is_just_the_town(towns):
+    """"0 km SW of Sheffield" is a direction nobody has to travel."""
+    assert towns.nearest(53.383, -1.467)["text"] == "Sheffield, GB"
+
+
+def test_a_city_beats_the_suburb_nearer_to_it(towns):
+    """A fire in the hills above Los Angeles is closest to a town nobody can place."""
+    found = towns.nearest(34.25, -118.05)
+    assert found["name"] == "Los Angeles", found
+
+    # Only within NEAR_ENOUGH_KM. Labuan Bajo holds four times as many people as Ruteng
+    # and is 64km from it, so a coordinate on Ruteng is named after Ruteng.
+    assert towns.nearest(-8.611, 120.464)["name"] == "Ruteng"
+
+
+def test_the_date_line_is_not_a_wall(towns):
+    """A degree either side of it is two degrees apart, not three hundred and fifty-eight."""
+    east = towns.nearest(-16.417, 179.9)
+    west = towns.nearest(-16.417, -179.9)
+    assert east["name"] == west["name"] == "Labasa"
+    assert east["bearing"] == "E" and west["bearing"] == "E", (east, west)
+    assert west["km"] - east["km"] == 21, (east, west)
+
+
+def test_nothing_is_named_without_a_table(monkeypatch):
+    """None, and no exception: a table that failed to ship must not stop a page drawing."""
+    monkeypatch.setattr(geocode, "_cities", [])
+    assert geocode.nearest(53.383, -1.467) is None
+
+
+def test_the_packed_table_ships_and_reads():
+    """The table is committed, so a checkout has it and CI needs no network."""
+    table = geocode.cities()
+    assert len(table) > 20000, len(table)
+    for name, country, latitude, longitude, thousands in table:
+        assert name and len(country) == 2, (name, country)
+        assert -90 <= latitude <= 90 and -180 <= longitude <= 180, name
+        assert thousands >= 0, name
+    # Named against the biggest thing near it, which is the case the tolerance exists for.
+    assert geocode.nearest(34.25, -118.05)["name"] == "Los Angeles"
+
+
 def test_a_home_is_read_off_the_host_config():
     """Only the three location keys, and only where they were answered."""
     assert geocode.home_from({"place": "Sheffield", "lhm_url": "http://x"}) == {

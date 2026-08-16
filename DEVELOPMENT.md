@@ -200,6 +200,11 @@ two pages can point at two places.
 names one, the badge's where it does not. Names go through `geocode.Geocoder`, one cache for
 every extension, so a town costs one lookup and not one per extension asking.
 
+**A reading that arrives as coordinates is named by `geocode.nearest()`**, which reads the
+packed settlement table and answers "44 km SE of Coimbra, PT". `tools/make_cities.py`
+rebuilds the table from GeoNames; it is committed, so a checkout has it and CI needs no
+network.
+
 **`ext add` rebuilds a uv tool**, having no way to add to one: `uv tool install
 --with-requirements` replaces the environment, hence the list in `extensions.txt`. An
 extension requiring a newer statsbadge is therefore a constraint on the tool itself, and takes

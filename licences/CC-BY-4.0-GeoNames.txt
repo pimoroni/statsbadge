@@ -1,0 +1,9 @@
+The settlement table in src/statsbadge/cities.tsv.gz is packed from the GeoNames
+cities15000 dump by tools/make_cities.py.
+
+  GeoNames, https://www.geonames.org/
+  Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0)
+  https://creativecommons.org/licenses/by/4.0/
+
+Names, coordinates, country codes and populations are taken from the dump; nothing is
+added. The full licence text is at the link above.
