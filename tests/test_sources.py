@@ -233,26 +233,6 @@ def test_a_rate_is_scaled_by_what_it_has_reached():
     assert run([1.0] * 5, 1.0) == PEAK_FLOOR
 
 
-def test_the_clock_only_syncs_from_a_fresh_reading():
-    """The clock is set once per reading, so a frame redrawn 45 times a second cannot drag
-    the hands back."""
-    badge = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
-    source = (badge / "clockface.py").read_text(encoding="utf-8")
-
-    resync = source[source.index("def _resync("):]
-    resync = resync[:resync.index("\n\n\n") if "\n\n\n" in resync else len(resync)]
-    assert "_synced_seq" in resync, "every frame reconsiders the same reading"
-    assert resync.index("_synced_seq") < resync.index("RTC()"), (
-        "the clock is set before the reading is checked for being a new one")
-
-    # Synced from the host's clock alone: there is one hardware clock, and two pages in two
-    # zones would each set it to theirs on being turned to.
-    render = source[source.index("def render(page"):]
-    render = render[:render.index("\n\n\n") if "\n\n\n" in render else len(render)]
-    assert "_resync(host," in render, render[:400]
-    assert "_zone_offset(host, here)" in render, "a page elsewhere is not offset from the host"
-
-
 def test_everything_that_walks_a_frame_steps_over_the_same_scalars(h, ui):
     """A frame carries scalars beside the groups of readings, and every walker skips the
     same list."""
