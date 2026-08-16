@@ -285,7 +285,15 @@ def font_path(explicit, style):
     cached = FONT_CACHE / urllib.parse.unquote(name)
     if not cached.exists():
         print(f"fetching Material Symbols {style} into {cached}")
-        urllib.request.urlretrieve(FONT_BASE + name, cached)
+        # Downloaded beside it and renamed, since a transfer that stops partway leaves a
+        # file that exists: every run after it hands FreeType a truncated font, and the
+        # only cure is knowing to delete it.
+        partial = cached.with_suffix(cached.suffix + ".part")
+        try:
+            urllib.request.urlretrieve(FONT_BASE + name, partial)
+            partial.replace(cached)
+        finally:
+            partial.unlink(missing_ok=True)
     return str(cached)
 
 
