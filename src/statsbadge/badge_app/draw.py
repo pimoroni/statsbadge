@@ -39,8 +39,8 @@ def clears(reset):
     return reset
 
 
-# How many decoded pictures to hold. The same bytes arrive every frame between changes,
-# and at most three are on screen.
+# How many decoded pictures to keep in memory. The same bytes arrive every frame between
+# changes, and at most three are on screen.
 _pictures = _cached({})
 PICTURE_CACHE = 4
 
@@ -123,7 +123,7 @@ def has_font(name):
 def use_font(name):
     """Draw text with a registered font from here on. True when it is there.
 
-    Nothing is emptied: sprites are keyed on the face, so what the old one baked stops being
+    The caches stay: sprites are keyed on the face, so what the old one baked stops being
     asked for and goes with the next ceiling clear.
     """
     global FONT
@@ -317,8 +317,8 @@ def fmt(value, field):
     return str(value)
 
 
-# How many figures a slot shows before it just says how many there are. Three is a load
-# average; sixteen per-core loads belong on a bars page.
+# How many figures a slot shows before falling back to a count. Three is a load average;
+# sixteen per-core loads belong on a bars page.
 SEVERAL = 3
 
 
@@ -333,8 +333,8 @@ def _several(values, field):
 def _rate(bps):
     """A throughput, scaled to the largest prefix it fills.
 
-    The prefix is part of the number and `short_unit` supplies the B/s after it, and the
-    two together read 512B/s, 800KB/s, 11.4MB/s, 1.2GB/s.
+    The prefix is part of the number; `short_unit` supplies the B/s after it. Together they
+    read 512B/s, 800KB/s, 11.4MB/s, 1.2GB/s.
     """
     if bps >= 1024 * 1024 * 1024:
         return f"{bps / (1024.0 ** 3):.1f}G"
@@ -364,7 +364,7 @@ def _duration(seconds):
     return f"{seconds // 60}m"
 
 
-# What the host said a field is measured in, keyed by field name, off the layout. For a
+# The unit the host said a field is measured in, keyed by field name, off the layout. For a
 # field this module has no opinion on: an extension can invent one, and kWh is nothing a
 # suffix betrays.
 UNITS = {}
@@ -385,8 +385,8 @@ def short_unit(field):
     """What follows the number.
 
     This pairs with what `fmt` printed, so the families it rescales are answered here and
-    not from the host. `_mb` prints as 11.4G, which takes a B and not the MB the value
-    arrived in, and a duration prints as 3d4h and takes nothing.
+    not from the host. `_mb` prints as 11.4G, which takes a B rather than the MB the value
+    arrived in. A duration prints as 3d4h and takes nothing.
 
     Anything with no answer here takes what the host sent.
     """
@@ -407,7 +407,7 @@ def short_unit(field):
     return UNITS.get(field, "")
 
 
-# What a value came out as. Formatting one is 305us against 21us to look it up, and
+# Formatted values, keyed by the value. Formatting one is 305us against 21us to look up, and
 # sixteen bars a frame is 4.9ms of formatting the same numbers.
 _readings = _cached({})
 
@@ -440,7 +440,7 @@ def reading(value, field):
 
 
 def background(theme, title, index, total, subtitle=None):
-    """The header, the footer and a cleared body, drawn where they stand.
+    """The header, the footer and a cleared body, each in its fixed place.
 
     Raster fills and two cached labels: 2.1ms, against 3.9ms when the bands were baked
     into images and blitted.
@@ -659,7 +659,7 @@ def readout(theme, y, name, value_text, fraction=None, note=None, chip=None, hot
         screen.pen = chip
         screen.rectangle(rect(x + look.READOUT_W - 10, y + 3, 10, 10))
     if note:
-        # What a full ring is, where the scale is not a round number. It takes the bar's place.
+        # The reading a full ring means, where the scale is not round. It takes the bar's place.
         blit_label(note, look.SIZE_SMALL, theme.dim, x, y + 29)
     elif fraction is not None:
         width = look.READOUT_W
@@ -678,8 +678,8 @@ COLUMN_LEAD = 3
 def column_lines(entries, top=None, align=0):
     """A stack of lines down the column beside a gauge, each `(text, size, pen)`.
 
-    For a page whose rows are not readouts, a clock's time and date say, so it takes the
-    column's left edge and rhythm from here. Empty strings are skipped.
+    For a page whose rows are not readouts, a clock's time and date among them, so it takes
+    the column's left edge and rhythm from here. Empty strings are skipped.
     Returns the y after the last line.
     """
     y = (look.BODY_TOP + 12) if top is None else top
@@ -812,8 +812,8 @@ def curve(values, steps=CURVE_STEPS):
     reading moving and the peak drawn is the peak measured.
 
     Values only; x is implied by index, so the caller lays the output out as it laid out the
-    input, over `steps` times as many points. Returned as it came when there is nothing to
-    interpolate or SMOOTH is off.
+    input, over `steps` times as many points. Returned as it came where a single point leaves
+    nothing to interpolate, or SMOOTH is off.
 
     Held within the range of the input: past the lowest sample an area fill would run under
     its own baseline.
@@ -841,10 +841,8 @@ _points = array("f", b"")
 # would resize the plot every frame.
 WALK_LEAD = 2
 
-# The fewest samples worth walking. A step is the box divided by the samples on it, so two
-# of them step a whole plot width and one reading slides the picture off the side. That is
-# what a field with no ring is: `pages._graph` plots its live reading twice so a cold field
-# still draws, and a pair is a placeholder, not a series on the sample clock.
+# The fewest samples worth walking. A step is the box divided by the samples on it, so a
+# pair steps a whole plot width and one reading slides the picture off the side.
 WALK_MIN = 8
 
 
@@ -971,8 +969,8 @@ AXIS_STEPS = (1, 2, 5, 10, 20, 50, 100, 200, 500)
 def axis_top(peak, field):
     """The round number an axis tops out at, at or above `peak`.
 
-    In the base the reading is scaled by, so a byte rate steps 1024 at a time and says
-    5.0MB/s and not 4.8. The point of a label is placing a sample against it.
+    In the base the reading is scaled by, so a byte rate steps 1024 at a time and reads
+    5.0MB/s rather than 4.8. A label is there to place a sample against.
     """
     base = 1024.0 if field.endswith(("_bps", "_mb")) else 10.0
     scale = 1.0
@@ -1252,7 +1250,7 @@ def fitted(shown, height):
     """`shown` cropped to `height`, or None where there is not enough room to bother.
 
     A band from the middle, where the crop that made the picture put what matters. Cropped
-    and not scaled: the pixels are palette indices, and halfway between two of them is a
+    and never scaled: the pixels are palette indices, so halfway between two of them is a
     third colour.
     """
     if shown is None or height >= shown.height:
@@ -1307,7 +1305,7 @@ def picture(theme, data):
 
 
 def _item_block(theme, item, top, height):
-    """One message: who it is from and how long ago, then what it says."""
+    """One message: who it is from, how long ago, then the body."""
     room = look.W - look.PAD * 2
     y = top + 6
     left = look.PAD
@@ -1528,7 +1526,7 @@ def sparklines(theme, entries):
         for index in range(1, len(rows), 2):
             screen.rectangle(rect(0, look.BODY_TOP + 2 + index * height, look.W, height))
     elif ROWS == "rules":
-        # What a rule is drawn in everywhere else.
+        # The pen a rule takes everywhere else.
         screen.pen = theme.grid
         for index in range(1, len(rows)):
             screen.hspan(look.PAD, look.BODY_TOP + 2 + index * height,

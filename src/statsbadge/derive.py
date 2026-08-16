@@ -1,33 +1,29 @@
 """A whole palette out of one accent colour.
 
-Built here and not on the badge, which cannot tell a derived palette from a written one.
+Built here and not on the badge, where a derived palette and a written one are the same
+thing.
 The config UI shows one before anybody commits to it.
 
 OKLCH throughout, where lightness matches perceived lightness and "ink has to be readable
 on bg" becomes arithmetic. The conversion mirrors the firmware's to within a count. Bytes
 in every axis, as the firmware uses them: l spans 0-1, c spans 0-0.35, h is 256 to a turn.
 
-`signal` sends the ramp to red as a warning light does; `mono` holds the accent's hue and
-says severity with lightness and chroma. Picked from the accent, never asked about. The
-shipped palettes whose ramp holds still sit within 45 degrees of their hot end, which is
+`signal` sends the ramp to red as a warning light does. `mono` keeps the accent's hue and
+carries severity in lightness and chroma instead. Picked from the accent, never asked about:
+the shipped palettes whose ramp holds still sit within 45 degrees of their hot end, which is
 where SIGNAL_NEAR comes from.
 
 A picture's levels are fixed and the same for every theme: the host dithers to a position
 on a ramp without knowing which theme will draw it, so index 2 of four means one
-brightness everywhere. Both level counts travel, index 2 of four and of eight differing.
+brightness everywhere. Both counts are sent, since index 2 of four is not index 2 of eight.
 """
 
 import math
 
-# The accents on offer: twelve hues evenly round the wheel, in four families. A taste
-# call, and arguable.
 ACCENT_HUES = tuple(range(0, 360, 30))
-# The four families, as (lightness, share of the hue's chroma limit). Twelve hues each,
-# so forty-eight colours.
-#
-# A share of the limit, not a fixed chroma: capacity varies from 0.128 at cyan to 0.287
-# at magenta on a dark page, and a fixed number does not hold a family together.
-# `saturated` is where the single-hue themes sat, within 0.003 of each hue's limit.
+# (lightness, share of the hue's chroma limit). A share and not a fixed chroma: capacity
+# runs from 0.128 at cyan to 0.287 at magenta on a dark page, and one number for all of them
+# does not hold a family together. `saturated` is where the single-hue themes sat.
 ACCENT_FAMILIES = {
     "pastel": (0.86, 0.34),
     "normal": (0.72, 0.62),
@@ -35,8 +31,8 @@ ACCENT_FAMILIES = {
     "dark": (0.45, 0.85),
 }
 DEFAULT_FAMILY = "normal"
-# What an accent has to clear against its page. Below a text ratio, an accent being a
-# rule, a pip and a plot.
+# What an accent has to clear against its page, under INK_RATIO and DIM_RATIO below: an
+# accent is a rule or a pip, not something read.
 ACCENT_RATIO = 1.8
 # Chroma the hot end gains over the cold, and how far a mono ramp moves along lightness.
 # From the shipped palettes: hot ends near 0.21 chroma, cold nearer 0.14.
@@ -47,13 +43,12 @@ MONO_TRAVEL = 0.30
 BOLD_TOWARD = 0.23
 BOLD_AWAY = 0.20
 
-# Where the page sits on the lightness scale, which way its panel steps, and how much of
-# the accent's hue the greys carry. The lightnesses come out of the shipped palettes,
-# placed by hand.
+# Where the page sits on the lightness scale, and how much of the accent's hue the greys
+# carry. The lightnesses are the shipped palettes', placed by hand.
 #
-# Colourfulness is `chroma`, an absolute, or `share`, a fraction of the hue's limit at that
-# lightness. A lit panel holds the share: luminescence runs 0.030 to 0.100 of chroma across
-# its roles at a share of about 0.6.
+# Colourfulness is either `chroma`, an absolute, or `share`, a fraction of the hue's limit at
+# that lightness. The glow shapes use the share: luminescence runs 0.030 to 0.100 of chroma
+# across its roles at a share of about 0.6.
 SHAPES = {
     "dark": {"bg": 0.193, "panel": 0.237, "grid": 0.323, "dim": 0.665, "ink": 0.971,
              "hot": 0.560, "chroma": 0.020},
@@ -83,7 +78,7 @@ SIGNAL_HUE = 30.0
 SIGNAL_NEAR = 45.0
 
 # A colour used sparingly beside the first, a graph's second series most of all. `same`
-# matches a palette without one; `contrasting` is measured, in `_contrasting`.
+# matches a palette without one; `contrasting` is measured, in `second_accent`.
 ACCENT_B_RULES = ("same", "complementary", "triadic", "contrasting")
 ACCENT_B_TURNS = {"same": 0.0, "triadic": 120.0, "complementary": 180.0}
 
@@ -147,12 +142,7 @@ def rgb(lightness, chroma, hue):
 def max_chroma(lightness, hue):
     """The most chroma sRGB can hold at that lightness and hue.
 
-    How much that is turns on the hue. Measured over the twelve offered, from 0.128 at
-    cyan to 0.287 at magenta on a dark page. One fixed chroma for all of them leaves some
-    tame and others flat.
-
-    Found by bisection, the gamut being convex along chroma for a fixed lightness and
-    hue.
+    By bisection, the gamut being convex along chroma for a fixed lightness and hue.
     """
     low, high = 0.0, 0.4
     for _ in range(16):
@@ -183,9 +173,9 @@ def contrast(one, other):
 def readable_on(lightness, chroma, hue, background, ratio):
     """That colour if it clears `ratio` against `background`, or the nearest one that does.
 
-    Placed first and checked second. A lightness taken from a palette that works is a
-    better starting point than the far side of a threshold, and most pass untouched. One
-    that misses moves away from the page, never towards it.
+    Placed first and checked second: a lightness taken from a palette that works beats the
+    far side of a threshold, and most pass untouched. One that misses moves away from the
+    page, never towards it.
     """
     wanted = rgb(lightness, chroma, hue)
     if contrast(wanted, background) >= ratio:
@@ -204,11 +194,9 @@ def readable_on(lightness, chroma, hue, background, ratio):
 def accents(family=DEFAULT_FAMILY):
     """The twelve accents of one family, as sRGB triples.
 
-    The same twelve whichever page they are going on. The family sets the lightness and
-    the chroma, and a swatch is the colour that will be used, not a stand-in.
-
-    Where one would be lost against its page, `palette` moves it. The swatch says which
-    colour was chosen, the palette says what that means on a particular page.
+    The same twelve whichever page they are going on: the family sets the lightness and the
+    chroma. A swatch is the colour that will be used and not a stand-in, except where the
+    page would swallow it, which `palette` corrects.
     """
     lightness, part = ACCENT_FAMILIES.get(family, ACCENT_FAMILIES[DEFAULT_FAMILY])
     return [rgb(lightness, max_chroma(lightness, float(hue)) * part, float(hue))
@@ -266,9 +254,9 @@ def second_accent(accent, rule="same"):
 def ramp_for(accent):
     """Which ramp suits this accent: `signal` where it has somewhere to travel, else `mono`.
 
-    Not a choice anybody is asked to make. Travelling to red is what a warning light does and
-    reads as severity without being learned, so it is the answer wherever it can be - and where
-    the accent is already red, saying it again says nothing.
+    Not a choice anybody is asked to make. Travelling to red reads as severity without being
+    learned, so it wins wherever there is room. Where the accent is already red the travel
+    would be invisible.
     """
     hue = oklch(accent)[2]
     away = abs((hue - SIGNAL_HUE + 180.0) % 360.0 - 180.0)
@@ -282,15 +270,15 @@ def _signal_ramp(lightness, chroma, hue, shape):
     than half a turn apart would collapse. The positions match the shipped ramps, where
     most of the travel happens in the top third.
 
-    The hot end lands where the mode says a hot end belongs, and not a fixed distance below
-    the accent, or an accent that is already dark ends up with a red nobody can see.
+    The hot end lands on the shape's own `hot` lightness, not a fixed distance below the
+    accent: an accent that is already dark would otherwise end in a red nobody can see.
     """
     turn = (SIGNAL_HUE - hue + 540.0) % 360.0 - 180.0
     hot = shape["hot"]
     stops = []
     for position, part in ((0.0, 0.0), (0.45, 0.42), (0.72, 0.74), (1.0, 1.0)):
-        # Held up until the last leg, as the shipped ramps do. Their stops run 0.84, 0.79, 0.76
-        # and then 0.56.
+        # Lightness held up until the last leg, as the shipped ramps do. Theirs run 0.84,
+        # 0.79, 0.76, then 0.56.
         eased = part * part
         stops.append((position, rgb(lightness + (hot - lightness) * eased,
                                     chroma + (HOT_C - chroma) * eased,
@@ -308,7 +296,7 @@ def _mono_ramp(lightness, chroma, hue, shape):
     its second graph series falls back to grey.
 
     The whole travel always happens, the window sliding down where the accent is near the top
-    of the scale. Squashed against the ceiling instead, both ends came out one colour.
+    of the scale. Clamping the ends instead brought both out the same colour.
     """
     away = MONO_TRAVEL if shape["bg"] < 0.5 else -MONO_TRAVEL
     hot = min(0.98, max(0.06, lightness + away))
@@ -342,13 +330,6 @@ def _bold_ramp(lightness, chroma, hue, shape):
 # ends, or the picture runs past its background and reads as a hole in the screen.
 IMAGE_DARK = 0.16
 IMAGE_LIGHT = 0.94
-# How colourful a picture is: the share of its hue's limit that the theme's accent takes
-# of its. `luminescence` takes 0.91 of its green and gets a phosphor screen, `mono` 0.00
-# and a grey picture.
-#
-# Against the hue's limit at each lightness, not one number for the ramp, so the ends
-# come out near neutral as a monochrome display does.
-
 # The level counts `imaging` produces. Both travel; see the module docstring.
 IMAGE_LEVELS = (4, 8)
 
@@ -356,9 +337,13 @@ IMAGE_LEVELS = (4, 8)
 def image_ramp(accent, levels):
     """The shades a picture of `levels` is drawn in, darkest first.
 
-    Evenly spaced across a fixed lightness range, in the accent's hue and at its share of
-    what that hue can hold. Held apart from the theme's `ramp`, which travels calm to
-    alarming and would draw a photograph as a heat map.
+    Evenly spaced across a fixed lightness range, in the accent's hue at its share of what
+    that hue can hold in chroma. The share is against the limit at each lightness, so the ends
+    come out near neutral as a monochrome display does: `luminescence` takes 0.91 of its
+    green and gets a phosphor screen, `mono` 0.00 and a grey picture.
+
+    Held apart from the theme's `ramp`, which travels calm to alarming and would draw a
+    photograph as a heat map.
     """
     if levels < 2:
         levels = 2
@@ -374,7 +359,7 @@ def image_ramp(accent, levels):
 
 
 def image_ramps(accent):
-    """Both level counts, keyed by how many, for a palette to carry."""
+    """Both level counts, keyed by how many, in the form a palette stores them."""
     return {str(levels): [list(colour) for colour in image_ramp(accent, levels)]
             for levels in IMAGE_LEVELS}
 
