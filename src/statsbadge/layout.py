@@ -16,8 +16,7 @@ import time
 
 from . import derive, themes
 
-# A page kind the badge can draw, and what it needs. Keyed, so a kind cannot arrive
-# without a description of it.
+# Every page the badge can draw, and what each needs.
 KINDS = {
     "dial": "one field as a sweep gauge, plus up to three readouts beside it",
     "dials": "up to four fields as gauges side by side, each named under its reading",
@@ -34,7 +33,7 @@ KINDS = {
     "badge": "the badge's own vitals, which need no field and come from no host",
 }
 
-# How many fields a kind can draw. What is left out carries a layout table.
+# How many fields a page can draw.
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
               "rings": 4, "spark": 6, "radar": 6, "notify": 6}
 
@@ -67,15 +66,15 @@ GAUGE_FILLS = ("solid", "ramp")
 # the accent again.
 ACCENT_B_RULES = derive.ACCENT_B_RULES
 
-# The names, from the file itself; a theme is data. Which of them take an accent, what each
-# is called and which half of the picker it belongs in are all answered there too.
+# The names, from the file itself; a theme is data. The file also holds which take an
+# accent, what each is called, and which half of the picker each belongs in.
 THEMES = tuple(themes.THEMES)
 
-# Retired names, resolved once at load. Nothing downstream sees one.
+# Retired names, resolved once at load. Nothing downstream sees a retired name.
 resolve_theme = themes.resolve
 theme_records = themes.records
 
-# Bindings the badge answers itself and never sends here. On this side only so the UI can
+# Bindings the badge handles on-device and never sends to the host. Here so the UI can
 # offer them alongside the host's commands.
 LOCAL_ACTIONS = (
     ("badge.prev", "previous page"),
@@ -110,7 +109,7 @@ DEFAULT_PAGES = [
 DEFAULT_CONFIG = {
     "rev": 1,
     "theme": "dark",
-    # Taken from the offered list and not written out, so it cannot drift from it.
+    # The seventh accent derive.accents() offers, not a literal triple.
     "tint": list(derive.accents()[6]),
     "interval_ms": 1000,
     "brightness": 0.8,
@@ -128,7 +127,7 @@ DEFAULT_CONFIG = {
     "advance_every_s": 10,
     "pages": DEFAULT_PAGES,
     "buttons": {"a": None, "b": None, "c": None},
-    # Per-extension settings, keyed by name. Host-side, so a token never travels to a badge.
+    # Per extension, keyed by extension name.
     "settings": {},
 }
 
@@ -165,9 +164,6 @@ class Config:
                 for badge_id, block in (stored.get("badges") or {}).items()
                 if isinstance(block, dict)
             }
-            # Retired theme names resolve here, once, and nothing downstream sees them again.
-            # A block that names no theme is left alone: writing None into it would override
-            # the default with nothing, and that badge would draw in the boot theme forever.
             for block in [merged] + list(merged["badges"].values()):
                 if not block.get("theme"):
                     continue
@@ -216,8 +212,6 @@ class Config:
             own = (self.data.get("badges") or {}).get(str(badge_id or ""))
             data = copy.deepcopy(self.data)
             if own is not None:
-                # Over the default and not instead of it. A block saved before a setting
-                # existed carries none, and the badge asked for a layout with holes in it.
                 data.update(copy.deepcopy(own))
             data["settings"] = copy.deepcopy(self.data.get("settings") or {})
         data.pop("badges", None)
@@ -283,12 +277,11 @@ class Config:
             cleaned["rev"] = self._next_rev()
             cleaned["updated_at"] = int(time.time())
             if badge_id:
-                # One place, one API key: an extension's settings are the host's, so they stay
-                # at the top level however they arrive.
+                # Settings are global, so they are lifted out of a badge's block.
                 self.data["settings"] = cleaned.pop("settings", None) or {}
                 self.data.setdefault("badges", {})[str(badge_id)] = cleaned
             else:
-                # The table belongs to the file, so replacing the default must not empty it.
+                # Replacing the default keeps the per-badge blocks.
                 kept = self.data.get("badges") or {}
                 self.data = cleaned
                 self.data["badges"] = kept
@@ -412,11 +405,11 @@ def palette_for(theme, tint, second="same"):
     return themes.palette(theme, tint, second)
 
 
-# The two graph series' alphas, and how far from the page a series has to land. Both are
-# badge_app/draw.py's, and a check holds them the same.
+# Alpha for the first series and the second, copied from badge_app/draw.py.
 SERIES_ALPHA = (200, 150)
+# How far a series colour has to sit from the background, on derive.apart's 0-100 scale.
 SERIES_FLOOR = 20
-# Where a background stops being dark, summed over the three channels, as look.Theme reads it.
+# A background counts as pale at this sum of its three channels.
 PALE_SUM = 384
 
 
@@ -467,7 +460,8 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     if theme not in THEMES:
         raise ValueError(f"unknown theme: {theme!r}")
     out["theme"] = theme
-    # A retired name brings its accent: the colour was the choice, not the tint beside it.
+    # A retired theme name carries the accent it stood for, which wins over any tint sent
+    # with it.
     out["tint"] = tint_accent(aliased or incoming.get("tint"), out["tint"])
 
     interval = int(incoming.get("interval_ms", out["interval_ms"]))
@@ -484,7 +478,7 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     # Whether a gauge sweeps to each new reading or steps to it. Off by default: on a noisy
     # field the sweep looks like lag.
     out["animate"] = bool(incoming.get("animate", False))
-    # Whether a plot moves between readings. Separate from `sweep`, and off for the same
+    # Whether a plot moves between readings. Separate from `animate`, and off for the same
     # reason.
     out["plot_animation"] = bool(incoming.get("plot_animation", False))
     # How a page turn moves. Off by default: it is a fifth of a second before what the reader
@@ -631,7 +625,7 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
             raise ValueError(f"page {page_id} needs a field")
         clean["field"] = field
     elif kind == "badge":
-        # Nothing to configure: the page reads the badge, and no host answers for it.
+        # Nothing to configure: the badge page reads the badge's vitals.
         pass
     elif kind in ("dials", "graph", "grid", "text", "rings", "spark", "radar"):
         fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
@@ -639,7 +633,7 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
             raise ValueError(f"page {page_id} needs at least one field")
         clean["fields"] = fields[:_FIELD_MAX.get(kind, 6)]
     else:
-        # An extension kind. Keep its fields, the shape being the badge's business.
+        # An extension's page. Keep its fields; the shape is the badge's business.
         clean["fields"] = [f for f in (page.get("fields") or []) if _is_ref(f)][:8]
         for entry in ((page_settings_schema or {}).get(kind) or ()):
             key = entry.get("key")
@@ -675,7 +669,7 @@ def prune(pages, capabilities):
     user should not have to know that to get a sensible default.
     """
     available = capabilities.get("available", {})
-    # The page kinds an installed extension draws. A map page declares no fields, so there is
+    # The pages an installed extension draws. A map page declares no fields, so there is
     # nothing in the host's field list to confirm it by.
     from_extensions = {page.get("kind") for page in capabilities.get("extension_pages", ())}
 
@@ -686,7 +680,7 @@ def prune(pages, capabilities):
     kept = []
     for page in pages:
         if page.get("kind") == "badge":
-            # The badge can always answer for itself, whatever this host can measure.
+            # The badge page draws the badge's vitals, whatever this host can measure.
             kept.append(page)
             continue
         if page.get("kind") not in KINDS:
