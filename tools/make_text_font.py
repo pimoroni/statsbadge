@@ -6,8 +6,8 @@
 
 Needs the fonts dependency group: uv sync --group fonts.
 
-The encoder is make_icon_font's, which is where the .af container and the contour
-cleaning live. What differs is the geometry, and all of it:
+The container is tools/af.py's and the contour cleaning is make_icon_font's. What differs
+from an icon font is the geometry, and all of it:
 
   - an icon is fitted to a box and given a made-up advance, because it stands alone. A
     text glyph keeps the font's own advance and side bearing, or the words do not space.
@@ -43,9 +43,11 @@ import unicodedata
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+from af import (  # noqa: E402
+    COORD_MAX, NARROW_UNITS_PER_EM, WIDE_COORD_MAX, Glyph, pack,
+)
 from make_icon_font import (  # noqa: E402
-    NARROW_UNITS_PER_EM, WIDE_COORD_MAX, Bounds, Glyph, clean_contours,
-    outline_contours, pack, require_font_tools,
+    Bounds, clean_contours, outline_contours, require_font_tools,
 )
 
 # What the badge draws: printable ASCII, the degree sign for a temperature, and the
@@ -66,7 +68,6 @@ def default_codepoints():
 
 
 CAP_HEIGHT = 81           # units a capital stands in the reference font
-MAX_COORD = 127
 # --wide packs coordinates as 16-bit, so the cap can stand in a much finer grid.
 # Eight times the reference, which keeps the cap-to-em ratio exact (648/1024 ==
 # 81/128) so a given font_size draws the same height either way.
@@ -147,7 +148,7 @@ def check(glyphs, wide=False):
     produces a glyph with ink and no advance, which packs and loads perfectly happily,
     then draws every letter of a word in the same place.
     """
-    max_coord = WIDE_COORD_MAX if wide else MAX_COORD
+    max_coord = WIDE_COORD_MAX if wide else COORD_MAX
     max_advance = 0xFFFF if wide else MAX_ADVANCE
     problems = []
     for glyph in glyphs:
@@ -232,7 +233,7 @@ def main():
     # A glyph the container cannot hold is left out, not clamped: a missing ligature is a
     # gap, where a clamped one is drawn wrong every time it appears.
     problems = check(glyphs, wide=args.wide)
-    limit = WIDE_COORD_MAX if args.wide else MAX_COORD
+    limit = WIDE_COORD_MAX if args.wide else COORD_MAX
     overflowing = {chr(g.codepoint) for g in glyphs
                    if any(max(abs(x), abs(y)) > limit
                           for c in g.contours for x, y in c)}
