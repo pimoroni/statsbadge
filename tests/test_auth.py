@@ -155,7 +155,7 @@ def test_pairing_is_off_until_asked_for(h):
 
 
 def test_hello_carries_the_identity(h):
-    """The badge keys its credentials on the id and name /v1/hello carries."""
+    """The badge keys its credentials on the id and name in /v1/hello."""
     status, body = h.raw("GET", "/v1/hello")
     assert status == 200
     assert body["id"] == h.service.identity["id"], body

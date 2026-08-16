@@ -26,7 +26,7 @@ EINPROGRESS, ECONNABORTED = 115, 103
 
 
 def getaddrinfo(host, port, _family=0, _kind=SOCK_STREAM, *_rest):
-    """The one shape net.py reads: family, type, proto, canonname, address."""
+    """The one shape net.py reads. Five fields: family, type, proto, canonname and address."""
     return [(AF_INET, SOCK_STREAM, 0, "", (host, int(port)))]
 
 
@@ -119,6 +119,6 @@ class socket:
             self._held += binascii.a2b_base64(arrived.encode())
 
 
-# select.poll works on streams the runtime knows about, and these are not among them,
+# select.poll works on streams the runtime registered, and these are not among them,
 # so the flags live here and select.py drives them.
 POLLIN, POLLOUT, POLLERR, POLLHUP = 1, 4, 8, 16

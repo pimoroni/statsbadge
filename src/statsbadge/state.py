@@ -12,7 +12,7 @@ import json
 import os
 import threading
 
-# The most keys a store will hold. A cache keyed by something a user types - a place
+# The most keys in a store. A cache keyed by something a user types - a place
 # name - grows by one on every typo, and no other store here is near a cap.
 MAX_KEYS = 64
 
@@ -20,7 +20,7 @@ MAX_KEYS = 64
 class Store:
     """A dict that persists. `Store()` keeps everything in memory and nothing on disk.
 
-    Written whole on every set, which suits what it holds: a handful of small values, saved
+    Written whole on every set, which suits the contents: a handful of small values, saved
     when something is learned rather than on a timer. Anything that will not serialise is
     refused before the store changes, so a store in memory always matches the one on disk.
     """

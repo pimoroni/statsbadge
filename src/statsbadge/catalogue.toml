@@ -1,8 +1,9 @@
 # The extensions this project publishes, so the config UI can offer them by name.
 #
 # A list, not a search: PyPI has no reliable way to ask "what is a statsbadge extension",
-# and a name typed into the free-form box installs just as well. Anything here that has
-# been removed from PyPI fails to install, with a message saying so.
+# and a name typed into the free-form box installs just as well.
+#
+# A name listed here but absent from PyPI fails to install, with a message saying so.
 #
 #   title     what the UI calls it, since a package name is not a heading
 #   summary   one line, in the UI's own words

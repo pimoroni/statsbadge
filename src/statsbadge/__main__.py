@@ -374,7 +374,7 @@ def _badge_status(args, port, directory):
                 print("              run 'statsbadge install' to update it")
             else:
                 # Only where they match, which is the one case this has seen enough to
-                # say what the badge holds.
+                # name the revision the badge has.
                 pushed.record(directory, info["uid"], desired, source)
                 print("              up to date with this package")
 
@@ -520,7 +520,7 @@ def _change_extensions(args, verb):
         return 1
     # uv names one package, and it need not be one just asked for. The rebuild installs
     # the whole list, so an entry that was already there and cannot be installed fails
-    # every add until it is taken out. Saying which is which is what makes the message
+    # every add until it is taken out. Separating the two is what makes the message
     # actionable.
     culprit = tooling.blamed(why)
     if culprit and tooling.short_name(culprit) not in tooling.names(changed):

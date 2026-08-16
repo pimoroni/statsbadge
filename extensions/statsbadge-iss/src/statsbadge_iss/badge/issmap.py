@@ -160,7 +160,7 @@ def _curve(state, points):
 
 
 def _track(theme, view, state, points, flown):
-    """The ground track, split at `flown`, the host's index for now within the run.
+    """The ground track, split at `flown`, the host's index of where it is in the run.
 
     Drawn as a stroked path per stretch: one open contour is 0.08ms plus its edges, where
     seventy-six lines are 0.08ms each.
@@ -241,7 +241,7 @@ def _band(theme, where, aboard, at=None, note="waiting for the feed"):
     """The strip under the map: how high, how fast, in sun or shadow, and who is aboard."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
-    # Use the header's underline accent colour to make the band look like UI.
+    # The header's underline accent, so the track band reads as part of the furniture.
     screen.pen = theme.accent_b
     screen.rectangle(rect(0, BAND_TOP, look.W, 1))
     if not where:
@@ -328,5 +328,5 @@ def render(page, frame, _history, theme):
 
 
 pages.EXTRA["issmap"] = render
-# Deliberately not in pages.ANIMATED: the station covers 0.06 pixels a second on a
+# Left out of pages.ANIMATED: the station covers 0.06 pixels a second on a
 # whole-world map, and a frame is 78ms with all 288 polygons in view.

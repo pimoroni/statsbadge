@@ -10,7 +10,7 @@ them, and it is how to check a font that was built but does not draw.
 
 Two things worth looking at in the output. A capital should stand 81 units, which
 look.py's sizes are in terms of, and an advance should be a little wider than the ink it
-carries. A glyph with ink and an advance of about one is the shape of a units mix-up: it
+sits in. A glyph with ink and an advance of about one is the shape of a units mix-up: it
 packs and loads without complaint and draws every letter of a word in the same place.
 """
 

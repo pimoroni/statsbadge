@@ -23,7 +23,7 @@ APP = ROOT / "src" / "statsbadge" / "badge_app"
 WEB = ROOT / "src" / "statsbadge" / "web"
 TRAY = ROOT / "src" / "statsbadge" / "tray" / "assets"
 # The packaged app's icon, which is not shipped in the wheel: briefcase reads it from here
-# and builds the .icns and .ico each platform wants.
+# and builds the .icns and .ico each platform needs.
 APP_ICONS = ROOT / "packaging" / "icons"
 sys.path.insert(0, str(APP))
 

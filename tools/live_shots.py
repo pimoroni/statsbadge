@@ -8,7 +8,7 @@ Unlike tools/probe.py this uses whatever the host actually reports, so it shows 
 page looks like when a field is missing - which on macOS is every temperature.
 
 One render a page, which is all any of them needs except the waterfall: that one puts down a
-column a frame and wants 278 of them, so `tools/waterfall_shot.py` shoots it instead.
+column a frame and needs 278 of them, so `tools/waterfall_shot.py` shoots it instead.
 """
 
 import os

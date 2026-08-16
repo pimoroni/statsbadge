@@ -139,7 +139,7 @@ class ConfigUI:
 
     Matching a binding as a substring - `'bindCheck("animate", "animate")' in script` -
     breaks on a reformat, and passes a control bound to a setting the server
-    would refuse. Reading the calls out gives the pair to check against the real schema.
+    rejects. Reading the calls out gives the pair to check against the real schema.
     """
 
     def __init__(self, web):

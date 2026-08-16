@@ -199,7 +199,7 @@ class QuakeMarkers(unittest.TestCase):
         self.assertTrue(self.quakemap.RING_PX_LOW < self.quakemap.RING_PX_HIGH)
 
     def test_a_ring_clears_the_dot_it_sits_around(self):
-        """Or it is a disc."""
+        """Without the cut it draws as a disc."""
         high = self.quakemap._dot_px(self.quakemap.MAG_HIGH)
         self.assertTrue(self.quakemap.RING_PX_LOW > high)
         self.assertTrue(self.quakemap.RING_MIN_PX < self.quakemap.RING_PX_LOW)

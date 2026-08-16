@@ -6,9 +6,9 @@ the surfaces that are arithmetic and layout; what rasterises is left alone. Faki
 rasteriser proves nothing about the one on the badge, so anything that draws is tested
 against the real firmware under the WASM port instead - see DEVELOPMENT.md.
 
-`install()` before the first `import look`, and note what is deliberately absent in
-NOT_FAKED: `tests/test_badgefakes.py` holds this to the builtins list in `ci/ruff.toml`, so
-a firmware name that arrives without a decision here is a failure and not a NameError later.
+`install()` before the first `import look`, and note what is left out in NOT_FAKED.
+`tests/test_badgefakes.py` holds this to the builtins list in `ci/ruff.toml`, so a firmware
+name arriving without a decision here fails there and not as a NameError later.
 """
 
 import builtins

@@ -319,7 +319,7 @@ class Store:
             return secret
 
     def rename(self, badge_id, name):
-        """A name somebody chose for a badge, or its id back when they clear it.
+        """A name the operator chose for a badge, or its id back when they clear it.
 
         A badge announces itself by whatever its setup screen was told, which is its id
         until somebody names it - and two badges on one host then read the same.
@@ -413,7 +413,7 @@ def sign(secret, method, path, seq, body):
 
 
 def fingerprint(secret):
-    """A short, safe way to show which secret a badge holds, for the UI."""
+    """A short, safe way to show which secret a badge was given, for the UI."""
     return base64.b32encode(
         hashlib.sha256(bytes.fromhex(secret)).digest()[:5]
     ).decode().rstrip("=")

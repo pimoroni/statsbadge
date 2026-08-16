@@ -99,7 +99,7 @@ class Flowing(unittest.TestCase):
         return body_pixels()
 
     def test_a_message_too_long_for_its_block_stays_inside_it(self):
-        """Whether the firmware truncates or merely clips does not show in the pixels:
+        """Whether the firmware truncates or clips does not show in the pixels:
         both cut the same prefix at the same place. What is checked is the block."""
         blank = self.band("")
         long = self.band(" ".join(["a post that runs on and on"] * 40))
@@ -218,7 +218,7 @@ class ClockFaces(unittest.TestCase):
                             f"the {face} face drew {moved * 100:.2f}% of its band")
             drawn[face] = band
 
-        # And each is a different drawing: two names in the table pointing at one
+        # Each is a different drawing, so two names in the table pointing at one
         # rendering is the same silent default the tables exist to avoid.
         names = list(drawn)
         for first in range(len(names)):

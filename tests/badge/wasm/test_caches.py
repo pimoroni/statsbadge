@@ -79,7 +79,7 @@ class ATintIsANewTheme(unittest.TestCase):
                          "a re-tint left the caches full of the old colours")
 
     def test_the_same_palette_twice_keeps_them(self):
-        """Or every poll throws away everything the last frame built."""
+        """Without this every poll throws away everything the last frame built."""
         one = app.App()
         one.layout = {"pages": [], "theme": "tinted", "palette": tinted(0)}
         one.apply_layout()

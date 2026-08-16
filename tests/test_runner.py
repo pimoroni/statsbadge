@@ -48,7 +48,7 @@ def test_a_bundle_with_no_trust_store_is_given_one():
         assert "SSL_CERT_FILE" not in os.environ
 
         # And Linux, which names a directory and loads nothing from it: a directory is
-        # searched per verification, so the count implies nothing about what it holds.
+        # searched per verification, so the count implies nothing about the contents.
         ssl.create_default_context = lambda *_args, **_kwargs: Store(0)
         listed = ssl.DefaultVerifyPaths(None, os.path.dirname(__file__), "", None, "", None)
         ssl.get_default_verify_paths = lambda: listed

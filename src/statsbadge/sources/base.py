@@ -5,7 +5,7 @@ say what lands in the frame, `settings` and `page_settings` say what can be set.
 `label` names the source in the picker.
 
 All four are read off the instance and not off the class. A source that only learns its
-groups from the network, a domain per site an account holds, can set them in `__init__`
+groups from the network, a domain per site on an account, can set them in `__init__`
 and have them offered as soon as they are known.
 """
 
@@ -178,7 +178,7 @@ class Source:
     def note_ok(self):
         """Record that the work succeeded, which clears a fault.
 
-        A source has to call this itself, nothing outside it being able to judge. One that
+        A source has to call this itself, since nothing outside it can judge. One that
         fetches on a thread fails and recovers on a schedule of its own, with `sample` handing
         over the last good reading is no evidence that the next fetch landed.
 

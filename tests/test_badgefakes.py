@@ -6,7 +6,7 @@ import badgefakes
 
 
 def test_every_badge_builtin_has_a_decision(repo_root):
-    """A name the firmware injects is either faked here or listed as deliberately absent."""
+    """A name the firmware injects is either faked here or listed in NOT_FAKED."""
     # `tools/check_app.py` reads the same list to find undefined names in the app.
     with (repo_root / "ci" / "ruff.toml").open("rb") as handle:
         declared = set(tomllib.load(handle)["builtins"])

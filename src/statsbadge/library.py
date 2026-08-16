@@ -257,7 +257,7 @@ def build(config_dir, requirements, verbose=False):
 
 
 def installed(where):
-    """Every distribution a generation carries, version by name."""
+    """Every distribution in a generation, version by name."""
     found = {}
     for entry in os.listdir(where):
         if not entry.endswith(".dist-info"):

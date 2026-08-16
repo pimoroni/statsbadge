@@ -34,4 +34,4 @@ The last set is kept, so a badge switched on before the network is up has someth
 
 **Largest magnitude**, **Latest magnitude** and **How many** are offered as readings too, under Earthquakes in the field pickers, for a `text` or `dial` page drawing a number and not a map.
 
-The feed is asked for every five minutes and the badge polls every second, so the events travel only on a change. An age is drawn to the minute and worked out against the minute just gone, which is what keeps a set that has not moved from being sent. Ten events are about 1.1KB, so that is 1.1KB a second saved for a page that changes twelve times an hour.
+The feed is asked for every five minutes and the badge polls every second, so events travel only on a change. An age is drawn to the minute and worked out against the minute just gone, which is what keeps a set that has not moved from being sent. Ten events are about 1.1KB, so that is 1.1KB a second saved for a page that changes twelve times an hour.

@@ -3,7 +3,7 @@
 A source hands over the bytes and gets back a small indexed PNG:
 
     a content weighted crop, keeping the subject through a cut to a fixed shape
-    levelled and ordered-dithered, which makes four colours read as a picture
+    levelled and ordered-dithered, so four colours read as a picture
     an indexed PNG at 2 or 4 bits a pixel, which is what makes it small enough to send
 
 What travels is indices, not colours. The file's palette is a grey ramp and the badge

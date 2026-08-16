@@ -297,7 +297,7 @@ def apply(config_dir, verb, asking, present, verbose=False, announce=None):
 
 
 def _outside(config_dir, requirements):
-    """Which of these the environment carries, and where, as the caller has to say so."""
+    """Which of these are in the environment, and where, since the caller has to report it."""
     found = []
     for requirement in requirements:
         short = short_name(requirement)

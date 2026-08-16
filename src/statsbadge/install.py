@@ -635,9 +635,9 @@ COPY_WAIT = 0.5
 def _copy(path, destination):
     """Copy one file onto the badge, and check it arrived whole.
 
-    The first write to a volume that has only just mounted comes back as ENXIO, and what
-    is left behind is an empty file rather than an error: an app whose `__init__.py` is
-    zero bytes starts and does nothing at all.
+    The first write to a volume that has only just mounted comes back as ENXIO, leaving an
+    empty file behind instead of an error. An app whose `__init__.py` is zero bytes starts
+    and does nothing at all.
     """
     wrong = None
     for attempt in range(COPY_TRIES):

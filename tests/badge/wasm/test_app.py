@@ -96,7 +96,7 @@ class IdleAdvance(unittest.TestCase):
         self.assertEqual(one.page_index, 1)
 
     def test_the_turns_it_makes_leave_the_idle_timer_alone(self):
-        """Or the first turn would put the badge back to sleep."""
+        """Without this the first turn would put the badge back to sleep."""
         one = built(idle_advance_s=5, advance_every_s=10)
         was = one._pressed_at
         one.advance_if_idle(was + 5000)
@@ -359,7 +359,7 @@ class DrawingElsewhere(unittest.TestCase):
         self.assertTrue(screen is was, "the page left itself bound to the image")  # noqa: F821
 
     def test_the_image_is_given_the_font_the_screen_has(self):
-        """An image starts with none, and a page that labels anything wants one."""
+        """An image starts with no font, and a page that labels anything needs one."""
         one = built()
         target = image(look.W, look.H)  # noqa: F821
         one.draw_page_into(target, one.current_page())

@@ -58,9 +58,9 @@ def test_a_theme_travels_as_its_colours():
     assert look.from_palette(sent["theme"], sent["palette"]).accent == \
         builtins.color.rgb(143, 212, 0)
 
-    # The greys a picture is drawn in are derived from the accent's hue, but their
-    # lightnesses are fixed: the host dithers a photograph with no say in which theme draws
-    # it, so index 2 of four has to mean the same brightness everywhere.
+    # The greys a picture is drawn in come from the accent's hue, at fixed lightnesses.
+    # The host dithers a photograph with no say in which theme draws it, so index 2 of four
+    # has to mean the same brightness everywhere.
     from statsbadge import derive
 
     wanted = None
@@ -118,7 +118,7 @@ def test_a_palette_can_carry_a_second_accent(h, ui):
     assert layout.validate({"accent_b": "clashing",
                             "pages": layout.DEFAULT_PAGES})["accent_b"] == "same"
 
-    # Each rule keeps the accent's lightness and its share of what the hue can hold.
+    # Each rule keeps the accent's lightness and its share of the hue's chroma limit.
     accent = derive.accents("normal")[6]
     assert tuple(derive.second_accent(accent, "same")) == tuple(accent)
     lightness, chroma, hue = derive.oklch(accent)

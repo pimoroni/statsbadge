@@ -297,7 +297,7 @@ def test_a_region_the_firmware_does_not_know_is_refused():
             exec(compile(handle.read(), "secrets.py", "exec"), values)
         assert values["REGION"] == "eu", "the region was not written in the firmware's case"
 
-    # A volume with no list falls back to what this package knows.
+    # A volume with no list falls back to the copy in this package.
     with tempfile.TemporaryDirectory() as bare:
         assert install.regions_on(bare) == install.REGIONS
 

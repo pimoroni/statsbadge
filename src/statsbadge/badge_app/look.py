@@ -129,7 +129,7 @@ class Theme:
     a palette cannot state it wrong. A case light's brightness is not here: it is not a
     colour, and it follows the backlight.
 
-    Built from the palette data a layout carries, and held as `color` objects: one built
+    Built from the palette data in a layout, and held as `color` objects: one built
     per pen set is 36.5us against 18.4 for one already made.
     """
 

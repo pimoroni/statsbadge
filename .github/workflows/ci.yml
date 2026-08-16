@@ -316,7 +316,7 @@ jobs:
             platform: macOS
             built: build/statsbadge-tray/macos/app/statsbadge.app/Contents/MacOS/statsbadge
             # Ad-hoc signed, there being no Apple Developer account behind this. The .app
-            # runs, but the first launch needs Open from the context menu, since Gatekeeper
+            # runs, but the first launch needs Open from the context menu, Gatekeeper blocking
             # refuses a double-click on anything unnotarised.
             sign: "--adhoc-sign"
           - os: windows-latest
@@ -356,13 +356,13 @@ jobs:
           uv run briefcase create ${{ matrix.platform }} app --no-input
           uv run briefcase build ${{ matrix.platform }} app --no-input
 
-      # What the app is, run as the app. A bundle carries the Python it runs, and all
-      # three faults found in one so far were invisible to every other job here.
+      # Run as the app: a bundle carries the Python it runs, and all three faults found
+      # in one so far were invisible to every other job here.
       # `--check` reports the tray, the certificates it can verify against and what it
       # installs with; `ext` reads the metadata it ships; `--be-pip` is what it spawns to
       # install one.
       - name: Ask the built app what it has
-        # bash on both, since powershell reads a quoted path as a string and wants the
+        # bash on both, since powershell reads a quoted path as a string and needs the
         # call operator to run it.
         shell: bash
         run: |

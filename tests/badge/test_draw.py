@@ -322,7 +322,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
     assert draw._points[0] < 60 - 0.01, "a series long enough to walk is standing still"
     assert walked
 
-    # A sparkline is drawn still whatever the setting holds: 22px tall with a sample every
+    # A sparkline is drawn still at any setting: 22px tall with a sample every
     # 5px, it has nowhere to scroll.
     assert pages.SCROLLS == ("graph", "trend"), pages.SCROLLS
     assert "spark" in pages.PLOTS, "it still wants a series fetched for it"
