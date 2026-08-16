@@ -164,3 +164,23 @@ def test_the_clock_is_set_from_the_host_alone(repo_root):
     for call in offsets:
         assert [argument.id for argument in call.args] == ["host", "here"], \
             "the offset is not the host against the place the page shows"
+
+
+def test_a_digital_face_only_asks_for_glyphs_its_font_packs(repo_root, clock_badge):
+    """Every character a digital face draws is in the font it draws with.
+
+    A glyph the font lacks measures as one width and draws as another, so the minutes,
+    placed by measuring back from the right edge, land off it. That is what the "--:--"
+    shown before the first reading did: neither digit font packs a hyphen.
+    """
+    clockface, _clock = clock_badge
+    import af
+
+    for spec in clockface.DIGITAL.values():
+        packed = {chr(glyph["codepoint"]) for glyph in
+                  af.read(repo_root / CLOCK_BADGE / spec["file"])["glyphs"]}
+        wanted = set(clockface.WIDEST_TIME) | set(clockface.BLANK_TIME)
+        if spec["ghost"]:
+            wanted |= set(spec["ghost"])
+        missing = sorted(wanted - packed)
+        assert not missing, (spec["file"], missing)

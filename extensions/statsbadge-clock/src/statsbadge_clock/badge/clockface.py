@@ -203,6 +203,11 @@ def _register_font():
 
 
 WIDEST_TIME = "44:44"
+# Shown until the first reading lands. Spaces and a colon, since neither digit font packs
+# a hyphen: a glyph the font lacks measures narrow and draws wide, which put the minutes
+# off the right-hand edge.
+BLANK_TIME = "  :  "
+BLANK_MINUTES = BLANK_TIME.partition(":")[2]
 
 COLON_W, COLON_DOT = 0.20, 0.061
 # Measured off the seven-segment face's colon with tools/read_af.py.
@@ -242,7 +247,7 @@ def _digital(clock, weather, label, theme, spec):
     if label:
         draw.blit_label(label, look.SIZE_VALUE, theme.accent, right, top, align=2)
 
-    text = clock.get("time") or "--:--"
+    text = clock.get("time") or BLANK_TIME
     hours, _, minutes = text.partition(":")
     gap = 8
     digits_top = look.BODY_TOP + 26
@@ -258,7 +263,7 @@ def _digital(clock, weather, label, theme, spec):
     if widest > span:
         size = int(size * span / widest)
     left_w = draw.text_width(hours, size, name)
-    right_w = draw.text_width(minutes or "--", size, name)
+    right_w = draw.text_width(minutes or BLANK_MINUTES, size, name)
     ink = int(size * draw.CAP)
     colon_w = int(ink * COLON_W) if dots else draw.text_width(":", size, name)
     # Left-justified, so the digits hold position from one minute to the next.
@@ -270,7 +275,7 @@ def _digital(clock, weather, label, theme, spec):
         draw.blit_label(spec["ghost"], size, theme.grid, x, y, name=name)
         draw.blit_label(spec["ghost"], size, theme.grid, minutes_x, y, name=name)
     draw.blit_label(hours, size, theme.ink, x, y, name=name)
-    draw.blit_label(minutes or "--", size, theme.ink, minutes_x, y, name=name)
+    draw.blit_label(minutes or BLANK_MINUTES, size, theme.ink, minutes_x, y, name=name)
     colon_x = (x + left_w + minutes_x) / 2.0
     if dots:
         ink_top = y + size - ink
