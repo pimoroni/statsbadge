@@ -32,12 +32,12 @@ Every release carries a `.dmg` for macOS and an `.msi` for Windows. They hold th
 thing - Python, the server, the tray, and the clock, ISS and quakes extensions - and need
 nothing installed first. Linux keeps the uv path above.
 
-Neither is signed. macOS refuses a double-click on the first run: right-click the app and
-choose **Open**, and it will not ask again. On Windows, SmartScreen hides the button behind **More info**, then
+Neither is signed. macOS blocks a double-click on the first run: right-click the app,
+choose **Open**, and the warning does not come back. On Windows, SmartScreen hides the button behind **More info**, then
 **Run anyway**.
 
 One thing the app cannot do: install more extensions. That needs uv or pip on the machine,
-and a packaged app has neither, so the **Extensions** tab lists what is there and says so.
+and a packaged app has neither, so the **Extensions** tab lists what is there without offering to change it.
 The three it ships with cover the pages most people want.
 
 Working on a checkout instead:
@@ -70,7 +70,7 @@ Run it again whenever you have upgraded the package or installed an extension. I
 
 `--ssid` sets the WiFi details in the badge's `secrets.py` while that volume is mounted, so a new badge goes from unboxed to showing stats in one command. It prompts for the password, so the password stays out of your shell history; `--pass` takes it directly and an empty string means an open network. `--region` and `--timezone` set those too. The region is the radio's country, and the firmware takes a fixed set of them that `statsbadge install --help` lists. One outside that set is refused here, since it leaves the badge unable to join a network at all - which reaches the screen as "could not reach the host". Details the badge already has are left alone unless you pass `--force-secrets`.
 
-The config UI does the same job without a terminal. **Update badge** in the header pushes the app to whichever badge is plugged in and pairs it with this host, showing what it copies as it goes. WiFi details are only touched if you tick **Set the WiFi network**, so updating a badge does not cost it the network it is on. A badge last seen running an older app says so in a line above the tabs; that is a guess from what this host last put there, and connecting the badge is what settles it.
+The config UI does the same job without a terminal. **Update badge** in the header pushes the app to whichever badge is plugged in and pairs it with this host, showing what it copies as it goes. WiFi details are only touched if you tick **Set the WiFi network**, so updating a badge does not cost it the network it is on. A badge last seen running an older app is marked in a line above the tabs; that is a guess from what this host last put there, and connecting the badge is what settles it.
 
 No cable? Run `statsbadge pair`, or open the config UI and press **Pair a badge**. Launch **Stats** on the badge and press **B** to set up; it finds the host by itself and shows a six-character code. Check that code matches the one the host shows, and approve it there. Nothing is typed on the badge.
 
@@ -219,20 +219,20 @@ statsbadge ext upgrade clock       # move that one, pin and all
 statsbadge ext sync                # build the library again from the list
 ```
 
-An extension the environment installed, an editable checkout say, cannot be uninstalled
+An extension the environment installed, an editable checkout for instance, cannot be uninstalled
 from here: a build only writes the library. Those offer **Disable** in place of Remove,
 which leaves them installed and stops loading them, recorded in `disabled.txt` beside your
 config.
 
 `ext outdated` and the **Update** button in the config UI both ask an index, so they want
 the network. A bare `ext upgrade` leaves anything you pinned in `extensions.txt` where it
-is; naming one is asking for it to move, which takes its pin off and says so. An extension
+is; naming one is asking for it to move, which removes its pin and reports it. An extension
 already running keeps running the code it imported, so a newer release of one wants a
-restart, and it says that too.
+restart, which the tab notes too.
 
 The tab offers whatever [`catalogue.toml`](https://github.com/pimoroni/statsbadge/blob/main/src/statsbadge/catalogue.toml) names, which is every extension this project publishes. That list is a convenience. Any pip requirement works, whether from PyPI, a URL or a path.
 
-Installing needs either `uv` or `pip` on the machine. Without one the tab still lists what is installed, and says so instead of offering to change it.
+Installing needs either `uv` or `pip` on the machine. Without one the tab still lists what is installed, but offers no way to change it.
 
 Three extensions are vendored here: [statsbadge-clock](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock) for a clock and the weather, [statsbadge-iss](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-iss) for the space station, and [statsbadge-quakes](https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-quakes) for recent earthquakes. The last two draw on the badge firmware's world map, so running both costs one copy of the coastlines and no geometry crosses the network.
 

@@ -153,7 +153,7 @@ class Collector:
                 self.sample_once()
             except Exception:
                 # The collector thread must never die: the fault is on its source and the
-                # next tick tries again.
+                # the next tick has another go.
                 pass
 
     def sample_once(self):
@@ -180,7 +180,7 @@ class Collector:
         return frame
 
     def _declared(self):
-        """The extension groups, as they stand.
+        """The extension groups, at their current values.
 
         Recomputed each call: a source that discovers its groups sets them on itself while
         running.
@@ -199,8 +199,8 @@ class Collector:
     def slow_groups(self):
         """The groups whose readings change far slower than a badge polls.
 
-        A domain's traffic is fetched once a minute and sent sixty times, and six of them
-        take a frame from 832 bytes to 4.7KB. So a source says which of its groups are like
+        A domain's traffic is fetched once a minute but sent sixty times, and six of them
+        take a frame from 832 bytes to 4.7KB. A source declares which of its groups are like
         that, and `/v1/stats` leaves them out of a frame for a badge that already has them.
         """
         return {group for group, declared in self._declared().items()
@@ -223,7 +223,7 @@ class Collector:
         return part
 
     def _push_slow_rev(self, frame):
-        """Number the slow half, letting a badge tell whether it already has this one.
+        """Number the slow half, so a badge can recognise one it already has.
 
         Compared against the last one, a dict of a few dozen numbers. A source
         fetching on its own schedule is the only place the moment its readings moved is
@@ -233,7 +233,7 @@ class Collector:
         if part != self._slow_last:
             self._slow_last = part
             self._slow_rev += 1
-        # In the frame either way: the badge sends it back to say what it holds.
+        # In the frame either way: the badge sends it back to name the revision it has.
         frame["slow_rev"] = self._slow_rev
 
     def _push_peaks(self, frame, dt):
@@ -379,9 +379,9 @@ class Collector:
 
         Derived from the live frame, so a laptop with no fan header does not offer a fan
         page. For a group the model does not define, a field has to be both in the frame and
-        named in the declaration: a source may put anything in a group it owns - the quake
-        feed carries the events its page draws from - and only what it declared is a reading
-        somebody can point a dial at.
+        named in the declaration. A source may put anything in a group it owns, as the quake
+        feed carries the events its page draws from; only what it declared counts as a
+        reading somebody can point a dial at.
         """
         frame = self.latest()
         declared = self._declared()
@@ -427,8 +427,8 @@ def _merge_declared(described, declared):
     """Fold the extensions' groups into the contract the config UI reads.
 
     The model's tables cover the built-in groups, so what an extension declares is merged in
-    beside them. A picker then names its fields and units the way it names everything else,
-    and a gauge is offered the ones with a top end.
+    beside them. A picker then names its fields and units as it names everything else. A
+    gauge is offered the ones with a top end.
     """
     for group, entry in declared.items():
         fields = entry.get("fields") or {}

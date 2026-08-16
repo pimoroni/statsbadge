@@ -42,7 +42,7 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
                            "your requirements are unsatisfiable.") == (
         "no such package: nosuchthing")
 
-    # The build refuses before it promotes anything.
+    # The build fails before anything is promoted.
     with tempfile.TemporaryDirectory() as directory:
         where, why = library.build(directory, ["statsbadge-quakes>=99"])
         assert where is None and why, (where, why)
@@ -51,7 +51,7 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
 
 def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs():
     """An extension declaring `groups` or `series` pins a statsbadge floor."""
-    # An older collector reads neither and says nothing about it, so the failure is a
+    # An older collector reads neither, and reports nothing, so the failure is a
     # missing group and a slow one polled every second.
     marks = ("groups = {", "def series(self)")
     for directory in sorted(pathlib.Path("extensions").iterdir()):
@@ -115,7 +115,7 @@ def test_the_list_is_what_every_build_is_made_from():
         tooling.write_wanted(work, ["statsbadge-clock", "statsbadge-iss"])
         # The file explains itself, and the comments stay comments.
         assert pathlib.Path(work, tooling.WANTED).read_text(encoding="utf-8").startswith("#")
-        # What is asked for against what is here, which is what `ext sync` repairs.
+        # What is asked for against what is here, the gap `ext sync` repairs.
         assert tooling.adrift(work, ["clock"]) == ["statsbadge-iss"]
         assert tooling.adrift(work, ["clock", "iss"]) == []
     finally:
@@ -176,7 +176,7 @@ def test_an_extension_asked_for_but_absent_is_built_back():
 
 def test_an_extension_already_in_the_environment_is_recorded_and_reported():
     """An extension pip installed in the environment is written down, and a removal that
-    cannot reach it says where it is."""
+    cannot reach it reports where it is."""
     from statsbadge import __main__ as cli
     from statsbadge import tooling
 
@@ -227,7 +227,7 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported():
             assert "/venv/site-packages" in spoken, spoken
             assert "Removed" not in said.getvalue(), said.getvalue()
 
-            # And again: the same answer, not a success.
+            # Repeated: the same answer, not a success.
             complained = io.StringIO()
             with contextlib.redirect_stdout(io.StringIO()), \
                     contextlib.redirect_stderr(complained):
@@ -243,7 +243,7 @@ def test_an_extension_already_in_the_environment_is_recorded_and_reported():
 
 def test_a_generation_is_asked_about_by_name_and_not_by_prefix():
     """A dist-info is matched by name, not by the stem it shares with a version."""
-    # The separator before the version is the hyphen a package name spells as an
+    # The separator before the version is the hyphen a package name writes as an
     # underscore, so normalising the whole stem matches nothing.
     work = tempfile.mkdtemp(prefix="statsbadge-named-")
     try:
@@ -251,7 +251,7 @@ def test_a_generation_is_asked_about_by_name_and_not_by_prefix():
             os.makedirs(os.path.join(work, f"{stem}.dist-info"))
         assert library.resolved(work, "statsbadge-clock") == "1.2.0"
         assert library.resolved(work, "statsbadge_clock") == "1.2.0"
-        # The host itself, which is what the version check reads.
+        # The host itself, which the version check reads.
         assert library.resolved(work, "statsbadge") == "1.3.3"
         assert library.resolved(work, "statsbadge-quakes") is None
         assert library.holds(work, "clock") and library.holds(work, "iss")
@@ -261,28 +261,28 @@ def test_a_generation_is_asked_about_by_name_and_not_by_prefix():
 
 
 def test_upgrading_one_extension_leaves_the_others_where_they_are():
-    """Naming one extension to upgrade leaves every other pinned to what the library
-    holds."""
+    """Naming one extension to upgrade leaves every other pinned to the version the
+    library records."""
     # A build resolves every unpinned name to its latest, so an unpinned list moves whole.
     from statsbadge import tooling
 
     assert tooling.without_pin("statsbadge-clock==1.1.0") == "statsbadge-clock"
     assert tooling.without_pin("statsbadge-iss>=2") == "statsbadge-iss"
     assert tooling.without_pin("statsbadge-clock") == "statsbadge-clock"
-    # A path resolves to whatever is in it, so there is no pin to take off.
+    # A path resolves to whatever is in it, so there is no pin to remove.
     assert tooling.without_pin("/src/statsbadge-clock") == "/src/statsbadge-clock"
     assert tooling.pinned(["statsbadge-clock==1.1.0", "statsbadge-iss"]) == {"clock"}
 
     work = tempfile.mkdtemp(prefix="statsbadge-upgrade-")
     try:
-        # Everything but the one named is held at the version the library carries.
+        # Everything but the one named is held at the version the library records.
         where = os.path.join(work, "lib", f"{library.tag()}-0001")
         os.makedirs(os.path.join(where, "statsbadge_iss-1.0.3.dist-info"))
         os.makedirs(os.path.join(where, "statsbadge_clock-1.1.0.dist-info"))
         building = tooling.holding(work, ["statsbadge-clock", "statsbadge-iss"], {"clock"})
         assert building == ["statsbadge-clock", "statsbadge-iss==1.0.3"], building
 
-        # Naming a pinned one takes the pin off, and says so.
+        # Naming a pinned one removes the pin, and reports it.
         done = tooling.plan("upgrade", ["clock"], ["statsbadge-clock==1.1.0"], set())
         assert done["wanted"] == ["statsbadge-clock"], done["wanted"]
         assert done["changed"] == ["statsbadge-clock"], done["changed"]
@@ -299,7 +299,7 @@ def test_upgrading_one_extension_leaves_the_others_where_they_are():
 
 
 def test_the_generation_a_build_replaced_comes_off_the_path():
-    """The replaced generation comes off sys.path, where it sits ahead of the new one."""
+    """The replaced generation is removed from sys.path, where it sits ahead of the new one."""
     work = tempfile.mkdtemp(prefix="statsbadge-path-")
     try:
         first = os.path.join(work, "lib", f"{library.tag()}-0001")
@@ -354,14 +354,14 @@ def test_a_rebuild_does_not_prune_away_what_it_is_installing():
 
 
 def test_the_catalogue_says_what_each_extension_is_and_what_it_needs():
-    """A catalogue entry says what an extension does, whether it ships a badge page, and
-    what it needs typed in."""
+    """A catalogue entry describes an extension: what it does, whether it ships a badge
+    page, and what it needs typed in."""
     listed = extensions.catalogue()
     named = {entry["name"] for entry in listed}
     assert {"clock", "iss", "quakes"} <= named, named
     for entry in listed:
         assert entry["summary"], entry
-    # A badge module travels over USB, so the entry says whether there is one to install.
+    # A badge module travels over USB, so the entry records whether there is one.
     ships = {entry["name"] for entry in listed if entry["page"]}
     assert ships == {"clock", "iss", "quakes"}, ships
     assert next(e for e in listed if e["name"] == "cloudflare")["needs"]
