@@ -255,6 +255,11 @@ def configure(sources, settings):
 
     A source that raises is recorded and left alone: one extension refusing a setting
     must not stop the others taking theirs.
+
+    An empty block is skipped, not passed on. `Source.configure` merges, so there would be
+    nothing in it to apply, and every extension here zeroes its fetch timers when told, so
+    calling it would refetch on a save that changed something else. A field is cleared by
+    arriving as null, not by being left out.
     """
     for source in sources:
         block = (settings or {}).get(getattr(source, "name", ""), {})

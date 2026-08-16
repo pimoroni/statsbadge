@@ -106,6 +106,10 @@ class Source:
 
         The default suits a source that reads `self.config` as it samples. One that
         copies values out in `__init__` has to override this and copy them again.
+
+        Merged, not replaced: a key that does not arrive keeps the value it had. So a field
+        is cleared by sending it as null, which is what the config UI does. A caller that
+        omits it instead leaves the source on its old value.
         """
         self.config.update(settings)
 
@@ -139,7 +143,12 @@ class Source:
 
     @classmethod
     def available(cls, _config=None):
-        """True if this source can run here. Cheap: no sampling, no subprocesses."""
+        """True if this source can run here. Cheap: no sampling, no subprocesses.
+
+        The config is optional because the two callers differ: a built-in source is handed
+        it (`sources/__init__.py`), an extension is not (`extensions.py`). Keep the
+        parameter, or moving a source between the two raises TypeError.
+        """
         return False
 
     def start(self):

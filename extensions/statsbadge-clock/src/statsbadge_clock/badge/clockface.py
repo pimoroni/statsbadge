@@ -33,7 +33,9 @@ LCD_FONT = "lcd"
 LCD_FILE = "lcd.af"
 
 # Lexend's digits and colon, packed --wide. The app's narrow copy visibly flattens the
-# counter of a nought at the 84pt this draws. 3KB.
+# counter of a nought at the 84pt this draws. Thirteen glyphs, 3KB: a space, ten digits,
+# the colon, and an H that is never drawn. The H stands 648 units, the cap the font was
+# packed to, so tools/read_af.py can check it.
 DIGITS_FONT = "digits"
 DIGITS_FILE = "digits.af"
 
