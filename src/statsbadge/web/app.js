@@ -41,7 +41,7 @@ const SHAPE = {
   radar: { one: null, many: "fields", max: 6, label: "Axes", manyPool: "gauge" },
   trend: { one: "field", many: null, max: 0, label: "", pool: "series" },
   waterfall: { one: "field", many: null, max: 0, label: "", pool: "list" },
-  // One slot list holding two sorts of thing: the renderer tells a message from a counter by
+  // One slot list holding two sorts of thing, a message and a counter, told apart by
   // looking at the reading, so a feed, a mention and a follower count go in one page.
   notify: { one: null, many: "fields", max: 6, label: "Lines", manyPool: "notify" },
   // The badge's vitals, with no fields, all of it coming from the badge itself.
@@ -83,7 +83,7 @@ function markDirty() {
 // -- tabs ------------------------------------------------------------------
 //
 // One sheet at a time, so a phone gets a page it can read and a wide screen gets boxes that
-// flow across it. The nav and the sheets are in the same order, which is what pairs them.
+// flow across it. The nav and the sheets are in the same order, which pairs them.
 
 const REMEMBERED_TAB = "statsbadge.tab"
 
@@ -162,7 +162,7 @@ function itemRefs() {
   return availableRefs().filter((ref) => itemFields().includes(ref.split(".")[1]))
 }
 
-/** What a notifications page can hold: the messages first, then anything countable. */
+/** The slots a notifications page takes: the messages first, then anything countable. */
 function notifyRefs() {
   return [...new Set(itemRefs().concat(numericRefs()))]
 }
@@ -180,7 +180,7 @@ function gaugeRefs() {
   })
 }
 
-/** Refs the host keeps a history ring for, which is what a graph needs to say anything.
+/** Refs the host keeps a history ring for, without which a graph has nothing to plot.
  *
  * Without one the page plots the live value twice and draws a flat line, which looks like a
  * reading that holds still, as against one nobody is recording. */
@@ -284,7 +284,7 @@ function refSelect(value, refs, onChange) {
 
 // -- pages -----------------------------------------------------------------
 
-// Which cards are open. Collapsed by default so the list reads as an overview and stays short
+// Which cards are open. Collapsed by default so the list stays an overview, and short
 // enough to drag around.
 const expanded = new Set()
 
@@ -367,7 +367,7 @@ function pageCard(page, index) {
     return renderPages()
   }
 
-  // The heading is the handle: a card holds a text field and two pickers, and dragging it
+  // The heading is the handle. A card holds a text field and two pickers, so dragging it
   // from anywhere meant dragging it out from under whichever one was being used.
   const kind = el("h3", { title: "Drag to reorder" },
                   el("span", { className: "kind", textContent: kindLabel(page.kind) }),
@@ -394,7 +394,7 @@ function pageCard(page, index) {
 
 /** Drag one of `items` to another place in it.
  *
- * The tag names the list a drag came from. A page card is draggable and so are the rows
+ * The tag names the list a drag came from. A page card is draggable, as are the rows
  * inside it, and without one a row dropped on its card would reorder the pages. The events
  * are stopped on the way up for the same reason.
  *
@@ -582,7 +582,7 @@ function renderSettings() {
 // is then a list of what is installed, and not a wall of every setting at once.
 const openExtensions = new Set()
 
-/** What the catalogue says about an extension, where it lists one. */
+/** The catalogue's entry for an extension, where it has one. */
 function catalogued(name) {
   return ((catalogue && catalogue.offered) || []).find((entry) => entry.name === name)
 }
@@ -708,7 +708,7 @@ function offerButton(entry) {
       onclick: () => changeExtension(verb, entry.name),
     })
   }
-  // Keyed on what is here: an entry listed but absent is put back by installing it, the
+  // Keyed on what is here: an entry listed but absent is restored by installing it, the
   // repair `ext add` makes.
   const verb = entry.installed ? "remove" : "add"
   return el("button", {
@@ -737,7 +737,7 @@ function freeformForm() {
 }
 
 /** Install or remove, then take up the result. A rebuild resolves the whole environment,
- * so this can sit there for a minute; the button says so and refuses a second click. */
+ * so this can sit there for a minute; the button stays busy, refusing a second click. */
 async function changeExtension(verb, name) {
   installing.add(name)
   renderSettings()
@@ -854,8 +854,8 @@ const editingSecrets = new Set()
 
 /** The API keys, masked behind a button.
  *
- * Masked and not hidden, since "not set" and "set to the wrong one" have to be told
- * apart, and the first few characters are what somebody checking would recognise. */
+ * Masked and never hidden: "not set" must be told from "set to the wrong one", and the
+ * first few characters are what somebody checking would recognise. */
 function secretsBlock(name, stored, secrets) {
   const open = editingSecrets.has(name)
   const block = el("div", { className: "secrets" })
@@ -952,7 +952,7 @@ function renderLook() {
   bindRange("interval", "interval_ms", (value) => `${value} ms`)
   bindRange("brightness", "brightness", (value) => `${value}%`, 100)
   bindRange("points", "graph_points", (value) => `${value}`)
-  // Zero is off, and the readout says so instead of showing a time nothing happens at.
+  // Zero is off, and the readout shows that instead of a time nothing happens at.
   bindRange("idle", "idle_advance_s", (value) => (value === "0" ? "off" : `${value}s idle`))
   bindRange("advance", "advance_every_s", (value) => `${value}s`)
 
@@ -1077,7 +1077,7 @@ function renderButtons() {
 // -- the theme preview ----------------------------------------------------
 //
 // The palette comes from the host, for every theme and not only the tinted ones. Deriving
-// there keeps the preview and what reaches the badge from drifting apart, and the browser
+// there holds the preview and what reaches the badge together, while the browser
 // needs no colour arithmetic.
 
 // Which preview request is the current one. Clicking along the swatches starts several, and
@@ -1146,7 +1146,7 @@ function swatches() {
 
 // -- the preview -----------------------------------------------------------
 //
-// Four pages at the badge's own 320x240, drawn in the badge's own faces. The colours and the
+// Four pages at the badge's 320x240, drawn in its faces. The colours and the
 // two graph series come from /api/theme: this file holds no palette and no rule for picking
 // one, only where a page puts things.
 
@@ -1703,7 +1703,7 @@ function rampAt(stops, at) {
 // -- which badge -----------------------------------------------------------
 //
 // One layout per badge, and a default for a badge with nothing saved. The picker
-// in the header says which of them the page is editing; `null` is the default.
+// in the header names which of them the page is editing; `null` is the default.
 
 const REMEMBERED = "statsbadge.whose"
 
@@ -1785,7 +1785,7 @@ async function forgetBadge(id) {
 /** Page ids made this badge's own.
  *
  * An extension keys what it does per page by page id - which city a clock page shows - so two
- * badges must not carry the same one. Done where a badge stops drawing the default and gets a
+ * badges must not carry the same one. Done where a badge stops drawing the default, gaining a
  * layout stored, and derived from the badge id so switching back and forth is stable. */
 function ownIds(pages, badgeId) {
   const tag = badgeId.slice(0, 4)
@@ -1808,7 +1808,7 @@ function renderBadges() {
 /** One box per paired badge: what to call it, what it is, and the two things that can be
  * done to it. The one the rest of the page is configuring is marked. */
 function badgeBox(id) {
-  // A badge nobody has named announces itself by its id, so there is no name to show and
+  // A badge nobody has named announces itself by its id, leaving no name to show while
   // the field is left empty, and not filled with the id under the id.
   const named = badges[id].name && badges[id].name !== id ? badges[id].name : ""
   const nameId = `badge${++controlSerial}`
@@ -1817,7 +1817,7 @@ function badgeBox(id) {
   const heading = el("h3", { textContent: named || "Unnamed badge" })
 
   // A moment after the typing stops as well as on the way out of the field, so a name that
-  // is typed and then left alone is still saved. Only leaving it says so out loud.
+  // is typed and then left alone is still saved. Only leaving it shows that.
   let pending = null
   const store = (announce) => {
     window.clearTimeout(pending)
@@ -2010,7 +2010,7 @@ async function watchPairing(announce) {
 
 let installPoll = null
 let installer = null
-// Whether the last poll saw one running, which is what turns finishing into an event.
+// Whether the last poll saw one running, which turns finishing into an event.
 let installRan = false
 
 function openInstaller() {
@@ -2042,7 +2042,7 @@ function installerBox() {
   const ssid = el("input", { type: "text", id: "ssid", placeholder: "Network name" })
   const password = el("input", { type: "password", id: "wifipass" })
   // A picker, not a field. The firmware takes a fixed set of countries, and one outside
-  // that set leaves the radio unable to associate: the screen then reads as a badge that
+  // that set leaves the radio unable to associate: the screen then shows a badge that
   // cannot reach the host, with no clue about the region.
   const region = el("select", { id: "region" },
                     el("option", { value: "", textContent: "Leave as it is" }))
@@ -2169,8 +2169,8 @@ function renderStale() {
 // -- help ------------------------------------------------------------------
 //
 // What this computer needs set up by hand. Every platform hides its sensors somewhere
-// different, and the two that need a human are macOS, where power and temperatures are
-// behind sudo, and Windows, where they are behind a driver.
+// different. Two need a human: macOS puts power and temperatures behind sudo, Windows
+// puts them behind a driver.
 
 async function renderHelp() {
   const node = $("help")
@@ -2233,7 +2233,7 @@ function macHelp(state) {
   return box
 }
 
-/** Windows: a normal process is told nothing, so this reads a driver somebody else
+/** Windows: a normal process is told nothing, so this reads the LibreHardwareMonitor
  * already wrote. */
 function windowsHelp(state) {
   const box = el("section", null,
@@ -2273,16 +2273,15 @@ function windowsHelp(state) {
 
 const PERCENT = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"]
 
-// Everything on a frame that is not a group of readings, which is collect.FRAME_SCALARS and
-// held to it by a test. `peaks` is shown, being useful to see, but it is scale and not a
-// reading and comes and goes with what has been measured, so it is left out of the signature
-// below.
+// Everything on a frame beside the groups of readings: collect.FRAME_SCALARS, held to it by
+// a test. `peaks` is shown but kept out of the signature below: it is scale, not a reading,
+// and comes and goes with what has been measured.
 const FRAME_SCALARS = ["v", "t", "seq", "slow_rev"]
 const FRAME_META = FRAME_SCALARS.concat(["peaks"])
 
-// Which groups the last frame carried. A source that finds out what it can report only
-// once it is running, the Cloudflare one listing an account's domains after it is given a
-// token, shows up here first. This is already fetched every second, so noticing is free.
+// Which groups the last frame carried, so a source that only learns what it can report
+// once running shows up here first: Cloudflare lists an account's domains after it is given
+// a token. Fetched every second regardless, so noticing costs nothing.
 let liveGroups = ""
 
 async function renderLive() {
@@ -2349,7 +2348,7 @@ const SHOWN = 48
 /** A reading as one line.
  *
  * Not everything a source reports is a number or a list of them: the ISS carries where it is
- * as an object and its ground track as a list of points, and the quakes source a list of
+ * as an object and its ground track as a list of points. The quakes source sends a list of
  * quakes. Those read as `[object Object]` and a row of `NaN`. */
 function reading(value) {
   if (value === null || value === undefined) return "unknown"
@@ -2388,7 +2387,7 @@ function readingList(item) {
 
 function renderSources() {
   $("sources").querySelector("ul").replaceChildren(...caps.sources.map((source) => {
-    // A fault goes underneath what a source provides and not in place of it, and one it
+    // A fault goes underneath what a source provides instead of replacing it, and one it
     // has recovered from is a footnote: an upstream 503 an hour ago should not still be a
     // source's whole description.
     const row = el("li", { className: source.last_fault ? "faulty" : null,

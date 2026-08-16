@@ -5,7 +5,9 @@ export default [
   {
     // The config UI is the only JavaScript that ships. tools/ is development tooling, and
     // a virtualenv holds whatever the packages in it happen to ship.
-    ignores: ["tools/**", "build/**", "dist/**", ".venv/**", "index.html"],
+    // Anchored at any depth: uv makes a venv in whichever directory it is run from, and one
+    // under extensions/ carries an installed copy of this file that eslint would check.
+    ignores: ["tools/**", "**/build/**", "**/dist/**", "**/.venv/**", "index.html"],
   },
   js.configs.recommended,
   {
