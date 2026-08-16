@@ -209,8 +209,12 @@ class Store:
             if len(self.enrolments) >= MAX_PENDING:
                 raise AuthError("too many badges waiting; approve or deny one first", 429)
 
-            # Each request extends the delay, so a flood slows itself down.
-            offer["strikes"] = offer.get("strikes", 0) + 1
+            # Each request extends the delay, so a flood slows itself down. Strikes lapse
+            # while nothing is asking, or one retry would hold a badge at the cap for the
+            # rest of the pairing window.
+            quiet = now - offer.get("last_attempt", now)
+            lapsed = int(quiet / PAIRING_FORGIVE_AFTER)
+            offer["strikes"] = max(0, offer.get("strikes", 0) - lapsed) + 1
             offer["not_before"] = now + min(
                 PAIRING_BACKOFF_BASE * (2 ** (offer["strikes"] - 1)),
                 PAIRING_BACKOFF_CAP)
