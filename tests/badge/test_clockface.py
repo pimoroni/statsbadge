@@ -1,7 +1,7 @@
 """The clock extension's own logic: setting the badge's clock, and a page in another zone.
 
 What `render` draws is checked against the firmware under `badge/wasm/`. Everything here
-is arithmetic, so it runs on the host.
+is arithmetic and runs on the host.
 """
 
 import ast
@@ -17,10 +17,10 @@ CLOCK_BADGE = "extensions/statsbadge-clock/src/statsbadge_clock/badge"
 def clock_badge(monkeypatch, badge_modules, repo_root):
     """`clockface`, with a clock the RTC sets and localtime reads back.
 
-    `machine` is a MicroPython module and not an injected builtin, so badgefakes does not
-    carry it. Coupling the two halves is what gives RESYNC_S any meaning: a stand-in that
-    only records the call leaves localtime() on the host's clock, so the drift never
-    closes and every reading resyncs.
+    badgefakes does not carry `machine`: it is a MicroPython module, not one of the
+    builtins the firmware injects. Coupling the RTC to localtime is what gives RESYNC_S any
+    meaning. A stand-in that only records the call leaves localtime() on the host's clock,
+    where the drift never closes and every reading resyncs.
     """
     class Clock:
         def __init__(self):
@@ -51,8 +51,8 @@ def clock_badge(monkeypatch, badge_modules, repo_root):
     monkeypatch.setitem(sys.modules, "machine", machine)
 
     pages = badge_modules["pages"]
-    # Importing the module registers the page kind, and sys.modules keeps it, so the
-    # registries have to be put back or a later test sees an extension it never loaded.
+    # Importing the module registers the page kind, and sys.modules keeps it. Restore the
+    # registries, or a later test sees an extension it never loaded.
     extra, animated = dict(pages.EXTRA), set(pages.ANIMATED)
 
     import clockface

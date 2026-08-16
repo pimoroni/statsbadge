@@ -49,7 +49,7 @@ def test_the_fonts_that_shipped_repack_to_the_same_bytes(repo_root):
     """Every .af in the tree, read and written again, is the file that shipped.
 
     Holds the encoder to what it wrote before the container became one module, on the wide
-    path and the narrow one, and needs neither the fonts group nor a .ttf to build from.
+    path and the narrow one. Needs neither the fonts group nor a .ttf to build from.
     """
     import af
 

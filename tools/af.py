@@ -9,18 +9,18 @@ disagree without either one failing: a font packs, loads, and draws wrong. `pack
 A four-byte marker, flags, then counts of glyphs, contours and points, each big-endian
 u16. Then the glyph table, the length of every contour, and finally the points.
 
-The conventions the glyph fields carry are the reference font's, read out of
-MonaSans-Medium.af rather than assumed: points are y-down from the baseline, so a glyph
-above the baseline has negative y, while bbox_y is y-up and goes negative only for a
-descender. x starts at the left of the advance, ink offset by the side bearing.
+The glyph fields follow MonaSans-Medium.af, read out of it and not assumed. Points are
+y-down from the baseline, so a glyph above it has negative y. bbox_y is y-up and goes
+negative only for a descender. x starts at the left of the advance, ink offset by the side
+bearing.
 """
 
 import struct
 
 AF_MAGIC = b"af!?"
 AF_FLAG_16BIT_POINT_COUNT = 0b0000001
-# A wide font stores its bbox, advance and points as 16-bit, and carries a u16
-# units-per-em after the counts. A narrow one gets the whole em in a signed byte, which is
+# A wide font stores its bbox, advance and points as 16-bit, then a u16 units-per-em
+# after the counts. A narrow one gets the whole em in a signed byte, which is
 # what shows as stepped outlines on a glyph drawn a hundred pixels tall.
 AF_FLAG_WIDE = 0b0000010
 HEADER = ">HHHH"                   # flags, glyphs, contours, points, after the marker
@@ -50,7 +50,7 @@ class Glyph:
 
 
 def limits(wide):
-    """The range a coordinate and the advance fit into, and the extent's ceiling."""
+    """The range a coordinate or an advance fits into, with the extent's ceiling."""
     if wide:
         return WIDE_COORD_MIN, WIDE_COORD_MAX, 0xFFFF
     return COORD_MIN, COORD_MAX, 255
@@ -120,7 +120,7 @@ def pack(glyphs, units_per_em=None):
 
 
 def unpack(data, name="<bytes>"):
-    """What a packed font holds: its glyphs, their points, and the grid they are on."""
+    """A packed font as data: its glyphs, their points, and the grid they sit on."""
     if data[:4] != AF_MAGIC:
         raise SystemExit(f"{name} does not start with {AF_MAGIC!r}")
     flags, glyph_count, contour_count, point_count = struct.unpack_from(HEADER, data, 4)
@@ -149,8 +149,8 @@ def unpack(data, name="<bytes>"):
             at += 1
 
     # Points, in order, so a glyph's own extent can be checked against its bbox. Also
-    # split back into contours, which is what `pack` takes: a font that cannot be read
-    # and rewritten cannot be checked against the one that shipped.
+    # split back into contours, the form `pack` takes: a font that cannot be read and
+    # written again cannot be checked against the one that shipped.
     point_code, point_size = ("h", 4) if wide else ("b", 2)
     index = 0
     for glyph in glyphs:

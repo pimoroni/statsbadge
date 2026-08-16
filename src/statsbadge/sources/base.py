@@ -107,9 +107,9 @@ class Source:
         The default suits a source that reads `self.config` as it samples. One that
         copies values out in `__init__` has to override this and copy them again.
 
-        Merged, not replaced: a key that does not arrive keeps the value it had. So a field
-        is cleared by sending it as null, which is what the config UI does. A caller that
-        omits it instead leaves the source on its old value.
+        Merged, not replaced: a key that does not arrive keeps the value it had. A field
+        is cleared by sending it as null, as the config UI does. A caller that omits it
+        leaves the source on the value it had.
         """
         self.config.update(settings)
 
