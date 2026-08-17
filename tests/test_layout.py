@@ -10,6 +10,7 @@ import tempfile
 
 from conftest import headers as _headers
 from statsbadge import install, layout, model, themes
+from statsbadge.collect import Collector
 
 
 def test_pruning_drops_absent_groups():
@@ -358,7 +359,7 @@ def test_a_badge_block_sits_over_the_default():
     assert whole["brightness"] == 0.8, "a block should inherit what it does not name"
 
 
-def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
+def test_a_unit_the_badge_cannot_guess_travels_with_the_layout():
     """A field with no suffix to read a unit off is sent its unit with the layout.
 
     What the badge does with them is `Units` in tests/badge/wasm/test_units.py: it keeps
@@ -377,23 +378,23 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout(h):
             frame["energy"] = {"kwh": 0.25, "spend_p": 316.8}
 
     source = Meter({})
-    collector = h.service.collector
+    # A collector of this test's own, so the frame it samples is the frame it reads. A
+    # thread samples the harness's, and lands between the append and the read.
+    collector = Collector(interval=1.0)
     collector.extensions.append(source)
-    try:
-        collector.sample_once()
-        caps = collector.capabilities()
-        pages = [{"id": "e", "kind": "graph", "title": "Energy",
-                  "fields": ["energy.kwh"]},
-                 {"id": "m", "kind": "grid", "title": "Mem",
-                  "fields": ["mem.used_mb", "sys.uptime_s", "fans.rpm"]}]
-        units = layout.field_units(pages, caps)
-        assert units.get("kwh") == "kWh", units
-        # The model's fields travel the same way.
-        assert units.get("rpm") == "rpm", units
-        # A field no page draws is not sent.
-        assert "spend_p" not in units, units
-    finally:
-        collector.extensions.remove(source)
+    collector.sample_once()
+    caps = collector.capabilities()
+    pages = [{"id": "e", "kind": "graph", "title": "Energy",
+              "fields": ["energy.kwh"]},
+             {"id": "m", "kind": "grid", "title": "Mem",
+              "fields": ["mem.used_mb", "sys.uptime_s", "fans.rpm"]}]
+    units = layout.field_units(pages, caps)
+    assert units.get("kwh") == "kWh", units
+    # The model's fields travel the same way.
+    assert units.get("rpm") == "rpm", units
+    # A field no page draws is not sent.
+    assert "spend_p" not in units, units
+
 
 
 

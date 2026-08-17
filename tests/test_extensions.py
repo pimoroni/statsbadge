@@ -5,6 +5,7 @@ import pathlib
 import sys
 
 from statsbadge import extensions, install, layout
+from statsbadge.collect import Collector
 
 
 def test_extensions_describe_finds_the_clock(h, ui):
@@ -90,7 +91,7 @@ def test_an_extension_page_survives_without_fields():
     assert kept == ["cpu", "quakes"], kept
 
 
-def test_a_declared_group_is_offered_kept_and_recorded(h):
+def test_a_declared_group_is_offered_kept_and_recorded():
     """A group an extension declares reaches the pickers, the rings and the peaks."""
     # A group that arrives with a pip install is in none of the model's tables.
     from statsbadge.sources.base import Source
@@ -107,7 +108,10 @@ def test_a_declared_group_is_offered_kept_and_recorded(h):
         def sample(self, frame, _dt):
             frame["site"] = {"hits": 40.0, "cached_pct": 62.0}
 
-    collector = h.service.collector
+    # A collector of this test's own, so the frame it samples is the frame it reads. A
+    # thread samples the harness's, and one already walking the source list writes its
+    # frame after the append.
+    collector = Collector(interval=1.0)
     collector.extensions.append(Site({}))
     collector.sample_once()
     caps = collector.capabilities()
@@ -147,56 +151,60 @@ def test_a_slow_group_travels_only_when_it_changes(h):
             frame["feed"] = {"hits": self.hits}
 
     feed = Feed({})
-    collector = h.service.collector
+    # This one serves the badge below, standing in for the harness's collector. Only this
+    # test samples it, so every frame it reads back is one it made.
+    collector = Collector(interval=1.0)
     collector.extensions.append(feed)
-    collector.sample_once()
-    assert "feed" in collector.slow_groups(), collector.slow_groups()
+    was, h.service.collector = h.service.collector, collector
+    try:
+        collector.sample_once()
+        assert "feed" in collector.slow_groups(), collector.slow_groups()
 
-    def stats(query=""):
-        status, body = h.signed("GET", f"/v1/stats{query}")
-        assert status == 200, (status, body)
-        return body
+        def stats(query=""):
+            status, body = h.signed("GET", f"/v1/stats{query}")
+            assert status == 200, (status, body)
+            return body
 
-    assert "feed" in stats(), "an app that cannot merge was sent a split frame"
+        assert "feed" in stats(), "an app that cannot merge was sent a split frame"
 
-    # Behind: the group arrives under one key, so the badge keeps what it is handed
-    # without knowing which of the frame's groups are the slow ones
-    first = stats("?have=-1")
-    rev = first["slow_rev"]
-    assert "feed" not in first, sorted(first)
-    assert first["slow"]["feed"] == {"hits": 10.0}, first["slow"]
-    # The peak scales the reading, so it travels with it, on the slow half
-    assert first["slow"]["peaks"] == {"feed.hits": 10}, first["slow"]
+        # Behind: the group arrives under one key, so the badge keeps what it is handed
+        # without knowing which of the frame's groups are the slow ones
+        first = stats("?have=-1")
+        rev = first["slow_rev"]
+        assert "feed" not in first, sorted(first)
+        assert first["slow"]["feed"] == {"hits": 10.0}, first["slow"]
+        # The peak scales the reading, so it travels with it, on the slow half
+        assert first["slow"]["peaks"] == {"feed.hits": 10}, first["slow"]
 
-    # Up to date, so the group and its peak are both left out
-    collector.sample_once()
-    lean = stats(f"?have={rev}")
-    assert "slow" not in lean and "feed" not in lean, sorted(lean)
-    assert "feed.hits" not in (lean.get("peaks") or {}), lean.get("peaks")
-    assert lean["slow_rev"] == rev, "a reading that did not move revised itself"
+        # Up to date, so the group and its peak are both left out
+        collector.sample_once()
+        lean = stats(f"?have={rev}")
+        assert "slow" not in lean and "feed" not in lean, sorted(lean)
+        assert "feed.hits" not in (lean.get("peaks") or {}), lean.get("peaks")
+        assert lean["slow_rev"] == rev, "a reading that did not move revised itself"
 
-    # When the reading moves, the revision does, and the next poll carries it
-    feed.hits = 40.0
-    collector.sample_once()
-    moved = stats(f"?have={rev}")
-    assert moved["slow_rev"] == rev + 1, (moved["slow_rev"], rev)
-    assert moved["slow"]["feed"] == {"hits": 40.0}, moved["slow"]
+        # When the reading moves, the revision does, and the next poll carries it
+        feed.hits = 40.0
+        collector.sample_once()
+        moved = stats(f"?have={rev}")
+        assert moved["slow_rev"] == rev + 1, (moved["slow_rev"], rev)
+        assert moved["slow"]["feed"] == {"hits": 40.0}, moved["slow"]
 
-    # On the badge, what it holds goes back into every later frame, and `peaks` merges into
-    # the fast ones rather than replacing them.
-    sys.path.insert(0, install.app_source_dir())
-    import pages
+        # On the badge, what it holds goes back into every later frame, and `peaks` merges into
+        # the fast ones rather than replacing them.
+        sys.path.insert(0, install.app_source_dir())
+        import pages
 
-    held = moved.pop("slow")
-    later = stats(f"?have={moved['slow_rev']}")
-    fast_peaks = dict(later.get("peaks") or {})
-    pages.merge_slow(later, held)
-    assert later["feed"] == {"hits": 40.0}, later.get("feed")
-    assert later["peaks"]["feed.hits"] == 40, later["peaks"]
-    for ref, value in fast_peaks.items():
-        assert later["peaks"][ref] == value, f"{ref} was lost to the merge"
-
-    collector.extensions.remove(feed)
+        held = moved.pop("slow")
+        later = stats(f"?have={moved['slow_rev']}")
+        fast_peaks = dict(later.get("peaks") or {})
+        pages.merge_slow(later, held)
+        assert later["feed"] == {"hits": 40.0}, later.get("feed")
+        assert later["peaks"]["feed.hits"] == 40, later["peaks"]
+        for ref, value in fast_peaks.items():
+            assert later["peaks"][ref] == value, f"{ref} was lost to the merge"
+    finally:
+        h.service.collector = was
 
 
 def test_a_declared_group_is_named_on_the_badge_too():
@@ -230,7 +238,7 @@ def test_a_declared_group_is_named_on_the_badge_too():
     assert pages.names_for(page["fields"]) == ["CF_A_COM", "CF_B_COM"]
 
 
-def test_a_bar_can_be_named_by_whoever_sent_it(h):
+def test_a_bar_can_be_named_by_whoever_sent_it():
     """A source sends lane names beside the values, and only the renderer reads them.
 
     `Lanes` in tests/badge/wasm/test_pages.py draws the bars with them and without.
@@ -250,23 +258,21 @@ def test_a_bar_can_be_named_by_whoever_sent_it(h):
                              "cached_names": ["a.com", "b.com"]}
 
     source = Domains({})
-    collector = h.service.collector
+    collector = Collector(interval=1.0)
     collector.extensions.append(source)
-    try:
-        collector.sample_once()
-        caps = collector.capabilities()
-        assert "cached" in caps["list_fields"], caps["list_fields"]
-        assert "cached_names" not in caps["list_fields"], caps["list_fields"]
-        assert "edge.cached_names" not in caps["available"], "the names were offered as a field"
+    collector.sample_once()
+    caps = collector.capabilities()
+    assert "cached" in caps["list_fields"], caps["list_fields"]
+    assert "cached_names" not in caps["list_fields"], caps["list_fields"]
+    assert "edge.cached_names" not in caps["available"], "the names were offered as a field"
 
-        sys.path.insert(0, install.app_source_dir())
-        import pages
+    sys.path.insert(0, install.app_source_dir())
+    import pages
 
-        frame = collector.latest()
-        assert pages.value_of(frame, "edge.cached") == [87.0, 74.5]
-        assert pages.value_of(frame, "edge.cached" + pages.LANE_NAMES) == ["a.com", "b.com"]
-    finally:
-        collector.extensions.remove(source)
+    frame = collector.latest()
+    assert pages.value_of(frame, "edge.cached") == [87.0, 74.5]
+    assert pages.value_of(frame, "edge.cached" + pages.LANE_NAMES) == ["a.com", "b.com"]
+
 
 
 def test_stored_settings_beat_the_command_line():
@@ -336,7 +342,6 @@ def test_an_extension_installed_since_start_is_taken_up_without_a_restart():
     # entry_points() walks sys.path on every call, so a reload picks one up in place, and
     # rebuilding a running source would throw away what it has fetched.
     from statsbadge import extensions as ext
-    from statsbadge.collect import Collector
 
     class Fake:
         provides = ("fake",)
