@@ -43,3 +43,7 @@ needs = "an API token"
 title = "Octopus Energy"
 summary = "Octopus Energy half-hourly prices and meter readings"
 needs = "an API key"
+
+[wildfires]
+title = "Global Wildfires"
+summary = "Global wildfires, on a world map."
