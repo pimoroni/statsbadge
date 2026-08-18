@@ -195,10 +195,11 @@ reads the same list, so a page on an undeclared group is dropped before it reach
 one answer per host. `page_settings` builds fields on each page of that extension's kinds, so
 two pages can point at two places.
 
-**Where the badge is belongs to the badge.** Help holds one location for the install, and
-`self.location(page)` answers `(latitude, longitude, label)`: the page's location where it
-names one, the badge's where it does not. Names go through `geocode.Geocoder`, one cache for
-every extension, so a town costs one lookup and not one per extension asking.
+**Where the badge is belongs to the badge.** General Settings holds one location for the
+install, and `self.location(page)` answers `(latitude, longitude, label)`: the page's
+location where it names one, the badge's where it does not. Names go through
+`geocode.Geocoder`, one cache for every extension, so a town costs one lookup and not one
+per extension asking.
 
 **A reading that arrives as coordinates is named by `geocode.nearest()`**, which reads the
 packed settlement table and answers "44 km SE of Coimbra, PT". `tools/make_cities.py`

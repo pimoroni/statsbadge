@@ -180,9 +180,6 @@ class Service:
         """
         system = platform.system()
         block = {"platform": system, "sources": [s.name for s in self.collector.sources]}
-        # Where the badge is, which no platform hides and every extension wanting a
-        # location reads.
-        block["location"] = {key: self.collector.config.get(key) for key in geocode.KEYS}
         if system == "Darwin":
             from .sources import macos
             block["powermetrics"] = {
@@ -202,16 +199,24 @@ class Service:
             }
         return block
 
+    def host_settings(self):
+        """Every host setting at the value the sources are working from.
+
+        Read off the collector rather than the store, so a value given on the command line
+        shows up as the answer in force even though nothing saved it.
+        """
+        return {key: self.collector.config.get(key) for key in HOST_KEYS}
+
     def set_host_settings(self, asked):
-        """Store what the Help tab changed, and hand it to the sources now."""
+        """Store what the Settings tab changed, and hand it to the sources now."""
         block = layout.coerce_settings(asked if isinstance(asked, dict) else {},
                                        HOST_SETTINGS)
         if not block:
-            return self.help()
+            return self.host_settings()
         self.config.set_settings(HOST, block)
         self.collector.config.update(block)
         self.collector.reconfigure()
-        return self.help()
+        return self.host_settings()
 
     def extension_kinds(self):
         """Page kinds that only the installed extensions can draw."""
@@ -704,7 +709,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/help" and method == "GET":
             return self._json(200, service.help())
 
-        if path == "/api/help" and method == "POST":
+        if path == "/api/settings" and method == "GET":
+            return self._json(200, service.host_settings())
+
+        if path == "/api/settings" and method == "POST":
             return self._json(200, service.set_host_settings(json.loads(body or b"{}")))
 
         if path == "/api/extensions" and method == "GET":

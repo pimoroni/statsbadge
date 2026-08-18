@@ -1793,6 +1793,60 @@ function ownIds(pages, badgeId) {
     ? page : { ...page, id: `${page.id}-${tag}` }))
 }
 
+// -- general settings ------------------------------------------------------
+
+/** What this install knows whichever badge is showing it, as against a layout, which is
+ * one badge's. Saved on its own button and not with the layout: `/api/settings` writes it
+ * to the sources at once, where a layout waits for Save. */
+async function renderGeneral() {
+  const node = $("general")
+  // Kept across the redraw, the heading being the page's and not this function's, as the
+  // badge list keeps its own.
+  const heading = node.querySelector("h2")
+  let host
+  try {
+    host = await api("/api/settings")
+  } catch (error) {
+    node.replaceChildren(heading,
+                         el("p", { className: "bad", textContent: error.message }))
+    return
+  }
+
+  const place = el("input", { type: "text", id: "hostplace", value: host.place || "",
+                              placeholder: "Sheffield, GB" })
+  const degrees = (id, value, limit) =>
+    el("input", { type: "number", id, step: "0.001", min: -limit, max: limit,
+                  value: value === null || value === undefined ? "" : value })
+  const latitude = degrees("hostlat", host.latitude, 90)
+  const longitude = degrees("hostlon", host.longitude, 180)
+
+  const save = el("button", { type: "button", className: "primary", textContent: "Save" })
+  save.onclick = () => api("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ place: place.value.trim(), latitude: latitude.value,
+                           longitude: longitude.value }),
+  }).then(() => {
+    toast("Saved")
+    return renderGeneral()
+  }).catch((error) => toast(error.message, true))
+
+  node.replaceChildren(
+    heading,
+    el("section", null,
+       el("h3", { textContent: "Where this badge is" }),
+       el("p", { textContent: "A town or city, and a country if the name is a common one: "
+                              + "Sheffield, or Sheffield, US. Looked up once and kept, so "
+                              + "every extension asking gets the same answer, and a page "
+                              + "naming somewhere else overrides it." }),
+       el("label", { htmlFor: "hostplace", textContent: "Location" }), place,
+       el("label", { htmlFor: "hostlat", textContent: "Latitude" }), latitude,
+       el("label", { htmlFor: "hostlon", textContent: "Longitude" }), longitude,
+       el("menu", null, save),
+       el("p", { textContent: "Coordinates win over the name, for a spot no name lands on. "
+                              + "Clear all three to set nowhere." })))
+}
+
 function renderBadges() {
   const ids = Object.keys(badges)
   const node = $("badges")
@@ -2185,42 +2239,7 @@ async function renderHelp() {
   const reading = el("section", null,
                      el("h2", { textContent: "Reading now" }),
                      el("p", { textContent: (facts.sources || []).join(", ") || "nothing" }))
-  node.replaceChildren(intro, ...helpFor(facts), locationHelp(facts.location || {}),
-                       reading)
-}
-
-/** Where the badge is. One answer per install, and an extension needs no settings of its
- * own on a badge with a location already set. A page naming a location overrides it. */
-function locationHelp(state) {
-  const place = el("input", { type: "text", id: "place", value: state.place || "",
-                              placeholder: "Sheffield, GB" })
-  const number = (id, value, limit) =>
-    el("input", { type: "number", id, step: "0.001", min: -limit, max: limit,
-                  value: value === null || value === undefined ? "" : value })
-  const latitude = number("latitude", state.latitude, 90)
-  const longitude = number("longitude", state.longitude, 180)
-  const save = el("button", { type: "button", className: "primary", textContent: "Save" })
-  save.onclick = () => api("/api/help", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ place: place.value.trim(), latitude: latitude.value,
-                           longitude: longitude.value }),
-  }).then(() => {
-    toast("Saved")
-    return renderHelp()
-  }).catch((error) => toast(error.message, true))
-
-  return el("section", null,
-            el("h2", { textContent: "Location" }),
-            el("p", { textContent: "A town or city, and a country if the name is a common "
-                                   + "one: Sheffield, or Sheffield, US. Looked up once and "
-                                   + "kept, so every extension asking gets the same answer." }),
-            el("label", { htmlFor: "place", textContent: "Location" }), place,
-            el("label", { htmlFor: "latitude", textContent: "Latitude" }), latitude,
-            el("label", { htmlFor: "longitude", textContent: "Longitude" }), longitude,
-            el("menu", null, save),
-            el("p", { textContent: "Coordinates win over the name, for a spot no name lands "
-                                   + "on. Clear all three to set nowhere." }))
+  node.replaceChildren(intro, ...helpFor(facts), reading)
 }
 
 function helpFor(facts) {
@@ -2288,7 +2307,7 @@ function windowsHelp(state) {
   const field = el("input", { type: "text", id: "lhmurl", value: state.url || "",
                               placeholder: state.default })
   const save = el("button", { type: "button", className: "primary", textContent: "Save" })
-  save.onclick = () => api("/api/help", {
+  save.onclick = () => api("/api/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ lhm_url: field.value.trim() || state.default }),
@@ -2535,6 +2554,7 @@ async function boot() {
   renderLook()
   renderSources()
   renderBadges()
+  renderGeneral().catch(() => {})
   renderLive()
   // After the first paint, since the list is a nicety and the page draws without it.
   refreshCatalogue().then(refreshOutdated).catch(() => {})

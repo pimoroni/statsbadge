@@ -242,7 +242,7 @@ Settings are what an extension is told. What it works out goes in `self.store`, 
 
 The clock keeps the coordinates a place name resolved to, since a town does not move. The geocoder is asked once per name ever, not once per launch, so a badge coming up while the geocoder is rate limiting still draws the right place.
 
-Where the badge *is* belongs to the badge and not to an extension. Help holds one location for the install, and an extension reads it with `self.location(page)`, which answers `(latitude, longitude, label)`: the page's location where it names one, the badge's where it does not. Names resolve through a cache every extension shares, and an extension needs no settings of its own on a badge with a location already set.
+Where the badge *is* belongs to the badge and not to an extension. General Settings holds one location for the install, and an extension reads it with `self.location(page)`, which answers `(latitude, longitude, label)`: the page's location where it names one, the badge's where it does not. Names resolve through a cache every extension shares, and an extension needs no settings of its own on a badge with a location already set.
 
 An extension can ship more than code. `badge_assets` lists further files to push, and the clock uses it for an icon font: its `icons.txt` names the Material Symbols to pack, and `tools/make_icon_font.py` packs them into an `.af` the badge loads with `font.load()`.
 

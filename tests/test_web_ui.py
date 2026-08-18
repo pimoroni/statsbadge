@@ -94,3 +94,43 @@ def test_the_settings_are_grouped_by_what_they_do(ui):
             for other in wanted:
                 assert other == heading or f'id="{control}"' not in sections[other], (
                     control, other)
+
+
+def test_the_general_settings_have_a_place_of_their_own(ui):
+    """Between Look & Feel and Badges, so a host-wide setting is not filed under Help.
+
+    The location lived in the Help tab first, which is for what a platform needs set up by
+    hand. Nothing read that tab, so nothing said the control had gone to the wrong place.
+    """
+    page = ui.markup
+    assert "<h2>General Settings</h2>" in page, "no General Settings heading"
+    assert 'id="general"' in page, "the section the script fills is not in the page"
+
+    order = [page.index(mark) for mark in
+             ("<h2>Look &amp; Feel</h2>", "<h2>General Settings</h2>", "<h2>Badges</h2>")]
+    assert order == sorted(order), order
+
+
+def test_the_general_settings_are_built_and_saved(ui):
+    """The script fills that section and writes it to `/api/settings`.
+
+    Read out of app.js, as the bindings above are: these controls are built at runtime, so
+    there is no markup to check and no DOM here to build them in.
+    """
+    script = ui.script
+    assert "function renderGeneral(" in script, "nothing builds the section"
+    assert "renderGeneral()" in script.replace("function renderGeneral()", ""), \
+        "renderGeneral is defined but never called"
+
+    body = script[script.index("function renderGeneral("):]
+    body = body[:body.index("\n}\n")]
+    assert '$("general")' in body, "renderGeneral does not fill the general section"
+    # replaceChildren takes the markup's heading with it unless the heading is restored.
+    # Caught in a browser and not here: the markup still had the h2 either way.
+    assert 'querySelector("h2")' in body, "a redraw would drop the General Settings heading"
+    for control in ("hostplace", "hostlat", "hostlon"):
+        assert control in body, f"{control} is not offered"
+    assert '"/api/settings"' in body, "the settings are not saved to /api/settings"
+
+    # The Help tab reports and no longer writes, so a location cannot be saved from it.
+    assert '"/api/help", {' not in script, "the help tab still posts settings"

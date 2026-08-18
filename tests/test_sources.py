@@ -509,6 +509,7 @@ def test_a_location_typed_in_the_browser_reaches_every_source():
         try:
             service.set_host_settings({"place": " Sheffield, GB ", "latitude": "",
                                        "longitude": ""})
+            assert service.host_settings()["place"] == "Sheffield, GB"
             stored = service.config.snapshot()["settings"][server_module.HOST]
             assert stored == {"place": "Sheffield, GB", "latitude": None,
                               "longitude": None}, stored

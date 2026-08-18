@@ -271,3 +271,41 @@ def test_server_identity_is_stable(h):
     assert first["id"] == again["id"], "the id changed between loads"
     assert len(first["id"]) >= 16
     assert first["name"]
+
+
+def test_the_general_settings_are_read_and_written_over_one_route(h):
+    """The Settings tab reads and saves through `/api/settings`, which reaches the sources.
+
+    The route the browser really calls, since the control that calls it is built at runtime
+    and nothing here can press it.
+    """
+    was = h.raw("GET", "/api/settings")[1]
+    try:
+        status, block = h.raw("GET", "/api/settings")
+        assert status == 200, (status, block)
+        assert set(block) == set(server.HOST_KEYS), block
+
+        status, saved = h.raw("POST", "/api/settings",
+                              json.dumps({"place": " Sheffield, GB ", "latitude": "",
+                                          "longitude": ""}).encode(),
+                              {"Content-Type": "application/json"})
+        assert status == 200, (status, saved)
+        assert saved["place"] == "Sheffield, GB", saved
+        assert h.raw("GET", "/api/settings")[1]["place"] == "Sheffield, GB"
+        for source in h.service.collector.extensions:
+            assert source.home == {"place": "Sheffield, GB"}, source.name
+
+        # A browser does not enforce min and max on a typed value, so the host clamps.
+        _status, clamped = h.raw("POST", "/api/settings",
+                                 json.dumps({"latitude": 120}).encode(),
+                                 {"Content-Type": "application/json"})
+        assert clamped["latitude"] == 90.0, clamped
+
+        # The help tab reports what the platform needs and takes nothing. 404, the router
+        # answering an unmatched method the same way it answers an unmatched path.
+        status, _body = h.raw("POST", "/api/help", b"{}",
+                              {"Content-Type": "application/json"})
+        assert status == 404, status
+    finally:
+        h.raw("POST", "/api/settings", json.dumps(was).encode(),
+              {"Content-Type": "application/json"})
