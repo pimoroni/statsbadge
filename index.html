@@ -670,6 +670,7 @@ footer {
   <p>A server on the host measures things and serves them; the badge app fetches and draws them.</p>
   <p>Requires a Badgeware Tufty 2350 with <a href="https://github.com/pimoroni/tufty2350/releases/tag/v3.0.1">firmware v3.0.1</a></p>
   <p><b>Windows and macOS:</b> take the app from the <a href="https://github.com/pimoroni/statsbadge/releases/latest">latest release</a>. It carries everything below, and the clock, ISS and quakes extensions, with nothing to install first. Neither app is signed, so the first launch wants right-click &gt; Open on macOS, or More info &gt; Run anyway on Windows.</p>
+  <p>Otherwise install it with <a href="https://docs.astral.sh/uv/">uv</a>, from any shell on Linux, Terminal on macOS, or PowerShell on Windows:</p>
   <form>
     <input type="radio" name="platform" id="linux" checked>
     <label for="linux">Linux</label>
@@ -678,15 +679,18 @@ footer {
     <input type="radio" name="platform" id="windows">
     <label for="windows">Windows</label>
 
-    <pre><code><b>uv tool install</b> statsbadge          <i># or "statsbadge[nvidia]" for an NVIDIA card</i>
+    <pre><code><b>curl</b> -LsSf https://astral.sh/uv/install.sh | sh   <i># skip if you have uv</i>
+<b>uv tool install</b> statsbadge          <i># or "statsbadge[nvidia]" for an NVIDIA card</i>
 <b>statsbadge serve</b>
 <b>statsbadge install</b>                   <i># with the badge on USB</i></code></pre>
 
-    <pre><code><b>uv tool install</b> statsbadge
+    <pre><code><b>curl</b> -LsSf https://astral.sh/uv/install.sh | sh   <i># skip if you have uv</i>
+<b>uv tool install</b> statsbadge
 <b>statsbadge serve --powermetrics</b>      <i># temperatures, fans and package watts</i>
 <b>statsbadge install</b>                   <i># with the badge on USB</i></code></pre>
 
-    <pre><code><b>uv tool install</b> "statsbadge[nvidia]"
+    <pre><code><b>irm</b> https://astral.sh/uv/install.ps1 | <b>iex</b>          <i># skip if you have uv</i>
+<b>uv tool install</b> "statsbadge[nvidia]"
 <b>statsbadge serve</b>                     <i># --lhm-url if LibreHardwareMonitor is not on port 8085</i>
 <b>statsbadge install</b>                   <i># with the badge on USB</i></code></pre>
   </form>
