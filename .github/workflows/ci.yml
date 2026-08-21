@@ -36,19 +36,19 @@ jobs:
 
       # The badge compiles these from source when the app is launched, where a syntax
       # error surfaces as a crash dialog.
-      - name: Check the app is whole and parses
+      - name: Check the badge app is whole and parses
         run: uv run python tools/check_app.py
 
       - name: Lint
         run: uv run ruff check --config ci/ruff.toml src tools tests extensions packaging
 
       # Catches a source that cannot even be imported on a clean machine.
-      - name: Probe this host
+      - name: Check the host probe runs
         run: uv run statsbadge probe
 
       # No DISPLAY here, so this is the headless path under test: it has to report what
       # is missing and exit 0, never traceback.
-      - name: Report what the tray would need
+      - name: Check the tray backend is reported headless
         run: uv run statsbadge tray --check
 
   tray:
@@ -74,16 +74,16 @@ jobs:
           # All three, so the tests that read an extension's badge page run rather than skip.
           uv pip install --no-deps ./extensions/statsbadge-clock ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
 
-      - name: Report what the tray would need
+      - name: Check the tray backend is reported headless
         run: uv run statsbadge tray --check
 
-      - name: Where a login entry would go
+      - name: Check the autostart entry path resolves
         run: uv run statsbadge autostart
 
       # How many roots this Python can verify against. A packaged app has none of its
       # own, and neither does uv's Python on some hosts, so it is worth seeing per
       # platform rather than inferring it from a test that went red.
-      - name: Report what this Python can verify
+      - name: Report the certificate roots available
         run: uv run python -c "import ssl; print(ssl.get_default_verify_paths());
              print(ssl.create_default_context().cert_store_stats())"
 
@@ -124,7 +124,7 @@ jobs:
           uv sync --all-extras
           uv pip install --no-deps ./extensions/statsbadge-clock ./extensions/statsbadge-iss ./extensions/statsbadge-quakes
 
-      - name: Fetch the badgeware runtime
+      - name: Fetch the badgeware WASM runtime
         run: |
           curl -fsSL -o runtime.zip \
             "https://github.com/$RUNTIME_REPO/releases/download/$RUNTIME_TAG/$RUNTIME_ASSET"
@@ -133,7 +133,7 @@ jobs:
 
       # What no host-side test can reach: the page kinds actually drawing, against real
       # picovector and the real fonts.
-      - name: Draw every page kind
+      - name: Render every page kind under the runtime
         run: node tools/wasm/run.mjs
 
   web:
@@ -171,7 +171,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
 
-      - name: Read the pinned MicroPython
+      - name: Read the pinned MicroPython version
         shell: bash
         run: |
           curl -fsSL "https://raw.githubusercontent.com/$TUFTY_REPO/$TUFTY_REF/ci/micropython.sh" \
@@ -251,7 +251,7 @@ jobs:
       # MICROPYTHON_FLAVOUR and MICROPYTHON_VERSION, straight out of the firmware's own
       # CI script, so this never drifts from the badge it targets. Into GITHUB_ENV rather
       # than kept inside the build script, because the cache key needs them.
-      - name: Read the pinned MicroPython
+      - name: Read the pinned MicroPython version
         shell: bash
         run: |
           curl -fsSL "https://raw.githubusercontent.com/$TUFTY_REPO/$TUFTY_REF/ci/micropython.sh" \
@@ -278,11 +278,11 @@ jobs:
 
       # The same script a developer runs locally, so there is one code path. It rejects
       # a .py left beside an .mpy, which would win the import and undo the build.
-      - name: Compile it
+      - name: Compile the badge app to bytecode
         run: MPY_CROSS=mpy-cross/mpy-cross ci/build-mpy.sh src/statsbadge/badge_app build/mpy
 
       # The launcher looks for a directory called `stats`.
-      - name: Zip it
+      - name: Stage and zip the badge app
         run: |
           mkdir -p stage
           cp -r build/mpy stage/stats
@@ -315,9 +315,8 @@ jobs:
           - os: macos-latest
             platform: macOS
             built: build/statsbadge-tray/macos/app/statsbadge.app/Contents/MacOS/statsbadge
-            # Ad-hoc signed, there being no Apple Developer account behind this. The .app
-            # runs, but the first launch needs Open from the context menu, Gatekeeper blocking
-            # refuses a double-click on anything unnotarised.
+            # Ad-hoc here whatever the account holds: this is the build check, and signing
+            # belongs to the workflow that produces something to download.
             sign: "--adhoc-sign"
           - os: windows-latest
             platform: windows
@@ -344,14 +343,14 @@ jobs:
 
       # From the same mark the tray and the badge draw. Briefcase falls back to its own
       # mascot for an icon it cannot find, noted in one line among hundreds.
-      - name: Draw the icons
+      - name: Generate the app icons
         run: uv run python tools/icon.py
 
       # Briefcase takes a static version, and everything else here reads the tag.
-      - name: Say what is being packaged
+      - name: Set the briefcase version from the tag
         run: uv run python tools/app_version.py
 
-      - name: Build it
+      - name: Create and build the app bundle
         run: |
           uv run briefcase create ${{ matrix.platform }} app --no-input
           uv run briefcase build ${{ matrix.platform }} app --no-input
@@ -361,7 +360,7 @@ jobs:
       # `--check` reports the tray, the certificates it can verify against and what it
       # installs with; `ext` reads the metadata it ships; `--be-pip` is what it spawns to
       # install one.
-      - name: Ask the built app what it has
+      - name: Verify the built bundle
         # bash on both, since powershell reads a quoted path as a string and needs the
         # call operator to run it.
         shell: bash
@@ -370,19 +369,15 @@ jobs:
           "${{ matrix.built }}" ext
           "${{ matrix.built }}" --be-pip --version
 
-      - name: Package it
+      - name: Package it for distribution
         run: uv run briefcase package ${{ matrix.platform }} app --no-input ${{ matrix.sign }}
 
+      # Not attached to a release: release-desktop.yml builds the signed one people
+      # download. This job exists to prove the app still packages on every push.
       - uses: actions/upload-artifact@v7
         with:
           name: statsbadge-${{ matrix.platform }}
           path: dist/*
-
-      - name: Attach to the release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3
-        with:
-          files: dist/*
 
   package-app:
     name: Pack the badge app
@@ -397,11 +392,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check the app is whole and parses
+      - name: Check the badge app is whole and parses
         run: python3 tools/check_app.py
 
       # The launcher looks for a directory called `stats`, so stage it under that name.
-      - name: Zip it
+      - name: Stage and zip the badge app
         run: |
           mkdir -p stage
           cp -r src/statsbadge/badge_app stage/stats

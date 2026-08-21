@@ -1,0 +1,134 @@
+name: Release the desktop app
+
+# The installers people download, built on a release. `package-desktop` in ci.yml builds
+# the same app on every push to prove it still builds; this one is where the artefacts
+# come from, and where the macOS signing credentials are reachable.
+#
+# Signing is wired but inert. With no MACOS_SIGNING_IDENTITY variable set on the `release`
+# environment the .app is ad-hoc signed, which runs but needs Open from the context menu on
+# first launch. Setting that variable and the four secrets turns it on with no change here.
+# What has to be done at Apple first is in DEVELOPMENT.md.
+#
+# Windows is packaged here too, and signs nothing: SmartScreen warns the first time, and
+# Authenticode is a separate certificate and a separate argument to briefcase.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.9.2"
+
+jobs:
+  desktop:
+    name: Pack ${{ matrix.platform }}
+    # Where the macOS signing credentials live. Naming it is what makes the environment's
+    # secrets and variables resolve at all; without it they are empty and the job quietly
+    # ad-hoc signs instead. Its protection rules are also the only thing between
+    # workflow_dispatch and the certificate, so restrict it to the tags releases are cut
+    # from. Windows needs none of this and is unharmed by it.
+    environment: release
+    permissions:
+      contents: write # to attach the installer to a release
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macOS
+            built: build/statsbadge-tray/macos/app/statsbadge.app/Contents/MacOS/statsbadge
+            app: build/statsbadge-tray/macos/app/statsbadge.app
+          - os: windows-latest
+            platform: windows
+            built: build/statsbadge-tray/windows/app/src/statsbadge.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # The version comes from the nearest tag, which a shallow clone does not carry.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # setup-uv publishes no v9 tag, only exact versions
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --group packaging
+
+      # From the same mark the tray and the badge draw. Briefcase falls back to its own
+      # mascot for an icon it cannot find, noted in one line among hundreds.
+      - name: Generate the app icons
+        run: uv run python tools/icon.py
+
+      # Briefcase takes a static version, and everything else here reads the tag.
+      - name: Set the briefcase version from the tag
+        run: uv run python tools/app_version.py
+
+      - name: Create and build the app bundle
+        run: |
+          uv run briefcase create ${{ matrix.platform }} app --no-input
+          uv run briefcase build ${{ matrix.platform }} app --no-input
+
+      # Run as the app: a bundle carries the Python it runs, and all three faults found in
+      # one so far were invisible to every other job. `--check` reports the tray, the
+      # certificates it can verify against and what it installs with; `ext` reads the
+      # metadata it ships; `--be-pip` is what it spawns to install one.
+      - name: Verify the built bundle
+        # bash on both, since powershell reads a quoted path as a string and needs the call
+        # operator to run it.
+        shell: bash
+        run: |
+          "${{ matrix.built }}" --check
+          "${{ matrix.built }}" ext
+          "${{ matrix.built }}" --be-pip --version
+
+      - name: Sign and notarise the app
+        if: matrix.platform == 'macOS' && vars.MACOS_SIGNING_IDENTITY != ''
+        env:
+          IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          ci/sign-macos.sh
+          uv run briefcase package macOS app --no-input --identity "$IDENTITY"
+
+      - name: Package without a signing identity
+        if: matrix.platform != 'macOS' || vars.MACOS_SIGNING_IDENTITY == ''
+        shell: bash
+        run: |
+          uv run briefcase package ${{ matrix.platform }} app --no-input \
+            ${{ matrix.platform == 'macOS' && '--adhoc-sign' || '' }}
+
+      # An unsigned artefact is not obviously unsigned once downloaded, and the way to end
+      # up with one is a variable set at the wrong scope, which fails no step.
+      - name: Report the signature and Gatekeeper verdict
+        if: matrix.platform == 'macOS'
+        run: |
+          codesign --display --verbose=2 "${{ matrix.app }}" 2>&1 \
+            | sed -n -e 's/^Authority=/signed by /p' \
+                     -e 's/^Signature=adhoc/signed by nothing, ad-hoc only/p'
+          spctl --assess --type execute "${{ matrix.app }}" \
+            && echo "Gatekeeper accepts it" \
+            || echo "::warning::Gatekeeper rejects this build, so it is not notarised."
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: statsbadge-${{ matrix.platform }}
+          path: dist/*
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
