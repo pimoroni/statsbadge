@@ -134,3 +134,27 @@ def test_the_general_settings_are_built_and_saved(ui):
 
     # The Help tab reports and no longer writes, so a location cannot be saved from it.
     assert '"/api/help", {' not in script, "the help tab still posts settings"
+
+
+def test_quick_add_is_a_picker_of_its_own_beside_the_kinds(ui):
+    """Two pickers on the one row, and each control the script reaches for is in the page.
+
+    The kind picker was the only select in the form, so both it and the option lookup
+    behind a card's heading were found by position.
+    """
+    for control in ("kind", "recipe", "quickadd"):
+        assert control in ui.ids, f"{control} is not in the page"
+    assert ui.ids["recipe"] == "select", ui.ids["recipe"]
+
+    form = ui.markup.split("<form>")[1].split("</form>")[0]
+    assert form.index('id="kind"') < form.index('id="recipe"'), "quick add is not beside it"
+
+    filled = ui.function("offerRecipes")
+    assert "caps.recipes" in filled, "the picker is not filled from what the host offers"
+    assert '$("recipe")' in filled and '$("quickadd")' in filled, filled
+
+    # Every page a recipe brings is re-identified: a duplicate id is a 400 on save, and a
+    # recipe adding two pages of one kind would carry two of the same.
+    added = ui.function("quickAdd")
+    assert "freshId(" in added, added
+    assert "markDirty()" in added, "adding pages does not enable Save"

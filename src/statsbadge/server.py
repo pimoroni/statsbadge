@@ -23,7 +23,7 @@ import time
 import traceback
 
 from . import (auth, commands, derive, extensions, geocode, identity, install, layout,
-               library, push, pushed, state, themes, tooling)
+               library, push, pushed, recipes, state, themes, tooling)
 from .collect import Collector
 
 # Normalised and absolute, since `_static` compares a normalised target against this.
@@ -277,6 +277,9 @@ class Service:
         caps["extension_pages"] = extensions.badge_pages(self.collector.extensions)
         caps["extension_settings"] = self.extension_settings()
         caps["extension_page_settings"] = self.extension_page_settings()
+        # Read after the extensions above, since a recipe of a kind nothing installed can
+        # draw is not offered.
+        caps["recipes"] = recipes.offered(caps, extensions.recipes(self.collector.extensions))
         return caps
 
     def replace_config(self, incoming, badge_id=None):

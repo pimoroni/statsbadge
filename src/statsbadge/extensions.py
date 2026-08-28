@@ -12,6 +12,7 @@ The class is a `sources.base.Source` with two extras:
     badge_module     path to a .py to install into the app's `pages/` directory
     badge_assets     paths to further files the badge side needs, an .af icon font among them
     badge_page       the page descriptor the config UI should offer
+    badge_recipes    pages with their settings already picked, for the UI's Quick Add
 
 Anything under a group the frame already names is merged; an extension may also add a
 top-level group.
@@ -282,6 +283,26 @@ def configure(sources, settings):
             source.configure(block)
         except Exception as exc:  # noqa: BLE001  a bad setting is the source's problem
             source.note_fault(exc)
+
+
+def recipes(sources):
+    """Ready-made pages contributed by extensions, for the config UI's Quick Add.
+
+    Namespaced by the source, so two extensions can both ship a "clock".
+    """
+    found = []
+    for source in sources:
+        name = getattr(source, "name", "ext")
+        for recipe in getattr(source, "badge_recipes", ()) or ():
+            entry = dict(recipe)
+            entry["name"] = f"{name}.{entry.get('name') or 'pages'}"
+            entry["from_extension"] = name
+            # On the pages too, which is what `prune` reads to keep a page whose fields are
+            # the extension's and absent from the model's list.
+            entry["pages"] = [{"from_extension": name, **page}
+                              for page in entry.get("pages") or ()]
+            found.append(entry)
+    return found
 
 
 def badge_pages(sources):

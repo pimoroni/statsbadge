@@ -1,0 +1,134 @@
+# The ready-made pages Quick Add offers, as data. See recipes.py for how one is read.
+#
+# A recipe names one or more pages, each written as the layout stores it: a kind, a title
+# and the fields already picked. Order here is the order the picker offers them in.
+#
+#   title     what the picker calls it
+#   summary   one line, shown as the option's tooltip
+#   pages     a [[name.pages]] table per page, added in the order they appear
+#
+# A page whose fields this host does not report is dropped, and a recipe left with none is
+# not offered at all. Nothing here checks that a field suits the slot it goes in: a graph
+# wants one of the fields collect.py keeps a history ring for, and a gauge one with a top
+# end.
+
+[cpu]
+title = "CPU Overview"
+summary = "Load on the dial, with temperature, clock and process count beside it."
+
+[[cpu.pages]]
+kind = "dial"
+title = "CPU"
+field = "cpu.pct"
+readouts = ["cpu.temp", "cpu.freq", "cpu.procs"]
+
+[cores]
+title = "CPU Cores"
+summary = "One bar per core."
+
+[[cores.pages]]
+kind = "bars"
+title = "Cores"
+field = "cpu.cores"
+
+[waterfall]
+title = "Core Waterfall"
+summary = "Per-core load as lanes of colour, scrolling."
+
+[[waterfall.pages]]
+kind = "waterfall"
+title = "Cores"
+field = "cpu.cores"
+
+[gpu]
+title = "GPU Overview"
+summary = "Load on the dial, with temperature, power draw and VRAM beside it."
+
+[[gpu.pages]]
+kind = "dial"
+title = "GPU"
+field = "gpu.pct"
+readouts = ["gpu.temp", "gpu.power", "gpu.mem_pct"]
+
+[memory]
+title = "Memory Overview"
+summary = "Memory used on the dial, with the absolute figures and swap beside it."
+
+[[memory.pages]]
+kind = "dial"
+title = "Memory"
+field = "mem.pct"
+readouts = ["mem.used_mb", "mem.total_mb", "mem.swap_pct"]
+
+[network]
+title = "Network Graph"
+summary = "Download and upload over time, two series on one plot."
+
+[[network.pages]]
+kind = "graph"
+title = "Network"
+fields = ["net.down_bps", "net.up_bps"]
+
+[traffic]
+title = "Network Totals"
+summary = "Throughput now and the totals since boot, as four big numbers."
+
+[[traffic.pages]]
+kind = "grid"
+title = "Traffic"
+fields = ["net.down_bps", "net.up_bps", "net.down_total_mb", "net.up_total_mb"]
+
+[disk]
+title = "Disk Overview"
+summary = "How full it is, what it is reading and writing, and how much is used."
+
+[[disk.pages]]
+kind = "grid"
+title = "Disk"
+fields = ["disk.pct", "disk.read_bps", "disk.write_bps", "disk.used_mb"]
+
+[thermals]
+title = "Thermals"
+summary = "Processor and graphics temperature over time."
+
+[[thermals.pages]]
+kind = "graph"
+title = "Thermals"
+fields = ["cpu.temp", "gpu.temp"]
+
+[glance]
+title = "At a Glance"
+summary = "Processor, memory, graphics and disk as the shape of one polygon."
+
+[[glance.pages]]
+kind = "radar"
+title = "Load"
+fields = ["cpu.pct", "mem.pct", "gpu.pct", "disk.pct"]
+
+[sparklines]
+title = "Load Sparklines"
+summary = "A row each for the four busiest things, name, value and recent history."
+
+[[sparklines.pages]]
+kind = "spark"
+title = "Load"
+fields = ["cpu.pct", "mem.pct", "gpu.pct", "net.down_bps"]
+
+[battery]
+title = "Battery"
+summary = "Charge on the dial, with time left, power draw and load beside it."
+
+[[battery.pages]]
+kind = "dial"
+title = "Battery"
+field = "power.battery_pct"
+readouts = ["power.secs_left", "power.package_w", "cpu.pct"]
+
+[host]
+title = "System Overview"
+summary = "Hostname, OS, processor model, uptime and battery, as labelled lines."
+
+[[host.pages]]
+kind = "text"
+title = "Host"
+fields = ["sys.host", "sys.os", "sys.cpu_name", "sys.uptime_s", "power.battery_pct"]
