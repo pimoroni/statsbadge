@@ -39,6 +39,8 @@ Every clock page then has settings of its own, so two pages can show two cities.
 | `digital` | No dial: date, place, the time the height of the band, weather under it |
 | `lcd` | The same layout in seven-segment digits, over their unlit segments |
 
+**Quick add** offers Digital Clock and Station Clock, which add a page with the face already picked. The other three faces are a dropdown away once a page is there.
+
 Without a location the clock still keeps time, and the weather readouts read "no location set".
 
 The same settings work from the command line, for a host with no browser near it. Anything stored by the UI wins over the flag.
