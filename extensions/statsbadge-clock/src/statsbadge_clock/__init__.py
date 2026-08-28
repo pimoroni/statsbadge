@@ -22,6 +22,7 @@ Where the host calls in:
     settings               the UI form, and layout validation drops undeclared keys
     page_settings          per-kind page validation
     badge_page             the UI page list, and the kinds the validator accepts
+    badge_recipes          the UI's Quick Add, a page with its settings already set
     badge_module/_assets   pushed to the badge by statsbadge install
 """
 
@@ -142,6 +143,19 @@ class Clock(Source):
         "fields": [],
         "slots": {},
     }
+
+    # Quick Add, where a face is picked without opening the page. The rest of the faces are
+    # a dropdown away once one is added.
+    badge_recipes = (
+        {"name": "digital", "title": "Digital Clock",
+         "summary": "The time as big digits in the badge theme, with local weather.",
+         "pages": [{"kind": "clockface", "title": "Clock", "fields": [],
+                    "face": "digital"}]},
+        {"name": "station", "title": "Station Clock",
+         "summary": "The railway clock face, with local weather.",
+         "pages": [{"kind": "clockface", "title": "Clock", "fields": [],
+                    "face": "railway"}]},
+    )
 
     # Per page settings, so two clock pages can show two cities.
     # Open-Meteo returns a location's UTC offset with its forecast, no need to set timezone
