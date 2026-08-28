@@ -48,7 +48,7 @@
       drop to re-order.</p>
 
     <form>
-      <select aria-label="Page kind">
+      <select id="kind" aria-label="Page kind">
         <optgroup label="Gauges">
           <option value="dial">Dial</option>
           <option value="dials">Gauges</option>
@@ -70,6 +70,8 @@
         </optgroup>
       </select>
       <button type="submit">Add page</button>
+      <select id="recipe" aria-label="Ready-made page"></select>
+      <button type="button" id="quickadd">Quick add</button>
     </form>
     <p role="status" hidden></p>
     <ol id="pages"></ol>

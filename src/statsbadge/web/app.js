@@ -299,7 +299,7 @@ function renderPages() {
 /** What the picker calls a kind. The card used to shout the bare value in capitals, and
  * "dial" beside "CPU" reads as a slip rather than a style. */
 function kindLabel(kind) {
-  const option = pick(`main form option[value="${CSS.escape(kind)}"]`)
+  const option = $("kind").querySelector(`option[value="${CSS.escape(kind)}"]`)
   return (option && option.textContent) || titleCase(kind)
 }
 
@@ -510,17 +510,31 @@ function moveButtons(index) {
     })
 }
 
+/** A page id no page in the list is using. `taken` is added to, so a recipe adding two
+ * pages of one kind gets two ids. */
+function freshId(base, taken) {
+  const stamp = Date.now().toString(36).slice(-4)
+  let id = `${base}${stamp}`
+  for (let n = 2; taken.has(id); n += 1) id = `${base}${stamp}${n}`
+  taken.add(id)
+  return id
+}
+
+function pageIds() {
+  return new Set(config.pages.map((page) => page.id))
+}
+
 function newPage(kind) {
-  const suffix = Date.now().toString(36).slice(-4)
+  const taken = pageIds()
   const offered = (caps.extension_pages || []).find((page) => page.kind === kind)
   if (offered) {
     // An extension declares its page: take the fields and title it shipped with, the
     // shape being its badge module's business.
-    return { ...offered, id: `${offered.id || kind}${suffix}` }
+    return { ...offered, id: freshId(offered.id || kind, taken) }
   }
   const shape = SHAPE[kind]
   const pool = numericRefs()
-  const page = { id: `${kind}${suffix}`, kind, title: kind }
+  const page = { id: freshId(kind, taken), kind, title: kind }
   if (shape.one) {
     page[shape.one] = kind === "bars" ? "cpu.cores" : (pool[0] || "cpu.pct")
   }
@@ -533,7 +547,7 @@ function newPage(kind) {
 /** Add the installed extensions' pages to the kind picker, which lists the built-ins in
  * groups it declares. */
 function offerExtensionPages() {
-  const picker = pick("main form select")
+  const picker = $("kind")
   const offered = (caps.extension_pages || []).filter(
     (page) => ![...picker.options].some((option) => option.value === page.kind))
   if (!offered.length) return
@@ -541,6 +555,38 @@ function offerExtensionPages() {
     || picker.appendChild(el("optgroup", { label: "Extensions" }))
   group.append(...offered.map(
     (page) => el("option", { value: page.kind, textContent: page.title || page.kind })))
+}
+
+/** Fill the Quick Add picker with the recipes this host can fill in.
+ *
+ * Replaced rather than appended to, since installing an extension or plugging in a GPU
+ * changes which of them the host offers. */
+function offerRecipes() {
+  const picker = $("recipe")
+  const listed = caps.recipes || []
+  const wanted = picker.value
+  picker.replaceChildren(...listed.map((recipe) => el("option", {
+    value: recipe.name, textContent: recipe.title, title: recipe.summary || null })))
+  if (listed.some((recipe) => recipe.name === wanted)) picker.value = wanted
+  // Nothing to offer on a host that reports nothing yet, and a picker with no options is
+  // a control that does not say so.
+  picker.hidden = !listed.length
+  $("quickadd").hidden = !listed.length
+}
+
+/** Add a recipe's pages, which arrive with their fields already picked. */
+function quickAdd(name) {
+  const recipe = (caps.recipes || []).find((entry) => entry.name === name)
+  if (!recipe) return
+  const taken = pageIds()
+  const added = recipe.pages.map((page) => (
+    { ...page, id: freshId(page.id || page.kind, taken) }))
+  config.pages.unshift(...added)
+  // One page is opened to be looked over; a set of them is a list to read, not a form.
+  if (added.length === 1) expanded.add(added[0].id)
+  else toast(`Added ${recipe.title}: ${added.length} pages.`)
+  markDirty()
+  renderPages()
 }
 
 /** Tell the user when a page they configured will not appear on the badge. */
@@ -2465,7 +2511,7 @@ function capsSignature() {
   // `/api/preview` and all, once a second for as long as it was broken.
   const faults = (caps.sources || []).map((source) => [source.name, source.last_fault])
   return JSON.stringify([caps.available, caps.extension_settings, caps.graphed,
-                         caps.group_source, caps.extension_pages, faults])
+                         caps.group_source, caps.extension_pages, caps.recipes, faults])
 }
 
 /** Refetch capabilities and redraw if what the host offers has changed.
@@ -2485,6 +2531,7 @@ async function refreshCaps() {
   caps = fresh
   if (capsSignature() === before) return false
   offerExtensionPages()
+  offerRecipes()
   renderPages()
   renderSettings()
   renderSources()
@@ -2548,6 +2595,7 @@ async function boot() {
     return
   }
   offerExtensionPages()
+  offerRecipes()
   renderWhose()
   renderPages()
   renderSettings()
@@ -2566,11 +2614,12 @@ async function boot() {
     event.preventDefault()
     // At the top: added at the bottom it lands off the end of a long list, and the first thing
     // anyone does with a new page is configure it.
-    config.pages.unshift(newPage(form.querySelector("select").value))
+    config.pages.unshift(newPage($("kind").value))
     expanded.add(config.pages[0].id)
     markDirty()
     renderPages()
   }
+  $("quickadd").onclick = () => quickAdd($("recipe").value)
   // Picks up a window opened by `statsbadge pair` or a previous page load.
   watchPairing().catch(() => {})
 

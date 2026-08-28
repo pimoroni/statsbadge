@@ -195,6 +195,12 @@ reads the same list, so a page on an undeclared group is dropped before it reach
 one answer per host. `page_settings` builds fields on each page of that extension's kinds, so
 two pages can point at two places.
 
+**A recipe is a page nobody has to configure.** `badge_recipes` contributes to the config
+UI's Quick Add: a name, a title and the pages it adds, each with its settings already set.
+The clock ships Digital Clock and Station Clock, which are the `face` setting picked in
+advance. `recipes.py` drops a recipe whose kind nothing installed can draw, so uninstalling
+an extension takes its recipes with it.
+
 **Where the badge is belongs to the badge.** General Settings holds one location for the
 install, and `self.location(page)` answers `(latitude, longitude, label)`: the page's
 location where it names one, the badge's where it does not. Names go through
