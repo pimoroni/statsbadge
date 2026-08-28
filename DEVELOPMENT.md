@@ -212,6 +212,15 @@ packed settlement table and answers "44 km SE of Coimbra, PT". `tools/make_citie
 rebuilds the table from GeoNames; it is committed, so a checkout has it and CI needs no
 network.
 
+**`badge_assets` pushes more than code.** The clock ships an icon font that way: `icons.txt`
+names the Material Symbols to pack, and `tools/make_icon_font.py` fits each glyph to the text
+font's metrics so icons sit on the baseline of the words beside them.
+
+```bash
+uv sync --group fonts
+python3 tools/make_icon_font.py extensions/statsbadge-clock
+```
+
 **`ext add` rebuilds a uv tool**, having no way to add to one: `uv tool install
 --with-requirements` replaces the environment, hence the list in `extensions.txt`. An
 extension requiring a newer statsbadge is therefore a constraint on the tool itself, and takes
@@ -239,6 +248,11 @@ to the sources on a mismatch, because a wheel outlives a firmware release.
 `src` layout, one project at the repo root, and the version comes from the tag. The badge app
 lives *inside* the package at `src/statsbadge/badge_app/`, because an installed wheel has to
 carry it or `statsbadge install` has nothing to push.
+
+The repository, the package, the module and the command are all `statsbadge`, and an
+extension follows: `statsbadge-clock` on PyPI, `statsbadge_clock` to import, `clock` to `ext
+add`. Naming the distribution and the module differently needs uv_build's `module-name`,
+which older uv treats as a fatal parse error rather than a warning.
 
 The backend is `hatchling` with `uv-dynamic-versioning`. Each extension sets `pattern-prefix`
 so it reads the tags for its own package, which has to match the prefix its workflow fires on;
