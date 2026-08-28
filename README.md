@@ -12,7 +12,7 @@ About 12 hours on battery with the backlight low, so a badge that sits on your d
 
 ## Install
 
-A `.dmg` for macOS and an `.msi` for Windows, on the [latest release](https://github.com/pimoroni/statsbadge/releases/latest). Neither is signed: on macOS right-click the app and choose **Open** the first time round, on Windows choose **More info** and then **Run anyway**.
+A `.dmg` for macOS and an `.msi` for Windows, on the [latest release](https://github.com/pimoroni/statsbadge/releases/latest). On Windows you'll need to choose **More info** and then **Run anyway**.
 
 On Linux, or to have it on your PATH:
 
