@@ -72,6 +72,31 @@ def find(items, label):
 
 # -- the menu ---------------------------------------------------------------
 
+def test_a_waiting_badge_is_answered_the_way_the_toolkit_calls_the_action():
+    """pystray reads an action's argument count and hands a one-argument callable the tray
+    icon, so calling the action here with nothing is more forgiving than the real thing.
+
+    Written as `lambda request=request_id:` the icon landed in `request_id` and both
+    buttons answered a request that does not exist, leaving pairing to time out.
+    """
+    from pystray._base import MenuItem
+
+    stack = FakeStack(pending=[WAITING])
+    entry = find(TrayApp(stack).model(), "Waiting to pair").submenu[0]
+    for label, verb in (("Approve", "approve"), ("Deny", "deny")):
+        # What pystray builds from the action, and what it passes when the item is clicked.
+        MenuItem(label, find(entry.submenu, label).action)("the tray icon")
+        assert stack.service.badges.done[-1] == (verb, "r1"), stack.service.badges.done
+
+
+def test_a_checkout_posts_its_alerts_through_the_toolkit():
+    """Only a bundle has a name of its own to post under. Anything else has to say it did
+    not, or the alert is dropped rather than going the long way round."""
+    from statsbadge.tray.backend import Tray
+
+    assert Tray._notify_as_app("a badge is waiting", "statsbadge") is False
+
+
 def test_a_waiting_badge_is_approved_one_at_a_time_by_its_code():
     """Approving takes two steps and names one badge, so there is no menu item that
     pairs every badge waiting."""

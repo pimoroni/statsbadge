@@ -125,9 +125,20 @@ class TrayApp:
     def _waiting(self, entry):
         """The code is checked against the badge's screen, so approving is two steps."""
         return Item(f"{entry['name']} - code {entry['code']}", submenu=[
-            Item("Approve", lambda request=entry["request_id"]: self.approve(request)),
-            Item("Deny", lambda request=entry["request_id"]: self.deny(request)),
+            Item("Approve", self._answer(self.approve, entry["request_id"])),
+            Item("Deny", self._answer(self.deny, entry["request_id"])),
         ])
+
+    @staticmethod
+    def _answer(verb, request_id):
+        """`verb` bound to one request, as an action that takes nothing.
+
+        Not `lambda request=request_id:`, the usual way to bind a loop variable. pystray
+        reads an action's argument count and hands a one-argument callable the tray icon,
+        which lands in `request_id` in place of the default: both buttons then answered a
+        request that does not exist, and pairing ran to its timeout.
+        """
+        return lambda: verb(request_id)
 
     def open_ui(self):
         webbrowser.open(f"http://127.0.0.1:{self.status['port']}/")
