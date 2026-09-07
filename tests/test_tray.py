@@ -19,6 +19,7 @@ import pytest
 
 from statsbadge import autostart, logs, runner
 from statsbadge.tray import TrayApp
+from statsbadge.tray import backend as tray_backend
 from statsbadge.tray.backend import SEPARATOR
 
 ARGV = ["/opt/a place/statsbadge-tray", "--config-dir", "/tmp/a b", "--port", "8421"]
@@ -92,12 +93,33 @@ def test_a_waiting_badge_is_answered_the_way_the_toolkit_calls_the_action(monkey
         assert stack.service.badges.done[-1] == (verb, "r1"), stack.service.badges.done
 
 
-def test_a_checkout_posts_its_alerts_through_the_toolkit():
-    """Only a bundle has a name of its own to post under. Anything else has to say it did
-    not, or the alert is dropped rather than going the long way round."""
+def test_a_checkout_has_no_name_to_post_an_alert_under():
+    """Only a bundle has one, and it has to say so rather than claim the alert went out."""
     from statsbadge.tray.backend import Tray
 
     assert Tray._notify_as_app("a badge is waiting", "statsbadge") is False
+
+
+def test_macos_says_nothing_rather_than_say_it_as_script_editor(monkeypatch):
+    """pystray posts a macOS alert through `osascript`, which macOS credits to Script
+    Editor: an alert about pairing under a name with nothing to do with this, and nothing
+    to click. The icon and the menu say the same thing, so silence is better."""
+    from statsbadge.tray.backend import Tray
+
+    posted = []
+    tray = Tray.__new__(Tray)              # the toolkit is not wanted, only the choice
+    tray._pystray = type("P", (), {"Icon": type("I", (), {"HAS_NOTIFICATION": True})})
+    tray._icon = type("Icon", (), {"notify": lambda _s, *a: posted.append(a)})()
+
+    # The real `sys`, so the whole process is that platform for the length of this.
+    monkeypatch.setattr(tray_backend.sys, "platform", "darwin")
+    tray.notify("a badge is waiting", "statsbadge")
+    assert posted == [], "an alert went out under someone else's name"
+
+    # Windows puts a balloon on the icon itself, which is this app's own.
+    monkeypatch.setattr(tray_backend.sys, "platform", "win32")
+    tray.notify("a badge is waiting", "statsbadge")
+    assert posted == [("a badge is waiting", "statsbadge")], posted
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="an AppKit notification centre")

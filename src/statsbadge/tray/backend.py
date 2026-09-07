@@ -140,14 +140,27 @@ class Tray:
         self._mark_template()
 
     def notify(self, message, title=None, on_activate=None, action=None):
+        """Say a badge is waiting, where it can be said properly. Silent where it cannot.
+
+        The icon's attention state and the menu carry the same news, so nothing is lost by
+        staying quiet, and an alert nobody can place is worse than none. What pystray does
+        with one differs by platform: Windows puts a balloon on the icon itself, macOS
+        shells out to `osascript` and has the alert credited to Script Editor, and Linux
+        answers with NotImplementedError. Only the first of those is worth posting, and
+        macOS goes through `_notify_as_app` above when it is a bundle.
+        """
         if self._notify_as_app(message, title, on_activate, action):
+            return
+        if sys.platform == "darwin":
             return
         if not getattr(self._pystray.Icon, "HAS_NOTIFICATION", False):
             return
         try:
             self._icon.notify(message, title)
-        except Exception:
+        except NotImplementedError:
             pass
+        except Exception:
+            traceback.print_exc()
 
     @staticmethod
     def _notify_as_app(message, title, on_activate=None, action=None):
