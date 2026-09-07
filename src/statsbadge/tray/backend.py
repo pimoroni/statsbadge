@@ -8,6 +8,7 @@ import collections
 import importlib.util
 import os
 import sys
+import uuid
 
 from .. import bundled
 from . import icons
@@ -19,6 +20,44 @@ SEPARATOR = object()
 Item = collections.namedtuple(
     "Item", "label action checked enabled default submenu",
     defaults=(None, None, True, False, None))
+
+# The notification centre keeps only a weak reference to its delegate, so the one it is
+# given has to outlive the call that sets it.
+_activation = None
+
+# The alert's own button was clicked, rather than its body. AppKit's
+# NSUserNotificationActivationTypeActionButtonClicked, which is not worth a framework
+# binding for one integer.
+ACTION_BUTTON = 2
+
+# What each posted alert should do, by the key carried in its userInfo. An alert names one
+# badge waiting, so several can be out at once and each answers for its own.
+_answers = {}
+
+
+def _activation_delegate():
+    """The notification-centre delegate, built once and kept.
+
+    An Objective-C class cannot be registered under the same name twice, and a collected
+    delegate would leave the alert's buttons dead.
+    """
+    global _activation
+    if _activation is None:
+        from Foundation import NSObject
+
+        class Activated(NSObject):
+            def userNotificationCenter_didActivateNotification_(self, centre, note):
+                info = note.userInfo()
+                key = info.objectForKey_("statsbadge") if info else None
+                opens, acts = _answers.pop(key, (None, None))
+                handler = acts if note.activationType() == ACTION_BUTTON else opens
+                centre.removeDeliveredNotification_(note)
+                if handler is not None:
+                    handler()
+
+        _activation = Activated.alloc().init()
+    return _activation
+
 
 INSTALL = ("pystray is missing, though statsbadge depends on it. Reinstall:\n"
            "  uv tool install --force statsbadge")
@@ -92,8 +131,8 @@ class Tray:
         self._icon.icon = icons.load(attention=wanted, template=self._template)
         self._mark_template()
 
-    def notify(self, message, title=None):
-        if self._notify_as_app(message, title):
+    def notify(self, message, title=None, on_activate=None, action=None):
+        if self._notify_as_app(message, title, on_activate, action):
             return
         if not getattr(self._pystray.Icon, "HAS_NOTIFICATION", False):
             return
@@ -103,7 +142,7 @@ class Tray:
             pass
 
     @staticmethod
-    def _notify_as_app(message, title):
+    def _notify_as_app(message, title, on_activate=None, action=None):
         """Post the alert under this app's own name. True where it went out.
 
         pystray's macOS backend shells out to `osascript`, and macOS credits the alert to
@@ -124,6 +163,16 @@ class Tray:
             note = NSUserNotification.alloc().init()
             note.setTitle_(title or "statsbadge")
             note.setInformativeText_(message)
+            # An alert carries a button whether or not anything is listening, so one with
+            # nothing to run loses it rather than keeping a button that does nothing.
+            if on_activate or action:
+                key = str(uuid.uuid4())
+                _answers[key] = (on_activate, action[1] if action else None)
+                note.setUserInfo_({"statsbadge": key})
+                centre.setDelegate_(_activation_delegate())
+            note.setHasActionButton_(bool(action))
+            if action:
+                note.setActionButtonTitle_(action[0])
             centre.deliverNotification_(note)
             return True
         except Exception:

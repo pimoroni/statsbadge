@@ -100,6 +100,91 @@ def test_a_checkout_posts_its_alerts_through_the_toolkit():
     assert Tray._notify_as_app("a badge is waiting", "statsbadge") is False
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="an AppKit notification centre")
+def test_a_clicked_alert_runs_what_was_given_to_it():
+    """The alert carries a button whatever is listening, so without a delegate it was one
+    that did nothing."""
+    from statsbadge.tray import backend
+
+    delegate = backend._activation_delegate()
+    # The name AppKit will look for, which is what the underscores spell.
+    assert delegate.respondsToSelector_("userNotificationCenter:didActivateNotification:")
+    # Built once and kept: the centre holds it weakly and the class cannot be registered
+    # twice.
+    assert backend._activation_delegate() is delegate
+
+    class FakeNote:
+        """Enough of NSUserNotification for the delegate to read it back."""
+
+        def __init__(self, key, activation):
+            self._info = {"statsbadge": key}
+            self._activation = activation
+
+        def userInfo(self):
+            return type("Info", (), {"objectForKey_": lambda _s, k: self._info.get(k)})()
+
+        def activationType(self):
+            return self._activation
+
+    class FakeCentre:
+        def __init__(self):
+            self.removed = []
+
+        def removeDeliveredNotification_(self, note):
+            self.removed.append(note)
+
+    done = []
+    centre = FakeCentre()
+    for activation, wanted in ((backend.ACTION_BUTTON, "approved"), (1, "opened")):
+        backend._answers["k"] = (lambda: done.append("opened"),
+                                 lambda: done.append("approved"))
+        note = FakeNote("k", activation)
+        delegate.userNotificationCenter_didActivateNotification_(centre, note)
+        assert done[-1] == wanted, done
+        assert note in centre.removed, "an answered alert was left standing"
+        assert "k" not in backend._answers, "an answered alert can be answered twice"
+
+    # An alert with nothing recorded for it is one this process did not post.
+    delegate.userNotificationCenter_didActivateNotification_(centre, FakeNote("gone", 1))
+    assert done == ["approved", "opened"], done
+
+
+def test_a_pairing_alert_offers_to_open_the_config_ui():
+    """The alert says a badge is waiting, so what it opens is where it can be approved."""
+    stack = FakeStack(pending=[WAITING])
+    app = TrayApp(stack)
+
+    posted = []
+
+    class Recording:
+        def title(self, _text):
+            pass
+
+        def attention(self, _wanted):
+            pass
+
+        def update(self):
+            pass
+
+        def notify(self, message, title=None, on_activate=None, action=None):
+            posted.append({"message": message, "title": title,
+                           "on_activate": on_activate, "action": action})
+
+    app.tray = Recording()
+    app.refresh()
+    app._apply()
+    assert len(posted) == 1, posted
+    assert "4F9A2C" in posted[0]["message"], posted[0]["message"]
+    assert "Desk badge" in posted[0]["title"], posted[0]["title"]
+    assert posted[0]["on_activate"] == app.open_ui, "the alert opens nothing"
+
+    # The button approves the badge it names, not whichever came last.
+    label, approve = posted[0]["action"]
+    assert label == "Approve", label
+    approve()
+    assert stack.service.badges.done == [("approve", "r1")]
+
+
 def test_a_waiting_badge_is_approved_one_at_a_time_by_its_code():
     """Approving takes two steps and names one badge, so there is no menu item that
     pairs every badge waiting."""

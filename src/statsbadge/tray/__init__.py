@@ -138,6 +138,8 @@ class TrayApp:
         which lands in `request_id` in place of the default: both buttons then answered a
         request that does not exist, and pairing ran to its timeout.
         """
+        # A plain closure over the loop variable would be read when the menu item or the
+        # alert is answered, by which time it names whichever badge came last.
         return lambda: verb(request_id)
 
     def open_ui(self):
@@ -205,8 +207,12 @@ class TrayApp:
             if entry["request_id"] in self._announced:
                 continue
             self._announced.add(entry["request_id"])
-            self.tray.notify(f"{entry['name']} wants to pair. Its code is "
-                             f"{entry['code']}.", "statsbadge")
+            # `_answer` again, and for the same reason: `entry` is the loop variable,
+            # and the alert is answered long after the loop has moved on.
+            self.tray.notify(
+                f"A badge with code {entry['code']} would like to pair.",
+                f"{entry['name']} wants to pair", on_activate=self.open_ui,
+                action=("Approve", self._answer(self.approve, entry["request_id"])))
         self._announced &= {entry["request_id"] for entry in waiting}
 
     def run(self, tray, serving):
