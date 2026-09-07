@@ -9,6 +9,7 @@ import importlib.util
 import os
 import sys
 
+from .. import bundled
 from . import icons
 
 # A separator in a menu model. pystray drops runs of them and trims the ends, so a
@@ -92,12 +93,41 @@ class Tray:
         self._mark_template()
 
     def notify(self, message, title=None):
+        if self._notify_as_app(message, title):
+            return
         if not getattr(self._pystray.Icon, "HAS_NOTIFICATION", False):
             return
         try:
             self._icon.notify(message, title)
         except Exception:
             pass
+
+    @staticmethod
+    def _notify_as_app(message, title):
+        """Post the alert under this app's own name. True where it went out.
+
+        pystray's macOS backend shells out to `osascript`, and macOS credits the alert to
+        Script Editor: it arrives under a name the reader has no reason to trust, and
+        opening it opens Script Editor. Only a bundle has an identity to post under, so a
+        checkout still goes the long way round.
+
+        NSUserNotification is deprecated, and its replacement is in a framework the bundle
+        carries no bindings for. Whatever it does, the osascript path is still below.
+        """
+        if sys.platform != "darwin" or not bundled():
+            return False
+        try:
+            from Foundation import NSUserNotification, NSUserNotificationCenter
+            centre = NSUserNotificationCenter.defaultUserNotificationCenter()
+            if centre is None:
+                return False
+            note = NSUserNotification.alloc().init()
+            note.setTitle_(title or "statsbadge")
+            note.setInformativeText_(message)
+            centre.deliverNotification_(note)
+            return True
+        except Exception:
+            return False
 
     def _started(self, setup):
         def ready(icon):
