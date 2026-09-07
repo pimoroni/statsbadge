@@ -114,6 +114,38 @@ def describe(disabled=()):
     return sorted(found, key=lambda record: record["name"])
 
 
+def versions():
+    """The distribution version behind each entry point, by entry point name."""
+    return {entry.name: _version(entry) for entry in _entries()}
+
+
+def forget(names):
+    """Drop these extensions' modules, so the next import reads what is on disk now.
+
+    Returns the names it could do it for. An upgrade builds a new generation and puts it on
+    sys.path, but a package already imported stays imported: the version read off the
+    metadata would be the new one and the code, including the badge module the installer
+    pushes, the old one.
+    """
+    roots = {entry.name: _root(entry) for entry in _entries()}
+    dropped = []
+    for name in names:
+        root = roots.get(name)
+        if not root:
+            continue
+        for module in [held for held in sys.modules
+                       if held == root or held.startswith(root + ".")]:
+            del sys.modules[module]
+        dropped.append(name)
+    return dropped
+
+
+def _root(entry):
+    """The top-level package an entry point names, or "" where it names nothing."""
+    named = getattr(entry, "module", None) or str(getattr(entry, "value", "")).split(":")[0]
+    return named.split(".")[0]
+
+
 def _version(entry):
     distribution = getattr(entry, "dist", None)
     return getattr(distribution, "version", None) if distribution else None

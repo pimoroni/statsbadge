@@ -53,6 +53,11 @@ class Collector:
         self.state_dir = state_dir
         self.geocoder = geocoder or geocode.Geocoder()
         self.extensions = extensions.load(self.config, state_dir, self.geocoder)
+        # What each was loaded at, so reload_extensions can tell an upgrade from a restart
+        # of the same code. Extensions that a later release supersedes are listed in
+        # `stale`, for a caller that has to say a restart is still wanted.
+        self.versions = extensions.versions()
+        self.stale = []
         extensions.set_home(self.sources + self.extensions, self.config)
         self.frame = model.empty_frame()
         self.seq = 0
@@ -129,21 +134,39 @@ class Collector:
         entry_points() walks sys.path on every call, so one installed since start is visible
         without a restart. An extension already loaded is kept as it stands: building it
         again would throw away what it has fetched and start its clock over.
+
+        One whose version has moved is the exception. Its modules are dropped and it is
+        built again, or the metadata would report the new release while the code, and the
+        badge module the installer compares against, stayed the old one.
         """
         importlib.invalidate_caches()
+        now = extensions.versions()
+        moved = {name for name, version in now.items()
+                 if name in self.versions and version != self.versions[name]}
+        refreshed = set(extensions.forget(moved))
+        self.stale = sorted(moved - refreshed)
+
         running = {source.name: source for source in self.extensions}
-        kept = []
+        retired, kept = [], []
         for source in extensions.load(self.config, self.state_dir, self.geocoder):
             already = running.pop(source.name, None)
-            if already is not None:
+            if already is not None and source.name not in refreshed:
                 kept.append(already)
                 continue
+            if already is not None:
+                retired.append(already)
             try:
                 source.start()
             except Exception as exc:
                 source.note_fault(exc)
             kept.append(source)
         self.extensions = kept
+        self.versions = now
+        for gone in retired:
+            try:
+                gone.stop()
+            except Exception:
+                pass
         extensions.set_home(kept, self.config)
         for gone in running.values():
             try:

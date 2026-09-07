@@ -3,6 +3,7 @@
 import json
 import pathlib
 import sys
+import types
 
 from statsbadge import extensions, install, layout
 from statsbadge.collect import Collector
@@ -386,6 +387,114 @@ def test_an_extension_installed_since_start_is_taken_up_without_a_restart():
         assert arrived.stopped == 1, "one that has gone was left running"
     finally:
         ext._entries = was
+
+
+def test_an_upgraded_extension_is_rebuilt_rather_than_kept():
+    """A release installed over a running one has to be taken up, not held off until a
+    restart: the metadata would report the new version while the code, and the badge
+    module the installer compares against, stayed the old one."""
+    from statsbadge import extensions as ext
+
+    class Fake:
+        provides = ("fake",)
+
+        def __init__(self, _config):
+            self.started = self.stopped = 0
+
+        @classmethod
+        def available(cls):
+            return True
+
+        def start(self):
+            self.started += 1
+
+        def stop(self):
+            self.stopped += 1
+
+    class Entry:
+        name = "fake"
+        value = "statsbadge_fake:Fake"
+
+        def __init__(self, version):
+            self.dist = types.SimpleNamespace(version=version)
+
+        def load(self):
+            return Fake
+
+    offered = [Entry("1.0.0")]
+    was = ext._entries
+    ext._entries = lambda: list(offered)
+    try:
+        collector = Collector(interval=1.0)
+        first = collector.extensions[0]
+        assert collector.versions == {"fake": "1.0.0"}
+
+        # The same version is the same code, and rebuilding would throw away what it has
+        # fetched and start its clock over.
+        assert collector.reload_extensions() == ["fake"]
+        assert collector.extensions[0] is first
+        assert collector.stale == []
+
+        offered[:] = [Entry("1.0.1")]
+        assert collector.reload_extensions() == ["fake"]
+        assert collector.extensions[0] is not first, "an upgrade kept the old source"
+        assert first.stopped == 1, "the superseded source was left running"
+        assert collector.extensions[0].started == 1
+        assert collector.versions == {"fake": "1.0.1"}
+        assert collector.stale == [], "a rebuild that took still asked for a restart"
+    finally:
+        ext._entries = was
+
+
+def test_an_upgrade_whose_modules_will_not_drop_still_asks_for_a_restart():
+    """`forget` can only clear what an entry point names. One it cannot is reported, so
+    the caller can say the new release is on disk and not in this process."""
+    from statsbadge import extensions as ext
+
+    class Entry:
+        name = "fake"
+        value = ""
+
+        def __init__(self, version):
+            self.dist = types.SimpleNamespace(version=version)
+
+        def load(self):
+            raise AssertionError("not reached")
+
+    was = ext._entries
+    ext._entries = lambda: [Entry("2.0.0")]
+    try:
+        assert ext.forget(["fake"]) == []
+        assert ext.versions() == {"fake": "2.0.0"}
+    finally:
+        ext._entries = was
+
+
+def test_forgetting_an_extension_drops_the_package_and_what_is_under_it():
+    from statsbadge import extensions as ext
+
+    class Entry:
+        name = "fake"
+        value = "statsbadge_fake.source:Fake"
+
+        def load(self):
+            raise AssertionError("not reached")
+
+    was = ext._entries
+    ext._entries = lambda: [Entry()]
+    held = ("statsbadge_fake", "statsbadge_fake.source", "statsbadge_fakeish")
+    for name in held:
+        sys.modules[name] = types.ModuleType(name)
+    try:
+        assert ext.forget(["fake"]) == ["fake"]
+        assert "statsbadge_fake" not in sys.modules
+        assert "statsbadge_fake.source" not in sys.modules
+        # A package whose name merely starts the same is another package.
+        assert "statsbadge_fakeish" in sys.modules
+    finally:
+        ext._entries = was
+        for name in held:
+            sys.modules.pop(name, None)
 
 
 def test_the_app_keeps_what_extensions_reach_into_it_for():

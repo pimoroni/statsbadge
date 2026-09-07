@@ -165,11 +165,10 @@ class Service:
                 answer["needs_usb"] = sorted({
                     name for name, _path in extensions.badge_modules(
                         self.collector.extensions)})
-                # Already imported code stays imported, so a newer release of something
-                # running is on disk and not yet in this process.
+                # An upgrade is normally taken up in place. What could not be, because
+                # its modules would not drop, is on disk and not in this process.
                 answer["restart"] = sorted(
-                    set(answer["changed"]) & set(answer["loaded"])
-                ) if verb == "upgrade" else []
+                    {tooling.short_name(name) for name in self.collector.stale})
             return answer
 
     def help(self):
