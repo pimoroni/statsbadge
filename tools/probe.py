@@ -106,8 +106,8 @@ FRAME = {
                          "condition": "overcast", "icon": "f", "wind": 14.0,
                          "wind_unit": "km/h", "place": "Sheffield, GB",
                          "utc_offset": 3600}
-               for page_id in ("swiss_clock", "face_dots", "face_squircle",
-                               "face_digital", "face_lcd")},
+               for page_id in ("swiss_clock", "face_dots", "face_amsterdam",
+                               "face_squircle", "face_digital", "face_lcd")},
     "weather": {"temp": 16.0, "feels": 14.0, "humidity": 78, "wind": 14.0,
                 "high": 19.0, "low": 11.0,
                 "condition": "overcast", "code": 3,
@@ -229,6 +229,7 @@ PAGES = [
     # id is also the key its place is published under.
     {"id": "swiss_clock", "kind": "clockface", "title": "Clock", "face": "railway"},
     {"id": "face_dots", "kind": "clockface", "title": "Clock", "face": "dots"},
+    {"id": "face_amsterdam", "kind": "clockface", "title": "Clock", "face": "amsterdam"},
     {"id": "face_squircle", "kind": "clockface", "title": "Clock", "face": "squircle"},
     {"id": "face_digital", "kind": "clockface", "title": "Clock", "face": "digital"},
     {"id": "face_lcd", "kind": "clockface", "title": "Clock", "face": "lcd"},

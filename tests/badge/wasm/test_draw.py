@@ -227,6 +227,122 @@ class ClockFaces(unittest.TestCase):
                     drawn[names[first]] != drawn[names[second]],
                     f"{names[first]} and {names[second]} draw the same face")
 
+    def test_a_face_with_its_own_livery_takes_the_theme_when_asked(self):
+        """`themed` on a page swaps a face's colours for the theme's, and the two dials are
+        cached apart rather than one standing in for the other."""
+        clockface = self.clockface()
+        drawn = {}
+        for themed in (False, True):
+            page = {"kind": "clockface", "id": "clock1", "title": "Clock",
+                    "face": "amsterdam", "themed": themed}
+            draw.background(self.theme, "Clock", 0, 1, None)
+            clockface.render(page, CLOCK_FRAME, {}, self.theme)
+            drawn[themed] = body_pixels()
+        self.assertTrue(drawn[False] != drawn[True], "themed drew the face's own livery")
+
+        # Drawn again in the order they were not baked in, in case the cache hands one over
+        # for the other.
+        for themed in (True, False):
+            page = {"kind": "clockface", "id": "clock1", "title": "Clock",
+                    "face": "amsterdam", "themed": themed}
+            draw.background(self.theme, "Clock", 0, 1, None)
+            clockface.render(page, CLOCK_FRAME, {}, self.theme)
+            self.assertEqual(body_pixels(), drawn[themed], f"themed={themed} redrew wrong")
+
+    def test_a_face_with_no_livery_of_its_own_is_themed_either_way(self):
+        clockface = self.clockface()
+        drawn = {}
+        for themed in (False, True):
+            page = {"kind": "clockface", "id": "clock1", "title": "Clock",
+                    "face": "squircle", "themed": themed}
+            draw.background(self.theme, "Clock", 0, 1, None)
+            clockface.render(page, CLOCK_FRAME, {}, self.theme)
+            drawn[themed] = body_pixels()
+        self.assertEqual(drawn[False], drawn[True])
+
+
+class StopToGo(unittest.TestCase):
+    """A face with a `sweep` steps its second hand out early and waits short of twelve.
+
+    `_ease` reads a firmware tween, so this belongs here rather than beside the arithmetic
+    in tests/badge/.
+    """
+
+    def setUp(self):
+        import sys
+        if EXT_DIR not in sys.path:
+            sys.path.insert(0, EXT_DIR)
+        try:
+            import clockface
+        except ImportError:
+            self.skipTest("the clock extension was not staged")
+        self.clockface = clockface
+        self.sweep = clockface.FACES["amsterdam"]["sweep"]
+        self.step = self.sweep / 60.0
+
+    def angles(self, second):
+        return self.clockface._angles(10, 9, second, self.sweep)
+
+    def test_a_swept_second_hand_still_crosses_the_dial_over_the_minute(self):
+        _hours, minutes, seconds = self.clockface._angles(10, 9, 30.5, None)
+        self.assertAlmostEqual(seconds, 183.0, places=3)
+        self.assertAlmostEqual(minutes, 54.0 + 3.05, places=3)
+
+    def test_the_hand_waits_upright_at_twelve_for_the_minute(self):
+        self.assertAlmostEqual(self.angles(self.sweep - 0.001)[2], 360.0, places=1)
+        for second in (self.sweep, self.sweep + 1.5, 59.999):
+            self.assertEqual(self.angles(second)[2], 0.0, second)
+
+    def test_the_hand_never_runs_backwards(self):
+        was = 0.0
+        for tick in range(int(self.sweep * 20)):
+            now = self.angles(tick / 20.0)[2]
+            self.assertTrue(now >= was, (tick, was, now))
+            was = now
+
+    def moved(self, over, span=0.02):
+        """How far the second hand travels over `span` of a step, starting `over` into one."""
+        at = self.step * (20 + over)
+        return self.angles(at + self.step * span)[2] - self.angles(at)[2]
+
+    def test_a_step_lands_on_the_mark(self):
+        self.assertAlmostEqual(self.angles(self.step * 20)[2], 120.0, places=3)
+        self.assertAlmostEqual(self.angles(self.step * 21)[2], 126.0, places=3)
+
+    def test_the_hand_runs_at_a_sinusoidal_speed(self):
+        """Fastest between two marks, slowest across one, and never stopped.
+
+        A speed of 1 - r*cos puts (1 + r) / (1 - r) between the two, which is what the
+        ripple means and holds for whatever it is set to.
+        """
+        ripple = self.clockface.STEP_RIPPLE
+        over_mark, mid_step = self.moved(0.0), self.moved(0.49)
+        self.assertTrue(over_mark > 0.0, over_mark)
+        wanted = (1.0 + ripple) / (1.0 - ripple)
+        self.assertAlmostEqual(mid_step / over_mark, wanted, delta=wanted * 0.1)
+        # Symmetric: leaving a mark and arriving at the next take the same speed.
+        self.assertAlmostEqual(self.moved(0.1), self.moved(0.88), places=3)
+
+    def test_a_ripple_of_zero_is_a_hand_that_does_not_pulse(self):
+        was = self.clockface.STEP_RIPPLE
+        try:
+            self.clockface.STEP_RIPPLE = 0.0
+            self.assertAlmostEqual(self.moved(0.0), self.moved(0.49), places=4)
+        finally:
+            self.clockface.STEP_RIPPLE = was
+
+    def test_the_hands_spring_onto_the_new_minute(self):
+        """The minute hand is a minute behind as the minute turns, and there by SPRING_MS."""
+        spring = self.clockface.SPRING_MS / 1000.0
+        self.assertAlmostEqual(self.angles(0.0)[1], 48.0, places=3)
+        self.assertAlmostEqual(self.angles(spring)[1], 54.0, places=3)
+        self.assertAlmostEqual(self.angles(spring * 2)[1], 54.0, places=3)
+        part = self.angles(spring / 2.0)[1]
+        self.assertTrue(48.0 < part < 54.0, part)
+        # The hour hand rides the same spring, half a degree of it.
+        self.assertAlmostEqual(self.angles(0.0)[0], 304.0, places=3)
+        self.assertAlmostEqual(self.angles(spring)[0], 304.5, places=3)
+
 
 if __name__ == "__main__":
     unittest.main()
