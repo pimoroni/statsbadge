@@ -2,7 +2,7 @@
 
 A clock and the weather, for [statsbadge](https://github.com/pimoroni/statsbadge).
 
-Five faces. A Swiss railway station clock whose second hand sweeps at the badge's frame rate, Koppel's dotted minute track, and the badge's squircle in whatever theme it is wearing. Then two digital faces, one set in the app's typeface and one in seven-segment digits over their unlit segments.
+Six faces. A Swiss railway station clock with a smoothly sweeping second hand, Koppel's dotted minute track, the Amsterdam platform clock with a stop-to-go second hand, and a squircle which always uses the badge's theme. Then two digital faces, one set in the app's typeface and one in seven-segment digits over their unlit segments.
 
 ![Railway](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/swiss_clock.png) ![Dots](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_dots.png) ![Squircle](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_squircle.png) ![Digital](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_digital.png) ![Digital LCD](https://raw.githubusercontent.com/pimoroni/statsbadge/main/shots/face_lcd.png)
 
@@ -35,11 +35,14 @@ Every clock page then has settings of its own, so two pages can show two cities.
 | ---- | ---------- |
 | `railway` | Hilfiker's station clock in the Mondaine colourway, keeping its own livery |
 | `dots` | Koppel's dotted minute track, needle hands with a spike opposite each |
+| `amsterdam` | Navy oval marks over a minute track of dots, and a second hand that steps a revolution out in 57 seconds then waits at twelve for the minute |
 | `squircle` | The badge's furniture, in the page theme |
 | `digital` | No dial: date, place, the time the height of the band, weather under it |
 | `lcd` | The same layout in seven-segment digits, over their unlit segments |
 
-**Quick add** offers Digital Clock and Station Clock, which add a page with the face already picked. The other three faces are a dropdown away once a page is there.
+**Quick add** offers Digital Clock and Station Clock, which add a page with the face already picked. The other four faces are a dropdown away once a page is there.
+
+**Theme colours** draws a stylised face in the page theme instead of its livery: the railway clock in Mondaine red, the Amsterdam navy and the Koppel black all give way to the theme's panel, ink, dim and accent. Squircle and the two digital faces are themed either way, so the setting doesn't affect them.
 
 Without a location the clock still keeps time, and the weather readouts read "no location set".
 

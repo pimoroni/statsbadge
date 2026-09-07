@@ -46,29 +46,41 @@ RADIUS = look.DIAL_OUTER
 # Keys beyond the colours:
 #
 #   plate          what the dial sits on: "disc", "squircle", or None for the background
-#   marks_style    "bars" for the railway's blocks, "dots" for a dotted minute track
+#   marks_style    "bars" for the railway's blocks, "dots" for a dotted minute track,
+#                  "ovals" for round-ended five-minute marks over a dotted one
+#   hands_style    "bars", or "ovals" for round-ended hands cut flat at the tail
 #   star           a spike opposite each hand, as the Koppel hub has
-#   *_mark/*_hand  (length, half-width), as fractions of RADIUS
+#   band           where the marks reach, as a fraction of RADIUS
+#   hub            a disc over the hands at the pivot, in pixels, or 0 for none
+#   *_mark         (length, half-width), as fractions of RADIUS
+#   *_hand         (length, half-width, tail), as fractions of RADIUS
+#   sec_ring       (how far along the second hand, outer radius, band), or None
+#   sweep          None for a second hand that sweeps the minute, or the seconds a
+#                  revolution takes for a stop-to-go one
 FACES = {
     # Hilfiker's station clock in the Mondaine colourway.
     "railway": {
         "label": "Railway",
         "face": (245, 245, 242), "marks": (16, 16, 18),
         "hands": (222, 32, 28), "second": (24, 24, 26),
-        "plate": "disc", "marks_style": "bars", "star": False,
+        "plate": "disc", "marks_style": "bars", "hands_style": "bars", "star": False,
+        "band": 0.97,
         "hour_mark": (0.19, 0.055), "min_mark": (0.095, 0.019),
-        "hour_hand": (0.55, 0.062), "min_hand": (0.86, 0.048),
-        "sec_hand": (0.76, 0.011), "tail": 0.13, "hub": 4,
+        "hour_hand": (0.55, 0.062, 0.13), "min_hand": (0.86, 0.048, 0.13),
+        "sec_hand": (0.76, 0.011, 0.13), "hub": 4,
+        "sec_ring": None, "sweep": None,
     },
     # Koppel's dial for Georg Jensen.
     "dots": {
         "label": "Dots",
         "face": (250, 250, 248), "marks": (18, 18, 20),
         "hands": (18, 18, 20), "second": (18, 18, 20),
-        "plate": "disc", "marks_style": "dots", "star": True,
+        "plate": "disc", "marks_style": "dots", "hands_style": "bars", "star": True,
+        "band": 0.97,
         "hour_mark": (0.0, 0.042), "min_mark": (0.0, 0.017),
-        "hour_hand": (0.52, 0.019), "min_hand": (0.88, 0.015),
-        "sec_hand": (0.88, 0.009), "tail": 0.24, "hub": 7,
+        "hour_hand": (0.52, 0.019, 0.24), "min_hand": (0.88, 0.015, 0.24),
+        "sec_hand": (0.88, 0.009, 0.24), "hub": 7,
+        "sec_ring": None, "sweep": None,
     },
     # Colours from the theme: a fixed dark plate lands within a few counts of a dark
     # theme's background.
@@ -76,10 +88,30 @@ FACES = {
         "label": "Squircle",
         "face": None, "marks": None,
         "hands": None, "second": None,
-        "plate": "squircle", "marks_style": "bars", "star": False,
+        "plate": "squircle", "marks_style": "bars", "hands_style": "bars", "star": False,
+        "band": 0.97,
         "hour_mark": (0.16, 0.030), "min_mark": (0.06, 0.012),
-        "hour_hand": (0.52, 0.040), "min_hand": (0.84, 0.030),
-        "sec_hand": (0.80, 0.010), "tail": 0.16, "hub": 5,
+        "hour_hand": (0.52, 0.040, 0.16), "min_hand": (0.84, 0.030, 0.16),
+        "sec_hand": (0.80, 0.010, 0.16), "hub": 5,
+        "sec_ring": None, "sweep": None,
+    },
+    # The Amsterdam platform clock: oval marks over a minute track of dots, and a
+    # stop-to-go second hand that runs a revolution out in 57 seconds and waits at twelve
+    # for the minute. Colours and geometry measured off a render of the dial.
+    "amsterdam": {
+        "label": "Amsterdam",
+        "face": (228, 228, 230), "marks": (59, 76, 145),
+        "hands": (43, 48, 90), "second": (155, 50, 65),
+        "plate": "disc", "marks_style": "ovals", "hands_style": "ovals", "star": False,
+        "band": 0.906,
+        # Marks and dots heavier than the 0.032 and 0.0165 measured off the dial: at 82px
+        # the antialiased edge eats a pixel that a 235px render does not miss.
+        "hour_mark": (0.277, 0.044), "min_mark": (0.0, 0.022),
+        # The minute hand stops short of the dots and the second hand runs past them, so
+        # neither tip is read as a dot of its own.
+        "hour_hand": (0.537, 0.054, 0.163), "min_hand": (0.850, 0.040, 0.234),
+        "sec_hand": (0.920, 0.019, 0.341), "hub": 3,
+        "sec_ring": (0.572, 0.085, 0.022), "sweep": 57.0,
     },
 }
 DEFAULT_FACE = "railway"
@@ -98,12 +130,14 @@ _hands_cache = {}
 _baked_for = None
 
 
-def _colours(spec, theme):
+def _colours(spec, theme, themed):
+    """The face's own livery, or the page theme's where it carries none or `themed` is set."""
     return {
-        "face": color.rgb(*spec["face"]) if spec["face"] else theme.panel,
-        "marks": color.rgb(*spec["marks"]) if spec["marks"] else theme.dim,
-        "hands": color.rgb(*spec["hands"]) if spec["hands"] else theme.ink,
-        "second": color.rgb(*spec["second"]) if spec["second"] else theme.accent,
+        "face": color.rgb(*spec["face"]) if spec["face"] and not themed else theme.panel,
+        "marks": color.rgb(*spec["marks"]) if spec["marks"] and not themed else theme.dim,
+        "hands": color.rgb(*spec["hands"]) if spec["hands"] and not themed else theme.ink,
+        "second": (color.rgb(*spec["second"]) if spec["second"] and not themed
+                   else theme.accent),
     }
 
 
@@ -124,9 +158,23 @@ def _aim(bar, centre, degrees):
     return bar
 
 
+def _oval(inner, outer, half_width):
+    """A round-ended bar pointing at twelve, from the origin for _aim to place."""
+    return shape.rounded_rectangle(
+        rect(-half_width, -outer, half_width * 2.0, outer - inner), half_width)
+
+
 def _dot(radius_at, size):
     """A dot on the minute track, at twelve, for _aim to place."""
     return shape.circle(vec2(0, -radius_at), size)
+
+
+def _ring(radius_at, outer, band):
+    """A ring around a point on a hand, at twelve, for _aim to place.
+
+    An arc, not a disc inside a disc: the dial and the hands below show through the hole.
+    """
+    return shape.arc(vec2(0, -radius_at), outer - band, outer, 0, 360)
 
 
 def _bake_face(spec, pens):
@@ -148,6 +196,7 @@ def _bake_face(spec, pens):
         face.shape(shape.circle(vec2(*middle), RADIUS))
 
     face.pen = pens["marks"]
+    band = RADIUS * spec["band"]
     hour_len, hour_half = spec["hour_mark"]
     min_len, min_half = spec["min_mark"]
     if spec["marks_style"] == "dots":
@@ -155,9 +204,16 @@ def _bake_face(spec, pens):
         big, small = _dot(track, RADIUS * hour_half), _dot(track, RADIUS * min_half)
         for tick in range(60):
             face.shape(_aim(big if tick % 5 == 0 else small, middle, tick * 6.0))
+    elif spec["marks_style"] == "ovals":
+        # The dots share the outer edge of the five-minute marks, so both read as one band.
+        hour_mark = _oval(RADIUS * (1.0 - hour_len), band, RADIUS * hour_half)
+        minute_dot = _dot(band - RADIUS * min_half, RADIUS * min_half)
+        for tick in range(60):
+            face.shape(_aim(hour_mark if tick % 5 == 0 else minute_dot, middle,
+                            tick * 6.0))
     else:
-        hour_mark = _bar(RADIUS * (1.0 - hour_len), RADIUS * 0.97, RADIUS * hour_half)
-        minute_mark = _bar(RADIUS * (1.0 - min_len), RADIUS * 0.97, RADIUS * min_half)
+        hour_mark = _bar(RADIUS * (1.0 - hour_len), band, RADIUS * hour_half)
+        minute_mark = _bar(RADIUS * (1.0 - min_len), band, RADIUS * min_half)
         for tick in range(60):
             face.shape(_aim(hour_mark if tick % 5 == 0 else minute_mark, middle,
                             tick * 6.0))
@@ -166,14 +222,39 @@ def _bake_face(spec, pens):
 
 
 def _bake_hands(spec):
-    tail = spec["tail"]
-    return tuple(
-        _bar(-RADIUS * tail, RADIUS * length, RADIUS * half)
-        for length, half in (spec["hour_hand"], spec["min_hand"], spec["sec_hand"])
-    )
+    """Each hand as the shapes that draw it, which one _aim per shape points together.
+
+    An oval hand is a round-ended bar with a rectangle over its tail cap, squaring the end
+    off.
+
+    A ring is cut out of the second hand: the stick stops at the band and picks up on the
+    far side, so nothing crosses the hole.
+    """
+    oval = spec["hands_style"] == "ovals"
+    bar = _oval if oval else _bar
+
+    hands = []
+    for length, half, back in (spec["hour_hand"], spec["min_hand"]):
+        tail, outer, wide = -RADIUS * back, RADIUS * length, RADIUS * half
+        parts = [bar(tail, outer, wide)]
+        if oval:
+            parts.append(_bar(tail, tail + wide, wide))
+        hands.append(parts)
+
+    length, half, back = spec["sec_hand"]
+    tail, outer, wide = -RADIUS * back, RADIUS * length, RADIUS * half
+    if spec["sec_ring"]:
+        at, ring_outer, band = spec["sec_ring"]
+        middle, hole = outer * at, RADIUS * (ring_outer - band)
+        second = [bar(tail, middle - hole, wide), bar(middle + hole, outer, wide),
+                  _ring(middle, RADIUS * ring_outer, RADIUS * band)]
+    else:
+        second = [bar(tail, outer, wide)]
+    hands.append(second)
+    return tuple(tuple(parts) for parts in hands)
 
 
-def _face(name, theme):
+def _face(name, theme, themed):
     """(spec, pens, dial, hands), baking on first use."""
     global _baked_for
     if _baked_for != theme.key:
@@ -181,17 +262,82 @@ def _face(name, theme):
         _hands_cache.clear()
         _baked_for = theme.key
     spec = FACES.get(name) or FACES[DEFAULT_FACE]
-    pens = _colours(spec, theme)
-    key = spec["label"]
+    pens = _colours(spec, theme, themed)
+    # A page in its own livery and one in the theme's are two dials, not one.
+    key = (spec["label"], themed)
     if key not in _face_cache:
         _face_cache[key] = _bake_face(spec, pens)
         _hands_cache[key] = _bake_hands(spec)
     return spec, pens, _face_cache[key], _hands_cache[key]
 
 
-def _hand(bar, degrees, pen):
+def _hand(parts, degrees, pen):
     screen.pen = pen
-    screen.shape(_aim(bar, CENTRE, degrees))
+    for part in parts:
+        screen.shape(_aim(part, CENTRE, degrees))
+
+
+# A stop-to-go second hand turns at the speed its AC movement drives it at, which swings
+# sinusoidally over each step: fastest between two marks, slowest across one.
+#
+#   speed(u) = 1 - STEP_RIPPLE * cos(2 * pi * u)
+#
+# integrated below. The cosine averages out over the step, so the hand still covers exactly
+# one mark in one step whatever the ripple. At 1.0 it stops dead on each mark; under that
+# it crawls across and never quite stops.
+STEP_RIPPLE = 0.6
+TWO_PI = math.pi * 2.0
+
+# How long the hour and minute hands take to spring onto the new minute.
+SPRING_MS = 260
+
+_spring_tween = None
+_spring_over = None
+
+
+def _spring(phase_ms, over_ms):
+    """How far the hour and minute hands have closed on the new minute, 0 to 1.
+
+    A tween read at a phase rather than run, since `at` takes milliseconds and clamps at
+    both ends. `tween` is named here and not at module scope: a host importing this module
+    has no firmware to take it from.
+    """
+    global _spring_tween, _spring_over
+    if _spring_over != over_ms:
+        _spring_tween = tween(0.0, 1.0, over_ms, tween.CUBIC_OUT)
+        _spring_over = over_ms
+    return _spring_tween.at(phase_ms)
+
+
+def _step(fraction):
+    """How far a second hand is through one step, 0 to 1, for a fraction of its time."""
+    return fraction - STEP_RIPPLE / TWO_PI * math.sin(TWO_PI * fraction)
+
+
+def _angles(hour, minute, second, sweep):
+    """Degrees clockwise from twelve for the hour, minute and second hands.
+
+    Without a `sweep` the second hand crosses the dial once a minute at the frame rate and
+    the other two creep after it.
+
+    With one it is a stop-to-go movement: sixty steps in fewer than sixty seconds, a wait
+    upright at twelve, then the minute springs all three hands on together.
+    """
+    if sweep is None:
+        return ((hour % 12) * 30.0 + minute * 0.5, minute * 6.0 + second * 0.1,
+                second * 6.0)
+
+    # A minute behind at the second, closing over SPRING_MS.
+    behind = 1.0 - _spring(second * 1000.0, SPRING_MS)
+    hours = (hour % 12) * 30.0 + minute * 0.5 - behind * 0.5
+    minutes = minute * 6.0 - behind * 6.0
+
+    step_s = sweep / 60.0
+    steps = second / step_s
+    if steps >= 60.0:
+        return hours, minutes, 0.0
+    taken = int(steps)
+    return hours, minutes, (taken + _step(steps - taken)) * 6.0
 
 
 def _register_font():
@@ -336,7 +482,7 @@ def render(page, frame, _history, theme):
         _digital(clock, weather, label, theme, DIGITAL[chosen])
         return
 
-    spec, pens, dial, hands = _face(chosen, theme)
+    spec, pens, dial, hands = _face(chosen, theme, bool((page or {}).get("themed")))
     size = dial.width
     screen.blit(dial, vec2(int(CENTRE[0] - size / 2), int(CENTRE[1] - size / 2)))
 
@@ -348,11 +494,13 @@ def render(page, frame, _history, theme):
         _resync(host, frame.get("seq"))
         hour, minute, second = _local_time(_zone_offset(host, here))
         hour_hand, minute_hand, second_hand = hands
-        _hand(hour_hand, (hour % 12) * 30.0 + minute * 0.5, pens["hands"])
-        _hand(minute_hand, minute * 6.0 + second * 0.1, pens["hands"])
-        _hand(second_hand, second * 6.0, pens["second"])
-        screen.pen = pens["second"]
-        screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
+        hours, minutes, seconds = _angles(hour, minute, second, spec["sweep"])
+        _hand(hour_hand, hours, pens["hands"])
+        _hand(minute_hand, minutes, pens["hands"])
+        _hand(second_hand, seconds, pens["second"])
+        if spec["hub"]:
+            screen.pen = pens["second"]
+            screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
 
     # The readout takes theme colours, down the app's column.
     x = look.READOUT_X

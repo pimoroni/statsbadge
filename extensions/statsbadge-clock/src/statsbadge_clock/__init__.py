@@ -169,11 +169,15 @@ class Clock(Source):
         {"key": "longitude", "label": "Longitude", "type": "number",
          "min": -180, "max": 180, "step": 0.001, "unit": "degrees"},
         {"key": "face", "label": "Face", "type": "choice",
-         "options": ["railway", "dots", "squircle", "digital", "lcd"],
+         "options": ["railway", "dots", "amsterdam", "squircle", "digital", "lcd"],
          "default": "railway",
-         "hint": "railway is the station clock, dots is a dotted minute track, squircle "
+         "hint": "railway is the station clock, dots is a dotted minute track, amsterdam "
+                 "is the platform clock with a stop-to-go second hand, squircle "
                  "and digital adopt badge's theme, lcd is seven-segment digits over "
                  "their unlit segments"},
+        {"key": "themed", "label": "Theme colours", "type": "bool", "default": False,
+         "hint": "Draw a face that carries its own livery in the page theme instead. "
+                 "Squircle and the digital faces are already themed either way"},
     )
 
     @classmethod
