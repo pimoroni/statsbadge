@@ -7,6 +7,7 @@ import json
 import os
 import pathlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -450,6 +451,45 @@ def test_a_packaged_app_installs_with_a_version_and_not_an_interpreter():
 
     # Anywhere else it is the running interpreter, whose environment is being built against.
     assert "--python" in library.installer()
+
+
+def test_an_update_check_that_could_not_run_says_so_rather_than_reporting_nothing():
+    """Not knowing is a different thing from up to date. A caller handed [] for both shows
+    one as the other, which is what left the Extensions tab claiming everything was
+    current whenever the index was slow."""
+    behind, why = library.outdated("/nowhere at all")
+    assert behind == []
+    assert why, "a check with no library to look at came back looking successful"
+
+
+def test_an_update_check_reports_what_the_installer_said(tmp_path, monkeypatch):
+    where = tmp_path / "lib" / f"{library.tag()}-0001"
+    where.mkdir(parents=True)
+    monkeypatch.setattr(library, "tool", lambda: ("uv", ["uv", "pip"]))
+
+    def failed(*_args, **_kwargs):
+        return subprocess.CompletedProcess([], 1, stdout="", stderr="no such index\n")
+
+    monkeypatch.setattr(library.subprocess, "run", failed)
+    behind, why = library.outdated(str(tmp_path))
+    assert behind == []
+    assert "no such index" in why
+
+    def timed_out(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired([], 60)
+
+    monkeypatch.setattr(library.subprocess, "run", timed_out)
+    behind, why = library.outdated(str(tmp_path), timeout=60)
+    assert (behind, "60 seconds" in why) == ([], True), why
+
+    def answered(*_args, **_kwargs):
+        return subprocess.CompletedProcess([], 0, stdout=json.dumps(
+            [{"name": "statsbadge-iss", "version": "1.0.0", "latest_version": "1.0.1"}]))
+
+    monkeypatch.setattr(library.subprocess, "run", answered)
+    behind, why = library.outdated(str(tmp_path))
+    assert why is None
+    assert behind == [{"name": "statsbadge-iss", "version": "1.0.0", "latest": "1.0.1"}]
 
 
 def test_a_packaged_app_spawns_itself_as_pip():

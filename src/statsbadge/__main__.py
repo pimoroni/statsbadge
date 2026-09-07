@@ -441,7 +441,10 @@ def _how_to_add(name):
 
 def _report_outdated(args):
     directory = config_dir(args.config_dir)
-    behind = library.outdated(directory)
+    behind, why = library.outdated(directory)
+    if why:
+        print(f"could not check for updates: {why}", file=sys.stderr)
+        return 1
     if not behind:
         print("nothing to update" if tooling.read_wanted(directory)
               else "no extensions installed")

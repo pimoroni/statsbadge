@@ -723,7 +723,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         # Asks an index, so it is a separate request: the tab draws without waiting on it.
         if path == "/api/extensions/outdated" and method == "GET":
-            return self._json(200, {"outdated": library.outdated(service.config_dir)})
+            behind, why = library.outdated(service.config_dir)
+            return self._json(200, {"outdated": behind, "why": why})
 
         if path == "/api/extensions" and method == "POST":
             payload = json.loads(body or b"{}")

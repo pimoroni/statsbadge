@@ -669,18 +669,29 @@ async function refreshCatalogue() {
 // What has a newer release, by short name. Kept apart from the catalogue: asking an index
 // takes seconds, and the list draws without it.
 let behind = {}
+// Why the last check came back with nothing, or null where it came back with an answer.
+// Without this a check that could not reach the index reads as everything being current.
+let behindWhy = null
+let checking = false
 
 async function refreshOutdated() {
+  checking = true
+  renderSettings()
   let found
   try {
     found = await api("/api/extensions/outdated")
   } catch (error) {
+    behindWhy = error.message || "the server did not answer"
+    checking = false
+    renderSettings()
     return
   }
   behind = {}
   for (const entry of found.outdated || []) {
     behind[entry.name.replace(/^statsbadge-/, "")] = entry.latest
   }
+  behindWhy = found.why || null
+  checking = false
   renderSettings()
 }
 
@@ -702,8 +713,23 @@ function catalogueBox() {
       + "then. Add them with uv pip install, or start it again from a terminal." }))
   }
   box.append(el("ul", { className: "catalogue" }, ...catalogue.offered.map(offerRow)))
+  box.append(updateCheck())
   box.append(freeformForm())
   return box
+}
+
+/** Where the update check stands, and a way to run it again.
+ *
+ * It asks an index over the network and is run once on load, so a slow or unreachable
+ * one used to leave the tab looking exactly like everything being current. */
+function updateCheck() {
+  const said = checking ? "Checking for updates..."
+    : behindWhy ? `Could not check for updates: ${behindWhy}`
+    : Object.keys(behind).length ? "" : "Everything is up to date."
+  return el("p", { className: behindWhy ? "bad" : null },
+            el("small", { textContent: said }),
+            el("button", { type: "button", textContent: "Check again",
+                           disabled: checking, onclick: () => refreshOutdated() }))
 }
 
 function offerRow(entry) {

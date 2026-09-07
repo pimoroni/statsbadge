@@ -181,16 +181,18 @@ def installer():
 
 
 def outdated(config_dir, timeout=60):
-    """What the library holds that has a newer release, as name, version and latest.
+    """What the library holds that has a newer release, as (entries, why).
 
-    This asks an index, over the network, and can take a moment. Anything that cannot be
-    told comes back empty: not knowing is a different thing from up to date, and the
-    caller has nothing to show either way.
+    This asks an index, over the network, and can take a moment. `why` says what stopped
+    it and is None where the answer is good: not knowing is a different thing from up to
+    date, and a caller that cannot tell them apart shows one as the other.
     """
     where = current(config_dir)
+    if not where:
+        return [], "no extension library has been built yet"
     found = tool()
-    if not where or found is None:
-        return []
+    if found is None:
+        return [], "neither uv nor pip is here to ask with"
     kind, argv = found
     argv = [*argv, "list", "--outdated", "--format", "json",
             "--target" if kind == "uv" else "--path", where]
@@ -198,17 +200,20 @@ def outdated(config_dir, timeout=60):
         done = subprocess.run(argv, capture_output=True, text=True, check=False,
                               encoding="utf-8", errors="replace", timeout=timeout,
                               **NO_WINDOW)
-    except (OSError, subprocess.SubprocessError):
-        return []
+    except subprocess.TimeoutExpired:
+        return [], f"the index did not answer inside {timeout} seconds"
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [], f"could not run {kind}: {exc}"
     if done.returncode != 0:
-        return []
+        said = (done.stderr or "").strip().splitlines()
+        return [], f"{kind} said: {said[-1] if said else 'nothing, and failed anyway'}"
     try:
         listed = json.loads(done.stdout or "[]")
     except ValueError:
-        return []
+        return [], f"{kind} answered with something that is not JSON"
     return [{"name": entry.get("name", ""), "version": entry.get("version"),
              "latest": entry.get("latest_version")}
-            for entry in listed if entry.get("name") and entry.get("latest_version")]
+            for entry in listed if entry.get("name") and entry.get("latest_version")], None
 
 
 def build(config_dir, requirements, verbose=False):
