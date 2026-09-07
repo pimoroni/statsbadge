@@ -114,14 +114,19 @@ def test_a_clicked_alert_runs_what_was_given_to_it():
     assert backend._activation_delegate() is delegate
 
     class FakeNote:
-        """Enough of NSUserNotification for the delegate to read it back."""
+        """Enough of NSUserNotification for the delegate to read it back.
+
+        `userInfo` hands back a plain dict because that is what pyobjc does with it. A
+        stand-in that answered `objectForKey_` instead is what let a crash through: it
+        modelled the framework as it was imagined, not as it is.
+        """
 
         def __init__(self, key, activation):
             self._info = {"statsbadge": key}
             self._activation = activation
 
         def userInfo(self):
-            return type("Info", (), {"objectForKey_": lambda _s, k: self._info.get(k)})()
+            return dict(self._info)
 
         def activationType(self):
             return self._activation
@@ -147,6 +152,56 @@ def test_a_clicked_alert_runs_what_was_given_to_it():
     # An alert with nothing recorded for it is one this process did not post.
     delegate.userNotificationCenter_didActivateNotification_(centre, FakeNote("gone", 1))
     assert done == ["approved", "opened"], done
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="an AppKit notification centre")
+def test_the_delegate_reads_a_real_notification_back():
+    """Against the framework, not a stand-in for it. Building one needs no bundle; only
+    delivering it does, and what went wrong was reading it, not posting it."""
+    from Foundation import NSUserNotification
+
+    from statsbadge.tray import backend
+
+    done = []
+    backend._answers["real"] = (lambda: done.append("opened"), None)
+    note = NSUserNotification.alloc().init()
+    note.setUserInfo_({"statsbadge": "real"})
+
+    class Centre:
+        def removeDeliveredNotification_(self, _note):
+            done.append("dismissed")
+
+    # activationType is 0 until AppKit sets it, which is the body rather than the button.
+    backend._activation_delegate().userNotificationCenter_didActivateNotification_(
+        Centre(), note)
+    assert done == ["dismissed", "opened"], done
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="an AppKit notification centre")
+def test_a_failed_answer_does_not_leave_the_delegate():
+    """AppKit rethrows an exception coming back out of a callback as an NSException, which
+    is an abort. A request that has already expired must not be able to do that."""
+    from statsbadge.tray import backend
+
+    def boom():
+        raise RuntimeError("that request is long gone")
+
+    backend._answers["k"] = (boom, boom)
+
+    class Note:
+        def userInfo(self):
+            return {"statsbadge": "k"}
+
+        def activationType(self):
+            return backend.ACTION_BUTTON
+
+    class Centre:
+        def removeDeliveredNotification_(self, _note):
+            pass
+
+    # Raising here is the crash; the traceback going to the log is the point.
+    backend._activation_delegate().userNotificationCenter_didActivateNotification_(
+        Centre(), Note())
 
 
 def test_a_pairing_alert_offers_to_open_the_config_ui():

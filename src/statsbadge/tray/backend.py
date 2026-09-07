@@ -8,6 +8,7 @@ import collections
 import importlib.util
 import os
 import sys
+import traceback
 import uuid
 
 from .. import bundled
@@ -47,13 +48,20 @@ def _activation_delegate():
 
         class Activated(NSObject):
             def userNotificationCenter_didActivateNotification_(self, centre, note):
-                info = note.userInfo()
-                key = info.objectForKey_("statsbadge") if info else None
-                opens, acts = _answers.pop(key, (None, None))
-                handler = acts if note.activationType() == ACTION_BUTTON else opens
-                centre.removeDeliveredNotification_(note)
-                if handler is not None:
-                    handler()
+                # Nothing may leave here. An exception crossing back into AppKit is
+                # rethrown as an NSException and takes the app down with it.
+                try:
+                    # pyobjc hands userInfo back as a plain dict, so read it as a mapping
+                    # rather than through NSDictionary.
+                    info = note.userInfo() or {}
+                    key = info["statsbadge"] if "statsbadge" in info else None
+                    opens, acts = _answers.pop(key, (None, None))
+                    handler = acts if note.activationType() == ACTION_BUTTON else opens
+                    centre.removeDeliveredNotification_(note)
+                    if handler is not None:
+                        handler()
+                except Exception:
+                    traceback.print_exc()
 
         _activation = Activated.alloc().init()
     return _activation
