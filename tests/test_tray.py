@@ -72,13 +72,16 @@ def find(items, label):
 
 # -- the menu ---------------------------------------------------------------
 
-def test_a_waiting_badge_is_answered_the_way_the_toolkit_calls_the_action():
+def test_a_waiting_badge_is_answered_the_way_the_toolkit_calls_the_action(monkeypatch):
     """pystray reads an action's argument count and hands a one-argument callable the tray
     icon, so calling the action here with nothing is more forgiving than the real thing.
 
     Written as `lambda request=request_id:` the icon landed in `request_id` and both
     buttons answered a request that does not exist, leaving pairing to time out.
     """
+    # Importing pystray picks a backend, and the X one wants a display no CI runner has.
+    # MenuItem is the same whichever is chosen, and it is all this needs.
+    monkeypatch.setenv("PYSTRAY_BACKEND", "dummy")
     from pystray._base import MenuItem
 
     stack = FakeStack(pending=[WAITING])
