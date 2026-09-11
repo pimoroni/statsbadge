@@ -1,4 +1,7 @@
-"""Talking to the host: a step-per-frame HTTP client, and request signing."""
+"""Talking to the host: a step-per-frame HTTP client, and request signing.
+
+Hand-rolled for step budget and request signing.
+"""
 
 import binascii
 import hashlib
