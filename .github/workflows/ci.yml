@@ -101,7 +101,7 @@ jobs:
       # The badgeware WASM runtime the badge tests run on. A batteries-included build,
       # so it carries the badgeware package and the fonts and only the app is staged.
       RUNTIME_REPO: pimoroni/badgeware-wasm
-      RUNTIME_TAG: v3.0.1
+      RUNTIME_TAG: v3.1.0
       RUNTIME_ASSET: badgeware-tufty2350-batteries-jspi.zip
 
     steps:

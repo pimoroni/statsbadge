@@ -137,13 +137,13 @@ def _bar(inner, outer, half_width):
     return shape.rectangle(rect(-half_width, -outer, half_width * 2.0, outer - inner))
 
 
-def _aim(bar, centre, degrees):
-    """Point a bar at a clock angle.
+def _aim(piece, centre, degrees):
+    """Point a shape at a clock angle.
 
     Translate before rotate, since each call right-multiplies.
     """
-    bar.transform = mat3().translate(centre[0], centre[1]).rotate(degrees)
-    return bar
+    piece.transform = mat3().translate(centre[0], centre[1]).rotate(degrees)
+    return piece
 
 
 def _oval(inner, outer, half_width):
@@ -204,7 +204,11 @@ def _bake_face(spec, pens):
 
 
 def _bake_hands(spec):
-    """Return each hand as the shapes that draw it, one _aim per shape."""
+    """Return each hand as one shape, for a single aim and a single draw.
+
+    The parts are built pointing at twelve, so `shape.combine` bakes them together there
+    and `_aim` still places the result. Needs firmware v3.1.0.
+    """
     oval = spec["hands_style"] == "ovals"
     bar = _oval if oval else _bar
 
@@ -226,7 +230,7 @@ def _bake_hands(spec):
     else:
         second = [bar(tail, outer, wide)]
     hands.append(second)
-    return tuple(tuple(parts) for parts in hands)
+    return tuple(shape.combine(parts) for parts in hands)
 
 
 def _face(name, theme, themed):
@@ -246,10 +250,9 @@ def _face(name, theme, themed):
     return spec, pens, _face_cache[key], _hands_cache[key]
 
 
-def _hand(parts, degrees, pen):
+def _hand(hand, degrees, pen):
     screen.pen = pen
-    for part in parts:
-        screen.shape(_aim(part, CENTRE, degrees))
+    screen.shape(_aim(hand, CENTRE, degrees))
 
 
 # A stop-to-go second hand turns at the speed its AC movement drives it at, which swings
@@ -451,9 +454,13 @@ def render(page, frame, _history, theme):
         hour, minute, second = _local_time(_zone_offset(host, here))
         hour_hand, minute_hand, second_hand = hands
         hours, minutes, seconds = _angles(hour, minute, second, spec["sweep"])
+        # A hand is one combined shape, so NON_ZERO fills the union of its parts. Under
+        # EVEN_ODD an oval hand's tail and the second hand's ring come out hollow.
+        screen.fill_rule = image.NON_ZERO
         _hand(hour_hand, hours, pens["hands"])
         _hand(minute_hand, minutes, pens["hands"])
         _hand(second_hand, seconds, pens["second"])
+        screen.fill_rule = image.EVEN_ODD
         if spec["hub"]:
             screen.pen = pens["second"]
             screen.shape(shape.circle(vec2(*CENTRE), spec["hub"]))
