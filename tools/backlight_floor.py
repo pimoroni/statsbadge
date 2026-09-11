@@ -1,23 +1,4 @@
-"""Find the dimmest backlight this panel is still readable at.
-
-    mpremote connect PORT mount . run tools/backlight_floor.py
-
-In a dark room, with the sensor covered or the room genuinely dark. It steps the panel up
-from off, a byte at a time, half a second each, with something on screen worth trying to
-read. Press:
-
-    A   the moment anything at all is visible
-    B   when it is comfortable to read
-
-A measurement and not a setting: the app hands the panel a 0-1 fraction and leaves the
-mapping to the firmware. What this answers is where a given firmware puts the bottom of
-that range, which is the thing to take to the firmware if the low end is dead.
-
-The driver raises its input to the power of 2.8 for the PWM level, so the byte and the duty
-are both printed. The byte is what the panel resolves; the duty is what it is lit at.
-
-C starts again from the bottom, for a second opinion once your eyes have adjusted.
-"""
+"""Find the dimmest backlight this panel is still readable at."""
 
 import sys
 import time
@@ -32,8 +13,8 @@ BUTTON_HOME.irq(None)
 
 draw.prepare()
 
-# Every byte from here up. Below it the PWM level is under a thousandth and nothing has ever
-# lit; above it the panel is plainly on and there is nothing left to find out.
+# Every byte from here up. Below it the PWM level is under a thousandth and nothing has
+# ever lit; above it the panel is plainly on.
 FIRST = 8
 LAST = 140
 EVERY_MS = 500
@@ -47,8 +28,9 @@ def duty(byte):
 
 
 def show(byte):
-    """Something with fine detail and something with none, so "visible" and "readable" can
-    be told apart: the bar is lit long before the words come up."""
+    """Draw something with fine detail and something with none, so "visible" and
+    "readable" can be told apart.
+    """
     screen.pen = PAPER
     screen.clear()
     draw.blit_label(f"{byte}", 44, INK, screen.width // 2, 24, 1)
@@ -60,12 +42,7 @@ def show(byte):
 
 
 def sweep():
-    """Step up a byte at a time until both presses are in, or the range runs out.
-
-    `badge.pressed` is an edge off the last `badge.poll`, and `badge.update` is what polls,
-    so the wait redraws rather than spinning. Without that a press is only seen if it was
-    held when the step changed, and a tap at the moment the panel lit was missed.
-    """
+    """Step up a byte at a time until both presses are in, or the range runs out."""
     visible = readable = None
     for byte in range(FIRST, LAST + 1):
         display.backlight(byte / 255.0)

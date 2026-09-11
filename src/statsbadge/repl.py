@@ -1,24 +1,11 @@
-"""Talk to the badge over its serial REPL.
-
-Two things: run a short script and read what it printed, then hard reset so `main.py`
-starts again. Both are the raw REPL, four control characters and two end markers, which
-is why mpremote is not a dependency: its console script is off PATH under a uv tool
-install, and it spawns an interpreter per command.
-
-Raw REPL and not raw-paste. The longest script sent from here is about 600 bytes, so the
-flow control raw-paste negotiates buys nothing over paced chunks. Nothing here copies
-files, the app going on over USB mass storage.
-
-The protocol follows MicroPython's implementation, `tools/mpremote/transport_serial.py`,
-which is MIT licensed - see licences/MIT-MicroPython.txt.
-"""
+"""Talk to the badge over its serial REPL."""
 
 import time
 
 # A USB CDC port ignores the line speed, but pyserial takes a number.
 BAUD = 115200
-# A script is written in chunks with a pause between them, which keeps it inside
-# the board's USB buffer without raw-paste's flow control.
+# A script is written in chunks with a pause between them, which keeps it inside the
+# board's USB buffer without raw-paste's flow control.
 CHUNK = 256
 CHUNK_PAUSE = 0.01
 POLL = 0.01
@@ -46,12 +33,7 @@ class Busy(NotOpened):
 
 
 class Repl:
-    """One connection to the badge's raw REPL.
-
-    A context manager, because a badge left in raw mode is a badge sitting on a blank
-    screen: closing hands the friendly prompt back, and `reset` is what starts the app
-    again.
-    """
+    """One connection to the badge's raw REPL."""
 
     def __init__(self, port, timeout=30):
         self.port = port
@@ -73,8 +55,8 @@ class Repl:
         import serial
 
         try:
-            # Non-blocking, so every read here is bounded by a deadline of its own and a
-            # badge that stops answering is a timeout rather than a hang.
+            # Non-blocking, so every read is bounded by a deadline of its own and a badge
+            # that stops answering is a timeout rather than a hang.
             self.serial = serial.Serial(self.port, BAUD, timeout=0, exclusive=True)
         except (serial.SerialException, OSError) as exc:
             detail = str(exc).lower()
@@ -100,11 +82,7 @@ class Repl:
         self.serial = None
 
     def exec(self, script, timeout=None):
-        """Run a script on the badge and return what it printed.
-
-        A traceback comes back on its own stream, so a script that raised is an exception
-        here and never an empty read the caller has to notice.
-        """
+        """Run a script on the badge and return what it printed."""
         deadline = self._deadline(timeout)
         self._send(script, deadline)
         printed = self._until(END, deadline, "waiting for the script to finish")
@@ -114,21 +92,12 @@ class Repl:
         return printed.decode(errors="replace")
 
     def reset(self, timeout=None):
-        """Hard reset the badge, which is the only way back to `main.py`.
-
-        The board sleeps first so that its acknowledgement gets out ahead of the reset;
-        after that there is nothing to read, because the port goes away with the board.
-        """
+        """Hard reset the badge, which is the only way back to `main.py`."""
         self._send("import time, machine; time.sleep_ms(100); machine.reset()",
                    self._deadline(timeout))
 
     def _enter_raw(self):
-        """Interrupt whatever is running, then soft reset into a clean interpreter.
-
-        The soft reset is what makes an import predictable: without it the app is still in
-        memory, holding the screen and every module it pulled in. It runs `boot.py` and
-        stops there, so `main.py` does not start again until the badge is reset.
-        """
+        """Interrupt whatever is running, then soft reset into a clean interpreter."""
         deadline = self._deadline(None)
         self.serial.write(INTERRUPT)
         # Whatever the interrupt printed, plus anything the app had in flight.
@@ -163,12 +132,7 @@ class Repl:
         return data
 
     def _until(self, ending, deadline, what):
-        """Read up to `ending` and return what came before it.
-
-        What follows the marker is kept. A read is whatever the port had ready, and the
-        board's next prompt usually arrives in the same breath as the output before it.
-        Throwing that away leaves the next command waiting for a prompt already sent.
-        """
+        """Read up to `ending` and return what came before it."""
         while True:
             found = self.buffer.find(ending)
             if found >= 0:

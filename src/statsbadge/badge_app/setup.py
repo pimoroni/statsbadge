@@ -1,13 +1,4 @@
-"""Pairing from the badge. Nothing is typed on it.
-
-Finds hosts by beacon, asks the one you pick to let it in, and shows a short code. Check
-it against the host and approve it there, in the config UI or the terminal.
-
-The host mints the code per request. Not derived from badge.uid: that travels as
-X-Badge-Id over plain HTTP, so anyone on the network could show a matching code.
-
-A back, B select, C next. HOME quits. Returns True to carry on into the app.
-"""
+"""Pairing from the badge. Nothing is typed on it."""
 
 import time
 
@@ -19,11 +10,7 @@ POLL_INTERVAL_MS = 1200
 
 
 def hosts_menu(app):
-    """Switch host, add one, or leave. Opened with HOME.
-
-    Rescans on open, so a server started after the app did turns up without a restart.
-    Returns "exit" if the user chose to leave the app.
-    """
+    """Switch host, add one, or leave. Opened with HOME."""
     while True:
         rows = _host_rows(app)
         picked = _pick_row(app, rows)
@@ -43,7 +30,7 @@ def hosts_menu(app):
 
 
 def _host_rows(app):
-    """Known hosts, then any unpaired ones answering now, then rescan and exit."""
+    """Return known hosts, then any unpaired ones answering now, then rescan and exit."""
     draw.banner(app.theme, "Hosts", "looking for servers")
     badge.update()
     seen = {}
@@ -115,8 +102,7 @@ def draw_rows(theme, shown, index):
         ink = theme.bg if selected else theme.ink
         dim = ink if selected else theme.dim
         draw.blit_label(row["label"], look.SIZE_VALUE, ink, look.PAD + 8, y + 2)
-        # The note goes first and the address is right-aligned to clear it: "not seen" is wider
-        # than a fixed column allows.
+        # The address is right-aligned to clear the note: "not seen" overflows a fixed column.
         right = look.W - look.PAD - 8
         if row["note"]:
             right -= draw.blit_label(row["note"], look.SIZE_SMALL, dim,
@@ -155,8 +141,8 @@ def _find_hosts(app):
     found = []
     deadline = time.ticks_add(time.ticks_ms(), 6000)
     while time.ticks_diff(deadline, time.ticks_ms()) > 0:
-        # Short scans so the countdown moves, and six seconds of them, which
-        # outlasts the beacon interval here.
+        # Short scans so the countdown moves, and six seconds of them, which outlasts
+        # the beacon interval here.
         found = net.discover(timeout_ms=600)
         if found:
             return found
@@ -181,7 +167,7 @@ MAX_HOSTS = 5
 
 
 def _choose_host(app, hosts):
-    """Pick from what answered. Skipped when only one host replied."""
+    """Pick from what answered."""
     index = 0
     while True:
         draw_hosts(app.theme, hosts, index, app.config.hosts)
@@ -218,11 +204,7 @@ def draw_hosts(theme, hosts, index, known):
 
 
 def _already_paired(app, chosen):
-    """Whether this badge already holds credentials for this server that it can use.
-
-    Not whether it holds any. A host that has dropped the badge sets `rejected`, and
-    pairing again is then exactly the point.
-    """
+    """Return whether this badge already holds usable credentials for this server."""
     server_id = chosen.get("id")
     if not server_id or not (app.config.hosts.get(server_id) or {}).get("secret"):
         return False
@@ -230,22 +212,12 @@ def _already_paired(app, chosen):
 
 
 def _ask_to_join(app, chosen):
-    """Ask the host to let us in, show its code, and wait. True if approved and saved,
-    False to go back, None to quit.
-
-    A server this badge is already paired with is waved through instead. Setup is offered
-    after a few failed polls as well as when unpaired, so this screen is easy to reach with
-    nothing wrong with the pairing.
-
-    Asking again would need the host in pairing mode, and would mint a second secret for
-    one machine.
-    """
+    """Ask the host to let us in, show its code, and wait. True if approved and saved."""
     host, port = chosen["host"], chosen["port"]
     label = chosen.get("name") or host
 
     if _already_paired(app, chosen):
-        # A paired host's address may have moved since, which is the other thing this
-        # screen is for.
+        # A paired host's address may have moved since.
         app.config.note_address(chosen["id"], host, port, chosen.get("name"))
         app.config.switch(chosen["id"])
         draw.banner(app.theme, "Already paired", label, "using the credentials it has")

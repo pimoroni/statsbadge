@@ -1,9 +1,4 @@
-"""Linux sensors, straight out of sysfs.
-
-psutil's sensors_temperatures already reads hwmon, so this fills the gaps it leaves:
-picking a sensible "the CPU temperature" out of a pile of labelled sensors, and fan
-RPM.
-"""
+"""Linux sensors, straight out of sysfs."""
 
 import glob
 import os
@@ -12,8 +7,7 @@ import psutil
 
 from .base import Source
 
-# Labels that mean "the package", best first. A machine offers several, and the one to
-# report is the hottest meaningful aggregate.
+# Labels that mean "the package", best first.
 CPU_LABELS = (
     "package id 0", "tctl", "tdie", "cpu", "k10temp", "coretemp",
     "soc_thermal", "cpu_thermal", "acpitz",
@@ -63,8 +57,7 @@ class LinuxHwmon(Source):
                     len(CPU_LABELS),
                 )
                 # Best-named first, then hottest. Several sensors rank the same where the
-                # labels are blank and every entry falls back to one chip name. Taking
-                # the first of those is taking core 0.
+                # labels are blank, and taking the first of those is taking core 0.
                 if best is None or (rank, -entry.current) < (best[0], -best[1]):
                     best = (rank, entry.current)
         if best and best[0] < len(CPU_LABELS):

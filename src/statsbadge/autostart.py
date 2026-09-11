@@ -1,11 +1,4 @@
-"""Run the tray at login.
-
-A registry value on Windows, a LaunchAgent on macOS, an XDG autostart entry elsewhere.
-Each backend takes its own base directory, so a test can drive one anywhere.
-
-The base is the desktop's, not config_dir(), which on macOS and Windows is somewhere
-else entirely.
-"""
+"""Run the tray at login."""
 
 import os
 import plistlib
@@ -57,11 +50,7 @@ def command(config_dir=None, port=None):
 
 
 def launcher():
-    """What to run, most specific first.
-
-    Beside sys.executable pins the environment this is running from, which for a uv tool
-    is the one holding the extensions.
-    """
+    """Return what to run, most specific first."""
     # A packaged app is its own launcher. Its executable takes no `-m`, and a
     # statsbadge-tray found on PATH would be some other install of it entirely.
     if bundled():
@@ -133,8 +122,8 @@ class LaunchAgent:
         entry = {"Label": LABEL, "ProgramArguments": list(argv),
                  "RunAtLoad": True, "ProcessType": "Interactive"}
         if log:
-            # Anything printed before logs.start replaces the streams, which is where
-            # a missing extra or a broken import shows up.
+            # Anything printed before logs.start replaces the streams, which is where a
+            # missing extra or a broken import shows up.
             os.makedirs(os.path.dirname(log), exist_ok=True)
             entry["StandardOutPath"] = entry["StandardErrorPath"] = log
         with open(self.where(), "wb") as handle:
@@ -187,7 +176,7 @@ class Desktop:
 
 
 def _launchctl(*argv):
-    """Takes effect now instead of at the next login."""
+    """Take effect now instead of at the next login."""
     tool = shutil.which("launchctl")
     if not tool:
         return
@@ -198,7 +187,7 @@ def _launchctl(*argv):
 
 
 def _desktop_exec(argv):
-    """Desktop Entry quoting: a literal % doubles, and a quoted part escapes \\ " ` $."""
+    """Quote for a Desktop Entry: a literal % doubles, and a quoted part escapes \\ " ` $."""
     parts = []
     for original in argv:
         part = original.replace("%", "%%")

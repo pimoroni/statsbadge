@@ -1,15 +1,4 @@
-"""Run the app's drawing on a badge without installing it, time it, and dump frames.
-
-    python3 tools/dump_themes.py          # the palettes the host would send
-    mpremote connect PORT mount . run tools/probe.py
-
-Mount the repo root, not the app directory: frames go to /remote/build/shots, which is
-ignored - `tools/shots.py --publish` copies the README's out of there.
-
-Every page kind against a canned frame, so it needs no server, then every palette the host
-has, then a sparse frame: "unknown" drawn as `0` is the easiest thing here to break. What a
-real poll costs is tools/live.py's to measure, this having neither wifi nor net.
-"""
+"""Run the app's drawing on a badge without installing it, time it, and dump frames."""
 
 import gc
 import json
@@ -24,8 +13,7 @@ import draw
 import look
 import pages as pages_module
 
-# Registers the clockface kind by importing, the same way the app picks it up out of
-# ext/. Without this the clock page has no renderer and draws a message saying so.
+# Registers the clockface kind by importing, the same way the app picks it up out of ext/.
 import clockface  # noqa: F401
 
 badge.mode(HIRES | VSYNC)
@@ -38,8 +26,7 @@ draw.prepare()
 print("font.load + prepare: %.1f ms" % (time.ticks_diff(time.ticks_us(), t0) / 1000))
 
 # The picture on a mocked post, encoded the way an extension sends one: a 128x96 indexed
-# PNG out of statsbadge.imaging, base64 in the frame. Beside this file rather than in it,
-# 4KB of base64 being nothing anybody reads.
+# PNG out of statsbadge.imaging, base64 in the frame.
 with open("/remote/tools/mock_post_image.b64") as _handle:
     MOCK_IMAGE = _handle.read().strip()
 
@@ -57,10 +44,8 @@ FRAME = {
     "disk": {"pct": 74.2, "read_bps": 52428800, "write_bps": 8388608,
              "used_mb": 703840, "total_mb": 948584},
     "power": {"battery_pct": 91, "charging": True, "package_w": 44.2},
-    # A feed, for the notifications page. Four things - who, what, when and why - which
-    # is a post, a mention, a headline and an RSS entry alike.
-    # Invented, not copied from anybody's timeline: a shot of this goes on the project
-    # page, where a real post is somebody else's words republished without their say-so.
+    # A feed, for the notifications page. Invented, not copied from anybody's timeline: a
+    # shot of this goes on the project page.
     "feed": {
         "home": {"title": "@alder", "text": "Your Tufty 2350 is crying out for some "
                                             "statsbadge love",
@@ -94,9 +79,8 @@ FRAME = {
     "fans": [{"name": "cpu", "rpm": 1820}],
     "sys": {"host": "workshop-pc", "os": "Windows 11", "arch": "AMD64",
             "cpu_name": "Ryzen 7 7800X3D", "uptime_s": 271830},
-    # The clock extension's groups. The hands are drawn from hour, minute and seconds
-    # and the digits from time, so these have to agree or the shot shows a clock
-    # disagreeing with itself.
+    # The clock extension's groups. The hands are drawn from hour, minute and seconds and
+    # the digits from time, so these have to agree.
     "clock": {"time": "10:09", "date": "Fri 31 Jul", "hour": 10, "minute": 9,
               "seconds": 36},
     # One entry per clock page, which is how the host sends a page its own location.
@@ -135,25 +119,21 @@ LABELS = {"cf_example_com": "example.com", "cf_example_org": "example.org",
 
 
 def ramp(n, peak=100.0):
-    """A plausible wiggle for a graph, without needing a server's history."""
+    """Return a plausible wiggle for a graph, without needing a server's history."""
     import math
     return [peak * (0.35 + 0.3 * math.sin(i / 4.0) + 0.2 * math.sin(i / 1.7))
             for i in range(n)]
 
 
 def day(n, peak, low=0.18):
-    """A day of hourly points, quiet overnight and busy in the afternoon.
-
-    Cloudflare's history is hourly and a day long, so a graph of it has the shape of a day
-    rather than the last ninety seconds a sampled reading would give.
-    """
+    """Return a day of hourly points, quiet overnight and busy in the afternoon."""
     import math
     return [peak * (low + (1 - low) * max(0.0, math.sin((i / n) * math.pi) ** 1.6))
             for i in range(n)]
 
 
 def core_ramp(cores, n):
-    """A ring of per-core samples, the shape the host's history sends for a list field."""
+    """Return a ring of per-core samples, as the host's history sends a list field."""
     import math
     return [[max(0.0, min(100.0, 50 + 45 * math.sin(i / 5.0 + c * 0.8)))
              for c in range(cores)] for i in range(n)]
@@ -202,10 +182,9 @@ PAGES = [
     {"id": "radar", "kind": "radar", "title": "Shape",
      "fields": ["cpu.pct", "mem.pct", "gpu.pct", "disk.pct", "gpu.temp"]},
     {"id": "trend", "kind": "trend", "title": "CPU", "field": "cpu.pct"},
-    # Named apart from the shot the docs show. This renders a page once, and a waterfall
-    # puts down one column a frame, so what lands here is a sliver against a screen of
-    # background. tools/waterfall_shot.py drives it until the plot is full and writes
-    # `waterfall`; sharing the name meant whichever tool ran last won.
+    # Named apart from the shot the docs show: this renders a page once, and a waterfall
+    # puts down one column a frame. tools/waterfall_shot.py drives it until the plot is
+    # full and writes `waterfall`.
     {"id": "waterfall_1frame", "kind": "waterfall", "title": "Cores",
      "field": "cpu.cores"},
     {"id": "notify", "kind": "notify", "title": "Mastodon",
@@ -225,8 +204,8 @@ PAGES = [
     {"id": "cloudflare_spark", "kind": "spark", "title": "Cloudflare",
      "fields": ["cf_example_com.requests", "cf_example_org.requests",
                 "cf_example_net.requests", "cf_example_com.cached_pct"]},
-    # The clock extension's pages, one per face. The ids name the shots, and each page
-    # id is also the key its place is published under.
+    # The clock extension's pages, one per face. The ids name the shots, and each page id
+    # is also the key its place is published under.
     {"id": "swiss_clock", "kind": "clockface", "title": "Clock", "face": "railway"},
     {"id": "face_dots", "kind": "clockface", "title": "Clock", "face": "dots"},
     {"id": "face_amsterdam", "kind": "clockface", "title": "Clock", "face": "amsterdam"},
@@ -253,7 +232,7 @@ def shot(name):
 
 
 def time_page(page, theme, n=12):
-    """ms per frame excluding display.update, after one warm-up frame."""
+    """Return ms per frame excluding display.update, after one warm-up frame."""
     pages_module.render(page, FRAME, HISTORY, theme, 0, len(PAGES))
     gc.collect()
     t = time.ticks_us()
@@ -263,8 +242,7 @@ def time_page(page, theme, n=12):
 
 
 # The palettes the host would send, and not the one this app boots with: that one carries
-# no image ramps, so a picture keeps the greys it arrived in instead of being redrawn in
-# the theme's. tools/dump_themes.py writes them.
+# no image ramps. tools/dump_themes.py writes them.
 try:
     with open("/remote/build/themes.json") as _handle:
         PALETTES = json.load(_handle)
@@ -275,7 +253,7 @@ except (OSError, ValueError):
 
 
 def themed(name):
-    """`name` as the badge would build it from a layout, or what it booted with."""
+    """Return `name` as the badge would build it from a layout, or what it booted with."""
     palette = PALETTES.get(name)
     return (look.from_palette(name, palette) if palette else None) or look.get(name)
 
@@ -292,8 +270,7 @@ for index, page in enumerate(PAGES):
     print(f"{page['id']:<8} {page['kind']:<6} {per_frame:6.2f} ms/frame")
 
 # The single dial again with the whole ramp swept round it. A second pass over the same
-# page, the fill being a layout setting and not a page one, and it is worth a shot
-# because no other page can show it.
+# page, the fill being a layout setting and not a page one.
 draw.GAUGE_FILL = "ramp"
 draw.clear_cache()
 ramped = time_page(PAGES[0], theme)
@@ -311,8 +288,7 @@ pages_module.render(PAGES[0], FRAME, HISTORY, theme, 0, len(PAGES), "host")
 print("\nfirst draw of a page, cold cache: %.1f ms"
       % (time.ticks_diff(time.ticks_us(), t) / 1000))
 
-# Every palette the host has, built the way the badge builds one from a layout: the app
-# itself only carries the one it boots with.
+# Every palette the host has, built the way the badge builds one from a layout.
 print("\nevery theme, on the CPU dial:")
 for name in PALETTES:
     theme = themed(name)
@@ -334,8 +310,8 @@ shot("sparse")
 print("\nsparse frame drew without raising")
 
 
-# Every screen that is not a page, so the shots in the README cannot drift from what
-# the app draws. The wording is not repeated here: these call the app's own drawing.
+# Every screen that is not a page, so the shots in the README cannot drift from what the
+# app draws.
 import setup as setup_ui    # noqa: E402
 import splash               # noqa: E402
 

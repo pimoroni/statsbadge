@@ -1,11 +1,4 @@
-"""A file to print into when there is no terminal.
-
-statsbadge prints rather than logs. Under pythonw.exe, or inside a macOS .app bundle,
-sys.stdout is None and every print in the package raises AttributeError. Replacing the
-streams fixes that without touching the prints.
-
-serve does not call this.
-"""
+"""A file to print into when there is no terminal."""
 
 import io
 import logging
@@ -24,7 +17,7 @@ def path(config_dir, name="tray"):
 
 
 def start(config_dir, name="tray"):
-    """Point stdout and stderr at the log file. Returns where that is."""
+    """Point stdout and stderr at the log file, returning where that is."""
     target = path(config_dir, name)
     os.makedirs(os.path.dirname(target), exist_ok=True)
 
@@ -55,7 +48,7 @@ class _Handler(logging.handlers.RotatingFileHandler):
 
 
 def _terminal(stream):
-    """The stream if someone is watching it, else None."""
+    """Return the stream if someone is watching it, else None."""
     try:
         return stream if stream is not None and stream.isatty() else None
     except (AttributeError, ValueError, OSError):
@@ -63,11 +56,7 @@ def _terminal(stream):
 
 
 class _Stream:
-    """A file-like object that turns writes into whole log lines.
-
-    `echo` is the terminal it came from, where there is one, so the log is a record and
-    not a diversion.
-    """
+    """A file-like object that turns writes into whole log lines."""
 
     encoding = "utf-8"
     errors = "replace"
@@ -137,7 +126,7 @@ def _excepthook(kind, value, tb):
 
 
 def _thread_excepthook(args):
-    """Catches a thread dying. The HTTP, beacon and tray threads report nothing."""
+    """Catch a thread dying. The HTTP, beacon and tray threads report nothing."""
     if args.exc_type is SystemExit:
         return
     name = args.thread.name if args.thread else "unknown"

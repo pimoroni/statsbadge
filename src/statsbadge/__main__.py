@@ -21,14 +21,7 @@ DEFAULT_PORT = 8420
 
 
 def config_dir(explicit=None):
-    """Where layout.json, badges.json and server.json live.
-
-    Each platform's location, ~/.config on Windows being just a dotfile in the home
-    directory. XDG_CONFIG_HOME wins wherever it is set.
-
-    An existing ~/.config/statsbadge keeps being used: it holds pairing secrets, and moving
-    those unasked would strand a paired badge.
-    """
+    """Return where layout.json, badges.json and server.json live."""
     if explicit:
         return os.path.abspath(explicit)
     if os.environ.get("XDG_CONFIG_HOME"):
@@ -42,19 +35,15 @@ def _platform_config_base():
     if sys.platform == "darwin":
         return os.path.expanduser("~/Library/Application Support")
     if os.name == "nt":
-        # LOCALAPPDATA, not APPDATA: the server id here identifies this machine, and a
-        # roaming profile would carry it to another one as a duplicate.
+        # LOCALAPPDATA, not APPDATA: the server id identifies this machine, and a roaming
+        # profile would carry it to another one as a duplicate.
         base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
         return base or os.path.expanduser("~")
     return os.path.expanduser("~/.config")
 
 
 def parse_extension_options(pairs):
-    """Turn --extension clock.latitude=52.4 into {"clock": {"latitude": 52.4}}.
-
-    Numbers and booleans are converted, an extension asking for a latitude taking a
-    float where every value off a command line is a string.
-    """
+    """Turn --extension clock.latitude=52.4 into {"clock": {"latitude": 52.4}}."""
     options = {}
     for pair in pairs or ():
         if "=" not in pair or "." not in pair.split("=", 1)[0]:
@@ -80,11 +69,7 @@ def _coerce(text):
 
 
 def source_config_from(args):
-    """What the sources are told. Settings stored by the UI beat --extension.
-
-    Read here as well as by the Service, because `probe` and `install` load extensions
-    without one and should see the same configuration the server would.
-    """
+    """Return what the sources are told. Settings stored by the UI beat --extension."""
     stored = layout.Config(
         os.path.join(config_dir(getattr(args, "config_dir", None)), "layout.json")
     ).snapshot().get("settings")
@@ -108,22 +93,14 @@ def build_service(args):
 
 
 def extension_modules(args):
-    """Badge-side modules from installed extensions, unless asked not to.
-
-    Loaded directly instead of through a Service, so an install does not start a
-    collector it will only stop again. --without NAME leaves that one out of both the
-    frame and the badge, which it should mean.
-    """
+    """Return badge-side modules from installed extensions, unless asked not to."""
     if getattr(args, "no_extensions", False):
         return []
     return extensions.badge_modules(extensions.load(source_config_from(args)))
 
 
 def _extension_line(record):
-    """One extension on the startup line: its name, and what went wrong if anything did.
-
-    A pip install that did not take is otherwise invisible until a page fails to appear.
-    """
+    """Return one extension on the startup line: its name, and what went wrong."""
     if record.get("error"):
         return f"{record['name']} (failed)"
     if record.get("available") is False:
@@ -184,11 +161,7 @@ def _report_in_use(exc):
 
 
 def cmd_pair(args):
-    """Serve with a pairing window open from the start.
-
-    Keeps serving afterwards: exiting once paired would strand the badge on a host that
-    has gone away.
-    """
+    """Serve with a pairing window open from the start."""
     service = build_service(args)
     try:
         stack = runner.Stack.start(service, args.host, args.port, args.verbose,
@@ -227,7 +200,7 @@ def _approve_loop(service, auto):
         try:
             pending = service.badges.pending_enrolments()
         except Exception:  # noqa: BLE001
-            # This runs on a thread beside the server; if it dies the server should not.
+            # Runs on a thread beside the server; if it dies the server should not.
             return
         for request in pending:
             if request["request_id"] in seen:
@@ -285,7 +258,7 @@ def cmd_install(args):
 
 
 def install_options(args, directory):
-    """The install flags as the driver takes them."""
+    """Return the install flags as the driver takes them."""
     return {
         "config_dir": directory,
         "port_dev": args.port_dev,
@@ -315,7 +288,7 @@ def _confirm_mass_storage():
 
 
 def cmd_status(args):
-    """What is on the badge and what this host has, without touching anything."""
+    """Report what is on the badge and what this host has, without touching anything."""
     directory = config_dir(args.config_dir)
     print(f"host: {directory}")
     service = build_service(args)
@@ -373,8 +346,8 @@ def _badge_status(args, port, directory):
                     ", ".join(added + changed + removed)))
                 print("              run 'statsbadge install' to update it")
             else:
-                # Only where they match, which is the one case this has seen enough to
-                # name the revision the badge has.
+                # Only where they match, which is the one case this can name the
+                # revision the badge has for.
                 pushed.record(directory, info["uid"], desired, source)
                 print("              up to date with this package")
 
@@ -517,14 +490,13 @@ def _change_extensions(args, verb):
 
     print(why, file=sys.stderr)
     if "needs statsbadge" in (why or ""):
-        # The library installs beside statsbadge and cannot move it, so the upgrade is the
-        # answer and it is not one this can make.
+        # The library installs beside statsbadge and cannot move it, so the upgrade is
+        # the answer and it is not one this can make.
         print("  upgrade statsbadge itself, then add it again.", file=sys.stderr)
         return 1
     # uv names one package, and it need not be one just asked for. The rebuild installs
     # the whole list, so an entry that was already there and cannot be installed fails
-    # every add until it is taken out. Separating the two is what makes the message
-    # actionable.
+    # every add until it is taken out.
     culprit = tooling.blamed(why)
     if culprit and tooling.short_name(culprit) not in tooling.names(changed):
         print(f"  {culprit} was already in {tooling.WANTED}, and nothing was changed. Take it "
@@ -700,12 +672,7 @@ examples:
 """
 
 def be_pip(argv):
-    """Be `python -m pip`, for a bundle with no python to be it.
-
-    Spawned as a child of itself rather than run in this process: pip takes over the root
-    logger, and a server is running here. runpy is what `-m` does, so this is pip's entry
-    point and not its internals.
-    """
+    """Be `python -m pip`, for a bundle with no python to be it."""
     import runpy
     sys.argv = ["pip", *argv]
     runpy.run_module("pip", run_name="__main__", alter_sys=True)
@@ -728,8 +695,8 @@ def main(argv=None):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--host", default="0.0.0.0")
     common.add_argument("--port", type=int, default=DEFAULT_PORT)
-    # Tried by default on macOS, and quiet where sudo is not permitted. Named here to make
-    # the attempt explicit, or to prevent it.
+    # Tried by default on macOS, and quiet where sudo is not permitted. Named here to
+    # make the attempt explicit, or to prevent it.
     common.add_argument("--powermetrics", dest="powermetrics", action="store_true",
                         default=None,
                         help="macOS: report the sudoers rule if powermetrics is refused")
@@ -784,8 +751,7 @@ def main(argv=None):
                       help="password for --ssid. Prompted for if omitted; pass an empty "
                            "string for an open network")
     # Checked here as well as on the way to the badge: a region outside that set leaves
-    # the radio unable to associate, and the only sign of it is a badge that never
-    # connects.
+    # the radio unable to associate.
     inst.add_argument("--region", type=str.lower, choices=install.REGIONS,
                       metavar="REGION",
                       help="WiFi region: {}".format(", ".join(install.REGIONS)))
@@ -802,8 +768,7 @@ def main(argv=None):
     inst.add_argument("--new-secret", action="store_true", help="mint a fresh secret")
     inst.add_argument("--no-extensions", action="store_true",
                      help="do not push badge-side modules from installed extensions")
-    # Accepted and ignored. Extensions go on by default now, and scripts that passed
-    # this should keep working.
+    # Accepted and ignored. Extensions go on by default now.
     inst.add_argument("--with-extensions", action="store_true",
                      help=argparse.SUPPRESS)
     inst.add_argument("--mpy", metavar="DIR", nargs="?", const="build/mpy",
@@ -872,18 +837,7 @@ def main(argv=None):
 
 
 def trust_store():
-    """Point OpenSSL at a bundle of roots where it has none. Returns the file, or None.
-
-    A packaged app carries a Python built somewhere else, and inside the bundle there are
-    no roots at all: every HTTPS request an extension makes comes back unable to find an
-    issuer. certifi travels in the app for this, and anywhere else this does nothing.
-
-    Both halves are needed to tell a bundle from a host that is perfectly well. Windows
-    names no file and loads 409 roots from the system store. Linux names a directory and
-    loads nothing, since a directory is searched per verification by subject hash. Only
-    the bundle has neither, and a machine with roots must not be handed certifi
-    in place of them.
-    """
+    """Point OpenSSL at a bundle of roots where it has none, returning the file or None."""
     import ssl
     if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
         return None
@@ -904,12 +858,7 @@ def trust_store():
 
 
 def tray_main(argv=None):
-    """The gui-scripts entry point. The tray, unless another command was named.
-
-    A flag is the tray's; a word is a command. That is what lets a packaged
-    app, whose only entry point is this, still be asked for `ext` or `status`. The pip
-    verb is a flag and neither, being how the app spawns itself.
-    """
+    """Run the gui-scripts entry point: the tray, unless another command was named."""
     asked = list(sys.argv[1:] if argv is None else argv)
     if asked and (asked[0] == PIP_VERB or not asked[0].startswith("-")):
         return main(asked)

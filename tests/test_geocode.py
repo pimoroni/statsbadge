@@ -1,8 +1,4 @@
-"""The shared geocoder, and the badge-wide location a source falls back to.
-
-Nothing here reaches Open-Meteo: `urlopen` is replaced, so a test counts the requests a
-real run would have made.
-"""
+"""The shared geocoder, and the badge-wide location a source falls back to."""
 
 import json
 import tempfile
@@ -75,8 +71,8 @@ def test_a_country_after_the_comma_picks_that_one(monkeypatch):
     finder, _asked = answering(monkeypatch, [SHEFFIELD, ALABAMA])
     assert finder.lookup("Sheffield")[:2] == (53.38, -1.47)
 
-    # A country matches on its code and on its name, since somebody typing a country has no
-    # reason to know which of the two Open-Meteo answers with.
+    # A country matches on its code and on its name, since somebody typing a country has
+    # no reason to know which of the two Open-Meteo answers with.
     for named in ("Sheffield, US", "Sheffield, United States"):
         finder, _asked = answering(monkeypatch, [SHEFFIELD, ALABAMA])
         assert finder.lookup(named)[:2] == (34.76, -87.7), named
@@ -98,8 +94,7 @@ def test_a_failed_lookup_is_backed_off(monkeypatch):
     assert finder.lookup("Sheffield") is None, "raised again instead of backing off"
     assert len(asked) == 1, asked
 
-    # Another name is unaffected: the backoff is per name, and one typo leaves the rest
-    # of the badge resolving.
+    # Another name is unaffected: the backoff is per name.
     with pytest.raises(RuntimeError):
         finder.lookup("Tokyo")
 

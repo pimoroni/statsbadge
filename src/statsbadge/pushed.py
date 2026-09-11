@@ -1,12 +1,4 @@
-"""What each badge was last seen holding, for telling a stale badge from an updated one.
-
-`install.desired_hashes` is worked out on this host alone, so comparing it against a record
-of the last install answers the question with no badge connected. That is the only way the
-config UI can offer to update a badge before it is plugged in.
-
-It is a best guess. Another machine can have installed something else since, and the answer
-is only ever a prompt to connect the badge and look.
-"""
+"""What each badge was last seen holding, for telling a stale badge from an updated one."""
 
 import json
 import os
@@ -16,9 +8,9 @@ from . import install
 
 PUSHED = "pushed.json"
 
-# Which build the hashes came from. Bytecode and sources hash differently, so a comparison
-# has to be made against the same kind. A directory named on the command line cannot be
-# found again later, and anything from one is left uncompared.
+# Which build the hashes came from. Bytecode and sources hash differently, so a
+# comparison has to be made against the same kind. A directory named on the command line
+# cannot be found again later, and anything from one is left uncompared.
 PACKAGED = "packaged"
 SOURCE = "source"
 ELSEWHERE = "elsewhere"
@@ -64,7 +56,7 @@ def _write(config_dir, found):
 
 
 def flavour(source):
-    """Which build a directory is, as it will have to be recognised again later."""
+    """Return which build a directory is, as it will have to be recognised again later."""
     if not source:
         return SOURCE
     packaged = install.packaged_mpy_dir()
@@ -74,7 +66,7 @@ def flavour(source):
 
 
 def _source_for(kind):
-    """(directory to hash, whether it can be) for a recorded flavour."""
+    """Return (directory to hash, whether it can be) for a recorded flavour."""
     if kind == SOURCE:
         return None, True
     if kind == PACKAGED:
@@ -84,11 +76,7 @@ def _source_for(kind):
 
 
 def behind(config_dir, badge_id, modules=()):
-    """What an install would change on a badge nobody has connected, or None.
-
-    None where there is nothing recorded, or where what was recorded cannot be worked out
-    again, such as an install from a precompiled build that is no longer in this package.
-    """
+    """Return what an install would change on a badge nobody has connected, or None."""
     entry = read(config_dir).get(badge_id) or {}
     held = entry.get("hashes")
     if not held:

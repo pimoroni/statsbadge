@@ -1,12 +1,4 @@
-"""The app itself, built and driven.
-
-Run under the WASM port by `node tools/wasm/run.mjs`. app.py reaches the firmware at
-import, and `socket`, `wifi` and `secrets` come from tools/wasm/shims: nothing here touches a
-network, and anything that tried would raise.
-
-A layout is assigned rather than fetched. That is what `apply_layout` does with the
-host's reply, and `setting()` reads it, so an App with one is an App that has polled.
-"""
+"""The app itself, built and driven."""
 
 import unittest
 
@@ -185,7 +177,8 @@ class Setup(unittest.TestCase):
 
     def test_one_failed_poll_offers_setup(self):
         """Every control on the notice screen needs it, so waiting for three is a screen
-        of buttons that do nothing."""
+        of buttons that do nothing.
+        """
         one = paired()
         one.layout = None
         one.client.failures = app.SETUP_AFTER
@@ -331,8 +324,9 @@ class Series(unittest.TestCase):
         self.assertEqual(one._plot_refs(), ["g0.value", "g2.value"])
 
     def test_the_request_starts_at_the_page_on_screen(self):
-        """In page order, the refs at the end are never fetched, and the page holding
-        them draws its live reading twice."""
+        """In page order, the refs at the end are never fetched, and the page holding them
+        draws its live reading twice.
+        """
         one = self.plotting("graph", "graph", "graph")
         one.turn(1)
         self.assertEqual(one._graph_keys()[0], "g1.value")
@@ -348,9 +342,7 @@ class DrawingElsewhere(unittest.TestCase):
         draw.prepare()      # main() does this before anything is drawn
 
     def test_a_page_drawn_into_an_image_puts_the_screen_back(self):
-        """`screen` is a builtin, so it is rebound: an extension's renderer draws through
-        the same name and would otherwise draw to the screen while the app drew the image.
-        """
+        """`screen` is a builtin, so it is rebound for an extension's renderer."""
         one = built()
         one.theme = look.get(look.DEFAULT)
         was = screen  # noqa: F821
@@ -385,7 +377,8 @@ class Rendering(unittest.TestCase):
 
     def test_a_turn_that_is_waiting_leaves_the_body_standing(self):
         """The title and the pip move on the press; redrawing the body as well is what
-        the wait is holding off."""
+        the wait is holding off.
+        """
         self.app.render()
         standing = body_pixels()
         self.app.turn(1)
@@ -408,7 +401,7 @@ class CaseLights(unittest.TestCase):
 
     def setUp(self):
         self.asked = []
-        real, asked = badge, self.asked  # noqa: F821  the firmware's, shadowed below
+        real, asked = badge, self.asked  # noqa: F821
 
         class Watched:
             """The badge, with what the lights are asked for written down."""
@@ -468,8 +461,7 @@ class Slides(unittest.TestCase):
         self.assertIsNone(one.sliding)
 
     def test_each_press_pushes_the_wait_out(self):
-        """A burst is one slide, from the page the reader started on to the one they
-        landed on."""
+        """A burst is one slide, from the page the reader started on to the one they landed on."""
         one = built(slide="over")
         one.turn(1)
         # As if the first press had been a wait ago: two turns land in the same

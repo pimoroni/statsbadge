@@ -1,34 +1,5 @@
 #!/usr/bin/env python3
-"""Build an .af icon font for a vendored extension.
-
-    python3 tools/make_icon_font.py extensions/statsbadge-clock
-    python3 tools/make_icon_font.py extensions/statsbadge-clock --weight 500 --list
-
-Needs the fonts dependency group: uv sync --group fonts.
-
-Each extension keeps an `icons.txt` of `name codepoint [ascii]` lines, and this writes
-an .af next to its badge module. `statsbadge install` pushes it to the badge with the
-rest of the extension, and the badge loads it with font.load().
-
-The third field remaps a symbol onto an ASCII character, so badge-side code can draw it
-with an ordinary string: `sunny e81a s` puts the sun at "s".
-
-The encoder is lifted from alright-fonts (afinate on feature/icon-and-font-merge) and
-cut down to the icon case. Fixed on the way in:
-
-  - cubic_to passed a float to range(), so any font with cubic outlines - every OTF, and
-    CFF-flavoured TTFs - raised TypeError instead of building
-  - both curve decompositions stopped one step short of the segment's end point, so
-    contours never quite reached it, and a segment short enough to want one step emitted
-    only its start
-  - a zero-length segment produced no points at all
-  - points pack as signed bytes and advance as unsigned, with no range check, so a glyph
-    that overflowed raised struct.error from inside the packer
-  - codepoints pack as u16, which silently excludes the Material Symbols that live above
-    U+FFFF
-
-Comments in the corpus are this tool's own doing; afinate does not take them.
-"""
+"""Build an .af icon font for a vendored extension."""
 
 import argparse
 import math
@@ -82,7 +53,7 @@ class Point:
 
 
 class Bounds:
-    """A glyph's extent, from a FreeType bbox."""
+    """Return a glyph's extent, from a FreeType bbox."""
 
     def __init__(self, box):
         self.x, self.y, self.x2, self.y2 = box.xMin, box.yMin, box.xMax, box.yMax
@@ -99,20 +70,11 @@ class Bounds:
 # -- outlines ---------------------------------------------------------------
 
 def outline_contours(face, scale):
-    """Decompose the loaded glyph into polylines, in font units.
-
-    FreeType hands back lines and curves; the .af format only has points, so curves are
-    flattened here and the redundant points are taken back out by shapely later.
-
-    `scale` is font units per output unit, and only sets how finely curves are cut. A
-    step per output unit is already finer than a signed byte can express. Stepping per
-    *font* unit costs hundreds of points a glyph that all quantise to the same handful
-    of coordinates.
-    """
+    """Decompose the loaded glyph into polylines, in font units."""
     contours = []
 
     def steps(*points):
-        """How finely to flatten, from the control polygon's length."""
+        """Return how finely to flatten, from the control polygon's length."""
         length = sum(a.distance(b) for a, b in zip(points, points[1:], strict=False))
         return max(1, int(length / scale))
 
@@ -126,8 +88,8 @@ def outline_contours(face, scale):
         start = Point(*contours[-1][-1])
         control, target = Point(control.x, control.y), Point(target.x, target.y)
         n = steps(start, control, target)
-        # From the step after the start up to and including the end point, or the
-        # contour stops short of where the next segment begins.
+        # From the step after the start up to and including the end point, or the contour
+        # stops short of where the next segment begins.
         for i in range(1, n + 1):
             t = i / n
             contours[-1].append((
@@ -155,16 +117,7 @@ def outline_contours(face, scale):
 
 
 def clean_contours(contours, tolerance):
-    """Resolve overlapping and self-intersecting outlines into simple rings.
-
-    Fonts are not obliged to be tidy: contours overlap, wind either way, cross
-    themselves, and a renderer that just fills what it is given shows the seams. This
-    is alright-fonts' shapely pipeline, which unions anything that genuinely overlaps
-    and then takes the rings back out.
-
-    Nesting is not overlapping, which is the point: a counter sits inside its outer
-    ring without touching it, so it survives as its own contour and stays a hole.
-    """
+    """Resolve overlapping and self-intersecting outlines into simple rings."""
     rings = [shapely.LinearRing(contour) for contour in contours if len(contour) > 3]
     if not rings:
         return []
@@ -204,15 +157,7 @@ def merge_overlaps(polygons):
 
 
 def load_icon(face, codepoint, size, tolerance):
-    """One icon, fitted to a `size` box and placed like a text glyph.
-
-    None if the font has no such glyph, or it has no outline.
-
-    The conventions are the reference font's, read out of MonaSans-Medium.af rather than
-    assumed: points are y-down from the baseline, so a glyph above the baseline has
-    negative y, while bbox_y is y-up and goes negative only for a descender. x starts at
-    the left of the advance, ink offset by the side bearing.
-    """
+    """Fit one icon to a `size` box and place it like a text glyph."""
     if face.get_char_index(codepoint) == 0:
         return None
     face.load_char(codepoint, freetype.FT_LOAD_PEDANTIC)
@@ -249,7 +194,7 @@ def load_icon(face, codepoint, size, tolerance):
 # -- the corpus -------------------------------------------------------------
 
 def read_corpus(path):
-    """`name codepoint [ascii]` per line. Blank lines and # comments are skipped."""
+    """Parse `name codepoint [ascii]` per line, skipping blanks and # comments."""
     entries = []
     for number, line in enumerate(
             pathlib.Path(path).read_text(encoding="utf-8").splitlines(), 1):
@@ -285,9 +230,8 @@ def font_path(explicit, style):
     cached = FONT_CACHE / urllib.parse.unquote(name)
     if not cached.exists():
         print(f"fetching Material Symbols {style} into {cached}")
-        # Downloaded beside it and renamed, since a transfer that stops partway leaves a
-        # file that exists: every run after it hands FreeType a truncated font, and the
-        # only cure is knowing to delete it.
+        # Downloaded beside it and renamed: a transfer that stops partway leaves a file
+        # that exists, and every run after it hands FreeType a truncated font.
         partial = cached.with_suffix(cached.suffix + ".part")
         try:
             urllib.request.urlretrieve(FONT_BASE + name, partial)
@@ -298,13 +242,10 @@ def font_path(explicit, style):
 
 
 def set_axes(face, requested):
-    """Set variable axes by name, ignoring any the font does not have.
-
-    Design coordinates, not 16.16: passing fixed point clamps every axis to its maximum.
-    """
+    """Set variable axes by name, ignoring any the font does not have."""
     try:
         axes = face.get_variation_info().axes
-    except Exception:                      # noqa: BLE001  a static font has none
+    except Exception:                      # noqa: BLE001
         return {}
     coords, applied = [], {}
     for axis in axes:
@@ -349,7 +290,7 @@ def build(font, entries, size, tolerance, axes, quiet=False):
 
 
 def default_output(extension):
-    """An extension's badge directory, which the installer pushes."""
+    """Return an extension's badge directory, which the installer pushes."""
     found = sorted(pathlib.Path(extension).glob("src/*/badge"))
     if not found:
         raise SystemExit(f"no src/*/badge directory under {extension}")
@@ -357,13 +298,7 @@ def default_output(extension):
 
 
 def write_web(font, entries, out):
-    """The same corpus as a woff2, for the config UI.
-
-    The preview draws the badge's pages, so it draws the badge's symbols. Built from the
-    corpus and source font the .af came from, so a second hand-kept list cannot drift.
-
-    Needs fonttools, which the fonts dependency group brings in for the .af anyway.
-    """
+    """Write the same corpus as a woff2, for the config UI."""
     try:
         from fontTools import subset
     except ImportError:

@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""Pack the settlement table `geocode.nearest` names a coordinate from.
-
-    python3 tools/make_cities.py
-    python3 tools/make_cities.py --source cities5000 --list
-
-Writes `src/statsbadge/cities.tsv.gz`, which ships in the wheel and is committed, the way
-the .af fonts are: a contributor gets the table with the checkout and needs no network.
-
-The source is GeoNames, whose `cities15000` is every settlement over 15,000 people. That is
-the granularity a fire or an earthquake is named at - the nearest town somebody would
-recognise, not the nearest hamlet - and it is what USGS names its quakes against.
-
-Names are taken from the ASCII column. The badge draws these with lexend, which packs no
-Cyrillic or CJK, so a name it cannot draw is worse than a transliterated one.
-
-GeoNames is CC BY 4.0. The attribution is written into the file header and repeated in
-README.md, and has to stay on both.
-"""
+"""Pack the settlement table `geocode.nearest` names a coordinate from."""
 
 import argparse
 import gzip
@@ -41,13 +24,12 @@ LONGITUDE = 5
 COUNTRY = 8
 POPULATION = 14
 
-# Decimal places kept. Three is about 110m, far finer than a distance printed in whole
-# kilometres needs, and it holds the table under half a megabyte.
+# Decimal places kept. Three is about 110m, and it holds the table under half a megabyte.
 PLACES = 3
 
 
 def fetch(source):
-    """The GeoNames dump, from the cache where a previous run left one."""
+    """Return the GeoNames dump, from the cache where a previous run left one."""
     CACHE.mkdir(parents=True, exist_ok=True)
     cached = CACHE / f"{source}.zip"
     if not cached.exists():
@@ -63,15 +45,7 @@ def fetch(source):
 
 
 def rows(dump):
-    """(name, country, latitude, longitude, thousands), by country and then by name.
-
-    That order is for the packer: grouping the country codes into runs and the names by
-    language takes 75KB off the gzip against sorting by population. Nothing reads the file
-    in order.
-
-    Population is kept in thousands, which `nearest` needs only to tell a city from the
-    suburb next to it. Rows without a name, a country or a position are dropped.
-    """
+    """Return (name, country, latitude, longitude, thousands), by country then by name."""
     found = []
     for line in dump.splitlines():
         fields = line.split("\t")

@@ -1,9 +1,4 @@
-"""Checks for the tray, its menu and run at login.
-
-Needs no server, no display and no pystray, so it runs on a headless CI box.
-
-    uv run pytest tests/test_tray.py
-"""
+"""Checks for the tray, its menu and run at login."""
 
 import configparser
 import io
@@ -32,7 +27,7 @@ class FakeBadges:
     def pairing_active(self):
         return self.open
 
-    def begin_pairing(self, ttl=300):  # noqa: ARG002  the Store's signature
+    def begin_pairing(self, ttl=300):  # noqa: ARG002
         self.open = True
 
     def cancel_pairing(self):
@@ -74,14 +69,9 @@ def find(items, label):
 # -- the menu ---------------------------------------------------------------
 
 def test_a_waiting_badge_is_answered_the_way_the_toolkit_calls_the_action(monkeypatch):
-    """pystray reads an action's argument count and hands a one-argument callable the tray
-    icon, so calling the action here with nothing is more forgiving than the real thing.
-
-    Written as `lambda request=request_id:` the icon landed in `request_id` and both
-    buttons answered a request that does not exist, leaving pairing to time out.
-    """
+    """pystray reads an action's argument count and hands a one-argument callable the tray."""
     # Importing pystray picks a backend, and the X one wants a display no CI runner has.
-    # MenuItem is the same whichever is chosen, and it is all this needs.
+    # MenuItem is the same whichever is chosen.
     monkeypatch.setenv("PYSTRAY_BACKEND", "dummy")
     from pystray._base import MenuItem
 
@@ -102,8 +92,8 @@ def test_a_checkout_has_no_name_to_post_an_alert_under():
 
 def test_macos_says_nothing_rather_than_say_it_as_script_editor(monkeypatch):
     """pystray posts a macOS alert through `osascript`, which macOS credits to Script
-    Editor: an alert about pairing under a name with nothing to do with this, and nothing
-    to click. The icon and the menu say the same thing, so silence is better."""
+    Editor. The icon and the menu say the same thing, so silence is better.
+    """
     from statsbadge.tray.backend import Tray
 
     posted = []
@@ -124,8 +114,7 @@ def test_macos_says_nothing_rather_than_say_it_as_script_editor(monkeypatch):
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="an AppKit notification centre")
 def test_a_clicked_alert_runs_what_was_given_to_it():
-    """The alert carries a button whatever is listening, so without a delegate it was one
-    that did nothing."""
+    """The alert carries a button whatever is listening, so without a delegate it did nothing."""
     from statsbadge.tray import backend
 
     delegate = backend._activation_delegate()
@@ -138,9 +127,7 @@ def test_a_clicked_alert_runs_what_was_given_to_it():
     class FakeNote:
         """Enough of NSUserNotification for the delegate to read it back.
 
-        `userInfo` hands back a plain dict because that is what pyobjc does with it. A
-        stand-in that answered `objectForKey_` instead is what let a crash through: it
-        modelled the framework as it was imagined, not as it is.
+        `userInfo` hands back a plain dict, which is what pyobjc does with it.
         """
 
         def __init__(self, key, activation):

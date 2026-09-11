@@ -1,12 +1,4 @@
-"""The badge's HTTP client, against a real statsbadge.
-
-Run under the WASM port by `node tools/wasm/run.mjs`, which starts the same server
-tests/test_server.py drives and pairs one badge with it. The socket is node's, through
-tools/wasm/shims - the requests, the signing and the parsing are the badge's own.
-
-`step()` is advanced from the draw loop a slice at a time, so these drive it the way a
-frame would: call it until the request comes back done.
-"""
+"""The badge's HTTP client, against a real statsbadge."""
 
 import json
 import unittest
@@ -16,8 +8,8 @@ import net
 
 STEP_LIMIT = 400
 
-# One server for the run, rejecting a counter it has already seen. Each client
-# starts well above the last, the way a badge that has been away comes back.
+# One server for the run, rejecting a counter it has already seen. Each client starts
+# well above the last, the way a badge that has been away comes back.
 _from = [1000]
 
 
@@ -98,9 +90,7 @@ class Requests(unittest.TestCase):
         self.assertTrue("theme" in layout and "palette" in layout, sorted(layout))
 
     def test_a_command_nobody_bound_is_refused(self):
-        """The POST path, end to end, without running anything on the machine: the
-        runner binds no buttons, and the host only runs what a layout bound.
-        """
+        """The POST path, end to end, without running anything on the machine."""
         self.client.post("/v1/command", {"cmd": "media_next"})
         self.assertTrue(self.finish())
         self.assertEqual(self.client.http_status, 403, self.client.body)
@@ -124,7 +114,8 @@ class NoHostThere(unittest.TestCase):
 
     def test_the_draw_loop_is_never_held(self):
         """A blocking connect sits in the handshake until lwIP gives up, with the screen
-        inside that call."""
+        inside that call.
+        """
         self.client.get("/v1/stats")
         steps = 0
         while steps < STEP_LIMIT and not self.client.step():

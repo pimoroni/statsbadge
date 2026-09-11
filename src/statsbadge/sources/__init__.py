@@ -1,10 +1,4 @@
-"""Stats sources.
-
-A source fills in part of a frame. `available()` gates whether it loads at all, so
-a machine without an NVIDIA card never imports pynvml. Sources run in registration
-order and later ones may fill gaps the earlier ones left, which is how a
-platform-specific source adds temperatures psutil cannot see.
-"""
+"""Stats sources."""
 
 import platform
 

@@ -1,29 +1,16 @@
-"""What a source worked out, kept between runs.
-
-Settings are what a source is told and are editable in the UI. This is the other half:
-what it found out and would otherwise find out again on every launch, a resolved location
-or a refresh token.
-
-Namespaced by source name, so an extension asks for a value and sets one without touching
-the config directory. One file per source, or two writing at once cost a third its state.
-"""
+"""What a source worked out, kept between runs."""
 
 import json
 import os
 import threading
 
-# The most keys in a store. A cache keyed by something a user types - a place
-# name - grows by one on every typo, and no other store here is near a cap.
+# The most keys in a store. A cache keyed by something a user types grows by one on
+# every typo.
 MAX_KEYS = 64
 
 
 class Store:
-    """A dict that persists. `Store()` keeps everything in memory and nothing on disk.
-
-    Written whole on every set, which suits the contents: a handful of small values, saved
-    when something is learned rather than on a timer. Anything that will not serialise is
-    refused before the store changes, so a store in memory always matches the one on disk.
-    """
+    """A dict that persists. `Store()` keeps everything in memory and nothing on disk."""
 
     def __init__(self, path=None):
         self.path = path
@@ -74,14 +61,14 @@ class Store:
 
 
 def for_source(directory, name):
-    """The store one source writes to, or an in-memory one where there is nowhere to write."""
+    """Return the store one source writes to, or an in-memory one with nowhere to write."""
     if not directory:
         return Store()
     return Store(os.path.join(directory, f"{_safe(name)}.json"))
 
 
 def _safe(name):
-    """A source name as a filename. Entry point names are tame, but this is a path."""
+    """Reduce a source name to a filename, this being a path."""
     kept = [c if c.isalnum() or c in "-_" else "_" for c in str(name)]
     return "".join(kept)[:64] or "source"
 

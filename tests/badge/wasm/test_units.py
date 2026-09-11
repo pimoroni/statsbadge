@@ -1,9 +1,4 @@
-"""What follows a number on the badge, and where the badge gets it.
-
-Run under the WASM port by `node tools/wasm/run.mjs`. `fmt` rescales some families as it
-prints them, so the suffix has to pair with what it printed rather than with what the
-host sent: `_mb` prints as 11.1G, which takes a B.
-"""
+"""What follows a number on the badge, and where the badge gets it."""
 
 import unittest
 
@@ -51,9 +46,7 @@ class Units(unittest.TestCase):
 
 
 class EveryFigureCarriesAUnit(unittest.TestCase):
-    """A kind that prints a figure asks for its unit, wherever it puts it: a slot with
-    room takes the two separately, a row that is a name and a figure takes them together.
-    """
+    """A kind that prints a figure asks for its unit, wherever it puts it."""
 
     def setUp(self):
         draw.prepare()

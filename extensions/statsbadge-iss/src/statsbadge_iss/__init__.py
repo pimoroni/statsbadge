@@ -1,13 +1,4 @@
-"""Where the space station is, for the badge to draw on a world map.
-
-Two feeds, neither needing a key or an account:
-
-    wheretheiss.at   where it is now, where it will be, and the sub-solar point.
-    open-notify.org  who is aboard.
-
-`/positions` returns a position per timestamp, so the ground track is fetched as twenty
-positions either side of now. `flown` is where now falls in that run.
-"""
+"""Where the space station is, for the badge to draw on a world map."""
 
 import json
 import os
@@ -28,7 +19,6 @@ POSITION_EVERY = 300.0
 TRACK_EVERY = 600.0
 CREW_EVERY = 3600.0
 RETRY_AFTER = 30.0
-# How often the fetch thread wakes to check timers.
 FETCH_POLL = 1.0
 
 # The endpoint takes ten timestamps a request, so twenty points is two requests.
@@ -36,7 +26,7 @@ FETCH_POLL = 1.0
 TRACK_STEP_S = 300
 TRACK_BACK = 9
 TRACK_AHEAD = 10
-# Store key: a badge switched on before the network is up still has a position to draw.
+# A badge switched on before the network is up still has a position to draw.
 LAST = "last"
 
 
@@ -112,7 +102,7 @@ class ISS(Source):
                 try:
                     what()
                 except Exception as exc:
-                    # The fetcher must not die: the page would continue drawing the last
+                    # The fetcher must not die: the page would go on drawing the last
                     # position.
                     self.note_fault(exc)
             self._wake.wait(FETCH_POLL)
@@ -132,7 +122,7 @@ class ISS(Source):
         self._wake.set()
 
     def sample(self, frame, dt):
-        """The position, ground track and crew last stored by the fetcher."""
+        """Return the position, ground track and crew last stored by the fetcher."""
         with self._lock:
             where = dict(self._where)
             track = list(self._track)
@@ -225,7 +215,7 @@ def _get(url):
 
 
 def _distance(value, units):
-    """The feed returns kilometres; converted to miles on request."""
+    """Convert the feed's kilometres to miles on request."""
     if value is None:
         return None
     value = float(value)

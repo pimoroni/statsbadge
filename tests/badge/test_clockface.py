@@ -1,8 +1,4 @@
-"""The clock extension's own logic: setting the badge's clock, and a page in another zone.
-
-What `render` draws is checked against the firmware under `badge/wasm/`. Everything here
-is arithmetic and runs on the host.
-"""
+"""The clock extension's own logic: setting the badge's clock, and a page in another zone."""
 
 import ast
 import sys
@@ -15,13 +11,7 @@ CLOCK_BADGE = "extensions/statsbadge-clock/src/statsbadge_clock/badge"
 
 @pytest.fixture
 def clock_badge(monkeypatch, badge_modules, repo_root):
-    """`clockface`, with a clock the RTC sets and localtime reads back.
-
-    badgefakes does not carry `machine`: it is a MicroPython module, not one of the
-    builtins the firmware injects. Coupling the RTC to localtime is what gives RESYNC_S any
-    meaning. A stand-in that only records the call leaves localtime() on the host's clock,
-    where the drift never closes and every reading resyncs.
-    """
+    """`clockface`, with a clock the RTC sets and localtime reads back."""
     class Clock:
         def __init__(self):
             self.at = [2026, 8, 16, 4, 5, 0, 5, 228]
@@ -73,8 +63,7 @@ def clock_badge(monkeypatch, badge_modules, repo_root):
 
 
 def test_the_clock_only_syncs_from_a_fresh_reading(clock_badge):
-    """The clock is set once per reading, so a frame redrawn 45 times a second cannot drag
-    the hands back."""
+    """The clock is set once per reading, so a redrawn frame cannot drag the hands back."""
     clockface, clock = clock_badge
     reading = {"hour": 4, "minute": 5, "seconds": 0}
 
@@ -82,8 +71,7 @@ def test_the_clock_only_syncs_from_a_fresh_reading(clock_badge):
     assert clock.sets == [(4, 5, 0)], "the first reading did not set the clock"
 
     # With the host away, the badge's clock runs on while the frame holds the time it was
-    # polled at, so the disagreement passes RESYNC_S with no new reading behind it. The
-    # seq is the only thing that stops the hands being dragged back to the last poll.
+    # polled at, so the disagreement passes RESYNC_S with no new reading behind it.
     clock.tick(clockface.RESYNC_S + 15)
     for _ in range(45):
         clockface._resync(reading, seq=1)
@@ -91,8 +79,7 @@ def test_the_clock_only_syncs_from_a_fresh_reading(clock_badge):
 
 
 def test_a_reading_is_followed_only_once_it_disagrees_far_enough(clock_badge):
-    """A fresh reading close to the badge's clock is ignored, since the correction is what
-    shows and not the drift."""
+    """A fresh reading close to the badge's clock is ignored: the correction is what shows."""
     clockface, clock = clock_badge
 
     clockface._resync({"hour": 4, "minute": 5, "seconds": 0}, seq=1)
@@ -117,8 +104,7 @@ def test_a_reading_missing_a_field_never_sets_the_clock(clock_badge):
 
 
 def test_a_page_elsewhere_is_offset_from_the_host(clock_badge):
-    """A zone is the difference between two readings in the frame, the shortest way round
-    the day."""
+    """A zone is the difference between two readings in the frame, the shortest way round."""
     clockface, _clock = clock_badge
     here = {"hour": 12, "minute": 0, "seconds": 0}
 
@@ -137,13 +123,7 @@ def test_a_page_elsewhere_is_offset_from_the_host(clock_badge):
 
 
 def test_the_clock_is_set_from_the_host_alone(repo_root):
-    """There is one hardware clock, so two pages in two zones must not each set it to
-    theirs on being turned to.
-
-    `render` draws, so it cannot be called here; what it is wired to is read off the
-    parsed tree instead. Matching the source as text breaks on a reflow or a docstring
-    that happens to name RTC().
-    """
+    """There is one hardware clock, so two pages in two zones must not each set it."""
     source = (repo_root / CLOCK_BADGE / "clockface.py").read_text(encoding="utf-8")
     render = next(node for node in ast.parse(source).body
                   if isinstance(node, ast.FunctionDef) and node.name == "render")
@@ -167,12 +147,7 @@ def test_the_clock_is_set_from_the_host_alone(repo_root):
 
 
 def test_a_digital_face_only_asks_for_glyphs_its_font_packs(repo_root, clock_badge):
-    """Every character a digital face draws is in the font it draws with.
-
-    A glyph the font lacks measures as one width and draws as another, so the minutes,
-    placed by measuring back from the right edge, land off it. That is what the "--:--"
-    shown before the first reading did: neither digit font packs a hyphen.
-    """
+    """Every character a digital face draws is in the font it draws with."""
     clockface, _clock = clock_badge
     import af
 

@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Draw the app's mark as a PNG: the 24x24 sprite the launcher shows, and a larger copy
-for a browser tab, since Safari ignores an SVG favicon.
-
-    python3 tools/icon.py
-
-The splash scaled down. Angles and colours come from look.py, proportions from splash.py
-times one scale factor, which keeps the two agreeing. Rendered at 16x and reduced, since
-there is no anti-aliasing to be had at 24 pixels otherwise.
-"""
+"""Draw the app's mark as a PNG: the 24x24 sprite the launcher shows, and a larger copy."""
 
 import pathlib
 import shutil
@@ -22,15 +14,15 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / "src" / "statsbadge" / "badge_app"
 WEB = ROOT / "src" / "statsbadge" / "web"
 TRAY = ROOT / "src" / "statsbadge" / "tray" / "assets"
-# The packaged app's icon, which is not shipped in the wheel: briefcase reads it from here
-# and builds the .icns and .ico each platform needs.
+# The packaged app's icon, which is not shipped in the wheel: briefcase reads it from
+# here and builds the .icns and .ico each platform needs.
 APP_ICONS = ROOT / "packaging" / "icons"
 sys.path.insert(0, str(APP))
 
 badgefakes.install()
 
 import look  # noqa: E402
-import splash  # noqa: E402  its module-level constants; show() needs a badge
+import splash  # noqa: E402
 
 SIZE = 24
 WEB_SIZE = 64                     # a tab asks for 32, and twice that for a dense screen
@@ -71,7 +63,7 @@ def _box(centre, radius):
 
 
 def render(px, grid, accent, ink, plate=None, dot=None, ring=None, supersample=SUPERSAMPLE):
-    """The mark at px, drawn large and reduced."""
+    """Draw the mark at px, large and reduced."""
     size = SIZE * supersample
     scale = SCALE * supersample
     icon = Image.new("RGBA", (size, size), CLEAR)
@@ -104,7 +96,7 @@ def render(px, grid, accent, ink, plate=None, dot=None, ring=None, supersample=S
 
 
 def _dot(draw, size, fill, ring):
-    """A badge is waiting. Cut clear of the dial under it, to read at menu bar size."""
+    """Draw the waiting-badge mark, cut clear of the dial to read at menu bar size."""
     radius = size * DOT_R
     edge = size * DOT_RING
     centre = (size - radius - edge, radius + edge)
@@ -134,8 +126,7 @@ def main():
                render(TRAY_SIZE, MONO_GRID, MONO_INK, MONO_INK, dot=dot, ring=CLEAR))
 
     # Drawn at twice the size wanted and reduced, so this is not the 24 pixel mark
-    # enlarged. macOS reads the .icns and Windows the .ico; briefcase falls back to its
-    # own mascot for a format it cannot find, noted in one line nobody reads.
+    # enlarged. briefcase falls back to its own mascot for a format it cannot find.
     APP_ICONS.mkdir(parents=True, exist_ok=True)
     inner = round(APP_SIZE * APP_INSET)
     art = Image.new("RGBA", (APP_SIZE, APP_SIZE), CLEAR)
@@ -161,12 +152,7 @@ def _write(out, image):
 
 
 def _shrink(out, unquantised):
-    """Cut the colour count, which is most of what the file costs.
-
-    pngquant only for the palette it picks: the badge's image.load mis-decodes an indexed
-    PNG, returning a short buffer of wrong colours, so the result is written back out as
-    RGBA. Fewer distinct colours still compress better, worth about a fifth of the file.
-    """
+    """Cut the colour count, which is most of what the file costs."""
     if not shutil.which("pngquant"):
         print("pngquant not installed; left at full colour")
         return

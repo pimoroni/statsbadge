@@ -1,12 +1,4 @@
-"""The badge side of the ISS extension: the station, its track, and the terminator.
-
-Installed into the app's `ext/` directory by `statsbadge install` and imported by the app,
-at which point it registers itself.
-
-The map and the day and night wash are the app's `worldmap`. This draws the station: an
-orbit of ground track with the flown half behind it, a marker saying whether it is in
-sunlight, and the readouts under the map.
-"""
+"""The badge side of the ISS extension: the station, its track, and the terminator."""
 
 from array import array
 
@@ -57,15 +49,14 @@ def _page_state(page):
     return state
 
 
-# How much of the gap to the track's position is closed each draw. The lag left is a quarter
-# of a pixel.
+# How much of the gap to the track's position is closed each draw.
 CATCH_UP = 0.25
 # Past this the gap is a jump: a first draw, or a page returned to after an orbit.
 CATCH_UP_MAX = 5.0
 
 
 def eased(held, target):
-    """`held` moved a share of the way to `target`, the short way round the date line."""
+    """Return `held` moved toward `target`, the short way round the date line."""
     if held is None:
         return target
     lon = worldmap.shortest(target[0] - held[0])
@@ -77,11 +68,7 @@ def eased(held, target):
 
 
 def flown_at(dense, flown):
-    """Where along the track `flown` falls, as (lon, lat, sunlit).
-
-    Interpolated between two dense points, which are a quarter of a five minute step apart.
-    Longitude comes back unwrapped, as the spline needed it, and is returned to range.
-    """
+    """Return where along the track `flown` falls, as (lon, lat, sunlit)."""
     if not dense:
         return None
     at = flown * TRACK_STEPS
@@ -94,14 +81,13 @@ def flown_at(dense, flown):
 
 
 def _marker(theme, view, lon, lat, sunlit):
-    """The station: a lit marker in sunlight, a quiet one in shadow, over a soft halo."""
+    """Draw the station: a lit marker in sunlight, a quiet one in shadow, over a halo."""
     x, y = view.at(lon, lat)
     pen = theme.accent if sunlit else theme.dim
     was = screen.clip
     screen.clip = view.box
 
-    # Built once and re-aimed: a circle is a path of thirty-odd points to allocate for the
-    # sake of moving it a pixel.
+    # Built once and re-aimed: a circle is a path of thirty-odd points to allocate.
     global _parts
     if _parts is None:
         _parts = (shape.circle(vec2(0, 0), HALO),
@@ -125,14 +111,7 @@ def _marker(theme, view, lon, lat, sunlit):
 
 
 def _smoothed(points):
-    """The ISS ground track, resampled to a curve through every point the host sent.
-
-    Five minutes of orbit is twenty-odd degrees of longitude, and the samples drawn as chords
-    show as a fan of straight lines. Catmull-Rom, as the graph pages use.
-
-    Longitude is unwrapped first: the run crosses the date line, and a spline through 179
-    then -179 would swing back round the whole world to get there.
-    """
+    """Return the ISS ground track, resampled to a curve through every point sent."""
     lons, lats, lit = [], [], []
     turns = 0.0
     for lon, lat, sunlit in points:
@@ -152,7 +131,7 @@ def _smoothed(points):
 
 
 def _curve(state, points):
-    """The smoothed track, rebuilt only when the host sends a new run."""
+    """Return the smoothed track, rebuilt only when the host sends a new run."""
     key = (len(points), points[0], points[-1])
     if state.get("curve_for") != key:
         state["curve_for"] = key
@@ -160,21 +139,16 @@ def _curve(state, points):
 
 
 def _track(theme, view, state, points, flown):
-    """The ground track, split at `flown`, the index the host currently reports.
-
-    Drawn as a stroked path per stretch: one open contour is 0.08ms plus its edges, where
-    seventy-six lines are 0.08ms each.
-    """
+    """Return the ground track, split at `flown`, the index the host reports."""
     if len(points) < 2:
         return
     _curve(state, points)
     dense = state["curve"]
     cut = max(0, min(len(dense) - 1, int(flown * TRACK_STEPS)))
 
-    # The stroked shapes are kept until the run, the split or the projection moves - the
-    # camera to the nearest pixel, since below that it is the same picture. Stroking is the
-    # dear half: an open contour of 77 points becomes an outline of four times that, six
-    # times a frame.
+    # The stroked shapes are kept until the run, the split or the projection moves.
+    # Stroking is the dear half: an open contour of 77 points becomes an outline of four
+    # times that, six times a frame.
     drawn_for = (state["curve_for"], cut, int(view.lon * view.scale),
                  int(view.lat * view.scale), int(view.scale * 100.0))
     if state.get("runs_for") != drawn_for:
@@ -194,11 +168,7 @@ def _track(theme, view, state, points, flown):
 
 
 def _project(view, dense, cut):
-    """The ground track as stroked shapes, one per run drawn the same way.
-
-    Projected into one buffer that outlives the frame and stroked out of slices of it. A vec2
-    a point and a list a run would be 77 objects. Same idiom as draw.line.
-    """
+    """Return the ground track as stroked shapes, one per run drawn the same way."""
     global _path
     wanted = len(dense) * 2
     if len(_path) < wanted:
@@ -238,7 +208,7 @@ def _project(view, dense, cut):
 
 
 def _band(theme, where, aboard, at=None, note="waiting for the feed"):
-    """The strip under the map: how high, how fast, in sun or shadow, and who is aboard."""
+    """Draw the strip under the map: how high, how fast, in sun or shadow, and the crew."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
     # The header's underline accent, so the track band reads as part of the furniture.
@@ -254,8 +224,7 @@ def _band(theme, where, aboard, at=None, note="waiting for the feed"):
     draw.blit_label(altitude, look.SIZE_BIG, theme.ink, look.PAD, BAND_TOP + 3)
     left = look.PAD + draw.text_width(altitude, look.SIZE_BIG) + 10
 
-    # Sunlight is the one state among the numbers, so it is drawn in the theme's accent
-    # colour.
+    # Sunlight is the one state among the numbers, so it takes the theme's accent.
     sunlit = at[2] if at else where.get("sunlit", True)
     lit = "in sunlight" if sunlit else "in shadow"
     pen = draw.readable(theme.accent, theme.panel, theme.ink) if sunlit else theme.dim
@@ -274,7 +243,7 @@ def _band(theme, where, aboard, at=None, note="waiting for the feed"):
 
 
 def _grouped(value):
-    """27600 as "27 600". MicroPython's format has no thousands separator to ask for."""
+    """Format 27600 as "27 600". MicroPython's format has no thousands separator."""
     digits = f"{value:.0f}"
     out = ""
     while len(digits) > 3:
@@ -284,7 +253,7 @@ def _grouped(value):
 
 
 def _where_text(lat, lon):
-    """"51.6N 30.2E", or "position unknown"."""
+    """Format "51.6N 30.2E", or "position unknown"."""
     if lat is None or lon is None:
         return "position unknown"
     return (f"{abs(lat):.1f}{'N' if lat >= 0 else 'S'} "

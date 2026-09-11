@@ -1,9 +1,4 @@
-"""System stats from a host PC, drawn on a Badgeware badge.
-
-No `__version__` here: pyproject.toml names the version and the installed
-distribution carries it, so `version()` reads the one that is actually installed
-rather than a second copy that can disagree with it.
-"""
+"""System stats from a host PC, drawn on a Badgeware badge."""
 
 import os
 import sys
@@ -18,23 +13,17 @@ def version():
         return "unknown"
 
 
-# Windows opens a console window for every child a GUI app starts, and a tray is one: a
-# black box flashes up while an extension installs. subprocess.CREATE_NO_WINDOW, named
-# here so nothing has to import subprocess to say it.
+# Windows opens a console window for every child a GUI app starts, and a tray is one.
+# subprocess.CREATE_NO_WINDOW, named here so nothing has to import subprocess to say it.
 NO_WINDOW = {"creationflags": 0x08000000} if os.name == "nt" else {}
 
 # What a packaged app spawns itself as to be pip. There is no interpreter in a bundle to
-# run `-m pip` with, and the app is the nearest thing to one.
+# run `-m pip` with.
 PIP_VERB = "--be-pip"
 
 
 def bundled():
-    """Whether this is a packaged app, where `sys.executable` is the app binary.
-
-    A briefcase bundle leaves no marker, so the tell is the executable: a
-    Python, or something else. It matters twice. Running it with `-m pip` starts a second
-    copy of the app, and a login entry has to name the app itself.
-    """
+    """Return whether this is a packaged app, where `sys.executable` is the app binary."""
     if getattr(sys, "frozen", False):
         return True
     beside = os.path.dirname(sys.executable or "")
@@ -42,6 +31,6 @@ def bundled():
         return False
     # A console script's launcher sits beside the interpreter it runs, which
     # `statsbadge-tray.exe` in a venv's Scripts is. A bundle's binary has no such
-    # neighbour: its Python is somewhere else inside the app.
+    # neighbour.
     return not any(os.path.exists(os.path.join(beside, name)) for name in
                    ("python.exe", "pythonw.exe", "python3", "python"))

@@ -1,22 +1,4 @@
-"""Extensions: a pip install away from a new page.
-
-An extension is a normal package advertising a `statsbadge.sources` entry point. It
-contributes a source, and optionally badge-side Python that the server pushes across, so
-a page can animate at 45fps instead of being a picture fetched over the wire.
-
-    [project.entry-points."statsbadge.sources"]
-    weather = "statsbadge_weather:Weather"
-
-The class is a `sources.base.Source` with two extras:
-
-    badge_module     path to a .py to install into the app's `pages/` directory
-    badge_assets     paths to further files the badge side needs, an .af icon font among them
-    badge_page       the page descriptor the config UI should offer
-    badge_recipes    pages with their settings already picked, for the UI's Quick Add
-
-Anything under a group the frame already names is merged; an extension may also add a
-top-level group.
-"""
+"""Extensions: a pip install away from a new page."""
 
 import os
 import sys
@@ -28,15 +10,7 @@ GROUP = "statsbadge.sources"
 
 
 def load(config=None, state_dir=None, geocoder=None):
-    """Every installed extension that loads cleanly.
-
-    `state_dir` is where each one's store is kept, one file per extension named after it.
-    Without one they get a store that keeps what they learn in memory, which suits a
-    one-shot load: `install` builds these only to ask what badge modules they ship.
-
-    `geocoder` is shared by every extension: one lookup for the install, not one per
-    extension asking.
-    """
+    """Return every installed extension that loads cleanly."""
     config = config or {}
     disabled = set(config.get("disabled_extensions", ()))
     loaded = []
@@ -58,9 +32,8 @@ def load(config=None, state_dir=None, geocoder=None):
                   file=sys.stderr)
             continue
         source.name = getattr(source, "name", entry.name)
-        # Namespaced by the entry point name rather than by whatever the class calls itself:
-        # the entry point is what pip installed and what --without names, so it is the one
-        # thing that cannot collide with another extension's.
+        # Namespaced by the entry point name rather than by whatever the class calls
+        # itself: the entry point is what pip installed and what --without names.
         source.store = state.for_source(state_dir, entry.name)
         if geocoder is not None:
             source.geocode = geocoder
@@ -86,11 +59,7 @@ def _entries():
 
 
 def describe(disabled=()):
-    """Every discovered extension and how far it got, whether or not it loaded.
-
-    A pip install that did not take is otherwise invisible until a page fails to turn
-    up, so this reports the failure instead of skipping it the way load() does.
-    """
+    """Return every discovered extension and how far it got, whether or not it loaded."""
     found = []
     for entry in _entries():
         record = {"name": entry.name, "version": _version(entry), "loaded": False,
@@ -98,7 +67,7 @@ def describe(disabled=()):
                   "error": None, "disabled": entry.name in disabled}
         try:
             cls = entry.load()
-        except Exception as exc:  # noqa: BLE001  any import failure is worth reporting
+        except Exception as exc:  # noqa: BLE001
             record["error"] = f"{type(exc).__name__}: {exc}"
             found.append(record)
             continue
@@ -115,18 +84,12 @@ def describe(disabled=()):
 
 
 def versions():
-    """The distribution version behind each entry point, by entry point name."""
+    """Return the distribution version behind each entry point, by entry point name."""
     return {entry.name: _version(entry) for entry in _entries()}
 
 
 def forget(names):
-    """Drop these extensions' modules, so the next import reads what is on disk now.
-
-    Returns the names it could do it for. An upgrade builds a new generation and puts it on
-    sys.path, but a package already imported stays imported: the version read off the
-    metadata would be the new one and the code, including the badge module the installer
-    pushes, the old one.
-    """
+    """Drop these extensions' modules, so the next import reads what is on disk now."""
     roots = {entry.name: _root(entry) for entry in _entries()}
     dropped = []
     for name in names:
@@ -141,7 +104,7 @@ def forget(names):
 
 
 def _root(entry):
-    """The top-level package an entry point names, or "" where it names nothing."""
+    """Return the top-level package an entry point names, or "" where it names nothing."""
     named = getattr(entry, "module", None) or str(getattr(entry, "value", "")).split(":")[0]
     return named.split(".")[0]
 
@@ -152,7 +115,7 @@ def _version(entry):
 
 
 def catalogue():
-    """The published extensions, from catalogue.toml, in the order it names them."""
+    """Return the published extensions, from catalogue.toml, in the order it names them."""
     import tomllib
     from importlib import resources
     text = resources.files(__package__).joinpath("catalogue.toml").read_text(encoding="utf-8")
@@ -163,11 +126,7 @@ def catalogue():
 
 
 def offered(installed=None, wanted=(), disabled=()):
-    """The catalogue with each entry's state, then anything installed it does not name.
-
-    `wanted` is `extensions.txt`, so an extension asked for but absent reads as adrift
-    rather than as never having been asked for.
-    """
+    """Return the catalogue with each entry's state, then anything installed it does not name."""
     from . import tooling
     present = {record["name"]: record for record in
                (describe() if installed is None else installed)}
@@ -195,11 +154,7 @@ def offered(installed=None, wanted=(), disabled=()):
 
 
 def badge_modules(sources):
-    """The badge-side files the installer should push, as (name, path) pairs.
-
-    Modules and their assets together: the installer copies both into the app's ext/
-    directory, and load_extensions() imports only the .py it finds there.
-    """
+    """Return the badge-side files the installer should push, as (name, path) pairs."""
     files = []
     for source in sources:
         name = getattr(source, "name", "ext")
@@ -212,18 +167,13 @@ def badge_modules(sources):
 
 
 def model_groups(sources):
-    """Every frame group the loaded extensions declare, keyed by group name.
-
-    Read off each source and not its class, so one that discovers its groups - a domain
-    per site an account holds - has them offered as soon as they are set. A later
-    source declaring a group an earlier one already has adds its fields to it.
-    """
+    """Return every frame group the loaded extensions declare, keyed by group name."""
     declared = {}
     for source in sources:
         for name, group in (getattr(source, "groups", None) or {}).items():
             into = declared.setdefault(name, {"label": name, "fields": {}})
-            # Everything the group declares, `fields` apart: that one is merged so
-            # two sources can each contribute to a group.
+            # Everything the group declares, `fields` apart: that one is merged so two
+            # sources can each contribute to a group.
             for key, value in group.items():
                 if key != "fields" and value is not None:
                     into[key] = value
@@ -232,12 +182,7 @@ def model_groups(sources):
 
 
 def group_owners(sources):
-    """Which source each declared group came from, by the name the UI should head it with.
-
-    A picker groups the sources it offers by whoever provides them, and the frame is flat:
-    `cf_pinout_xyz` says nothing about being Cloudflare's. Only the groups an extension
-    declared are in here, so anything missing is the host measuring itself.
-    """
+    """Return which source each declared group came from, by the name to head it with."""
     owners = {}
     for source in sources:
         name = getattr(source, "name", "ext")
@@ -248,11 +193,7 @@ def group_owners(sources):
 
 
 def settings_schema(sources):
-    """What each loaded extension can be told, keyed by extension name.
-
-    The config UI builds its fields from this, so an extension that declares nothing
-    gets no section and cannot be configured from the browser.
-    """
+    """Return what each loaded extension can be told, keyed by extension name."""
     schema = {}
     for source in sources:
         declared = getattr(source, "settings", ()) or ()
@@ -262,12 +203,7 @@ def settings_schema(sources):
 
 
 def page_settings_schema(sources):
-    """What an extension's pages can be told, keyed by page kind.
-
-    Keyed by kind and not by extension, since the config UI is editing a page and a page
-    carries its kind. An extension contributing two kinds can declare settings once and
-    have both carry them.
-    """
+    """Return what an extension's pages can be told, keyed by page kind."""
     schema = {}
     for source in sources:
         declared = getattr(source, "page_settings", ()) or ()
@@ -281,47 +217,31 @@ def page_settings_schema(sources):
 
 
 def configure_pages(sources, pages):
-    """Hand each source the configured pages of its own kinds.
-
-    So a source can do per-page work - one weather lookup per place on the badge -
-    without knowing anything about the layout beyond its own pages.
-    """
+    """Hand each source the configured pages of its own kinds."""
     for source in sources:
         kinds = {page.get("kind") for page in badge_pages([source])}
         mine = [page for page in (pages or ()) if page.get("kind") in kinds]
         try:
             source.pages(mine)
-        except Exception as exc:  # noqa: BLE001  one source must not stop the others
+        except Exception as exc:  # noqa: BLE001
             print(f"statsbadge: extension {getattr(source, 'name', '?')!r} rejected its "
                   f"pages: {exc}", file=sys.stderr)
 
 
 def configure(sources, settings):
-    """Hand each source its own block of stored settings.
-
-    A source that raises is recorded and left alone: one extension refusing a setting
-    must not stop the others taking theirs.
-
-    An empty block is skipped, not passed on. `Source.configure` merges, so there would be
-    nothing in it to apply, and every extension here zeroes its fetch timers when told, so
-    calling it would refetch on a save that changed something else. A field is cleared by
-    arriving as null, not by being left out.
-    """
+    """Hand each source its own block of stored settings."""
     for source in sources:
         block = (settings or {}).get(getattr(source, "name", ""), {})
         if not block:
             continue
         try:
             source.configure(block)
-        except Exception as exc:  # noqa: BLE001  a bad setting is the source's problem
+        except Exception as exc:  # noqa: BLE001
             source.note_fault(exc)
 
 
 def recipes(sources):
-    """Ready-made pages contributed by extensions, for the config UI's Quick Add.
-
-    Namespaced by the source, so two extensions can both ship a "clock".
-    """
+    """Return ready-made pages contributed by extensions, for the config UI's Quick Add."""
     found = []
     for source in sources:
         name = getattr(source, "name", "ext")
@@ -329,8 +249,8 @@ def recipes(sources):
             entry = dict(recipe)
             entry["name"] = f"{name}.{entry.get('name') or 'pages'}"
             entry["from_extension"] = name
-            # On the pages too, which is what `prune` reads to keep a page whose fields are
-            # the extension's and absent from the model's list.
+            # On the pages too, which is what `prune` reads to keep a page whose fields
+            # are the extension's and absent from the model's list.
             entry["pages"] = [{"from_extension": name, **page}
                               for page in entry.get("pages") or ()]
             found.append(entry)
@@ -338,7 +258,7 @@ def recipes(sources):
 
 
 def badge_pages(sources):
-    """Page descriptors contributed by extensions, for the config UI to offer."""
+    """Return page descriptors contributed by extensions, for the config UI to offer."""
     pages = []
     for source in sources:
         page = getattr(source, "badge_page", None)

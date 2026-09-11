@@ -1,24 +1,10 @@
-"""Turning a picture off the internet into something a badge can hold and a theme can own.
-
-A source hands over the bytes and gets back a small indexed PNG:
-
-    a content weighted crop, keeping the subject through a cut to a fixed shape
-    levelled and ordered-dithered, so four colours read as a picture
-    an indexed PNG at 2 or 4 bits a pixel, which is what makes it small enough to send
-
-What travels is indices, not colours. The file's palette is a grey ramp and the badge
-assigns its theme's over the top, so one image suits every badge and arrives in the
-colours of the page around it. Quantising to a theme here would send the wrong colours
-to the second badge.
-
-Pillow does the decoding.
-"""
+"""Turning a picture off the internet into something a badge can hold."""
 
 import struct
 import zlib
 
-# Low is a thumbnail beside a message, high a picture with a page to itself. Portrait and
-# landscape are the same pixels turned over, so a caller picks by the space it has.
+# Low is a thumbnail beside a message, high a picture with a page to itself. Portrait
+# and landscape are the same pixels turned over.
 SIZES = {
     ("low", "portrait"): (48, 64),
     ("low", "landscape"): (64, 48),
@@ -27,12 +13,11 @@ SIZES = {
 }
 
 # Greys per preset, which sets the PNG's bit depth. Four colours is two bits; eight has
-# to be four, PNG having no three-bit depth, at twice the pixel cost.
+# to be four, PNG having no three-bit depth.
 LEVELS = {"low": 4, "high": 8}
 DEPTHS = {4: 2, 8: 4}
 
-# The energy map's long edge. The crop steps by the original divided by this, which is
-# finer than anything visible on a 64px thumbnail.
+# The energy map's long edge. The crop steps by the original divided by this.
 ENERGY_LONG = 96
 
 # Ordered dithering, 4x4. Error diffusion at four colours changes completely between two
@@ -55,10 +40,7 @@ class ImagingError(Exception):
 
 
 def thumbnail(data, preset="low", orientation="landscape"):
-    """`data` as an indexed PNG of the chosen preset. Bytes in, bytes out.
-
-    Raises `ImagingError` for anything that is not a picture this can read.
-    """
+    """Return `data` as an indexed PNG of the chosen preset. Bytes in, bytes out."""
     from PIL import Image
 
     if (preset, orientation) not in SIZES:
@@ -83,13 +65,7 @@ def thumbnail(data, preset="low", orientation="landscape"):
 
 
 def _best_crop(grey, aspect):
-    """The window of `aspect` holding the most going on, as a crop box.
-
-    A picture cut to a fixed shape by the middle loses whatever was not in the middle, which
-    on a photograph is usually the subject. Edges are the cheapest stand-in for interest
-    there is, and integrating them over every candidate window is one pass with a prefix sum
-    rather than a search.
-    """
+    """Return the window of `aspect` holding the most going on, as a crop box."""
     from PIL import Image, ImageFilter
 
     width, height = grey.size
@@ -105,8 +81,8 @@ def _best_crop(grey, aspect):
     if (want_w, want_h) == (width, height):
         return (0, 0, width, height)
 
-    # A small copy to score on: which part of a photograph is interesting needs no more than
-    # 96px to decide.
+    # A small copy to score on: which part of a photograph is interesting needs no more
+    # than 96px to decide.
     scale = ENERGY_LONG / float(max(width, height))
     small = grey.resize((max(1, int(width * scale)), max(1, int(height * scale))),
                         Image.BILINEAR).filter(ImageFilter.FIND_EDGES)
@@ -129,7 +105,7 @@ def _best_crop(grey, aspect):
 
 
 def _densest(weights, band):
-    """Where a window of `band` holds the most, as an index into `weights`."""
+    """Return where a window of `band` holds the most, as an index into `weights`."""
     band = max(1, min(len(weights), band))
     running = sum(weights[:band])
     best, at = running, 0
@@ -141,12 +117,7 @@ def _densest(weights, band):
 
 
 def _levelled(pixels, count):
-    """The picture stretched onto its own range, as a list of 0-255.
-
-    A photograph off a feed rarely uses the whole range, and at four levels one that does not
-    is a picture in two of them. The ends are clipped first so a specular highlight does not
-    define white on its own.
-    """
+    """Return the picture stretched onto its own range, as a list of 0-255."""
     if not count:
         return []
     histogram = [0] * 256
@@ -173,20 +144,15 @@ def _levelled(pixels, count):
 
 
 def _dithered(pixels, width, height, levels):
-    """0-255 brightnesses as `levels` indices, ordered dithered.
-
-    The threshold moves with the position and not with the error so far. The same picture
-    always comes out the same way, and two frames of nearly the same picture differ only
-    where the picture does, which matters when the result travels on a change.
-    """
+    """Return 0-255 brightnesses as `levels` indices, ordered dithered."""
     top = levels - 1
     out = bytearray(width * height)
     for y in range(height):
         row = BAYER[y & 3]
         base = y * width
         for x in range(width):
-            # Applied in the gap between two levels, which keeps it a texture and not noise over
-            # the whole picture.
+            # Applied in the gap between two levels, which keeps it a texture and not
+            # noise over the whole picture.
             nudged = pixels[base + x] * top / 255.0 + (row[x & 3] / BAYER_N - 0.5)
             index = int(nudged + 0.5)
             out[base + x] = 0 if index < 0 else top if index > top else index
@@ -194,12 +160,7 @@ def _dithered(pixels, width, height, levels):
 
 
 def _png(indices, width, height, levels):
-    """An indexed PNG, at the fewest bits a pixel the level count allows.
-
-    The palette is a grey ramp and is not the point: the badge assigns its theme's over the
-    top. It is written evenly spaced so the file is a picture in its own right - a preview in
-    a browser, or a look at what was actually sent.
-    """
+    """Return an indexed PNG, at the fewest bits a pixel the level count allows."""
     depth = DEPTHS[levels]
     per_byte = 8 // depth
     rows = bytearray()

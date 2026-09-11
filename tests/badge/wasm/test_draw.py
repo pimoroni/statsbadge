@@ -43,8 +43,9 @@ class ColumnWidth(unittest.TestCase):
 
 
 class SplitPages(unittest.TestCase):
-    """Anything round takes its centre and radius from look.py, so paging between a
-    gauge, a ring stack and a clock face moves nothing under the reader."""
+    """Anything round takes its centre and radius from look.py, so paging between a gauge,
+    a ring stack and a clock face moves nothing under the reader.
+    """
 
     def test_four_rings_fit_the_radius_a_single_gauge_draws_in(self):
         innermost = look.DIAL_OUTER - 4 * draw.RING_BAND - 3 * draw.RING_GAP
@@ -60,8 +61,7 @@ class SplitPages(unittest.TestCase):
 
 
 class Fitting(unittest.TestCase):
-    """`fit` shortens one line to a width, for a name off a feed that is whatever
-    length it is."""
+    """`fit` shortens one line to a width, for a name off a feed of any length."""
 
     def setUp(self):
         draw.prepare()
@@ -80,8 +80,7 @@ class Fitting(unittest.TestCase):
         self.assertTrue(short.endswith("..."), short)
 
     def test_a_string_that_cannot_be_cut_to_fit_comes_back_whole(self):
-        """Nothing of the name is worse than too much of it, and an ellipsis alone is
-        not a name."""
+        """Nothing of the name is worse than too much of it, and an ellipsis is not a name."""
         self.assertEqual(draw.fit("cpu", look.SIZE_SMALL, 1), "cpu")
 
 
@@ -99,8 +98,9 @@ class Flowing(unittest.TestCase):
         return body_pixels()
 
     def test_a_message_too_long_for_its_block_stays_inside_it(self):
-        """Whether the firmware truncates or clips does not show in the pixels:
-        both cut the same prefix at the same place. What is checked is the block."""
+        """Whether the firmware truncates or clips does not show in the pixels: both cut
+        the same prefix at the same place. What is checked is the block.
+        """
         blank = self.band("")
         long = self.band(" ".join(["a post that runs on and on"] * 40))
         self.assertTrue(differing(blank, long) > 0.001, "the long message drew nothing")
@@ -111,8 +111,9 @@ class Flowing(unittest.TestCase):
 
 
 class Chrome(unittest.TestCase):
-    """The title rule and the current pip take the second accent, which leaves the first
-    for what a reading is drawn in."""
+    """The title rule and the current pip take the second accent, leaving the first for
+    what a reading is drawn in.
+    """
 
     def setUp(self):
         draw.prepare()
@@ -140,8 +141,7 @@ class Chrome(unittest.TestCase):
                             "the current pip is drawn in the first accent")
 
     def test_a_palette_with_one_accent_still_draws_it(self):
-        """A palette naming no second gets the accent again, and the chrome is the same
-        either way."""
+        """A palette naming no second gets the accent again, and the chrome is unchanged."""
         one = look.from_palette("t", {
             "bg": (16, 16, 20), "panel": (28, 28, 34), "ink": (235, 235, 240),
             "dim": (130, 130, 140), "grid": (60, 60, 70), "accent": (0, 200, 120),
@@ -218,8 +218,8 @@ class ClockFaces(unittest.TestCase):
                             f"the {face} face drew {moved * 100:.2f}% of its band")
             drawn[face] = band
 
-        # Each is a different drawing, so two names in the table pointing at one
-        # rendering is the same silent default the tables exist to avoid.
+        # Each is a different drawing, so two names in the table pointing at one rendering
+        # is the same silent default the tables exist to avoid.
         names = list(drawn)
         for first in range(len(names)):
             for second in range(first + 1, len(names)):
@@ -228,8 +228,9 @@ class ClockFaces(unittest.TestCase):
                     f"{names[first]} and {names[second]} draw the same face")
 
     def test_a_face_with_its_own_livery_takes_the_theme_when_asked(self):
-        """`themed` on a page swaps a face's colours for the theme's, and the two dials are
-        cached apart rather than one standing in for the other."""
+        """`themed` swaps a face's colours for the theme's, and the two dials are cached
+        apart rather than one standing in for the other.
+        """
         clockface = self.clockface()
         drawn = {}
         for themed in (False, True):
@@ -240,8 +241,8 @@ class ClockFaces(unittest.TestCase):
             drawn[themed] = body_pixels()
         self.assertTrue(drawn[False] != drawn[True], "themed drew the face's own livery")
 
-        # Drawn again in the order they were not baked in, in case the cache hands one over
-        # for the other.
+        # Drawn again in the order they were not baked in, in case the cache hands one
+        # over for the other.
         for themed in (True, False):
             page = {"kind": "clockface", "id": "clock1", "title": "Clock",
                     "face": "amsterdam", "themed": themed}
@@ -262,11 +263,7 @@ class ClockFaces(unittest.TestCase):
 
 
 class StopToGo(unittest.TestCase):
-    """A face with a `sweep` steps its second hand out early and waits short of twelve.
-
-    `_ease` reads a firmware tween, so this belongs here rather than beside the arithmetic
-    in tests/badge/.
-    """
+    """A face with a `sweep` steps its second hand out early and waits short of twelve."""
 
     def setUp(self):
         import sys
@@ -301,7 +298,7 @@ class StopToGo(unittest.TestCase):
             was = now
 
     def moved(self, over, span=0.02):
-        """How far the second hand travels over `span` of a step, starting `over` into one."""
+        """Return how far the hand travels over `span` of a step, starting `over` into one."""
         at = self.step * (20 + over)
         return self.angles(at + self.step * span)[2] - self.angles(at)[2]
 
@@ -310,11 +307,7 @@ class StopToGo(unittest.TestCase):
         self.assertAlmostEqual(self.angles(self.step * 21)[2], 126.0, places=3)
 
     def test_the_hand_runs_at_a_sinusoidal_speed(self):
-        """Fastest between two marks, slowest across one, and never stopped.
-
-        A speed of 1 - r*cos puts (1 + r) / (1 - r) between the two, which is what the
-        ripple means and holds for whatever it is set to.
-        """
+        """Fastest between two marks, slowest across one, and never stopped."""
         ripple = self.clockface.STEP_RIPPLE
         over_mark, mid_step = self.moved(0.0), self.moved(0.49)
         self.assertTrue(over_mark > 0.0, over_mark)

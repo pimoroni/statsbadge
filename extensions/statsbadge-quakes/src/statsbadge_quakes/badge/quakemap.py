@@ -1,11 +1,4 @@
-"""The badge side of the quakes extension: a world map showing recent notable quakes.
-
-Installed into the app's `ext/` directory by `statsbadge install` and imported by the app,
-at which point it registers itself.
-
-The coastlines and their pens are the app's `worldmap`. This draws an epicentre per event,
-reticle rings over the one the camera is on, and the band naming it.
-"""
+"""The badge side of the quakes extension: a world map of recent notable quakes."""
 
 import math
 import time
@@ -55,7 +48,7 @@ _state = {}
 
 
 def _dot_px(mag):
-    """How wide an epicentre is drawn, by magnitude."""
+    """Return how wide an epicentre is drawn, by magnitude."""
     return DOT_PX_LOW + (DOT_PX_HIGH - DOT_PX_LOW) * _mag_fraction(mag)
 
 
@@ -88,7 +81,7 @@ def _travel(view, active, elapsed):
 
 
 def _others(theme, view, events, active):
-    """The rest of the set, sized by magnitude."""
+    """Draw the rest of the set, sized by magnitude."""
     was = screen.clip
     screen.clip = view.box
     screen.pen = theme.dim
@@ -103,7 +96,7 @@ def _others(theme, view, events, active):
 
 
 def _reticle(theme, view, event):
-    """Rings leaving the epicentre, coloured by magnitude off the theme's colour ramp."""
+    """Draw rings leaving the epicentre, coloured by magnitude off the theme's ramp."""
     x, y = view.at(event["lon"], event["lat"])
     pen = theme.at(_mag_fraction(event["mag"]))
     now = time.ticks_ms()
@@ -129,10 +122,10 @@ def _reticle(theme, view, event):
 
 
 def _band(theme, event, index, total, note="waiting for the feed"):
-    """The strip under the map: how big, where, how deep and how long ago."""
+    """Draw the strip under the map: how big, where, how deep and how long ago."""
     screen.pen = theme.panel
     screen.rectangle(rect(0, BAND_TOP, look.W, BAND_H))
-    # Use the header's underline accent colour to make the band look like UI.
+    # The header's underline accent, so the band reads as furniture.
     screen.pen = theme.accent_b
     screen.rectangle(rect(0, BAND_TOP, look.W, 1))
     if event is None:

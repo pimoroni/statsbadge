@@ -1,11 +1,4 @@
-"""Install the badge app and its credentials over USB.
-
-`/system` is read-only to MicroPython, so the app goes on through USB mass storage mode,
-which means a reset and a volume appearing. `/state` can be written over the REPL, so
-re-pairing or moving to a new host needs no remount.
-
-Pushing the app asks first, since it resets the badge.
-"""
+"""Install the badge app and its credentials over USB."""
 
 import glob
 import hashlib
@@ -22,8 +15,7 @@ from . import NO_WINDOW, repl
 
 APP_NAME = "stats"
 STATE_FILE = "/state/stats.json"
-# Where an extension's badge modules go under the app directory. The app names it too,
-# and records there why it is not `pages`.
+# Where an extension's badge modules go under the app directory.
 EXT_DIR = "ext"
 
 
@@ -32,16 +24,11 @@ class InstallError(Exception):
 
 
 class PortBusy(InstallError):
-    """Something else has the port, so the badge was never reached.
-
-    Told apart from the rest because it changes what happens on the way out. Every
-    command hard resets the badge in a `finally`, talking to the REPL leaving it on a
-    blank screen, and a port that was never opened has nothing to hand back.
-    """
+    """Something else has the port, so the badge was never reached."""
 
 
-# MICROPY_HW_USB_PID from each board definition. The vendor id is Raspberry Pi's, shared
-# with every other RP2350 board and with a debug probe attached to one.
+# MICROPY_HW_USB_PID from each board definition. The vendor id is Raspberry Pi's,
+# shared with every other RP2350 board.
 BADGE_VID = 0x2E8A
 BADGE_PIDS = frozenset((
     0x1100,     # Badger 2350
@@ -51,7 +38,7 @@ BADGE_PIDS = frozenset((
 
 
 def find_ports():
-    """Serial ports that are a Badgeware board."""
+    """Return serial ports that are a Badgeware board."""
     from serial.tools import list_ports
 
     return sorted(port.device for port in list_ports.comports()
@@ -70,8 +57,8 @@ def _exec(port, script, timeout=30):
         raise InstallError(str(exc) or f"the badge on {port} did not answer") from None
 
 
-# What `os.uname()[4]` reports on the board this app is for. Checked before `import
-# badgeware`, which on anything else fails as a traceback naming an unknown module.
+# What `os.uname()[4]` reports on the board this app is for. Checked before
+# `import badgeware`, which on anything else fails as a traceback.
 BOARD = "Tufty 2350"
 
 _BOARD_SCRIPT = (
@@ -97,7 +84,7 @@ def check_board(port):
 
 
 def badge_id(port):
-    """The badge's uid, the name it signs under."""
+    """Return the badge's uid, the name it signs under."""
     check_board(port)
     out = _exec(port, "import badgeware; print(badge.uid)")
     uid = out.strip().splitlines()[-1].strip() if out.strip() else ""
@@ -122,20 +109,13 @@ def badge_info(port):
         "model": lines[-4],
         "uid": lines[-3],
         "app_installed": lines[-2] == "True",
-        # The bytecode version this firmware loads. Only the badge reports it, so a precompiled
-        # app is checked here too.
+        # The bytecode version this firmware loads. Only the badge reports it.
         "mpy": int(lines[-1] or 0),
     }
 
 
 def check_precompiled(directory, badge_mpy):
-    """Refuse an .mpy build the attached badge cannot load.
-
-    A wrong bytecode version does not fail at install. It fails at import, on the badge,
-    after the launcher has already started the app, as a crash dialog with no clue in it.
-    The header is 'M', version, reserved, flags, and (flags << 8) | version is exactly
-    what the firmware reports as sys.implementation._mpy.
-    """
+    """Refuse an .mpy build the attached badge cannot load."""
     path = pathlib.Path(directory)
     if not path.is_dir():
         raise InstallError(f"no such directory: {directory}. Build one with "
@@ -168,20 +148,14 @@ def check_precompiled(directory, badge_mpy):
 
 def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
                 name=None):
-    """Add this host to the app's config in /state, which MicroPython can write.
-
-    Credentials are keyed on the server's id and not its address, so the badge can
-    follow a host that changes address. This *merges* instead of replacing, and a badge
-    paired with two machines keeps both. `seq` has to match the counter the
-    server recorded, or the badge's first request lands outside the replay window.
-    """
+    """Add this host to the app's config in /state, which MicroPython can write."""
     entry = json.dumps({
         "host": host, "port": http_port, "secret": secret,
         "name": name or host, "seq": seq,
     })
     key = server_id or "unknown"
-    # Read-modify-write, so a pairing with another host survives and an older flat file is
-    # upgraded in place.
+    # Read-modify-write, so a pairing with another host survives and an older flat file
+    # is upgraded in place.
     script = (
         "import os, json\n"
         "try:\n"
@@ -203,8 +177,8 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
         "                            'name': data.get('host'),\n"
         "                            'seq': data.get('seq', 0)}\n"
         f"entry = json.loads({entry!r})\n"
-        # A stand-in entry with the same secret is this host before it was identified. Folded
-        # in at the higher counter, or it reads as a second machine.
+        # A stand-in entry with the same secret is this host before it was identified.
+        # Folded in at the higher counter, or it reads as a second machine.
         "old = hosts.get('unknown')\n"
         "if old and old.get('secret') == entry['secret']:\n"
         "    entry['seq'] = max(entry.get('seq', 0), old.get('seq', 0))\n"
@@ -224,8 +198,8 @@ def write_state(port, host, http_port, secret, badge_uid, seq=0, server_id=None,
 
 APP_DIR = f"/system/apps/{APP_NAME}"
 
-# Hashed on the badge: the whole app directory in 45ms, with only the digests crossing
-# the wire. Marker-prefixed, to pick the lines out of whatever else the REPL said.
+# Hashed on the badge, with only the digests crossing the wire. Marker-prefixed, to
+# pick the lines out of whatever else the REPL said.
 _HASH_SCRIPT = """
 import hashlib, os, binascii
 def walk(base, prefix=''):
@@ -251,10 +225,7 @@ print('HEND')
 
 
 def installed_hashes(port):
-    """sha256 of every file in the app directory on the badge, by relative name.
-
-    Empty if the app is not installed.
-    """
+    """Return the sha256 of every file in the app directory on the badge, by name."""
     out = _exec(port, _HASH_SCRIPT % APP_DIR)
     if "HEND" not in out:
         raise InstallError(f"could not read the installed app: {out.strip()}")
@@ -267,7 +238,7 @@ def installed_hashes(port):
 
 
 def desired_hashes(source=None, extra_modules=()):
-    """The same mapping for what an install would put there."""
+    """Return the same mapping for what an install would put there."""
     hashes = {}
     for name, path in app_files(source, extra_modules):
         with open(path, "rb") as handle:
@@ -276,11 +247,7 @@ def desired_hashes(source=None, extra_modules=()):
 
 
 def app_changes(installed, desired):
-    """(added, changed, removed) between what is on the badge and what would be.
-
-    Only prunable names count as removed. A file somebody else put there is no reason
-    to reset the badge.
-    """
+    """Return (added, changed, removed) between what is on the badge and what would be."""
     added = sorted(set(desired) - set(installed))
     changed = sorted(name for name in set(desired) & set(installed)
                      if desired[name] != installed[name])
@@ -290,7 +257,7 @@ def app_changes(installed, desired):
 
 
 def secrets_file(volume):
-    """The badge's secrets.py on its USB volume."""
+    """Return the badge's secrets.py on its USB volume."""
     for candidate in (os.path.join(volume, "system", "secrets.py"),
                       os.path.join(volume, "secrets.py")):
         if os.path.exists(candidate):
@@ -299,7 +266,7 @@ def secrets_file(volume):
 
 
 def wifi_network(port):
-    """The SSID the badge is set to use, over the REPL. Never the password."""
+    """Return the SSID the badge is set to use, over the REPL. Never the password."""
     try:
         out = _exec(port,
                    "import secrets\n"
@@ -313,17 +280,12 @@ def wifi_network(port):
 
 
 # What the firmware takes as a WiFi country, mirrored from the badge's own secrets.py.
-# One outside this set leaves the radio unable to associate, which reaches the screen as an
-# app that cannot reach the host.
+# One outside this set leaves the radio unable to associate.
 REGIONS = ("us", "cuba", "eu", "moldova", "lebanon", "egypt", "chile", "australia", "nz")
 
 
 def regions_on(volume):
-    """The regions the badge's secrets.py lists, or the mirrored list.
-
-    The file is the authority, and it carries the list in the comment beside REGION. A
-    firmware that learns another one is then not refused by a constant here.
-    """
+    """Return the regions the badge's secrets.py lists, or the mirrored list."""
     path = secrets_file(volume)
     if path:
         with open(path, encoding="utf-8") as handle:
@@ -338,7 +300,7 @@ def regions_on(volume):
 
 
 def wifi_network_on(volume):
-    """The SSID secrets.py names on a mounted volume, or None."""
+    """Return the SSID secrets.py names on a mounted volume, or None."""
     path = secrets_file(volume)
     if not path:
         return None
@@ -347,7 +309,7 @@ def wifi_network_on(volume):
 
 
 def wifi_configured(volume):
-    """Whether secrets.py already names a network."""
+    """Return whether secrets.py already names a network."""
     return bool(wifi_network_on(volume))
 
 
@@ -357,12 +319,7 @@ def _secret_value(text, key):
 
 
 def write_secrets(volume, ssid, password, region=None, timezone=None):
-    """Set WiFi details in the badge's secrets.py, leaving the rest of the file alone.
-
-    This is the file the badge's error message points at, so it is the one
-    to change; a /secrets.py on the internal filesystem would take precedence over it and
-    silently defeat that edit.
-    """
+    """Set WiFi details in the badge's secrets.py, leaving the rest of the file alone."""
     path = secrets_file(volume)
     if not path:
         raise InstallError(f"no secrets.py on {volume}")
@@ -379,8 +336,7 @@ def write_secrets(volume, ssid, password, region=None, timezone=None):
     with open(path, encoding="utf-8") as handle:
         text = handle.read()
     for key, value in values.items():
-        # json.dumps, not repr: a valid Python literal either way, and it matches the
-        # double quotes the file ships with.
+        # json.dumps, not repr: it matches the double quotes the file ships with.
         literal = json.dumps(value)
 
         def replace(match, key=key, literal=literal):
@@ -389,7 +345,7 @@ def write_secrets(volume, ssid, password, region=None, timezone=None):
             return f"{key} = {literal}  {comment}" if comment else f"{key} = {literal}"
 
         # A function as the replacement, which keeps a backslash in a password from
-        # being read as an escape and written out broken.
+        # being read as an escape.
         text, count = re.subn(rf"^[ \t]*{key}[ \t]*=[^\n#]*(\s*#[^\n]*)?$",
                               replace, text, count=1, flags=re.M)
         if not count:
@@ -412,7 +368,7 @@ def read_state(port):
 
 
 def secret_in_state(state, server_id=None):
-    """The secret a read-back state holds for a host, whatever format it is in."""
+    """Return the secret a read-back state holds for a host, whatever format it is in."""
     if not state:
         return None
     hosts = state.get("hosts")
@@ -424,11 +380,7 @@ def secret_in_state(state, server_id=None):
 
 
 def app_source_dir():
-    """Where the badge app lives.
-
-    Inside the package, so a checkout and an installed wheel are the same path: uv_build
-    ships everything under the module directory, icon included.
-    """
+    """Return where the badge app lives."""
     here = os.path.dirname(os.path.abspath(__file__))
     app = os.path.join(here, "badge_app")
     if not os.path.isfile(os.path.join(app, "__init__.py")):
@@ -437,12 +389,7 @@ def app_source_dir():
 
 
 def packaged_mpy_dir():
-    """The precompiled app shipped inside the package, or None.
-
-    CI compiles into badge_app/mpy/ before the wheel is built, so a pip install carries
-    both: the .py sources, which load on any firmware, and bytecode for the firmware
-    current at release. A local `uv build` has no mpy-cross and produces neither.
-    """
+    """Return the precompiled app shipped inside the package, or None."""
     app = pathlib.Path(app_source_dir()) / "mpy"
     if app.is_dir() and any(app.glob("*.mpy")):
         return str(app)
@@ -450,16 +397,7 @@ def packaged_mpy_dir():
 
 
 def choose_app_source(explicit, force_source, badge_mpy):
-    """Which directory to install from. Returns (source or None for .py, note).
-
-    Bytecode only loads on the firmware it was built for, so a packaged build that does
-    not match the badge is skipped and not refused, the sources still working.
-
-    A bundled build whose sources have moved on is skipped for the same reason. It loads
-    perfectly well and is the older program, which shows up as an edit that had no effect.
-    An explicitly named directory is only warned about, since naming it is asking for
-    it, and its sources are not expected to be these ones.
-    """
+    """Return which directory to install from, as (source or None for .py, note)."""
     if force_source:
         return None, "installing sources, as asked"
     if explicit:
@@ -488,12 +426,7 @@ def choose_app_source(explicit, force_source, badge_mpy):
 
 
 def enter_mass_storage(port):
-    """Ask the badge to present its USB volume.
-
-    The `mass_storage` app does this from the launcher; doing it over the REPL means
-    importing the same `_msc` the double-tap path uses. The badge resets, so the
-    serial port goes away and comes back.
-    """
+    """Ask the badge to present its USB volume."""
     try:
         _exec(port, "import _msc", timeout=10)
     except InstallError:
@@ -536,12 +469,7 @@ OTHER_BUILD_DIRS = ("build/mpy",)
 
 
 def _current_build_elsewhere():
-    """A build directory that does match the sources, if one is lying around.
-
-    The build script used to default somewhere the installer does not read, so "rebuild
-    it" could be followed to the letter and change nothing. Saying where the good build is
-    beats leaving that to be worked out.
-    """
+    """Return a build directory that does match the sources, if one is lying around."""
     for candidate in OTHER_BUILD_DIRS:
         path = pathlib.Path(candidate)
         if path.is_dir() and not _stale_modules(path):
@@ -554,11 +482,7 @@ def _current_build_elsewhere():
 
 
 def _stale_modules(built_dir):
-    """Names of modules whose source has changed since the build.
-
-    By content, not mtime: a wheel's files all carry extraction-time stamps, so an mtime
-    comparison there is noise. A build with no BUILD_INFO cannot be checked.
-    """
+    """Return the names of modules whose source has changed since the build."""
     try:
         info = json.loads((pathlib.Path(built_dir) / "BUILD_INFO").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -577,17 +501,12 @@ def _stale_modules(built_dir):
     return stale
 
 
-# MPY_VERSION and BUILD_INFO are notes from the precompile. They stay on the host.
-# `mpy` is the built copy sitting inside the source directory.
+# MPY_VERSION and BUILD_INFO are notes from the precompile and stay on the host.
 NOT_APP_FILES = ("__pycache__", "MPY_VERSION", "BUILD_INFO", "mpy")
 
 
 def app_files(source=None, extra_modules=()):
-    """What an install puts on the badge, as (name relative to the app dir, path).
-
-    The one place naming which files belong, so the copy, the change check and the
-    prune cannot disagree.
-    """
+    """Return what an install puts on the badge, as (name relative to the app dir, path)."""
     source = source or app_source_dir()
     files = []
     for name in sorted(os.listdir(source)):
@@ -605,11 +524,7 @@ def app_files(source=None, extra_modules=()):
 
 
 def copy_app(volume, source=None, extra_modules=()):
-    """Copy the app onto a mounted badge volume, and remove what does not belong.
-
-    `source` may be a precompiled .mpy directory instead of the package's, which is how
-    the CI-built bytecode gets installed.
-    """
+    """Copy the app onto a mounted badge volume, and remove what does not belong."""
     apps = os.path.join(volume, "system", "apps")
     if not os.path.isdir(apps):
         apps = os.path.join(volume, "apps")
@@ -633,12 +548,7 @@ COPY_WAIT = 0.5
 
 
 def _copy(path, destination):
-    """Copy one file onto the badge, and check it arrived whole.
-
-    The first write to a volume that has only just mounted comes back as ENXIO, leaving an
-    empty file behind instead of an error. An app whose `__init__.py` is zero bytes starts
-    and does nothing at all.
-    """
+    """Copy one file onto the badge, and check it arrived whole."""
     wrong = None
     for attempt in range(COPY_TRIES):
         if attempt:
@@ -660,12 +570,7 @@ PRUNABLE = (".py", ".mpy", ".png", ".af")
 
 
 def prune_app(target, keep):
-    """Delete app files that are not part of the install. Returns their names.
-
-    A .py left beside an .mpy takes precedence over it, so a source install followed by
-    a bytecode one silently undoes the precompile unless those sources go. Extension
-    modules in ext/ have the same problem: one left behind keeps registering its page.
-    """
+    """Delete app files that are not part of the install, returning their names."""
     removed = []
     for name in _existing_app_files(target):
         if name in keep or not name.endswith(PRUNABLE):
@@ -679,7 +584,7 @@ def prune_app(target, keep):
 
 
 def _existing_app_files(target):
-    """Names, relative to the app directory, of what is on the badge now."""
+    """Return the names, relative to the app directory, of what is on the badge now."""
     found = []
     for name in sorted(os.listdir(target)):
         path = os.path.join(target, name)
@@ -691,11 +596,7 @@ def _existing_app_files(target):
 
 
 def wait_for_port(timeout=40, previous=None):
-    """Wait for a badge's REPL to come back after a reset, and return its port.
-
-    Enumeration takes a moment and the port may come back under a different name, so
-    this polls, the previous path being no guide.
-    """
+    """Wait for a badge's REPL to come back after a reset, and return its port."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         for port in find_ports():
@@ -711,15 +612,7 @@ def wait_for_port(timeout=40, previous=None):
 
 
 def hard_reset(port, settle=True):
-    """Reset the badge so it boots as it normally would. True if it was reset.
-
-    Talking over the REPL interrupts whatever the badge was running, leaving it at a bare
-    prompt on a blank screen; a reset runs `main.py` again.
-
-    Skipped for a port that would not open, whether something else holds it or there is
-    nothing there: the badge was never interrupted. Waiting for a port that stayed put
-    costs fifteen seconds before announcing a reset that never happened.
-    """
+    """Reset the badge so it boots as it normally would. True if it was reset."""
     try:
         repl.reset(port, timeout=10)
     except repl.NotOpened:
@@ -733,12 +626,7 @@ def hard_reset(port, settle=True):
 
 
 def wait_for_enumeration(previous=None, timeout=15):
-    """Wait for the badge's port to come back, without talking to it.
-
-    wait_for_port confirms the REPL answers, which is right when something is about to
-    be written but not after a reset meant to hand the badge back: the check would
-    interrupt whatever has just started. So this only watches enumeration.
-    """
+    """Wait for the badge's port to come back, without talking to it."""
     deadline = time.time() + timeout
     # Wait for the previous path to go, or it reads as the badge already being back.
     if previous:
@@ -753,13 +641,7 @@ def wait_for_enumeration(previous=None, timeout=15):
 
 
 def eject(volume, port=None):
-    """Send the badge back out of disk mode, and take the volume with it.
-
-    An eject is what the firmware watches for: the SCSI stop reboots it. Windows has no
-    eject command to run, so the badge is reset over the REPL, which stays up alongside
-    the volume. The flush before it is the point. A reset pulls the volume out from under
-    Windows, and anything left in the write cache goes with it, half a file at a time.
-    """
+    """Send the badge back out of disk mode, and take the volume with it."""
     system = platform.system()
     try:
         if system == "Darwin":

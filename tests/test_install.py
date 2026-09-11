@@ -59,8 +59,8 @@ def test_write_secrets_keeps_the_rest_of_the_file():
         assert install.secrets_file(volume) == path
         assert not install.wifi_configured(volume)
 
-        # A backslash and quotes in the password, which a regex replacement writes back out
-        # as escapes.
+        # A backslash and quotes in the password, which a regex replacement writes back
+        # out as escapes.
         password = 'p@ss "w0rd"\\'
         install.write_secrets(volume, "Some Network", password, region="us")
 
@@ -193,15 +193,15 @@ def test_a_file_that_did_not_write_is_not_left_on_the_badge():
 
 def test_the_installer_and_the_app_name_the_same_extension_directory(badge_constants):
     """The directory the installer writes badge modules into is the one the app adds to
-    sys.path."""
+    sys.path.
+    """
     assert badge_constants("app.py")["EXT_DIR"] == install.EXT_DIR, install.EXT_DIR
     # `pages` would be a directory shadowing the app's pages.py on sys.path.
     assert install.EXT_DIR != "pages"
 
 
 def test_one_writer_owns_the_badge_state_file():
-    """net.Config is the only writer inside the app, and the installer merges rather than
-    replaces."""
+    """net.Config is the only writer inside the app, and the installer merges."""
     # Two processes write it, so the path is a literal at each end and only a check holds
     # them together.
     app_dir = pathlib.Path(install.app_source_dir())
@@ -237,8 +237,8 @@ def test_a_badge_is_called_behind_from_what_it_was_last_seen_holding():
         pushed.record(directory, "badge1", desired)
         assert pushed.behind(directory, "badge1")["behind"] is False
 
-        # Bytecode and sources hash differently, so a build this package cannot find again
-        # is left uncompared.
+        # Bytecode and sources hash differently, so a build this package cannot find
+        # again is left uncompared.
         pushed.record(directory, "badge2", desired, source="/nowhere/mpy")
         assert pushed.behind(directory, "badge2") is None
 
@@ -267,8 +267,7 @@ def test_wifi_details_are_kept_unless_replacing_them_was_asked_for():
 
 
 def test_a_region_the_firmware_does_not_know_is_refused():
-    """A region is checked against the list in secrets.py, and nothing is written if it
-    fails."""
+    """A region is checked against the list in secrets.py, and nothing is written if it fails."""
     # It sets the radio's country: an unknown one cannot associate, and all the badge can
     # report is that it cannot reach the host.
     template = ('WIFI_SSID = ""\nWIFI_PASSWORD = ""\n'

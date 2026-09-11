@@ -1,15 +1,4 @@
-"""Talking to the host: a step-per-frame HTTP client, and request signing.
-
-The client is a generator advanced a slice at a time from the draw loop, so a poll
-never blocks a frame. Measured against a server that writes each response in one go:
-9ms a request warm, and the worst single step is 0.6ms. See DEVELOPMENT.md - the
-firmware's `fetch.py` is not used because it is broken on this build and wedges
-permanently on the first socket error.
-
-Signing is HMAC-SHA256 over method, path, a counter and a digest of the body. The
-counter only ever goes up, and the host rejects anything it has already seen, so a
-captured command cannot be replayed.
-"""
+"""Talking to the host: a step-per-frame HTTP client, and request signing."""
 
 import binascii
 import hashlib
@@ -19,17 +8,13 @@ import socket
 import time
 
 # Everything this app keeps across a power cycle, under the firmware's /state/<app>.json.
-# Config is the only writer, so nothing has to merge against anything else.
 STATE_FILE = "/state/stats.json"
 
-# Where `statsbadge serve` broadcasts. beacon.py holds the same number, and a check on
-# the host holds the two together.
+# Where `statsbadge serve` broadcasts. beacon.py holds the same number.
 BEACON_PORT = 8421
-# How often it goes out. The packet carries the host's figure as `every_ms`; this is what
-# to assume before one has been heard.
+# What to assume before a host's own `every_ms` has been heard.
 BEACON_EVERY_MS = 2000
-# A scan has to outlast the interval, or a host that has just broadcast is missed and the
-# list silently comes back short.
+# A scan has to outlast the interval, or a host that has just broadcast is missed.
 DISCOVER_MS = 2 * BEACON_EVERY_MS
 
 # How long to wait on a whole request before giving up and dropping the socket.
@@ -39,17 +24,15 @@ STEP_BUDGET_US = 2500
 
 IDLE, BUSY, DONE, FAILED = 0, 1, 2, 3
 
-# Written out rather than taken from the errno module, which is one more import at launch
-# and has nothing to call EAI_NONAME: that arrives from getaddrinfo and is not an errno.
+# Written out rather than imported from errno, which has nothing to call EAI_NONAME:
+# that arrives from getaddrinfo and is not an errno.
 ECONNABORTED, ECONNRESET, ETIMEDOUT = 103, 104, 110
 ECONNREFUSED, EHOSTUNREACH, ENOENT, EAI_NONAME = 111, 113, 2, -2
 # What a connect that has only been started reports, before it has finished.
 EINPROGRESS, EALREADY = 115, 114
 
-# What this firmware actually reports, checked on the board. Nothing listening comes back
-# as ECONNRESET and not ECONNREFUSED, lwIP surfacing the RST that way. An address with
-# nothing at it gives ECONNABORTED on the non-blocking path and ETIMEDOUT on a blocking
-# one, so both are worded for what they mean.
+# What this firmware reports, checked on the board: nothing listening comes back as
+# ECONNRESET, and an address with nothing at it as ECONNABORTED or ETIMEDOUT.
 _NET_ERRORS = {
     ECONNRESET: "no server answering",
     ECONNABORTED: "could not reach the host",
@@ -70,7 +53,7 @@ _HTTP_ERRORS = {
 
 
 def error_text(exc):
-    """A socket error in words. Keeps the number when there is nothing better to say."""
+    """Return a socket error in words, keeping the number when there is nothing better."""
     code = exc.args[0] if getattr(exc, "args", None) else None
     if code in _NET_ERRORS:
         return _NET_ERRORS[code]
@@ -82,7 +65,7 @@ def http_error_text(status):
 
 
 def _hmac_sha256(key, message):
-    """HMAC-SHA256. MicroPython has hashlib but no hmac, and this is all it takes."""
+    """Return an HMAC-SHA256. MicroPython has hashlib but no hmac."""
     block = 64
     if len(key) > block:
         key = hashlib.sha256(key).digest()
@@ -100,18 +83,7 @@ def sign(secret_hex, method, path, seq, body=b""):
 
 
 class Config:
-    """Every host this badge is paired with, persisted in /state.
-
-    Credentials are keyed on the server's id, not its address, so a host that gets a
-    new DHCP lease is still the same host: the beacon carries the id, and the address
-    is just the latest place it was seen. Several hosts can be paired at once and the
-    badge uses whichever is reachable, which makes a desk with two machines
-    work without re-pairing.
-
-    Each host keeps its own counter, because the counter is a conversation between one
-    badge and one server. The counter is written back once it has advanced past a
-    margin, not on every request: flash is finite and a badge polls all day.
-    """
+    """Every host this badge is paired with, persisted in /state."""
 
     SEQ_FLUSH = 64
 
@@ -136,8 +108,8 @@ class Config:
             self.hosts = data["hosts"]
             self.active = data.get("active")
         elif data.get("secret"):
-            # One flat host, as older installs and `--state-only` wrote it. Keep it
-            # under a stand-in id until a beacon or /v1/hello carries the real one.
+            # One flat host, as older installs and `--state-only` wrote it. Held under a
+            # stand-in id until a beacon or /v1/hello carries the real one.
             self.hosts = {
                 "unknown": {
                     "host": data.get("host"),
@@ -152,18 +124,14 @@ class Config:
         if self.active not in self.hosts:
             self.active = next(iter(self.hosts), None)
         # Start above whatever was last written: anything in flight when the badge lost
-        # power never made it to flash.
+        # power never reached flash.
         for entry in self.hosts.values():
             entry["seq"] = int(entry.get("seq", 0)) + self.SEQ_FLUSH
         self._flushed = self.seq
         return self.paired
 
     def save(self):
-        """Write our keys back, leaving anything else in the file alone.
-
-        A key an older build wrote and this one knows nothing of survives, so downgrading
-        keeps whatever it kept.
-        """
+        """Write our keys back, leaving anything else in the file alone."""
         try:
             try:
                 import os
@@ -248,11 +216,7 @@ class Config:
         return True
 
     def note_address(self, server_id, host, port, name=None):
-        """Update where a known host lives, after a beacon reports it elsewhere.
-
-        This is the DHCP case: same server, new address. Nothing else changes, so the
-        secret and the counter carry over untouched.
-        """
+        """Update where a known host lives, after a beacon reports it elsewhere."""
         entry = self.hosts.get(server_id)
         if entry is None:
             return False
@@ -305,13 +269,7 @@ class Client:
             self.sock = None
 
     def _connect(self):
-        """Start the connection. `_connecting` is what waits for it.
-
-        A blocking connect to a host that is not there sits in the handshake until lwIP
-        gives up, which is far past the request timeout and cannot be interrupted. The
-        draw loop is inside that call, so the screen holds still and a press on HOME is
-        never sampled: the badge looks hung with no way into the hosts menu.
-        """
+        """Start the connection. `_connecting` is what waits for it."""
         info = socket.getaddrinfo(self.config.host, self.config.port,
                                  0, socket.SOCK_STREAM)[0]
         sock = socket.socket(info[0], info[1], info[2])
@@ -326,14 +284,12 @@ class Client:
         self.sock = sock
 
     def _connecting(self):
-        """Yield until the socket is open. The step's own timeout is what gives up."""
+        """Yield until the socket is open."""
         poller = select.poll()
         poller.register(self.sock, select.POLLOUT)
         while True:
             yield
             for _sock, flags in poller.poll(0):
-                # Which failure it was does not come back from a poll, so this is worded
-                # for what it means to somebody looking at the badge.
                 if flags & (select.POLLERR | select.POLLHUP):
                     raise OSError(ECONNABORTED)
                 if flags & select.POLLOUT:
@@ -411,11 +367,7 @@ class Client:
             self.close()
 
     def step(self):
-        """Advance the current request. True when it has finished, either way.
-
-        Drains for a short budget rather than exactly one yield, because a response
-        needs a handful of reads and a frame has time for them.
-        """
+        """Advance the current request, returning True when it has finished either way."""
         if self._gen is None:
             return True
         deadline = time.ticks_add(time.ticks_us(), STEP_BUDGET_US)
@@ -461,14 +413,7 @@ class Client:
                 return False
 
     def _resync(self):
-        """Take the counter the host named as next.
-
-        A 401 over a counter means the two ends disagree - the badge rebooted and
-        lost count, or it was provisioned against a different starting point. The
-        host only offers `next_seq` once the signature has checked out, so it is the
-        authority, and one request puts them back in step. Without this the counter
-        has to be guessed at, which fails in whichever direction was not guessed.
-        """
+        """Take the counter the host named as next."""
         payload = self.json() or {}
         wanted = payload.get("next_seq")
         if wanted is None:
@@ -490,16 +435,7 @@ class Client:
 
 
 def discover(timeout_ms=DISCOVER_MS, wanted=None):
-    """Listen for host beacons, so nobody has to type an IP address.
-
-    `statsbadge serve` broadcasts a small JSON beacon; this collects whatever answers
-    within the timeout. Returns a list of dicts with `id`, `host`, `port` and `name`.
-    Credentials are keyed on the id, so a host that changed address is still recognised.
-
-    `wanted` is a set of server ids to stop at, for a caller after a host it holds
-    credentials for. The scan runs long enough to catch a beacon that has only just gone out,
-    and ends the moment one of those ids answers.
-    """
+    """Listen for host beacons, so nobody has to type an IP address."""
     found = []
     sock = None
     try:
@@ -522,8 +458,8 @@ def discover(timeout_ms=DISCOVER_MS, wanted=None):
                 continue
             entry = {
                 "id": beacon.get("id"),
-                # Trust the packet's source address over anything in the payload: it
-                # is where replies will actually reach.
+                # Trust the packet's source address over the payload: it is where
+                # replies reach.
                 "host": address[0],
                 "port": int(beacon.get("port", 8420)),
                 "name": beacon.get("host") or address[0],
@@ -546,21 +482,19 @@ def discover(timeout_ms=DISCOVER_MS, wanted=None):
 
 
 def hello(host, port, timeout_ms=4000):
-    """Ask an unpaired host who it is. Returns a dict or None."""
+    """Ask an unpaired host who it is, returning a dict or None."""
     reply, _ = _get_json(host, port, "/v1/hello", timeout_ms)
     return reply
 
 
 def enrol(host, port, badge_id, name=None, timeout_ms=8000):
-    """Ask a host to be let in. Returns (reply, error); reply has `code` to display and
-    `request_id` to poll with."""
+    """Ask a host to be let in, returning (reply, error)."""
     return _post_json(host, port, "/v1/enrol",
                       {"badge_id": badge_id, "name": name or badge_id}, timeout_ms)
 
 
 def enrol_status(host, port, request_id, timeout_ms=6000):
-    """Poll a request. Returns (reply, error); reply has `status`, and on approval the
-    `secret`, the host `id` and `name`."""
+    """Poll a pairing request, returning (reply, error)."""
     return _get_json(host, port, f"/v1/enrol/{request_id}", timeout_ms)
 
 
@@ -579,8 +513,7 @@ def _get_json(host, port, path, timeout_ms):
 
 
 def _exchange_once(host, port, request, body, timeout_ms):
-    """One blocking request on its own socket. Setup screens only, where blocking is
-    fine."""
+    """Make one blocking request on its own socket, for the setup screens."""
     sock = None
     try:
         info = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0]

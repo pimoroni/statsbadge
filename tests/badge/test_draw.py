@@ -103,7 +103,8 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
 
 def test_a_slide_is_a_style_the_ui_offers(ui):
     """`Slides`, `Rendering` and `DrawingElsewhere` in tests/badge/wasm/test_app.py drive
-    the movement itself."""
+    the movement itself.
+    """
     for style in layout.SLIDE_STYLES:
         assert layout.validate({"slide": style,
                                 "pages": layout.DEFAULT_PAGES})["slide"] == style
@@ -155,21 +156,19 @@ def test_the_big_gauge_can_show_the_whole_ramp(ui):
     # Fractions of a whole turn, so a 270 degree gauge lays the ramp over three quarters.
     assert [pos for pos, _ in fill.stops] == [pos * turn for pos, _ in theme.ramp]
     assert [pen for _, pen in fill.stops] == [pen for _, pen in theme.ramp]
-    # The track is the same ramp, dimmed by the colours themselves: a gradient brush ignores
-    # screen.alpha.
+    # The track is the same ramp, dimmed by the colours themselves: a gradient brush
+    # ignores screen.alpha.
     assert [pos for pos, _ in track.stops] == [pos for pos, _ in fill.stops]
     assert {pen.a for _, pen in track.stops} == {draw.TRACK_ALPHA}
     assert {pen.a for _, pen in fill.stops} == {255}
 
-    # A field read backwards still ends at the reading's colour: a battery at 100% is a
-    # machine doing well.
+    # A field read backwards still ends at the reading's colour.
     backwards, _ = draw.swept_pens(theme, look.DIAL_C, look.DIAL_OUTER, True)
     positions = [pos for pos, _ in backwards.stops]
     assert positions == sorted(positions), positions
     assert backwards.stops[0][1] == theme.ramp[-1][1], "it does not start at the hot end"
     assert backwards.stops[-1][1] == theme.ramp[0][1]
 
-    # Built once a theme: a pair from OKLCH stops is 3.4ms, moving the geometry is 12us.
     assert draw.swept_pens(theme, look.DIAL_C, look.DIAL_OUTER)[0] is fill
     draw.clear_cache()
     assert draw.swept_pens(theme, look.DIAL_C, look.DIAL_OUTER)[0] is not fill, (
@@ -204,16 +203,14 @@ def test_a_smoothed_graph_still_reads_as_the_data():
     assert len(dense) == (len(values) - 1) * 4 + 1, len(dense)
     for index, value in enumerate(values):
         assert abs(dense[index * 4] - value) < 1e-9, (index, dense[index * 4], value)
-    # Overshoot is clamped, or an area fill runs under the baseline where a reading touched
-    # zero.
+    # Overshoot is clamped, or an area fill runs under the baseline.
     assert min(dense) >= min(values) and max(dense) <= max(values), (
         min(dense), max(dense))
 
     # Fewer than three points cannot be interpolated.
     assert draw.curve([0.5, 0.6], steps=4) == [0.5, 0.6]
 
-    # `curve_steps` returns 1 for a plot drawn straight: switch off, too few samples, or a
-    # plot too short for a curve to show.
+    # `curve_steps` returns 1 for a plot drawn straight.
     assert draw.curve_steps(250, 150, len(values)) > 1
     assert draw.curve_steps(250, 22, len(values)) == 1
     assert draw.curve_steps(250, 150, 2) == 1
@@ -223,8 +220,8 @@ def test_a_smoothed_graph_still_reads_as_the_data():
     finally:
         draw.SMOOTH = True
 
-    # An axis with no full scale steps to round numbers rather than fitting the window, or
-    # it rescales on every poll as samples arrive and leave. A byte rate steps in 1024s.
+    # An axis with no full scale steps to round numbers rather than fitting the window.
+    # A byte rate steps in 1024s.
     assert draw.axis_top(900, "down_bps") == 1024
     assert draw.axis_top(6 * 1024 ** 2, "down_bps") == 10 * 1024 ** 2
     assert draw.axis_top(41943040, "down_bps") == 50 * 1024 ** 2
@@ -237,14 +234,12 @@ def test_a_smoothed_graph_still_reads_as_the_data():
         assert draw.axis_top(peak * 1024 ** 2, "down_bps") == 10 * 1024 ** 2, peak
 
     # A gap in a ring is a None, and comparing one against a float is a TypeError.
-    # Every widget draws a gap at the axis, decided in one place.
     assert draw.flat([0.5, None, 0.25]) == [0.5, 0.0, 0.25]
     same = [0.5, 0.25]
     assert draw.flat(same) is same, "a series with no gaps is copied every frame"
     # The series as the ring hands it over, gaps and all.
     gappy = [0.5, None, 0.25, 0.9, None, None, 0.1, 0.4]
     assert draw._lay_out(60, 40, 250, 150, gappy, 1.0, None) > 0  # noqa: SLF001
-
 
 
 def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
@@ -291,8 +286,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
     assert 'bindCheck("plotanim", "plot_animation")' in ui.script, \
         "it is not bound"
 
-    # A graph keeps room on its right for the samples still coming in. Laid across the
-    # width alone it shifts left and leaves a gap that grows and snaps back.
+    # A graph keeps room on its right for the samples still coming in.
     flat = [50.0] * 48
 
     def ends(shift, lead=1):
@@ -310,8 +304,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
             _first, last = ends(lead * tenth / 10.0, lead)
             assert last >= 310 - 0.01, (lead, tenth, last)
 
-    # A series too short to walk is drawn where it stands: two samples put a whole plot
-    # width in one step.
+    # A series too short to walk is drawn where it stands.
     for samples in range(2, draw.WALK_MIN):
         held = [50.0] * samples
         written = draw._lay_out(60, 40, 250, 150, held, 100.0, 0.75)
@@ -322,8 +315,7 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
     assert draw._points[0] < 60 - 0.01, "a series long enough to walk is standing still"
     assert walked
 
-    # A sparkline is drawn still at any setting: 22px tall with a sample every
-    # 5px, it has nowhere to scroll.
+    # A sparkline is drawn still at any setting: 22px tall with a sample every 5px.
     assert pages.SCROLLS == ("graph", "trend"), pages.SCROLLS
     assert "spark" in pages.PLOTS, "it still wants a series fetched for it"
     # Two readings, which is all a field with no history has, must still draw.
@@ -335,8 +327,8 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
                for ref in page.get("fields", []) + [page.get("field")] if ref}
     assert badge_constants("app.py")["GRAPH_KEYS"] >= len(plotted), sorted(plotted)
 
-    # A source that supplies its own history runs on a different clock - an hour, for a
-    # domain's traffic - so the collector's spacing would slide it a year an hour.
+    # A source supplying its own history runs on a different clock, so the collector's
+    # spacing would slide it a year an hour.
     try:
         pages.note_series_spacing({"cf_pinout_xyz.requests": {"every_ms": 3600000}})
         pages.PLOT_ANIMATION = True
@@ -370,14 +362,13 @@ def test_sparkline_rows_can_be_told_apart(ui):
         assert f'value="{style}"' in ui.markup, style
 
 
-    # A lift, not the panel colour: a panel can be a different hue as well as a different
-    # level, which on a near-black page draws a stripe of colour.
+    # A lift, not the panel colour: a panel can be a different hue as well as a
+    # different level.
     dark = look.THEMES["dark"]
     assert (dark.stripe.r - dark.bg.r == dark.stripe.g - dark.bg.g
             == dark.stripe.b - dark.bg.b == look.STRIPE), "the band shifts hue"
 
-    # Toward the ink on a dark page and away from it on a pale one: lighten has nowhere to
-    # go on a background that is already near white.
+    # Toward the ink on a dark page and away from it on a pale one.
     pale = look.from_palette("light", themes.written()["light"])
     assert pale.pale and not dark.pale
     assert pale.stripe.r < pale.bg.r and dark.stripe.r > dark.bg.r
@@ -395,7 +386,7 @@ def test_a_symbol_centres_on_the_words_beside_it():
     import draw
     import read_af
 
-    # The placement holds only while an icon's ink is centred in a box sat on the baseline.
+    # The placement holds only while an icon's ink is centred in a box on the baseline.
     # Read through the tool, so a font repacked wide is read as wide.
     fonts = (pathlib.Path(install.app_source_dir()) / "icons.af",
              CLOCK_BADGE / "icons.af")
@@ -420,8 +411,7 @@ def test_a_symbol_centres_on_the_words_beside_it():
 
 
 def test_the_shipped_fonts_are_packed_as_the_metrics_assume(badge_constants):
-    """draw.CAP and draw.ICON_BOX hold only while the fonts keep the proportions they
-    were measured from."""
+    """draw.CAP and draw.ICON_BOX hold only while the fonts keep their measured ratios."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
@@ -435,16 +425,14 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(badge_constants):
     assert abs(cap["bbox_h"] / text["units_per_em"] - draw.CAP) < 0.01, (
         cap["bbox_h"], text["units_per_em"], draw.CAP)
 
-    # The LCD face's digits stand where a capital does, or the clock sizes one of its faces
-    # by numbers that do not describe it.
+    # The LCD face's digits stand where a capital does.
     lcd = read_af.read(str(CLOCK_BADGE / "lcd.af"))
     eight = next(g for g in lcd["glyphs"] if g["codepoint"] == ord("8"))
     assert abs(eight["bbox_h"] / lcd["units_per_em"] - draw.CAP) < 0.01, (
         eight["bbox_h"], lcd["units_per_em"], draw.CAP)
 
-    # The other digital face draws its colon as two circles, at the positions this one's
-    # glyph puts them. The pair sits low and is not symmetric about the digits, so the
-    # numbers are measured and not chosen.
+    # The other digital face draws its colon as two circles. The pair sits low and is not
+    # symmetric about the digits, so the numbers are measured and not chosen.
     clockface = badge_constants(CLOCK_BADGE / "clockface.py")
     at, radius = clockface["COLON_AT"], clockface["COLON_DOT"]
 
@@ -458,8 +446,7 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(badge_constants):
         assert abs((span - centre) / span - drawn) < 0.005, (drawn, centre, span)
         assert abs((max(dot) - min(dot)) / 2.0 / span - radius) < 0.005, dot
 
-    # The digital face draws the app's face at a finer grid, so it has to agree on the cap
-    # it is sized from and the width it is placed by.
+    # The digital face draws the app's face at a finer grid, so it must agree on the cap.
     digits = read_af.read(str(CLOCK_BADGE / "digits.af"))
     assert digits["wide"], "the face that draws digits 84pt tall wants the finer grid"
     for char in "0123456789:":
@@ -474,12 +461,7 @@ def test_the_shipped_fonts_are_packed_as_the_metrics_assume(badge_constants):
 
 
 def test_every_clock_face_the_ui_offers_has_a_renderer(badge_constants):
-    """The face list is host side while the tables are badge side, and the badge cannot be
-    imported here.
-
-    `ClockFaces` in tests/badge/wasm/test_draw.py draws each of them, and checks no two
-    faces draw the same thing.
-    """
+    """The face list is host side while the tables are badge side."""
     Clock = pytest.importorskip("statsbadge_clock").Clock
 
     offered = next(s for s in Clock.page_settings if s["key"] == "face")["options"]
@@ -497,8 +479,7 @@ def test_every_clock_face_the_ui_offers_has_a_renderer(badge_constants):
 
 
 def test_a_notifications_page_sorts_messages_from_counters():
-    """One slot list holds both: a message is a dict carrying `text`, a counter is a
-    number."""
+    """One slot list holds both: a message is a dict carrying `text`, a counter a number."""
     sys.path.insert(0, install.app_source_dir())
     import draw
     import look
@@ -542,9 +523,7 @@ def test_a_notifications_page_sorts_messages_from_counters():
 
 
 def rules_of(css):
-    """Every rule in the sheet, as its full selector and the declarations under it.
-
-    The sheet nests, so a rule's selector is the chain of the ones it sits inside."""
+    """Return every rule in the sheet, as its full selector and the declarations under it."""
     chain, declarations, found, buffer = [], [], [], ""
     for char in css:
         if char == "{":

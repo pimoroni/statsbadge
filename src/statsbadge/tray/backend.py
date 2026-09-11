@@ -1,8 +1,4 @@
-"""Talking to pystray, and working out whether there is anything to talk to.
-
-pystray is imported inside functions. It brings in a toolkit, and on Linux it raises at
-import where no desktop hosts a tray, so `serve` should never touch it.
-"""
+"""Talking to pystray, and working out whether there is anything to talk to."""
 
 import collections
 import importlib.util
@@ -26,22 +22,17 @@ Item = collections.namedtuple(
 # given has to outlive the call that sets it.
 _activation = None
 
-# The alert's own button was clicked, rather than its body. AppKit's
-# NSUserNotificationActivationTypeActionButtonClicked, which is not worth a framework
-# binding for one integer.
+# The alert's own button was clicked, rather than its body:
+# NSUserNotificationActivationTypeActionButtonClicked.
 ACTION_BUTTON = 2
 
-# What each posted alert should do, by the key carried in its userInfo. An alert names one
-# badge waiting, so several can be out at once and each answers for its own.
+# What each posted alert should do, by the key carried in its userInfo. An alert names
+# one badge waiting, so several can be out at once.
 _answers = {}
 
 
 def _activation_delegate():
-    """The notification-centre delegate, built once and kept.
-
-    An Objective-C class cannot be registered under the same name twice, and a collected
-    delegate would leave the alert's buttons dead.
-    """
+    """The notification-centre delegate, built once and kept."""
     global _activation
     if _activation is None:
         from Foundation import NSObject
@@ -82,7 +73,7 @@ LINUX = (
 
 
 def why_not():
-    """What stops a tray working here, or None."""
+    """Return what stops a tray working here, or None."""
     try:
         if importlib.util.find_spec("pystray") is None:
             return INSTALL
@@ -100,7 +91,7 @@ def why_not():
 
 
 def name():
-    """Which pystray backend took, or None."""
+    """Return which pystray backend took, or None."""
     try:
         import pystray
     except Exception:
@@ -140,15 +131,7 @@ class Tray:
         self._mark_template()
 
     def notify(self, message, title=None, on_activate=None, action=None):
-        """Say a badge is waiting, where it can be said properly. Silent where it cannot.
-
-        The icon's attention state and the menu carry the same news, so nothing is lost by
-        staying quiet, and an alert nobody can place is worse than none. What pystray does
-        with one differs by platform: Windows puts a balloon on the icon itself, macOS
-        shells out to `osascript` and has the alert credited to Script Editor, and Linux
-        answers with NotImplementedError. Only the first of those is worth posting, and
-        macOS goes through `_notify_as_app` above when it is a bundle.
-        """
+        """Say a badge is waiting, where it can be said properly. Silent where it cannot."""
         if self._notify_as_app(message, title, on_activate, action):
             return
         if sys.platform == "darwin":
@@ -164,16 +147,7 @@ class Tray:
 
     @staticmethod
     def _notify_as_app(message, title, on_activate=None, action=None):
-        """Post the alert under this app's own name. True where it went out.
-
-        pystray's macOS backend shells out to `osascript`, and macOS credits the alert to
-        Script Editor: it arrives under a name the reader has no reason to trust, and
-        opening it opens Script Editor. Only a bundle has an identity to post under, so a
-        checkout still goes the long way round.
-
-        NSUserNotification is deprecated, and its replacement is in a framework the bundle
-        carries no bindings for. Whatever it does, the osascript path is still below.
-        """
+        """Post the alert under this app's own name. True where it went out."""
         if sys.platform != "darwin" or not bundled():
             return False
         try:
@@ -223,7 +197,7 @@ class Tray:
                                       enabled=entry.enabled, default=entry.default)
 
     def _mark_template(self):
-        """AppKit inverts a template image only. pystray builds the NSImage itself."""
+        """Invert a template image, AppKit doing so only for those. pystray builds it."""
         if not self._template:
             return
         try:

@@ -1,14 +1,4 @@
-"""`socket`, over node's, for the WASM port - which carries no networking at all.
-
-The runner opens the connections with `node:net` and holds them; this side asks after
-them. Node fills its buffers on its own event loop, and the JSPI build yields to that
-loop as the VM runs, so a poll here sees what has arrived since the last one.
-
-Bytes cross as base64, which is the one encoding both sides agree on without argument.
-
-TCP only. A datagram raises: the beacon is the badge's discovery, and answering it here
-would mean a stand-in for a host that is not running.
-"""
+"""`socket`, over node's, for the WASM port, which carries no networking at all."""
 
 import binascii
 
@@ -26,7 +16,7 @@ EINPROGRESS, ECONNABORTED = 115, 103
 
 
 def getaddrinfo(host, port, _family=0, _kind=SOCK_STREAM, *_rest):
-    """The one shape net.py reads. Five fields: family, type, proto, canonname and address."""
+    """The one shape net.py reads: family, type, proto, canonname and address."""
     return [(AF_INET, SOCK_STREAM, 0, "", (host, int(port)))]
 
 
@@ -66,7 +56,7 @@ class socket:
     send = write
 
     def readline(self):
-        """One line, or None while the rest of it is still coming."""
+        """Return one line, or None while the rest of it is still coming."""
         self._fill()
         at = self._held.find(b"\n")
         if at < 0:
@@ -98,7 +88,7 @@ class socket:
         return int(js.sb_state(self._handle)) if self._handle is not None else FAILED
 
     def poll_flags(self, wanted):
-        """The flags `wanted` asks about, as select.poll would report them."""
+        """Return the flags `wanted` asks about, as select.poll would report them."""
         state = self._state()
         flags = 0
         if state & FAILED:
@@ -119,6 +109,6 @@ class socket:
             self._held += binascii.a2b_base64(arrived.encode())
 
 
-# select.poll works on streams the runtime registered, and these are not among them,
-# so the flags live here and select.py drives them.
+# select.poll works on streams the runtime registered, and these are not among them, so
+# the flags live here and select.py drives them.
 POLLIN, POLLOUT, POLLERR, POLLHUP = 1, 4, 8, 16

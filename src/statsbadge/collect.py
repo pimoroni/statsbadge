@@ -1,9 +1,4 @@
-"""Sampling on a timer, so an HTTP request never waits on a sensor.
-
-Several sensors are slow - ioreg is a subprocess, LibreHardwareMonitor is another HTTP
-request - and a badge polls at 1Hz. One background thread samples on an interval and
-requests serve the last frame, so ten badges cost the same as one.
-"""
+"""Sampling on a timer, so an HTTP request never waits on a sensor."""
 
 import importlib
 import threading
@@ -12,12 +7,12 @@ import time
 from . import extensions, geocode, model
 from .sources import discover
 
-# A frame's other values are groups of readings, so a walk over the groups skips these four.
-# app.js hardcodes the same list, JavaScript being unable to import this one, and
+# A frame's other values are groups of readings, so a walk over the groups skips these
+# four. app.js hardcodes the same list, and
 # test_a_frame_is_walked_past_its_own_scalars holds them equal.
 FRAME_SCALARS = ("v", "t", "seq", "slow_rev")
 
-# The fields worth keeping a ring for. Anything a page draws as a graph.
+# The fields worth keeping a ring for.
 _GRAPHED = (
     ("cpu", "pct"), ("cpu", "temp"),
     ("mem", "pct"),
@@ -28,16 +23,14 @@ _GRAPHED = (
 )
 
 # Fields already carrying a list, kept as a ring of lists so a page can plot a lane per
-# element. Rounded and held shorter: twelve-core samples cost twelve times a scalar ring on
-# the wire.
+# element. Rounded and held shorter: twelve-core samples cost twelve times a scalar ring.
 _GRAPHED_SERIES = (
     ("cpu", "cores"),
 )
 SERIES_LEN = 64
 
-# How long a peak left alone takes to halve. Applied against the time between samples, since
-# the interval is a setting: a factor per sample would halve the peak twice as fast at half
-# the rate.
+# How long a peak left alone takes to halve. Applied against the time between samples,
+# since the interval is a setting.
 PEAK_HALF_LIFE_S = 600.0
 # Keeps a quiet link from scaling a trickle to a full ring.
 PEAK_FLOOR = 64 * 1024.0
@@ -53,9 +46,8 @@ class Collector:
         self.state_dir = state_dir
         self.geocoder = geocoder or geocode.Geocoder()
         self.extensions = extensions.load(self.config, state_dir, self.geocoder)
-        # What each was loaded at, so reload_extensions can tell an upgrade from a restart
-        # of the same code. Extensions that a later release supersedes are listed in
-        # `stale`, for a caller that has to say a restart is still wanted.
+        # What each was loaded at, so reload_extensions can tell an upgrade from a
+        # restart of the same code. Superseded extensions are listed in `stale`.
         self.versions = extensions.versions()
         self.stale = []
         extensions.set_home(self.sources + self.extensions, self.config)
@@ -94,12 +86,7 @@ class Collector:
                 pass
 
     def reconfigure(self):
-        """Hand the host config to the sources, and take up any that can run now.
-
-        `available()` runs at startup, so LibreHardwareMonitor is skipped while its server is
-        down or on another port. The `discover` pass below builds those, so a URL typed in
-        the browser reaches a source that startup passed over.
-        """
+        """Hand the host config to the sources, and take up any that can run now."""
         extensions.set_home(self.sources + self.extensions, self.config)
         told = []
         for source in list(self.sources):
@@ -129,16 +116,7 @@ class Collector:
         return told
 
     def reload_extensions(self):
-        """Pick up whatever is installed now. Returns the names loaded.
-
-        entry_points() walks sys.path on every call, so one installed since start is visible
-        without a restart. An extension already loaded is kept as it stands: building it
-        again would throw away what it has fetched and start its clock over.
-
-        One whose version has moved is the exception. Its modules are dropped and it is
-        built again, or the metadata would report the new release while the code, and the
-        badge module the installer compares against, stayed the old one.
-        """
+        """Pick up whatever is installed now, returning the names loaded."""
         importlib.invalidate_caches()
         now = extensions.versions()
         moved = {name for name, version in now.items()
@@ -180,8 +158,7 @@ class Collector:
             try:
                 self.sample_once()
             except Exception:
-                # The collector thread must never die: the fault is on its source and the
-                # the next tick has another go.
+                # The collector thread must never die: the next tick has another go.
                 pass
 
     def sample_once(self):
@@ -208,15 +185,11 @@ class Collector:
         return frame
 
     def _declared(self):
-        """The extension groups, at their current values.
-
-        Recomputed each call: a source that discovers its groups sets them on itself while
-        running.
-        """
+        """Return the extension groups, at their current values."""
         return extensions.model_groups(self.extensions)
 
     def _extra(self, want):
-        """Extension fields flagged with `want`, as (group, field) pairs."""
+        """Return extension fields flagged with `want`, as (group, field) pairs."""
         return tuple(
             (group, field)
             for group, declared in sorted(self._declared().items())
@@ -225,22 +198,12 @@ class Collector:
         )
 
     def slow_groups(self):
-        """The groups whose readings change far slower than a badge polls.
-
-        A domain's traffic is fetched once a minute but sent sixty times, and six of them
-        take a frame from 832 bytes to 4.7KB. A source declares which of its groups are like
-        that, and `/v1/stats` leaves them out of a frame for a badge that already has them.
-        """
+        """Return the groups whose readings change far slower than a badge polls."""
         return {group for group, declared in self._declared().items()
                 if declared.get("slow")}
 
     def slow_part(self, frame=None):
-        """The slow half of a frame: those groups, and the peaks belonging to them.
-
-        A peak is worked out from the reading, so a slow reading's peak moves only when it
-        does. Splitting it out keeps the fast frame small: a peak is 40 bytes of key, and six
-        domains have twelve of them.
-        """
+        """Return the slow half of a frame: those groups, and the peaks belonging to them."""
         frame = self.frame if frame is None else frame
         slow = self.slow_groups()
         part = {group: frame[group] for group in slow if group in frame}
@@ -251,12 +214,7 @@ class Collector:
         return part
 
     def _push_slow_rev(self, frame):
-        """Number the slow half, so a badge can recognise one it already has.
-
-        Compared against the last one, a dict of a few dozen numbers. A source
-        fetching on its own schedule is the only place the moment its readings moved is
-        known.
-        """
+        """Number the slow half, so a badge can recognise one it already has."""
         part = self.slow_part(frame)
         if part != self._slow_last:
             self._slow_last = part
@@ -265,19 +223,14 @@ class Collector:
         frame["slow_rev"] = self._slow_rev
 
     def _push_peaks(self, frame, dt):
-        """Track the high-water mark of each rate, decaying so it follows the machine.
-
-        A fixed full scale cannot suit every link: 100Mbit reads as pegged on a gigabit one
-        and as idle on a slow one. The decay stops an overnight transfer flattening the gauge
-        for as long as the server runs.
-        """
+        """Track the high-water mark of each rate, decaying so it follows the machine."""
         peaked = {f"{group}.{field}": PEAK_FLOOR for group, field in _GRAPHED
                   if field.endswith("_bps")}
         for group, declared in self._declared().items():
             for field, entry in (declared.get("fields") or {}).items():
                 if entry.get("peak"):
-                    # Per field, since the 64KB/s floor below would stop a gauge of requests
-                    # a minute ever moving.
+                    # Per field, since the 64KB/s floor below would stop a gauge of
+                    # requests a minute ever moving.
                     peaked[f"{group}.{field}"] = float(entry.get("peak_floor") or 1.0)
         decay = 0.5 ** (max(dt, 0.0) / PEAK_HALF_LIFE_S)
         for key, floor in peaked.items():
@@ -287,8 +240,7 @@ class Collector:
                 continue
             decayed = self._peaks.get(key, 0.0) * decay
             self._peaks[key] = max(float(value), decayed, floor)
-        # Whatever a source put there stands under these: LibreHardwareMonitor reports how
-        # high each rail has been, which is past guessing here. These are scales for other
+        # Whatever a source put there stands under these. These are scales for other
         # fields, so they go in `peaks`.
         given = dict(frame.get("peaks") or {})
         if self._peaks or given:
@@ -297,12 +249,7 @@ class Collector:
             frame["peaks"] = given
 
     def _push_history(self, frame):
-        """One point per sample per field, aligned to the sample clock.
-
-        A field with nothing in it gets None. A plot reads times off the ring's positions, so
-        leaving a sample out of one ring alone draws an intermittent field's history
-        compressed and mis-timed. A None is also how a plot draws a gap.
-        """
+        """Keep one point per sample per field, aligned to the sample clock."""
         self._history_at = frame["t"]
         for group, field in _GRAPHED + self._extra("graphed"):
             value = _dig(frame, group, field)
@@ -310,8 +257,7 @@ class Collector:
             ring = self._history.get(key)
             if ring is None:
                 if value is None:
-                    # Nothing has ever been read for this field, so no ring of Nones for a
-                    # machine with no such sensor.
+                    # Nothing has ever been read for this field, so no ring of Nones.
                     continue
                 ring = self._history[key] = []
             ring.append(None if value is None else round(float(value), 1))
@@ -344,12 +290,7 @@ class Collector:
             }
 
     def source_series(self, keys=None, points=48):
-        """The rings the sources keep themselves, on whatever spacing they are really on.
-
-        The collector's interval is the rate a sensor is read at; a domain's traffic is
-        reported on its own schedule. So a source that fetches its own history answers for
-        it. One that raises is skipped.
-        """
+        """Return the rings the sources keep themselves, on their own spacing."""
         wanted = set(keys) if keys else None
         found = {}
         for source in self.sources + self.extensions:
@@ -371,17 +312,7 @@ class Collector:
         return found
 
     def history_at(self, keys=None, points=48, spacing=False):
-        """The same rings, plus when they were taken.
-
-        `every_ms` is the spacing and `age_ms` how old the newest point is, so a plot can
-        place every point on a time axis. Ages, so no clocks have to be aligned and the only
-        error left is the trip back.
-
-        Both are the collector's. A source answering for its own history is on another clock,
-        so `spacing` brings its rings with the pair belonging to each. Without it those
-        rings are left out, since under the collector's spacing an hourly series would
-        animate as a per-second one.
-        """
+        """Return the same rings, plus when they were taken."""
         with self._lock:
             wanted = keys or list(self._history)
             series = {
@@ -403,14 +334,7 @@ class Collector:
         return reply
 
     def capabilities(self):
-        """Which fields this host actually produced, for the config UI to offer.
-
-        Derived from the live frame, so a laptop with no fan header does not offer a fan
-        page. For a group the model does not define, a field has to be both in the frame and
-        named in the declaration. A source may put anything in a group it owns, as the quake
-        feed carries the events its page draws from; only what it declared counts as a
-        reading somebody can point a dial at.
-        """
+        """Return which fields this host actually produced, for the config UI to offer."""
         frame = self.latest()
         declared = self._declared()
         available = {}
@@ -423,8 +347,8 @@ class Collector:
             elif isinstance(value, dict) and value:
                 keys = value if offered is None else (
                     key for key in value if key in offered)
-                # `<field>_names` labels the lanes of the field beside it, which the badge
-                # reads for itself. Nothing points a dial at one.
+                # `<field>_names` labels the lanes of the field beside it, which the
+                # badge reads for itself.
                 available[group] = sorted(key for key in keys
                                           if not key.endswith("_names"))
         described = model.describe()
@@ -438,9 +362,8 @@ class Collector:
             ],
             # Which extension each declared group belongs to; an unlisted group is the host's.
             "group_source": extensions.group_owners(self.extensions),
-            # What has a history ring. A graph of anything else draws the live value twice, a
-            # flat line whatever the machine is doing. Collector rings and source-answered
-            # rings both count.
+            # What has a history ring. A graph of anything else draws the live value
+            # twice. Collector rings and source-answered rings both count.
             "graphed": [f"{group}.{field}" for group, field in
                         _GRAPHED + self._extra("graphed") + self._extra("history")],
             "series_fields": [f"{group}.{field}"
@@ -452,12 +375,7 @@ class Collector:
 
 
 def _merge_declared(described, declared):
-    """Fold the extensions' groups into the contract the config UI reads.
-
-    The model's tables cover the built-in groups, so what an extension declares is merged in
-    beside them. A picker then names its fields and units as it names everything else. A
-    gauge is offered the ones with a top end.
-    """
+    """Fold the extensions' groups into the contract the config UI reads."""
     for group, entry in declared.items():
         fields = entry.get("fields") or {}
         described["groups"][group] = sorted(fields)

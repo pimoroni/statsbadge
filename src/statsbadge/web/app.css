@@ -1,10 +1,8 @@
 /* -- the faces the badge draws with -------------------------------------- */
 
 /* The preview canvases and the wordmark; the rest of the UI keeps the system stack.
-   Lexend draws the badge's text, and the site's title, so the header here is set in the
-   same face rather than in whatever the system offers in capitals. The symbols are subset
-   from Material Symbols against ci/badge-icons.txt, the corpus badge_app/icons.af is built
-   from, so the two cannot come to show different pictures. */
+   The symbols are subset from Material Symbols against ci/badge-icons.txt, the corpus
+   badge_app/icons.af is built from, so the two cannot show different pictures. */
 @font-face {
   font-family: Lexend;
   src: url("/lexend-var.ttf") format("truetype-variations");
@@ -21,7 +19,7 @@
 /* -- palette and scale --------------------------------------------------- */
 
 /* The accent and the ramp are the dark theme's, served generated as /tokens.css so they
-   cannot drift from themes.toml. The greys below belong to the UI and copy nothing. */
+   cannot drift from themes.toml. The greys below belong to the UI. */
 
 :root {
   font-size: 100%;
@@ -32,8 +30,7 @@
   --text-sm: 0.75rem;
   --gap: 20px;
 
-  /* Where the page stops widening. Past this the previews are a poster of a
-     320x240 screen rather than a picture of one, and a slider is a runway. */
+  /* Where the page stops widening. */
   --page: 1280px;
   --pad: 16px;
   --bg: #0e0e11;
@@ -124,8 +121,8 @@ dialog {
   position: absolute; inset: 100% var(--gap) auto auto; width: 340px;
   margin: 0; padding: 12px; border: 0;
 
-  /* Panel, so the fields and rows inside are drawn in panel2 as they are everywhere else.
-     No shadow: it hangs off the bottom of a sticky header and paints up over it. */
+  /* Panel, so the fields and rows inside are drawn in panel2. No shadow: it hangs off
+     the bottom of a sticky header and paints up over it. */
   background: var(--panel); border-left: 3px solid var(--accent); color: var(--ink);
   outline: none;
 
@@ -224,9 +221,8 @@ main > section section:not(:has(> section)) {
 
 main > section section[hidden] { display: none; }
 
-/* A row of controls belonging to the field above it: the second accent beside its chip, and
-   the source and reading a setting follows. Sits under the field's own column, not the
-   label's, so it reads as part of that setting and not as another one. */
+/* A row of controls belonging to the field above it. Sits under the field's own column,
+   not the label's, so it reads as part of that setting. */
 main section > span:is([data-tint], .refs):not([hidden]) {
   grid-column: 2 / -1;
   display: flex; align-items: center; gap: 8px; min-width: 0;
@@ -308,8 +304,8 @@ main > section > ol {
 
   li[data-dragging] { opacity: 0.4; }
 
-  /* Where it will land: down the edge a card would go beside, across the edge a row would
-     go above or below. */
+  /* Where it will land: down the edge a card would go beside, across the edge a row
+     would go above or below. */
   > li[data-over="before"] { box-shadow: inset 3px 0 0 var(--accent); }
   > li[data-over="after"] { box-shadow: inset -3px 0 0 var(--accent); }
   ol li[data-over="before"] { box-shadow: inset 0 3px 0 var(--accent); }
@@ -329,9 +325,9 @@ main > section > ol {
 
   header h3 .kind { flex: none; }
 
-  /* The name somebody gave the page, beside the kind of page it is. Read as a name and not
-     as another heading: the kind is in the accent, this is what was typed. A long one
-     gives way rather than pushing the buttons off the end of the row. */
+  /* The name somebody gave the page, beside the kind of page it is. The kind is in the
+     accent, this is what was typed. A long one gives way rather than pushing the buttons
+     off the end of the row. */
   header h3 .given {
     color: var(--ink); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -397,8 +393,8 @@ p.good { color: var(--good); }
   label { grid-column: 1; }
   input[type="text"] { grid-column: 2; }
 
-  /* Across both, like every other block of prose here. Left in column one it sets the
-     width of a max-content track, and a hint of any length puts the field off the card. */
+  /* Across both. Left in column one it sets the width of a max-content track, and a hint
+     of any length puts the field off the card. */
   p { grid-column: 1 / -1; margin: 0; color: var(--dim); font-size: var(--text-sm); }
   button { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
   dl { grid-column: 1 / -1; }
@@ -418,7 +414,7 @@ main ul {
 }
 
 /* What is installed fills the left, what could be installed sits down the right. Narrow
-   enough and they stack instead, the offer being the wordier of the two. */
+   enough and they stack instead. */
 .configured, .offer { grid-column: 1 / -1; }
 
 .configured {
@@ -435,8 +431,8 @@ main ul {
                                   min-width: 0; }
 .configured section > header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
 
-/* The package, beside the name somebody reads. Read as a name and not as another heading,
-   the way a page's given title is: the heading is in the accent, this is in the ink. */
+/* The package, beside the name somebody reads. The heading is in the accent, this is in
+   the ink. */
 .given {
   color: var(--ink);
   font-size: var(--text-sm); min-width: 0;
@@ -456,8 +452,8 @@ main ul {
   .extensions > .offer { grid-column: 3; }
 }
 
-/* The card is a three column grid, and it places no form, so one would sit in the
-   narrow first column. */
+/* The card is a three column grid, and it places no form, so one would sit in the narrow
+   first column. */
 .offer > form { grid-column: 1 / -1; margin-top: 4px; }
 .offer > form input { flex: 1; min-width: 0; }
 
@@ -523,8 +519,7 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* -- the theme preview --------------------------------------------------- */
 
-/* Four pages at the badge's 320x240, drawn on canvas. The colours come from /api/theme,
-   so no palette is written down here. */
+/* Four pages at the badge's 320x240, drawn on canvas. The colours come from /api/theme. */
 .screens {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -540,7 +535,7 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* The settings page. The theme box takes two thirds and everything else stacks in the
    remaining third; under 56rem they go one above the other. Laid out for a desktop: the
-   server binds to loopback, so nothing reaches it from a phone. */
+   server binds to loopback. */
 main > section[aria-label="Settings"] {
   > section[aria-label="Theme"] { grid-column: 1 / -1; }
 
@@ -556,14 +551,13 @@ main > section[aria-label="Settings"] {
 
     > section[aria-label="Theme"] { grid-column: 1; grid-row: span 6; }
 
-    /* The six panels beside it, and not the badge list, which holds sections of its own
-       and runs the full width underneath. */
+    /* The six panels beside it, and not the badge list, which runs the full width
+       underneath. */
     > section:not([aria-label="Theme"], :has(> section)) { grid-column: 2; }
   }
 }
 
-/* Three across, as they are on the badge, each under the letter printed beside it. The one
-   panel that reads better as a picture of the hardware than as a list of fields. */
+/* Three across, as they are on the badge, each under the letter printed beside it. */
 main > section section.buttons {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 10px;
@@ -580,9 +574,8 @@ main > section section.buttons {
 }
 
 /* Narrow, everything in the theme box is full width and stacked. Wide, it becomes two
-   columns the width of a preview each: the theme sits under the left pair and the accent it
-   is built from under the right. The fields keep their label beside them, as every other
-   panel does, by being a grid of their own inside the left column. */
+   columns the width of a preview each. The fields keep their label beside them by being a
+   grid of their own inside the left column. */
 main > section section[aria-label="Theme"] {
   align-content: start;
   column-gap: 8px;

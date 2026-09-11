@@ -1,13 +1,4 @@
-"""Driving an install: the order the pieces in install.py go in.
-
-The app is copied before credentials are written. Resetting into mass storage discards a
-write to /state, and a badge re-keyed that way round holds a secret this host has already
-replaced.
-
-Nothing here reads a terminal. Progress goes to `say`. The two questions - whether to reset
-into mass storage, and a WiFi password - are asked through callbacks, which lets the config
-UI settle both in the request that starts the install.
-"""
+"""Driving an install: the order the pieces in install.py go in."""
 
 import os
 
@@ -20,11 +11,7 @@ def _quiet(_text):
 
 def push(options, badges=None, identity=None, modules=(), say=None, confirm=None,
          password=None):
-    """Push the app and this host's credentials to a badge over USB.
-
-    `options` mirrors the flags `statsbadge install` takes. Returns what happened; the
-    caller decides what to print and what to call an error.
-    """
+    """Push the app and this host's credentials to a badge over USB."""
     say = say or _quiet
     ports = ([options["port_dev"]] if options.get("port_dev")
              else install.find_ports())
@@ -107,7 +94,7 @@ def _push(options, session, badges, identity, modules, say, confirm, password):
         secret = badges.secret_for(info["uid"])
         server_id, server_name = identity["id"], identity["name"]
         # Credentials the badge already holds for this server are left alone. A repeat
-        # install is then only a code update, with nothing to lose if it is interrupted.
+        # install is then only a code update.
         held = install.secret_in_state(install.read_state(port), server_id)
         if options.get("new_secret") or not secret:
             secret = badges.provision(info["uid"], options.get("name"))
@@ -136,8 +123,8 @@ def _push(options, session, badges, identity, modules, say, confirm, password):
         if password is None:
             return _answer(f"no password for {ssid!r}", badge=info["uid"],
                            model=info["model"])
-        # Before the badge is touched. A prompt going up over a board already sitting in
-        # mass storage mode leaves it there while it waits.
+        # Before the badge is touched. A prompt going up over a board already in mass
+        # storage mode leaves it there while it waits.
         options = dict(options, password=password(ssid))
 
     copying = not answer["up_to_date"] or bool(options.get("force_app"))
@@ -163,8 +150,8 @@ def _push(options, session, badges, identity, modules, say, confirm, password):
             if ssid:
                 answer["wifi"] = _set_wifi(options, volume, ssid, say)
         except (install.InstallError, OSError) as exc:
-            # The volume is left mounted. Whatever went wrong, it is halfway through the
-            # app directory, and running this again is what puts it right.
+            # The volume is left mounted. It is halfway through the app directory, and
+            # running this again is what puts it right.
             install.eject(volume, port)
             return _answer(f"{exc}. Run this again once the badge comes back.",
                            badge=info["uid"], model=info["model"])

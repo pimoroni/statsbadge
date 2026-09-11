@@ -1,9 +1,4 @@
-"""AMD GPUs on Linux, from amdgpu's sysfs nodes.
-
-No extra package needed: the driver publishes utilisation, VRAM, temperature and
-power under /sys/class/drm/card*/device. On Windows an AMD card is read through
-LibreHardwareMonitor instead.
-"""
+"""AMD GPUs on Linux, from amdgpu's sysfs nodes."""
 
 import glob
 import os

@@ -1,11 +1,4 @@
-"""Break the stored address, then check the badge finds its host again.
-
-    statsbadge serve
-    mpremote connect PORT mount . run tools/failover_test.py
-
-This is the DHCP case: same server, different address. The badge should hear the
-beacon, recognise the id it is already paired with, and follow it without re-pairing.
-"""
+"""Break the stored address, then check the badge finds its host again."""
 
 import sys
 import time

@@ -8,10 +8,7 @@ import tomllib
 from statsbadge import install
 
 class FakeBoard:
-    """The board's half of the raw REPL, enough to answer what repl.py asks of it.
-
-    Stands in for a serial port, so the framing is checked with no badge on the cable.
-    """
+    """The board's half of the raw REPL, enough to answer what repl.py asks of it."""
 
     def __init__(self, printed="ok\r\n", failed=""):
         self.printed, self.failed = printed.encode(), failed.encode()
@@ -86,8 +83,8 @@ def test_the_badge_is_sent_back_out_of_disk_mode():
                 assert not reset, (system, reset)
                 assert "eject" in words or "unmount" in words, words
 
-        # A flush that will not take is swallowed: it surfaces as the port failing to come
-        # back, and there is nothing the caller can do differently.
+        # A flush that will not take is swallowed: it surfaces as the port failing to
+        # come back, and there is nothing the caller can do differently.
         def refuse(*_argv, **_kwargs):
             raise OSError(5, "no such volume")
 
@@ -136,8 +133,7 @@ def test_a_badge_is_found_by_the_product_id_it_declares():
 
 
 def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else():
-    """Running a script and hard resetting are spoken here, with no mpremote and no
-    interpreter spawned."""
+    """Running a script and hard resetting are spoken here, with no mpremote spawned."""
     # A dependency's console script is off PATH when this is installed as a uv tool.
     from statsbadge import repl
 
@@ -172,15 +168,15 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else():
         repl.run("/dev/fake", long_one)
         assert board.scripts == [long_one], len(board.scripts)
 
-        # The reset is a hard one, so the badge runs main.py again and does not sit at
-        # a prompt. It sleeps first, letting the acknowledgement get out.
+        # The reset is a hard one, so the badge runs main.py again. It sleeps first,
+        # letting the acknowledgement get out.
         board = FakeBoard()
         repl.reset("/dev/fake")
         assert "machine.reset()" in board.scripts[0], board.scripts
         assert "sleep_ms" in board.scripts[0], board.scripts
 
         # A board of any other kind is named in the message. Every script here starts by
-        # importing badgeware, which on anything else is a traceback naming a module the
+        # importing badgeware, which on anything else is a traceback.
         # reader would have to go and look up.
         board = FakeBoard(printed="BOARD Raspberry Pi Pico2 with RP2350\r\n")
         try:
@@ -212,7 +208,7 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else():
             raise AssertionError("a held port is not reported as busy")
 
         # A port that failed to open is skipped on the way out. Every command hard resets
-        # there, and a reset that cannot happen would spend the enumeration timeout before
+        # there, and a reset that cannot happen would spend the enumeration timeout.
         # announcing one.
         started = time.monotonic()
         assert install.hard_reset("/dev/fake") is False

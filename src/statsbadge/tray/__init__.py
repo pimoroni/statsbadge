@@ -1,10 +1,4 @@
-"""The server on a thread, an icon on the main one.
-
-pystray owns the main thread: on macOS `run()` drives NSApplication, and on Windows it
-pumps the message loop. That is the other way round from `serve`.
-
-The menu is built as plain data, so it can be checked without a display.
-"""
+"""The server on a thread, an icon on the main one."""
 
 import shutil
 import signal
@@ -22,14 +16,17 @@ SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 
 def block_signals():
-    """Before any thread starts, so every one of them inherits the block."""
+    """Block signals before any thread starts, so every one of them inherits it."""
     if hasattr(signal, "pthread_sigmask"):
         signal.pthread_sigmask(signal.SIG_BLOCK, SIGNALS)
 
 
 def quit_on_signal(quit_now):
-    """Python runs a handler on the main thread between bytecodes, and that thread sits
-    inside the toolkit's run loop. A thread waiting on the signal takes it instead."""
+    """Wait on the signal from a thread.
+
+    Python runs a handler on the main thread between bytecodes, and that thread sits
+    inside the toolkit's run loop.
+    """
     if not hasattr(signal, "sigwait"):
         for number in SIGNALS:
             signal.signal(number, lambda *_: quit_now())
@@ -63,7 +60,7 @@ class TrayApp:
         return self.summary()
 
     def summary(self):
-        """Cheap, and enough to tell whether the menu would differ."""
+        """Return enough to tell whether the menu would differ."""
         return (tuple(self.status["addresses"]),
                 tuple(sorted(self.status["badges"])),
                 tuple(sorted(e["request_id"] for e in self.status["pending"])),
@@ -131,13 +128,7 @@ class TrayApp:
 
     @staticmethod
     def _answer(verb, request_id):
-        """`verb` bound to one request, as an action that takes nothing.
-
-        Not `lambda request=request_id:`, the usual way to bind a loop variable. pystray
-        reads an action's argument count and hands a one-argument callable the tray icon,
-        which lands in `request_id` in place of the default: both buttons then answered a
-        request that does not exist, and pairing ran to its timeout.
-        """
+        """Bind `verb` to one request, as an action that takes nothing."""
         # A plain closure over the loop variable would be read when the menu item or the
         # alert is answered, by which time it names whichever badge came last.
         return lambda: verb(request_id)

@@ -6,10 +6,8 @@ from statsbadge import layout
 
 
 def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
-    """Every binding in the script names a control in the page and a setting `validate`
-    keeps."""
-    # Three files that have to agree and none imports another, so they are checked as the
-    # pairs they are.
+    """Every binding in the script names a control in the page and a setting `validate` keeps."""
+    # Three files that have to agree and none imports another.
     assert ui.bindings, "no bindings were read out of app.js"
     for control, setting in ui.bindings.items():
         assert control in ui.ids, f"{control} is bound but not in the page"
@@ -23,8 +21,7 @@ def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
 
 
 def test_a_hint_beside_a_secret_leaves_room_for_the_field(ui):
-    """Prose in a settings grid spans both columns, so it cannot set the first track's
-    width."""
+    """Prose in a settings grid spans both columns, so it cannot set the first track."""
     # The first column is max-content: a hint left in it sizes the track to the paragraph
     # unwrapped, and an octopus key field beside one measured 16px.
     sheet = ui.css
@@ -63,10 +60,7 @@ def test_the_theme_box_spans_the_panels_beside_it(ui):
 
 
 def sections_of(page):
-    """The config UI's sections, keyed by heading.
-
-    Only the ones that are a `section`: the page list is a column to itself and would
-    otherwise swallow the heading after it."""
+    """Return the config UI's sections, keyed by heading."""
     found = {}
     for part in page.split("<h2>")[1:]:
         heading, rest = part.split("</h2>", 1)
@@ -97,11 +91,7 @@ def test_the_settings_are_grouped_by_what_they_do(ui):
 
 
 def test_the_general_settings_have_a_place_of_their_own(ui):
-    """Between Look & Feel and Badges, so a host-wide setting is not filed under Help.
-
-    The location lived in the Help tab first, which is for what a platform needs set up by
-    hand. Nothing read that tab, so nothing said the control had gone to the wrong place.
-    """
+    """Between Look & Feel and Badges, so a host-wide setting is not filed under Help."""
     page = ui.markup
     assert "<h2>General Settings</h2>" in page, "no General Settings heading"
     assert 'id="general"' in page, "the section the script fills is not in the page"
@@ -112,11 +102,7 @@ def test_the_general_settings_have_a_place_of_their_own(ui):
 
 
 def test_the_general_settings_are_built_and_saved(ui):
-    """The script fills that section and writes it to `/api/settings`.
-
-    Read out of app.js, as the bindings above are: these controls are built at runtime, so
-    there is no markup to check and no DOM here to build them in.
-    """
+    """The script fills that section and writes it to `/api/settings`."""
     script = ui.script
     assert "function renderGeneral(" in script, "nothing builds the section"
     assert "renderGeneral()" in script.replace("function renderGeneral()", ""), \
@@ -126,7 +112,6 @@ def test_the_general_settings_are_built_and_saved(ui):
     body = body[:body.index("\n}\n")]
     assert '$("general")' in body, "renderGeneral does not fill the general section"
     # replaceChildren takes the markup's heading with it unless the heading is restored.
-    # Caught in a browser and not here: the markup still had the h2 either way.
     assert 'querySelector("h2")' in body, "a redraw would drop the General Settings heading"
     for control in ("hostplace", "hostlat", "hostlon"):
         assert control in body, f"{control} is not offered"
@@ -137,11 +122,7 @@ def test_the_general_settings_are_built_and_saved(ui):
 
 
 def test_quick_add_is_a_picker_of_its_own_beside_the_kinds(ui):
-    """Two pickers on the one row, and each control the script reaches for is in the page.
-
-    The kind picker was the only select in the form, so both it and the option lookup
-    behind a card's heading were found by position.
-    """
+    """Two pickers on the one row, and each control the script reaches for is in the page."""
     for control in ("kind", "recipe", "quickadd"):
         assert control in ui.ids, f"{control} is not in the page"
     assert ui.ids["recipe"] == "select", ui.ids["recipe"]
@@ -153,8 +134,7 @@ def test_quick_add_is_a_picker_of_its_own_beside_the_kinds(ui):
     assert "caps.recipes" in filled, "the picker is not filled from what the host offers"
     assert '$("recipe")' in filled and '$("quickadd")' in filled, filled
 
-    # Every page a recipe brings is re-identified: a duplicate id is a 400 on save, and a
-    # recipe adding two pages of one kind would carry two of the same.
+    # Every page a recipe brings is re-identified: a duplicate id is a 400 on save.
     added = ui.function("quickAdd")
     assert "freshId(" in added, added
     assert "markDirty()" in added, "adding pages does not enable Save"

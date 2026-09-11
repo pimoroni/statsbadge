@@ -1,13 +1,4 @@
-"""The two map pages, imported and driven.
-
-Run under the WASM port by `node tools/wasm/run.mjs`. The extension's badge modules are
-staged into the app's ext/ the way an install puts them there, so these are the modules
-the badge would compile.
-
-The map itself is not staged - `worldmap: no map in /system/assets/world.geo.json` on
-stderr - so the pages draw without coastlines. What they place on top is the same either
-way.
-"""
+"""The two map pages, imported and driven."""
 
 import unittest
 
@@ -46,7 +37,8 @@ def staged(name):
 
 class MapBands(unittest.TestCase):
     """A map is polygons placed by a transform, with a track and a terminator in degrees
-    beside them, none of which stops at the edge of the page band."""
+    beside them, none of which stops at the edge of the page band.
+    """
 
     def setUp(self):
         draw.prepare()
@@ -181,7 +173,8 @@ class Station(unittest.TestCase):
 
 class QuakeMarkers(unittest.TestCase):
     """A ring here cannot be a footprint: a magnitude 5 is strongly felt for about 60km,
-    which is half a pixel with the world in view. So it is a marker, sized in pixels."""
+    half a pixel with the world in view. So it is a marker, sized in pixels.
+    """
 
     def setUp(self):
         self.quakemap = staged("quakemap")

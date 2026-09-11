@@ -1,12 +1,4 @@
-"""Talk to a real statsbadge server from the badge, and report what it costs.
-
-    statsbadge install --state-only        # once, to write /state/stats.json
-    statsbadge serve
-    mpremote connect PORT mount . run tools/live.py
-
-Exercises the signed endpoints the app uses, so a signing or framing mistake shows up
-here rather than as a blank page in the app.
-"""
+"""Talk to a real statsbadge server from the badge, and report what it costs."""
 
 import sys
 import time

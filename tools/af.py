@@ -1,27 +1,12 @@
-"""The .af container, as alright-fonts writes it and the firmware reads it.
-
-    (a library: tools/make_icon_font.py, make_text_font.py and read_af.py import it)
-
-One definition of the layout, because an encoder and a decoder that each declare it can
-disagree without either one failing: a font packs, loads, and draws wrong. `pack` and
-`unpack` are held to each other by a round trip in tests/test_tools.py.
-
-A four-byte marker, flags, then counts of glyphs, contours and points, each big-endian
-u16. Then the glyph table, the length of every contour, and finally the points.
-
-The glyph fields follow MonaSans-Medium.af, read out of it and not assumed. Points are
-y-down from the baseline, so a glyph above it has negative y. bbox_y is y-up and goes
-negative only for a descender. x starts at the left of the advance, ink offset by the side
-bearing.
-"""
+"""The .af container, as alright-fonts writes it and the firmware reads it."""
 
 import struct
 
 AF_MAGIC = b"af!?"
 AF_FLAG_16BIT_POINT_COUNT = 0b0000001
 # A wide font stores its bbox, advance and points as 16-bit, then a u16 units-per-em
-# after the counts. A narrow one gets the whole em in a signed byte, which is
-# what shows as stepped outlines on a glyph drawn a hundred pixels tall.
+# after the counts. A narrow one gets the whole em in a signed byte, which shows as
+# stepped outlines on a glyph drawn a hundred pixels tall.
 AF_FLAG_WIDE = 0b0000010
 HEADER = ">HHHH"                   # flags, glyphs, contours, points, after the marker
 GLYPH_STRUCT = ">HbbBBBB"          # codepoint, then bbox x y w h, advance, contour count
@@ -30,8 +15,7 @@ GLYPH_STRUCT_WIDE = ">HhhHHHB"
 NARROW_UNITS_PER_EM = 128
 
 # Coordinates and the advance are signed bytes. An advance over 127 reads as negative and
-# the glyphs draw on top of each other, which limits the box an icon fills. A wide font
-# gets 16 bits for both.
+# the glyphs draw on top of each other. A wide font gets 16 bits for both.
 COORD_MIN, COORD_MAX = -128, 127
 WIDE_COORD_MIN, WIDE_COORD_MAX = -32768, 32767
 MAX_CODEPOINT = 0xFFFF
@@ -50,7 +34,7 @@ class Glyph:
 
 
 def limits(wide):
-    """The range a coordinate or an advance fits into, with the extent's ceiling."""
+    """Return the range a coordinate or an advance fits into, with the extent's ceiling."""
     if wide:
         return WIDE_COORD_MIN, WIDE_COORD_MAX, 0xFFFF
     return COORD_MIN, COORD_MAX, 255
@@ -61,7 +45,7 @@ def clamp(value, low=COORD_MIN, high=COORD_MAX):
 
 
 def out_of_range(glyphs, wide=False):
-    """Names of glyphs with points outside the integer the format packs them into."""
+    """Return names of glyphs with points outside the integer the format packs them into."""
     low, high, _extent = limits(wide)
     over = []
     for glyph in glyphs:
@@ -73,12 +57,7 @@ def out_of_range(glyphs, wide=False):
 
 
 def pack(glyphs, units_per_em=None):
-    """The .af file: header, glyph table, contour lengths, then points.
-
-    Pass units_per_em to write a wide font, whose bbox, advance and points are 16-bit and
-    whose em is whatever the caller built the glyphs to. Without it the font is narrow,
-    every coordinate is a signed byte and the em is 128 by convention.
-    """
+    """Pack the .af file: header, glyph table, contour lengths, then points."""
     for glyph in glyphs:
         if glyph.codepoint > MAX_CODEPOINT:
             raise SystemExit(
@@ -120,7 +99,7 @@ def pack(glyphs, units_per_em=None):
 
 
 def unpack(data, name="<bytes>"):
-    """A packed font as data: its glyphs, their points, and the grid they sit on."""
+    """Unpack a font as data: its glyphs, their points, and the grid they sit on."""
     if data[:4] != AF_MAGIC:
         raise SystemExit(f"{name} does not start with {AF_MAGIC!r}")
     flags, glyph_count, contour_count, point_count = struct.unpack_from(HEADER, data, 4)
@@ -148,9 +127,9 @@ def unpack(data, name="<bytes>"):
             lengths.append(data[at])
             at += 1
 
-    # Points, in order, so a glyph's own extent can be checked against its bbox. Also
-    # split back into contours, the form `pack` takes: a font that cannot be read and
-    # written again cannot be checked against the one that shipped.
+    # Points in order, so a glyph's own extent can be checked against its bbox, and split
+    # back into contours: a font that cannot be read and written again cannot be checked
+    # against the one that shipped.
     point_code, point_size = ("h", 4) if wide else ("b", 2)
     index = 0
     for glyph in glyphs:
@@ -171,7 +150,7 @@ def unpack(data, name="<bytes>"):
 
 
 def to_glyphs(font):
-    """A font `unpack` returned, back as the `Glyph` objects `pack` takes."""
+    """Turn a font `unpack` returned back into the `Glyph` objects `pack` takes."""
     made = []
     for found in font["glyphs"]:
         glyph = Glyph(found["codepoint"])

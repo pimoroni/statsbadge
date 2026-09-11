@@ -1,9 +1,4 @@
-"""Broadcast where the server is, so a badge need not be told an IP address.
-
-Typing a dotted quad on six buttons is miserable. The server sends a small JSON packet
-to the broadcast address every couple of seconds, and the badge listens for it during
-setup. Nothing sensitive is in it, and it stays on the local segment.
-"""
+"""Broadcast where the server is, so a badge need not be told an IP address."""
 
 import ipaddress
 import json
@@ -35,7 +30,7 @@ class Beacon:
             self._thread.join(timeout=2.0)
 
     def payload(self):
-        """What goes out, as a dict. Small: it travels in one UDP packet under 256 bytes."""
+        """Return what goes out. Small: it travels in one UDP packet under 256 bytes."""
         return {
             "statsbadge": 1,
             "port": self.http_port,
@@ -63,14 +58,7 @@ class Beacon:
 
 
 def _broadcast_addresses():
-    """Where to send. The global broadcast plus each interface's own, because some
-    networks drop 255.255.255.255 but pass a subnet broadcast.
-
-    Windows reports no broadcast address for an interface, so it is worked out from the
-    address and the mask. Without one the only packet leaving a Windows host is the global
-    broadcast. That goes out whichever interface holds the default route, which on a
-    machine with a Hyper-V or WSL switch is often not the one the badge is on.
-    """
+    """Return where to send: the global broadcast plus each interface's own."""
     addresses = ["255.255.255.255"]
     try:
         import psutil
@@ -87,7 +75,7 @@ def _broadcast_addresses():
 
 
 def _subnet_broadcast(address, netmask):
-    """The broadcast address for an interface, or None where it has none."""
+    """Return the broadcast address for an interface, or None where it has none."""
     if not address or not netmask:
         return None
     try:
