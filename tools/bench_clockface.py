@@ -200,6 +200,146 @@ if HAS_TRS:
     measure("fresh shape, mat3.trs", 300, hand_trs, 1.0, "us")
     measure("cached shape, mat3.trs", 300, hand_cached_trs, 1.0, "us")
 
+# -- a multi-part hand, part by part or as one combined shape ---------------
+HAS_COMBINE = hasattr(shape, "combine")
+
+SEC_TAIL, SEC_OUT, SEC_HALF = -RADIUS * 0.13, RADIUS * 0.86, RADIUS * 0.012
+RING_AT, RING_OUT, RING_BAND = 0.62, 0.10, 0.022
+RING_MID = SEC_OUT * RING_AT
+RING_HOLE = RADIUS * (RING_OUT - RING_BAND)
+
+# The second hand of the Station face: two bars and the ring between them.
+RING_PARTS = (
+    shape.rectangle(rect(-SEC_HALF, -(RING_MID - RING_HOLE),
+                         SEC_HALF * 2.0, (RING_MID - RING_HOLE) - SEC_TAIL)),
+    shape.rectangle(rect(-SEC_HALF, -SEC_OUT, SEC_HALF * 2.0, SEC_OUT - (RING_MID + RING_HOLE))),
+    shape.arc(vec2(0, -RING_MID), RING_HOLE, RADIUS * RING_OUT, 0, 360),
+)
+
+
+def parts_reaimed(n):
+    face.pen = color.rgb(*MARKS)
+    for i in range(n):
+        for part in RING_PARTS:
+            part.transform = mat3().translate(MIDDLE[0], MIDDLE[1]).rotate(i % 60 * 6.0)
+            face.shape(part)
+
+
+def parts_combined(n):
+    face.pen = color.rgb(*MARKS)
+    # NON_ZERO fills the union; under EVEN_ODD the bars and the ring hollow each other out.
+    face.fill_rule = image.NON_ZERO
+    for i in range(n):
+        COMBINED_HAND.transform = mat3().translate(MIDDLE[0], MIDDLE[1]).rotate(i % 60 * 6.0)
+        face.shape(COMBINED_HAND)
+    face.fill_rule = image.EVEN_ODD
+
+
+if HAS_COMBINE:
+    COMBINED_HAND = shape.combine(list(RING_PARTS))
+    print()
+    print(f"{'one 3-part hand drawn':<36} {'min':>9} {'med':>9}")
+    measure("each part re-aimed, 3 draws", 300, parts_reaimed, 1.0, "us")
+    measure("combined, 1 aim and 1 draw", 300, parts_combined, 1.0, "us")
+
+
+# -- the dial as one combined shape, against baking it into an image --------
+# The rasteriser batches a shape into 1024 edges (MAX_EDGES) and abandons one that does
+# not fit, so an over-long combine draws nothing at all rather than part of itself.
+# Sixty bars fit; sixty dots or ovals do not. `ink` is the check.
+HOUR_TRACK, MIN_TRACK = RADIUS * 0.85, RADIUS * 0.95
+
+MARK_STYLES = (
+    ("bars",
+     lambda: shape.rectangle(rect(-HOUR_HALF, -HOUR_OUT, HOUR_HALF * 2.0, HOUR_OUT - HOUR_IN)),
+     lambda: shape.rectangle(rect(-MIN_HALF, -MIN_OUT, MIN_HALF * 2.0, MIN_OUT - MIN_IN))),
+    ("dots",
+     lambda: shape.circle(vec2(0, -HOUR_TRACK), HOUR_HALF),
+     lambda: shape.circle(vec2(0, -HOUR_TRACK), MIN_HALF)),
+    ("ovals",
+     lambda: shape.rounded_rectangle(rect(-HOUR_HALF, -HOUR_OUT, HOUR_HALF * 2.0, HOUR_OUT - HOUR_IN), HOUR_HALF),
+     lambda: shape.circle(vec2(0, -MIN_TRACK), MIN_HALF)),
+)
+
+
+def dial_marks(big, small):
+    marks = []
+    for tick in range(60):
+        mark = big() if tick % 5 == 0 else small()
+        mark.transform = mat3().translate(MIDDLE[0], MIDDLE[1]).rotate(tick * 6.0)
+        marks.append(mark)
+    return marks
+
+
+def ink(drawn, rule):
+    """Alpha-carrying pixels left behind, to catch a shape the rasteriser abandoned."""
+    blank()
+    face.fill_rule = rule
+    drawn()
+    face.fill_rule = image.EVEN_ODD
+    raw = bytes(face.raw)
+    return sum(1 for i in range(3, len(raw), 4) if raw[i])
+
+
+if HAS_COMBINE:
+    print()
+    print(f"{'the dial, 60 marks':<36} {'min':>9} {'med':>9}      ink")
+    for name, big, small in MARK_STYLES:
+        marks = dial_marks(big, small)
+        one = shape.combine(marks)
+
+        def draw_parts(n, marks=marks):
+            for _ in range(n):
+                blank()
+                for mark in marks:
+                    face.shape(mark)
+
+        def draw_one(n, one=one):
+            for _ in range(n):
+                blank()
+                face.fill_rule = image.NON_ZERO
+                face.shape(one)
+                face.fill_rule = image.EVEN_ODD
+
+        apart = ink(lambda marks=marks: [face.shape(m) for m in marks], image.EVEN_ODD)
+        joined = ink(lambda one=one: face.shape(one), image.NON_ZERO)
+        measure(f"{name}, 60 draws", 10, draw_parts)
+        measure(f"{name}, combined, 1 draw", 10, draw_one)
+        print(f"{'':36} {'':>9} {'':>9}    {apart} vs {joined} px")
+
+
+# -- the baked dial blitted, against drawing the combined one ---------------
+# clockface.py bakes the dial once and blits it every frame. This is what that blit costs
+# against rasterising the same marks, and the 110KB each cached dial holds.
+if HAS_COMBINE:
+    _big, _small = MARK_STYLES[0][1], MARK_STYLES[0][2]
+    baked = image(SIZE, SIZE)
+    baked.antialias = image.X4
+    baked.pen = color.rgb(*MARKS)
+    for _mark in dial_marks(_big, _small):
+        baked.shape(_mark)
+    BAKED_AT = vec2(0, 0)
+    BARS = shape.combine(dial_marks(_big, _small))
+
+    def blit_baked(n):
+        for _ in range(n):
+            screen.blit(baked, BAKED_AT)
+
+    def draw_bars(n):
+        screen.pen = color.rgb(*MARKS)
+        screen.fill_rule = image.NON_ZERO
+        for _ in range(n):
+            screen.shape(BARS)
+        screen.fill_rule = image.EVEN_ODD
+
+    screen.antialias = image.X4
+    print()
+    print(f"{'the dial onto the screen':<36} {'min':>9} {'med':>9}")
+    measure("blit the baked image", 100, blit_baked, 1.0, "us")
+    measure("draw the combined bars", 100, draw_bars, 1.0, "us")
+    print(f"{'':36} {SIZE * SIZE * 4 // 1024:>9}KB held per baked dial")
+
+
 # -- whether a cached shape's per-draw cost stays flat ----------------------
 BLOCK = 300
 BLOCKS = 12
