@@ -362,8 +362,12 @@ mpremote connect PORT mount . run tools/live.py            # against a real serv
 mpremote connect PORT mount . run tools/run.py             # the whole app
 mpremote connect PORT mount . run tools/multihost_test.py  # pairing config
 mpremote connect PORT mount . run tools/failover_test.py   # a changed host IP
+mpremote connect PORT mount . run tools/fetch_test.py      # the firmware's fetch, after a socket error
 uv run python tools/shots.py build/shots --publish         # PNGs, then the README's
 ```
+
+`fetch_test.py` wants its other half running first: `python3 tools/fetch_test.py` serves the
+faults from this machine and writes the address the badge half reads.
 
 The config UI in [`src/statsbadge/web`](src/statsbadge/web) is three files the server hands
 over as they are, linted separately by `npm run lint`. html-validate rejects an inline
