@@ -89,6 +89,14 @@ hard resets on the way out. A serial port that answers MicroPython is still not 
 geometry once and re-aim it, group what shares a pen, and never build either inside a per-item
 loop. The world map draws 288 polygons with 24 pens and two transforms for this reason.
 
+**A combined shape over 1024 edges draws nothing at all.** `shape.combine` bakes several
+shapes into one that rasterises in one pass, which is how the clock's hands are drawn: the
+parts are built pointing at twelve, combined once, and one `_aim` places the result. It needs
+`fill_rule = NON_ZERO`, or the overlaps come out hollow. The batch is `MAX_EDGES` and the
+rasteriser abandons a shape that will not fit rather than drawing part of it, with nothing
+raised to Python. Sixty bar marks fit; sixty dots or ovals do not. `tools/bench_clockface.py`
+reports ink alongside time for this reason.
+
 **A string is only worth a picture the second time it is asked for.** `draw.label` bakes a
 sprite on the second sighting and draws live on the first, because a value that moves every
 poll is a key that never comes again. Labels under 40pt become sprites; larger text is drawn
@@ -341,7 +349,7 @@ and the fonts inside the wasm, so nothing else has to be staged):
 
 ```bash
 curl -fsSL -o runtime.zip https://github.com/pimoroni/badgeware-wasm/releases/download/\
-v3.0.1/badgeware-tufty2350-batteries-jspi.zip
+v3.1.0/badgeware-tufty2350-batteries-jspi.zip
 unzip -q runtime.zip -d build/badgeware-runtime
 ```
 

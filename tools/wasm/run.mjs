@@ -33,7 +33,7 @@ if (!fileExists(RUNTIME)) {
   console.error(
     `no badgeware runtime at ${RUNTIME}\n\n` +
     "Fetch one:\n" +
-    "  gh release download v3.0.1 --repo pimoroni/badgeware-wasm \\\n" +
+    "  gh release download v3.1.0 --repo pimoroni/badgeware-wasm \\\n" +
     "    --pattern 'badgeware-tufty2350-batteries-jspi.zip'\n" +
     "  unzip -q badgeware-tufty2350-batteries-jspi.zip -d build/badgeware-runtime\n\n" +
     "or point BADGEWARE_RUNTIME at a build of your own.")
