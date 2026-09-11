@@ -12,8 +12,7 @@ from statsbadge import install
 
 
 def test_the_build_script_defaults_where_the_installer_looks():
-    """ci/build-mpy.sh writes where the installer reads, so a bare rebuild replaces the
-    bytecode."""
+    """ci/build-mpy.sh writes where the installer reads, so a bare rebuild replaces it."""
     script = (pathlib.Path(__file__).parent.parent / "ci" / "build-mpy.sh").read_text(encoding="utf-8")
     default = [line for line in script.splitlines() if line.startswith("OUT_DIR=")]
     assert default, "no OUT_DIR default in the build script"
@@ -29,7 +28,8 @@ def test_the_build_script_defaults_where_the_installer_looks():
 
 def test_the_version_is_written_down_once():
     """The tag is the version: no package here declares one, and the prefix a workflow
-    fires on is the prefix its build strips."""
+    fires on is the prefix its build strips.
+    """
     import statsbadge
 
     source = pathlib.Path("src/statsbadge/__init__.py").read_text(encoding="utf-8")
@@ -69,8 +69,7 @@ def test_the_version_is_written_down_once():
 
 
 def test_every_package_here_can_be_published():
-    """Every package here has a publish workflow, and each one fires on its tag prefix
-    alone."""
+    """Every package here has a publish workflow, each firing on its tag prefix alone."""
     # Trusted publishing matches on a workflow filename, and a release fires them all.
     workflows = pathlib.Path(".github/workflows")
     main = (workflows / "publish.yml").read_text(encoding="utf-8")
@@ -143,8 +142,7 @@ def test_a_published_readme_links_to_somewhere_that_exists():
 
 
 def test_the_mark_is_the_same_one_everywhere(h, ui):
-    """The badge, the config UI, the site and the tray all draw one mark, to one
-    geometry."""
+    """The badge, the config UI, the site and the tray all draw one mark, to one geometry."""
     # As bytes: the server hands the file over unchanged, and a Windows checkout with CRLF
     # line endings would not match text read back through universal newlines.
     icon = pathlib.Path("src/statsbadge/web/icon.svg").read_bytes().decode("utf-8")
@@ -179,7 +177,7 @@ def test_the_mark_is_the_same_one_everywhere(h, ui):
     numbers = {}
     for line in splash.splitlines():
         if line.startswith(("BAR_W", "BAR_GAP", "BAR_HEIGHTS", "OUTER", "INNER")):
-            exec(line, numbers)  # noqa: S102  a module in this repo, five constants off the top
+            exec(line, numbers)  # noqa: S102
     boxes = [(float(w), float(t)) for w, t in
              re.findall(r'<rect x="[\d.]+" y="[\d.]+" width="([\d.]+)" height="([\d.]+)"', icon)]
     assert len(boxes) == len(numbers["BAR_HEIGHTS"]), boxes

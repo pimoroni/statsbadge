@@ -1,9 +1,4 @@
-"""Exercise the badge's multi-host config: migration, DHCP move, switching.
-
-    mpremote connect PORT mount . run tools/multihost_test.py
-
-Uses a scratch state file, so the real pairing is left alone.
-"""
+"""Exercise the badge's multi-host config: migration, DHCP move, switching."""
 
 import json
 import os
@@ -44,7 +39,7 @@ check("flat counter jumps forward", config.seq == 100 + net.Config.SEQ_FLUSH,
 check("flat file lands under a placeholder id", list(config.hosts) == ["unknown"],
       str(list(config.hosts)))
 
-# ...and the real id replaces the stand-in once a beacon reveals it.
+# The real id replaces the stand-in once a beacon reveals it.
 check("adopt_id moves it", config.adopt_id("srv-aaa", "workshop"))
 check("keyed on the real id", "srv-aaa" in config.hosts and "unknown" not in config.hosts,
       str(list(config.hosts)))

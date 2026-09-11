@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Check the badge app is whole and parses, before it is packed.
-
-The badge compiles these from source when the app is launched, where a syntax error is
-a crash dialog. Imports nothing: every module here expects the badge's builtins.
-
-    python3 tools/check_app.py src/statsbadge/badge_app
-"""
+"""Check the badge app is whole and parses, before it is packed."""
 
 import ast
 import pathlib
@@ -25,14 +19,13 @@ WANTED = (
     "worldmap.py",
 )
 
-# The names the badge injects into builtins are written down in the ruff config, and
-# that list is the one this reads. A second copy drifts when the firmware gains a
-# builtin, hiding a NameError until the badge runs.
+# The names the badge injects into builtins are written down in the ruff config, and that
+# list is the one this reads. A second copy drifts when the firmware gains a builtin.
 RUFF_CONFIG = pathlib.Path(__file__).resolve().parent.parent / "ci" / "ruff.toml"
 
 
 def badge_globals(config=RUFF_CONFIG):
-    """The injected names, or a fault string if the ruff config cannot be read."""
+    """Return the injected names, or a fault string if the ruff config cannot be read."""
     try:
         with config.open("rb") as handle:
             names = tomllib.load(handle).get("builtins")
@@ -74,13 +67,8 @@ def main(app):
     return None
 
 
-
 def check_names(path, tree, injected):
-    """Catch a name that is neither defined here, imported, nor a badge builtin.
-
-    Worth doing because these modules cannot be imported on the host to find out,
-    and a NameError on the badge is a crash dialog after the app has launched.
-    """
+    """Catch a name that is neither defined here, imported, nor a badge builtin."""
     import builtins
 
     defined = set(dir(builtins)) | injected | {"__name__", "__file__"}

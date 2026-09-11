@@ -1,14 +1,10 @@
-"""Sampling the screen, for tests that measure what was drawn rather than read it.
-
-Staged with the tests by tools/wasm/run.mjs. Not a test module itself: the runner runs
-what is named test_*.py.
-"""
+"""Sampling the screen, for tests that measure what was drawn rather than read it."""
 
 import look
 
 
 def body_pixels():
-    """The page band, sampled. RGB only: alpha does not move here."""
+    """Return the page band, sampled. RGB only: alpha does not move here."""
     raw = screen.raw  # noqa: F821
     stride = look.W * 4
     out = bytearray()
@@ -23,7 +19,7 @@ def body_pixels():
 
 
 def differing(first, second):
-    """How much of the sampled band the two disagree on, 0 to 1."""
+    """Return how much of the sampled band the two disagree on, 0 to 1."""
     moved = 0
     for index in range(0, len(first), 3):
         if first[index:index + 3] != second[index:index + 3]:
@@ -32,7 +28,7 @@ def differing(first, second):
 
 
 def chrome_pixels():
-    """The rows above and below the page band: the header, the title and the footer."""
+    """Return the rows above and below the page band: the header, the title and the footer."""
     raw = screen.raw  # noqa: F821
     stride = look.W * 4
     out = bytearray()

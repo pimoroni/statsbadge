@@ -1,18 +1,4 @@
-"""macOS sources.
-
-Apple exposes very little without privileges. What is readable as a normal user:
-
-- GPU utilisation and memory, from IOAccelerator's PerformanceStatistics via ioreg.
-- Thermal pressure and any CPU speed limit, from pmset.
-
-Die temperatures, fan RPM and package power all live behind the SMC or powermetrics,
-which needs root. `MacPowermetrics` covers those, and is tried on every start: `sudo -n`
-prompts for nothing, so the cost of asking is a refusal.
-
-Refused, it carries on without those fields and stays quiet, since nobody asked for
-them. Asked for with `--powermetrics` it prints the sudoers rule to add instead: a flag
-that quietly does nothing is worse than no flag.
-"""
+"""macOS sources."""
 
 import getpass
 import plistlib
@@ -27,8 +13,7 @@ from .base import Source
 MB = 1024 * 1024
 
 # The one command this source runs as root, so the sudoers rule a user pastes is the
-# argv that will be run. sudoers matches the whole command line, and a rule written for
-# anything else does not match.
+# argv that will be run. sudoers matches the whole command line.
 POWERMETRICS = "/usr/bin/powermetrics"
 # Where the rule goes, named in the advice and in the Help tab.
 SUDOERS_FILE = "/etc/sudoers.d/statsbadge"
@@ -36,31 +21,31 @@ POWERMETRICS_ARGS = ("--samplers", "cpu_power,gpu_power,thermal", "-i", "1000", 
 
 
 def powermetrics_argv():
-    """The command, with this machine's path to it."""
+    """Return the command, with this machine's path to it."""
     return [shutil.which("powermetrics") or POWERMETRICS, *POWERMETRICS_ARGS]
 
 
 # What sudoers reads as syntax inside a command, per sudoers(5). The comma is the one
 # that bites: it separates commands in a rule, so `--samplers cpu_power,gpu_power` reads
-# as three of them and visudo rejects the second as not a path.
+# as three of them.
 SUDOERS_SPECIAL = ("\\", ",", ":", "=")
 
 
 def sudoers_escaped(word):
-    """One argument, as a rule has to spell it."""
+    """Escape one argument, as a rule has to spell it."""
     for special in SUDOERS_SPECIAL:
         word = word.replace(special, "\\" + special)
     return word
 
 
 def sudoers_line():
-    """The rule that allows exactly that command, for this user and this machine."""
+    """Return the rule that allows exactly that command, for this user and this machine."""
     return "{} ALL=(root) NOPASSWD: {}".format(
         getpass.getuser(), " ".join(sudoers_escaped(word) for word in powermetrics_argv()))
 
 
 def sudoers_advice():
-    """What to do about it, ready to paste. One command allowed, not a blanket rule."""
+    """Return what to do about it, ready to paste. One command allowed, not a blanket rule."""
     return (
         "statsbadge: --powermetrics was asked for, but sudo will not run powermetrics\n"
         "  without a password, so there will be no temperatures, fan speeds or package\n"
@@ -88,7 +73,7 @@ class MacIOKit(Source):
 
     def sample(self, frame, dt):
         # Both readings are subprocesses, so either can time out on a machine busy enough
-        # to be worth looking at. Neither failure is lasting; the next poll has another go.
+        # to be worth looking at. The next poll has another go.
         worked = True
         try:
             gpus = self._read_accelerators()
@@ -132,7 +117,7 @@ class MacIOKit(Source):
         return gpus
 
     def _read_thermal(self, frame):
-        """pmset reports thermal pressure and any speed limit, both without sudo."""
+        """Read pmset for thermal pressure and any speed limit, both without sudo."""
         out = subprocess.run(["pmset", "-g", "therm"], capture_output=True,
                              text=True, timeout=3)
         if out.returncode != 0:
@@ -145,12 +130,7 @@ class MacIOKit(Source):
 
 
 class MacPowermetrics(Source):
-    """Package power, GPU power and die temperatures, via a root powermetrics.
-
-    Opt-in: it needs to run as root, so it is only started when the config asks and sudoers
-    permits that one command without a password. One long-lived process sampling on an
-    interval, read on a thread, because spawning powermetrics per frame costs about a second.
-    """
+    """Package power, GPU power and die temperatures, via a root powermetrics."""
 
     name = "macos-powermetrics"
     provides = ("cpu", "gpu", "power", "fans")
@@ -176,8 +156,7 @@ class MacPowermetrics(Source):
             return
         if not self.permitted():
             # Only where it was asked for. Tried by default, a refusal is the ordinary
-            # state of a Mac and not something to colour the Stats tab red over: the
-            # Help tab is where the rule to allow it is written out.
+            # state of a Mac; the Help tab is where the rule to allow it is written out.
             if self._asked:
                 print(sudoers_advice(), file=sys.stderr)
                 self.note_fault(RuntimeError(
@@ -203,12 +182,7 @@ class MacPowermetrics(Source):
 
     @staticmethod
     def permitted():
-        """Whether sudo will run *this* command without a password.
-
-        Asked of the command itself and not of sudo in general. A rule that allows
-        powermetrics alone, which is the rule to write, does not allow `sudo -n true`, so
-        testing with that would reject the very setup worth having.
-        """
+        """Return whether sudo will run *this* command without a password."""
         try:
             return subprocess.run(["sudo", "-n", "-l", *powermetrics_argv()],
                                   capture_output=True, timeout=3).returncode == 0
@@ -216,16 +190,18 @@ class MacPowermetrics(Source):
             return False
 
     def _pump(self):
-        """Read the plist stream. powermetrics emits one plist per sample, back to
-        back, so split on the document header instead of stream-parsing."""
+        """Read the plist stream, splitting on the document header.
+
+        powermetrics emits one plist per sample, back to back.
+        """
         buf = b""
         head = b"<?xml"
         while not self._stop.is_set() and self._proc and self._proc.stdout:
             chunk = self._proc.stdout.read(8192)
             if not chunk:
                 # Nothing more coming. A rule that is permitted but does not match the
-                # argv, or a powermetrics that exits for reasons of its own, lands here
-                # and not in the check above, so its parting words become the fault.
+                # argv lands here and not in the check above, so its parting words
+                # become the fault.
                 self._note_exit()
                 break
             buf += chunk.replace(b"\x00", b"")
@@ -245,10 +221,7 @@ class MacPowermetrics(Source):
                     self._latest = sample
 
     def _note_exit(self):
-        """Record why the reader stopped, if it stopped badly.
-
-        Not while shutting down: terminate() is how this is meant to end.
-        """
+        """Record why the reader stopped, if it stopped badly."""
         if self._stop.is_set() or self._proc is None:
             return
         try:
@@ -300,8 +273,7 @@ def _gpu_name(entry):
 
 
 def _merge_gpus(existing, found):
-    """Fill gaps in already-collected GPUs without replacing them, so two
-    sources describing the same card produce one entry."""
+    """Fill gaps in already-collected GPUs without replacing them."""
     if not existing:
         return found
     for i, gpu in enumerate(found):

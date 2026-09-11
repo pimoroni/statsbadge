@@ -1,8 +1,4 @@
-"""Enough of the firmware's `wifi` for app.py to import. See socket.py, staged beside it.
-
-There is no radio here. `is_connected` answers, since a page can be drawn while the badge
-is off the network and that is worth drawing; connecting raises.
-"""
+"""Enough of the firmware's `wifi` for app.py to import. See socket.py, staged beside it."""
 
 
 def is_connected():

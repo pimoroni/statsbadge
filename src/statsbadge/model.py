@@ -1,14 +1,9 @@
-"""The normalised stats a badge can draw.
-
-One shape across every platform. A field a platform cannot answer is `None`, never
-zero and never absent, so the badge can separate "idle" from "unknown" and draw "--".
-Sources fill in what they know and leave the rest alone.
-"""
+"""The normalised stats a badge can draw."""
 
 FRAME_VERSION = 1
 
-# Every group the wire format defines, with the fields a page may ask for. Kept
-# explicit because it is also the contract the config UI and the badge read.
+# Every group the wire format defines, with the fields a page may ask for. Also the
+# contract the config UI and the badge read.
 GROUPS = {
     "cpu": ("pct", "temp", "freq", "load", "cores", "volts", "procs"),
     "mem": ("pct", "used_mb", "total_mb", "swap_pct", "swap_used_mb"),
@@ -20,10 +15,8 @@ GROUPS = {
     "sys": ("host", "os", "arch", "uptime_s", "cpu_name"),
 }
 
-# What to call a group and a field in the config UI. Terse enough to fit a dropdown and
-# explicit about the unit, because "mem_used_mb" tells a reader neither what it measures
-# nor what a useful value looks like. The badge has its own, shorter set in pages.NAMES:
-# these are read at a desk, those are read at arm's length on a 320px screen.
+# What to call a group and a field in the config UI. The badge has its own, shorter set
+# in pages.NAMES.
 GROUP_LABELS = {
     "cpu": "Processor",
     "mem": "Memory",
@@ -35,8 +28,8 @@ GROUP_LABELS = {
     "sys": "System",
 }
 
-# Every label carries its unit, because a group with both a percentage and an absolute
-# reading of the same thing needs to say which is which: "Used %" against "Used GB".
+# Every label carries its unit: a group with both a percentage and an absolute reading of
+# the same thing needs to say which is which.
 FIELD_LABELS = {
     "cpu": {"pct": "Load %", "temp": "Temperature °C", "freq": "Clock MHz",
             "load": "Load average", "cores": "Per-core load %",
@@ -59,7 +52,7 @@ FIELD_LABELS = {
 
 
 def label(group, field):
-    """What the UI calls one field. Falls back to the raw name for anything new."""
+    """Return what the UI calls one field, falling back to the raw name."""
     return FIELD_LABELS.get(group, {}).get(field, field.replace("_", " ").capitalize())
 
 
@@ -68,16 +61,14 @@ PERCENT_FIELDS = frozenset(
     ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct")
 )
 
-# Fields whose value is a list, which only the kinds that draw a lane or a bar each can
-# use. A gauge handed one has nothing to point at.
+# Fields whose value is a list, which only the kinds that draw a lane or a bar each can use.
 LIST_FIELDS = frozenset(("cores", "load", "volts"))
 
-# Fields holding a message and not a reading: a post, a mention, a headline, an RSS
-# entry. Only a `notify` page draws one. No group in the model has one, a host measuring
-# itself having nothing to report.
+# Fields holding a message and not a reading. Only a `notify` page draws one. No group in
+# the model has one, a host measuring itself having nothing to report.
 ITEM_FIELDS = frozenset()
 
-# Sensible full-scale values for the rest, used when a page does not override it.
+# Full-scale values for the rest, used when a page does not override it.
 FULL_SCALE = {
     "temp": 100.0,      # degrees C
     "volts": 1.6,       # a core rail, which sits near 1.2
@@ -104,7 +95,7 @@ UNITS = {
 
 
 def empty_frame():
-    """A frame with every group present and nothing known yet."""
+    """Return a frame with every group present and nothing known yet."""
     return {
         "v": FRAME_VERSION,
         "cpu": {},
@@ -119,7 +110,7 @@ def empty_frame():
 
 
 def full_scale(group, field, gpu_hint=None):
-    """Full-scale value for a field, which is where a gauge puts 100%."""
+    """Return the full-scale value for a field, which is where a gauge puts 100%."""
     if field in PERCENT_FIELDS:
         return 100.0
     if group == "gpu" and field == "temp":
@@ -134,17 +125,12 @@ def unit(field):
 
 
 def describe():
-    """What this host can actually answer, for the config UI to offer.
-
-    Filled at runtime by the collector, which has the list of loaded sources. This is
-    only the static half of the contract.
-    """
+    """Return what this host can actually answer, for the config UI to offer."""
     return {
         "version": FRAME_VERSION,
         "groups": {name: list(fields) for name, fields in GROUPS.items()},
         "percent_fields": sorted(PERCENT_FIELDS),
-        # Which fields have a top end, so the UI can keep uptime out of a gauge: a
-        # reading with no full scale has no fraction to fill the ring with.
+        # Which fields have a top end, so the UI can keep uptime out of a gauge.
         "full_scale": dict(FULL_SCALE),
         "list_fields": sorted(LIST_FIELDS),
         # What a `notify` page draws, and what every other kind has to be kept away from.

@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""Turn the badge's raw framebuffer dumps into PNGs.
-
-    python3 tools/shots.py build/shots              # convert what the badge dumped
-    python3 tools/shots.py build/shots --publish    # and copy the ones the docs show
-
-The badge writes frames into build/shots, which is ignored. A render of every page and
-every theme is a review artefact, and committing all of it means a drawing change shows up
-as forty modified images. Only what the README and the project page link is checked in,
-and --publish reads both to decide which those are, so the set maintains itself.
-
-The dumps are 320x240 straight from `screen.raw`: R G B A per pixel and
-premultiplied, so alpha is divided back out here. Measured, not assumed - a pure red
-`color.rgb(255, 0, 0)` comes back as `ff 00 00 ff`, so there is no byte swap.
-"""
+"""Turn the badge's raw framebuffer dumps into PNGs."""
 
 import pathlib
 import re
@@ -73,15 +60,7 @@ def main(directory):
 
 
 def shrink(path):
-    """Halve a shot with pngquant, where it is installed.
-
-    A palette is plenty for a flat vector render. 256 colours against the thousand or so
-    of antialiasing takes these from about 13KB to 7KB with nothing visible to tell them
-    apart, checked at 2x on the gauges.
-
-    Indexed PNGs are fine here, unlike the app's icon: nothing on the badge loads these,
-    and its image.load mis-decodes a palette.
-    """
+    """Halve a shot with pngquant, where it is installed."""
     if not shutil.which("pngquant"):
         return
     subprocess.run(["pngquant", "--force", "--skip-if-larger", "--strip", "--speed", "1",
@@ -89,12 +68,7 @@ def shrink(path):
 
 
 def linked_shots():
-    """The shot names the README or the project page shows, which earns a place here.
-
-    Both, because the page publishes out of the same `shots` directory: a figure added to
-    index.html and to nowhere else would never be copied in, leaving the site asking for a file
-    that is not there.
-    """
+    """Return the shot names the README or the project page shows."""
     root = pathlib.Path(__file__).resolve().parent.parent
     text = "".join((root / name).read_text() for name in ("README.md", "index.html")
                    if (root / name).is_file())

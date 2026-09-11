@@ -1,11 +1,4 @@
-"""The mark the app shows while it is still importing.
-
-Shapes only, with no font and no icon file. This has to be on screen before draw, pages
-and net are compiled, which is about 500ms from flash, and font.load another 107ms.
-
-A module to itself, so the launcher icon can be generated from these numbers and a
-screenshot taken without running the app. tools/icon.py reads them; tools/probe.py calls show().
-"""
+"""The mark the app shows while it is still importing."""
 
 import look
 

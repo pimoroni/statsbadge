@@ -17,8 +17,8 @@ from statsbadge import extensions, library
 
 def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
     """A resolver failure comes out as the two versions and the name to blame."""
-    # uv's last line is "your requirements are unsatisfiable", which is true of every
-    # resolution failure, and it wraps its prose so the versions span the fold.
+    # uv's last line is "your requirements are unsatisfiable", true of every resolution
+    # failure, and it wraps its prose so the versions span the fold.
     from statsbadge import tooling
 
     said = (
@@ -32,8 +32,7 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
     line = tooling.explain(said)
     assert line == ("statsbadge-cloudflare needs statsbadge>=1.1.0, and this is "
                     "statsbadge==1.0.0"), line
-    # A build installs every entry, so the name it trips over need not be the one just
-    # asked for.
+    # A build installs every entry, so the name it trips over need not be the one asked for.
     assert tooling.blamed(line) == "statsbadge-cloudflare", tooling.blamed(line)
     assert tooling.blamed(said) == "statsbadge-cloudflare"
 
@@ -52,8 +51,8 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
 
 def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs():
     """An extension declaring `groups` or `series` pins a statsbadge floor."""
-    # An older collector reads neither, and reports nothing, so the failure is a
-    # missing group and a slow one polled every second.
+    # An older collector reads neither and reports nothing, so the failure is a missing
+    # group and a slow one polled every second.
     marks = ("groups = {", "def series(self)")
     for directory in sorted(pathlib.Path("extensions").iterdir()):
         pyproject = directory / "pyproject.toml"
@@ -72,8 +71,7 @@ def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs():
 
 
 def test_the_list_is_what_every_build_is_made_from():
-    """One extension can be named three ways, so `extensions.txt` is compared by short
-    name."""
+    """One extension can be named three ways, so `extensions.txt` compares short names."""
     from statsbadge import tooling
 
     work = tempfile.mkdtemp(prefix="statsbadge-list-")
@@ -103,8 +101,8 @@ def test_the_list_is_what_every_build_is_made_from():
         assert tooling.blamed(tooling.explain(resolver)) == "statsbadge-nope"
         assert tooling.blamed("no internet") is None
 
-        # An index is only asked about a bare name, a path or a specifier being skipped.
-        # An unreachable index is no answer either, so both come back None.
+        # An index is only asked about a bare name. An unreachable index is no answer
+        # either, so both come back None.
         assert tooling.on_index("./extensions/statsbadge-iss") is None
         assert tooling.on_index("statsbadge-clock>=2") is None
         assert tooling.on_index("git+https://example.invalid/x.git") is None
@@ -177,7 +175,8 @@ def test_an_extension_asked_for_but_absent_is_built_back():
 
 def test_an_extension_already_in_the_environment_is_recorded_and_reported():
     """An extension pip installed in the environment is written down, and a removal that
-    cannot reach it reports where it is."""
+    cannot reach it reports where it is.
+    """
     from statsbadge import __main__ as cli
     from statsbadge import tooling
 
@@ -262,8 +261,7 @@ def test_a_generation_is_asked_about_by_name_and_not_by_prefix():
 
 
 def test_upgrading_one_extension_leaves_the_others_where_they_are():
-    """Naming one extension to upgrade leaves every other pinned to the version the
-    library records."""
+    """Naming one extension to upgrade leaves every other pinned to the recorded version."""
     # A build resolves every unpinned name to its latest, so an unpinned list moves whole.
     from statsbadge import tooling
 
@@ -300,7 +298,7 @@ def test_upgrading_one_extension_leaves_the_others_where_they_are():
 
 
 def test_the_generation_a_build_replaced_comes_off_the_path():
-    """The replaced generation is removed from sys.path, where it sits ahead of the new one."""
+    """The replaced generation leaves sys.path, where it sits ahead of the new one."""
     work = tempfile.mkdtemp(prefix="statsbadge-path-")
     try:
         first = os.path.join(work, "lib", f"{library.tag()}-0001")
@@ -321,8 +319,7 @@ def test_the_generation_a_build_replaced_comes_off_the_path():
 
 
 def test_a_rebuild_does_not_prune_away_what_it_is_installing():
-    """A build ignores the live generation when pruning, or it prunes what it just
-    installed."""
+    """A build ignores the live generation when pruning, or it prunes what it installed."""
     work = tempfile.mkdtemp(prefix="statsbadge-prune-")
     try:
         live = os.path.join(work, "lib", "gen-0001")
@@ -356,7 +353,8 @@ def test_a_rebuild_does_not_prune_away_what_it_is_installing():
 
 def test_the_catalogue_says_what_each_extension_is_and_what_it_needs():
     """A catalogue entry describes an extension: what it does, whether it ships a badge
-    page, and what it needs typed in."""
+    page, and what it needs typed in.
+    """
     listed = extensions.catalogue()
     named = {entry["name"] for entry in listed}
     assert {"clock", "iss", "quakes"} <= named, named
@@ -369,10 +367,8 @@ def test_the_catalogue_says_what_each_extension_is_and_what_it_needs():
 
 
 def test_an_extension_asked_for_but_absent_is_offered_as_such():
-    """An extension on the list but not installed, or installed but not on the list, still
-    appears in the tab."""
-    # `uv tool install` replaces the environment whole and leaves `extensions.txt` alone,
-    # so the two part company without either being edited.
+    """An extension on the list but not installed, or the reverse, still appears in the tab."""
+    # `uv tool install` replaces the environment whole and leaves `extensions.txt` alone.
     offered = {entry["name"]: entry for entry in
                extensions.offered(installed=[], wanted=["statsbadge-quakes"])}
     assert offered["quakes"]["asked"] and not offered["quakes"]["installed"]
@@ -387,8 +383,7 @@ def test_an_extension_asked_for_but_absent_is_offered_as_such():
 
 
 def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h):
-    """An install naming nothing, or naming a package no index has, is refused before
-    anything is written."""
+    """An install naming nothing, or a package no index has, is refused before any write."""
     status, body = h.raw("GET", "/api/extensions")
     assert status == 200, (status, body)
     assert body["offered"] and "manageable" in body, body
@@ -408,8 +403,8 @@ def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h):
 
 def test_uv_is_found_where_it_lives_and_not_only_on_the_path():
     """uv is found under the home directory when PATH does not carry it."""
-    # A tray started at login carries the PATH it was given then, and a uv tool environment
-    # has no pip behind it to fall back on.
+    # A tray started at login carries the PATH it was given then, and a uv tool
+    # environment has no pip behind it to fall back on.
     was_which, was_home = shutil.which, os.environ.get("HOME")
     with tempfile.TemporaryDirectory() as home:
         beside = os.path.join(home, ".local", "bin")
@@ -435,8 +430,7 @@ def test_uv_is_found_where_it_lives_and_not_only_on_the_path():
 
 
 def test_a_packaged_app_installs_with_a_version_and_not_an_interpreter():
-    """A bundle has no interpreter to point uv at, so the installer passes a version
-    instead."""
+    """A bundle has no interpreter to point uv at, so the installer passes a version."""
     was_executable, was_uv = sys.executable, library._uv
     try:
         sys.executable = os.path.join(os.sep, "Applications", "statsbadge.app",
@@ -454,9 +448,7 @@ def test_a_packaged_app_installs_with_a_version_and_not_an_interpreter():
 
 
 def test_an_update_check_that_could_not_run_says_so_rather_than_reporting_nothing():
-    """Not knowing is a different thing from up to date. A caller handed [] for both shows
-    one as the other, which is what left the Extensions tab claiming everything was
-    current whenever the index was slow."""
+    """Not knowing is a different thing from up to date."""
     behind, why = library.outdated("/nowhere at all")
     assert behind == []
     assert why, "a check with no library to look at came back looking successful"
@@ -494,7 +486,8 @@ def test_an_update_check_reports_what_the_installer_said(tmp_path, monkeypatch):
 
 def test_a_packaged_app_spawns_itself_as_pip():
     """`-m pip` in a bundle starts a second copy of the app, so it spawns itself under a
-    verb the tray ignores."""
+    verb the tray ignores.
+    """
     from statsbadge import PIP_VERB, __main__ as cli
 
     app = os.path.join(os.sep, "Applications", "statsbadge.app", "Contents", "MacOS",

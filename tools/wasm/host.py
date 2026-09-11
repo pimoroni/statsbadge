@@ -1,13 +1,4 @@
-"""Serve a real statsbadge to the badge tests, with one badge paired to it.
-
-Run by tools/wasm/run.mjs, which reads the first line of stdout for where to reach it
-and which credentials to use. Stays up until it is killed.
-
-    uv run python tools/wasm/host.py
-
-The same server tests/test_server.py drives, so what the badge is held to here is what
-the host actually answers.
-"""
+"""Serve a real statsbadge to the badge tests, with one badge paired to it."""
 
 import json
 import sys

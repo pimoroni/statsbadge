@@ -16,8 +16,7 @@ from statsbadge import extensions, install, model
 
 
 def test_a_source_keeps_what_it_worked_out():
-    """A store holds what a source worked out: one file per source, oldest keys dropped
-    at the cap."""
+    """A store holds what a source worked out: one file per source, oldest keys dropped."""
     from statsbadge import state
 
     directory = tempfile.mkdtemp(prefix="statsbadge-state-")
@@ -34,8 +33,8 @@ def test_a_source_keeps_what_it_worked_out():
     # A different source cannot see it, or read it by accident.
     assert state.for_source(directory, "other").all() == {}
 
-    # Nowhere to write is still a store: `install` loads every extension only to read what
-    # it ships, and can drop what it learns.
+    # Nowhere to write is still a store: `install` loads every extension only to read
+    # what it ships.
     memory = state.for_source(None, "clock")
     memory.set("geocoded", {})
     assert memory.get("geocoded") == {} and memory.path is None
@@ -80,8 +79,7 @@ def test_a_source_keeps_what_it_worked_out():
 
 
 def test_a_slow_lookup_does_not_hold_up_a_frame():
-    """A weather lookup runs off the collector's thread, so sampling returns before it
-    lands."""
+    """A weather lookup runs off the collector's thread, so sampling returns first."""
     clock = pytest.importorskip("statsbadge_clock")
 
     source = clock.Clock({"place": "Sheffield"})
@@ -128,8 +126,7 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
     refused._retry_at = 0.0
     assert refused._where() is None and len(tries) == 2, "never tried again"
 
-    # A town stays put, so coordinates in the store outlive a launch and the badge comes up
-    # knowing where it is looking even while the geocoder is refusing everyone.
+    # A town stays put, so coordinates in the store outlive a launch.
     from statsbadge import state
 
     directory = tempfile.mkdtemp(prefix="statsbadge-clock-")
@@ -158,8 +155,7 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
 
 
 def test_a_weather_reading_carries_its_units_and_a_symbol():
-    """Units travel with the readings, and every condition the table can produce has an
-    icon."""
+    """Units travel with the readings, and every condition the table produces has an icon."""
     clock = pytest.importorskip("statsbadge_clock")
 
     assert "wind_units" in [setting["key"] for setting in clock.Clock.settings]
@@ -196,8 +192,7 @@ def test_the_reported_disk_is_the_one_with_your_files_on():
     path = default_disk()
     if platform.system() == "Darwin":
         assert path == "/System/Volumes/Data", path
-        # Both volumes share the container, so free space matches and only `used`
-        # differs: the sealed root claims a fraction of what is actually in use.
+        # Both volumes share the container, so free space matches and only `used` differs.
         root = psutil.disk_usage("/")
         data = psutil.disk_usage(path)
         assert data.used > root.used
@@ -219,8 +214,7 @@ def test_a_rate_is_scaled_by_what_it_has_reached():
 
     peak = run([40e6] * 5, 1.0)
     assert peak == 40e6
-    # A trickle afterwards is a small part of the ring, not an eighth of a ring that was
-    # already full.
+    # A trickle afterwards is a small part of the ring, not an eighth of a full one.
     assert (1.5e6 / peak) < 0.05
 
     # A peak halves in the same wall-clock time whatever the sample interval is set to.
@@ -234,10 +228,8 @@ def test_a_rate_is_scaled_by_what_it_has_reached():
 
 
 def test_everything_that_walks_a_frame_steps_over_the_same_scalars(h, ui):
-    """A frame carries scalars beside the groups of readings, and every walker skips the
-    same list."""
-    # app.js keeps a copy, JavaScript being unable to import this one, so it is held to it
-    # here.
+    """A frame carries scalars beside the readings, and every walker skips the same list."""
+    # app.js keeps a copy, JavaScript being unable to import this one.
     from statsbadge import collect
 
     _status, frame = h.raw("GET", "/api/stats")
@@ -300,8 +292,7 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
 
 
 def test_the_cpu_temperature_linux_reports_is_the_hottest_one():
-    """A labelled sensor outranks a hotter unlabelled one, and unlabelled sets report their
-    hottest."""
+    """A labelled sensor outranks a hotter unlabelled one; unlabelled sets report hottest."""
     import types
 
     from statsbadge.sources import linux
@@ -344,8 +335,7 @@ def test_the_help_tab_is_told_what_this_platform_needs(h):
     assert block["sources"], "reading nothing at all"
 
     if block["platform"] == "Darwin":
-        # The rule names this user and the path to the command, since sudoers matches on
-        # the whole line.
+        # The rule names this user and the path, since sudoers matches on the whole line.
         assert "NOPASSWD:" in block["powermetrics"]["sudoers"]
     if block["platform"] == "Windows":
         assert block["lhm"]["url"].startswith("http")
@@ -421,8 +411,8 @@ def test_core_voltages_come_back_as_a_bar_each():
 
 def test_a_source_that_can_run_now_is_taken_up_without_a_restart():
     """A source that becomes available is built by `reconfigure`, without a restart."""
-    # `available()` is called once at startup, and LibreHardwareMonitor answers no while its
-    # server is down or on another port.
+    # `available()` is called once at startup, and LibreHardwareMonitor answers no while
+    # its server is down or on another port.
     from statsbadge import collect
 
     class Late:
@@ -497,11 +487,7 @@ def test_a_sensor_url_typed_in_the_browser_is_kept_and_read():
 
 
 def test_a_location_typed_in_the_browser_reaches_every_source():
-    """One location per install, so an extension wanting one needs no settings of its own.
-
-    Stored under the host's name beside the sensor URL, and handed to the sources on the
-    save rather than at the next start.
-    """
+    """One location per install, so an extension wanting one needs no settings of its own."""
     from statsbadge import server as server_module
 
     with tempfile.TemporaryDirectory() as directory:
@@ -551,8 +537,7 @@ def test_powermetrics_is_tried_and_says_nothing_when_refused():
     assert macos.powermetrics_argv()[0] in line, line
 
     # A comma separates commands in a rule, so an unescaped one in `--samplers
-    # cpu_power,gpu_power,thermal` reads as three of them and visudo rejects the second
-    # as not a path. Checked by visudo itself where there is one.
+    # cpu_power,gpu_power,thermal` reads as three of them and visudo rejects the second.
     assert "\\," in line, f"visudo will not take this: {line}"
     assert "cpu_power\\,gpu_power\\,thermal" in line, line
 

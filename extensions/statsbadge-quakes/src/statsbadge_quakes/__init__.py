@@ -1,12 +1,4 @@
-"""Recent earthquakes, for the badge to draw on a world map.
-
-`/system/assets/world.geo.json` ships with badgeware, so no geometry travels: the events go
-in the frame with their coordinates. Data is the USGS feed, which needs no key and no
-account.
-
-The events are a list, which no built-in page kind can draw, so this ships
-`badge/quakemap.py`. The scalars beside them suit anything drawing a number.
-"""
+"""Recent earthquakes, for the badge to draw on a world map."""
 
 import json
 import os
@@ -24,9 +16,8 @@ FEED = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 # USGS publishes about once a minute and asks callers to be reasonable.
 INTERVAL = 300.0
 RETRY_AFTER = 60.0
-# How often the fetch thread wakes to check timers.
 FETCH_POLL = 1.0
-# Store key: a badge switched on before the network is up still has events to draw.
+# A badge switched on before the network is up still has events to draw.
 EVENTS = "events"
 # USGS place strings run past eighty characters; the band they are drawn in holds about forty.
 PLACE_MAX = 48
@@ -41,10 +32,8 @@ class Quakes(Source):
     provides = ("quakes",)
 
     # `events` is left out: it is the list the map draws from, and offering it as a field
-    # would put a row of Python in a text page.
-    #
-    # Declared slow: the feed is polled every five minutes where the badge polls every
-    # second. That works because `age_s` below is drawn to the minute.
+    # would put a row of Python in a text page. Declared slow: the feed is polled every
+    # five minutes where the badge polls every second, and `age_s` is drawn to the minute.
     groups = {"quakes": {"label": "Earthquakes", "slow": True, "fields": {
         "biggest": {"label": "Largest magnitude", "full_scale": 9.0},
         "latest": {"label": "Latest magnitude", "full_scale": 9.0},
@@ -114,7 +103,7 @@ class Quakes(Source):
             try:
                 self._refresh()
             except Exception as exc:
-                # The fetcher must not die: the map would continue drawing the same set.
+                # The fetcher must not die: the map would go on drawing the same set.
                 self.note_fault(exc)
             self._wake.wait(FETCH_POLL)
             self._wake.clear()
@@ -134,19 +123,18 @@ class Quakes(Source):
             self.order = "recent"
 
     def configure(self, settings):
-        """Take settings while running. Zeroing the timer refetches, since a magnitude
-        changes which events are in the set."""
+        """Take settings while running, refetching since a magnitude changes the set."""
         super().configure(settings)
         self._read_settings()
         self._next = 0.0
         self._wake.set()
 
     def sample(self, frame, dt):
-        """The events last stored by the fetcher, aged and sorted."""
+        """Return the events last stored by the fetcher, aged and sorted."""
         with self._lock:
             records = list(self._records)
         # Aged against the minute just gone: rounding each age to its own minute bumps
-        # slow_rev ten times a minute, where moving the clock moves all of them together.
+        # slow_rev ten times a minute.
         now = int(time.time()) // 60 * 60
         events = []
         for record in records:
@@ -193,10 +181,7 @@ class Quakes(Source):
 
 
 def _event(feature):
-    """One feature in the shape the badge draws, or None without a magnitude and coordinates.
-
-    The feed returns a null magnitude while an event is still being reviewed.
-    """
+    """Return one feature as the badge draws it, or None without magnitude and coordinates."""
     properties = feature.get("properties") or {}
     coordinates = (feature.get("geometry") or {}).get("coordinates") or ()
     if properties.get("mag") is None or len(coordinates) < 2:

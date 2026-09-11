@@ -1,15 +1,13 @@
-// The config UI. Edits a config object, PUTs it, and the badge picks up the new revision on
-// its next poll.
-//
-// Everything on the page belongs to one badge, chosen in the header: `whose` is its id, or
-// null for the layout a badge draws before anything is saved for it.
+// The config UI. Edits a config object, PUTs it, and the badge picks up the new revision
+// on its next poll. Everything on the page belongs to one badge, chosen in the header:
+// `whose` is its id, or null for the layout a badge draws before anything is saved.
 
 const $ = (id) => document.getElementById(id)
 const pick = (selector) => document.querySelector(selector)
 const all = (selector) => [...document.querySelectorAll(selector)]
 
-/** An element, its properties, and whatever goes inside it. A key with a dash is set as an
- * attribute, `aria-` and `data-` having no matching property. */
+/** Build an element, its properties, and whatever goes inside it. A key with a dash is
+ * set as an attribute, `aria-` and `data-` having no matching property. */
 function el(tag, props, ...children) {
   const node = document.createElement(tag)
   for (const [key, value] of Object.entries(props || {})) {
@@ -41,10 +39,8 @@ const SHAPE = {
   radar: { one: null, many: "fields", max: 6, label: "Axes", manyPool: "gauge" },
   trend: { one: "field", many: null, max: 0, label: "", pool: "series" },
   waterfall: { one: "field", many: null, max: 0, label: "", pool: "list" },
-  // One slot list holding two sorts of thing, a message and a counter, told apart by
-  // looking at the reading, so a feed, a mention and a follower count go in one page.
+  // One slot list holding two sorts of thing, told apart by looking at the reading.
   notify: { one: null, many: "fields", max: 6, label: "Lines", manyPool: "notify" },
-  // The badge's vitals, with no fields, all of it coming from the badge itself.
   badge: { one: null, many: null, max: 0, label: "" },
 }
 
@@ -59,8 +55,8 @@ async function api(path, options) {
 const MINOR = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on",
                        "or", "the", "to", "with"])
 
-/** Title case for a name that arrives as a word or a slug. What an extension declared is left
- * as it declared them, "kmh" not being "Kmh". */
+/** Title case a name that arrives as a word or a slug, leaving what an extension
+ * declared as it declared it. */
 function titleCase(text) {
   return String(text).replace(/[-_]+/g, " ").trim().split(/\s+/)
     .map((word, index) => (index && MINOR.has(word.toLowerCase())
@@ -81,9 +77,6 @@ function markDirty() {
 }
 
 // -- tabs ------------------------------------------------------------------
-//
-// One sheet at a time, so a phone gets a page it can read and a wide screen gets boxes that
-// flow across it. The nav and the sheets are in the same order, which pairs them.
 
 const REMEMBERED_TAB = "statsbadge.tab"
 
@@ -95,8 +88,8 @@ function showSheet(wanted) {
     else tab.removeAttribute("aria-current")
     sheets[index].hidden = index !== wanted
   })
-  // Here rather than on the click, so the tab a reload lands on is drawn too. It is
-  // fetched on being shown and not polled: it puts a question to sudo.
+  // Here rather than on the click, so the tab a reload lands on is drawn too. Fetched
+  // on being shown and not polled: it puts a question to sudo.
   if (tabs[wanted] && tabs[wanted].textContent === "Help") renderHelp().catch(() => {})
   try {
     window.localStorage.setItem(REMEMBERED_TAB, wanted)
@@ -128,11 +121,11 @@ function availableRefs() {
   return refs
 }
 
-/** Numbers first, then everything else, each of them once. The numeric refs are a subset of
- * all of them, so without the Set every number appears twice. */
+/** Numbers first, then everything else, each once. The numeric refs are a subset of all
+ * of them, so without the Set every number appears twice. */
 function preferredRefs() {
   // Lists are left out of even this. fmt prints one verbatim, so a grid cell handed
-  // cpu.cores shows a row of Python. A message likewise.
+  // cpu.cores shows a row of Python.
   const printable = availableRefs().filter(
     (ref) => !listFields().includes(ref.split(".")[1])
              && !itemFields().includes(ref.split(".")[1]))
@@ -157,7 +150,7 @@ function itemFields() {
   return caps.item_fields || []
 }
 
-/** Refs holding a message and not a reading: a post, a mention, a headline. */
+/** Refs holding a message and not a reading. */
 function itemRefs() {
   return availableRefs().filter((ref) => itemFields().includes(ref.split(".")[1]))
 }
@@ -169,8 +162,8 @@ function notifyRefs() {
 
 /** Refs a gauge can place a needle on: a percentage, or something with a top end.
  *
- * Being a number is not enough. Uptime is a number, and a ring drawn from it stays empty
- * whatever the machine has been doing, there being no full scale to fill against. */
+ * Being a number is not enough. Uptime has no full scale to fill a ring against.
+ */
 function gaugeRefs() {
   const percent = caps.percent_fields || []
   const scaled = Object.keys(caps.full_scale || {})
@@ -182,8 +175,8 @@ function gaugeRefs() {
 
 /** Refs the host keeps a history ring for, without which a graph has nothing to plot.
  *
- * Without one the page plots the live value twice and draws a flat line, which looks like a
- * reading that holds still, as against one nobody is recording. */
+ * Without one the page plots the live value twice and draws a flat line.
+ */
 function seriesRefs() {
   const kept = caps.graphed || []
   const withHistory = numericRefs().filter((ref) => kept.includes(ref))
@@ -195,9 +188,9 @@ function listRefs() {
   return availableRefs().filter((ref) => listFields().includes(ref.split(".")[1]))
 }
 
-// Which pool each slot draws from. "gauge" needs a top end, "series" only a number since it
-// scales itself from the data, "list" one value per element, "notify" a message or a number,
-// and "any" prints whatever it is given.
+// Which pool each slot draws from. "gauge" needs a top end, "series" only a number since
+// it scales itself from the data, "list" one value per element, "notify" a message or a
+// number, and "any" prints whatever it is given.
 const POOLS = {
   gauge: gaugeRefs,
   series: seriesRefs,
@@ -211,7 +204,7 @@ function groupLabel(group) {
 }
 
 // What the sources this host measures itself with are listed under. Held apart from
-// "System", the `sys` group's name, which would head a list with its last entry.
+// "System", the `sys` group's name.
 const HOST_SOURCE = "This host"
 
 function sourceLabel(group) {
@@ -224,14 +217,14 @@ function fieldLabel(ref) {
   return labels[field] || titleCase(field)
 }
 
-/** Two dropdowns: which source, then which of its readings.
+/** Build two dropdowns: which source, then which of its readings.
  *
- * One list of every reading was navigable while a host only measured itself. An extension
- * contributes a group per thing it watches, a domain apiece for an account with six of
- * them, so the source is picked first and the metric list is only ever that source's.
- * Returned as a fragment, so the row's flex layout still reaches the selects. */
+ * An extension contributes a group per thing it watches, so the source is picked first
+ * and the metric list is only ever that source's. Returned as a fragment, so the row's
+ * flex layout still reaches the selects.
+ */
 function refSelect(value, refs, onChange) {
-  // Deduplicated here as well as by the caller: a repeated option is impossible to tell apart
+  // Deduplicated here as well as by the caller: a repeated option cannot be told apart
   // once it is on screen.
   const options = [...new Set(refs)]
   if (value && !options.includes(value)) options.unshift(value)
@@ -244,7 +237,7 @@ function refSelect(value, refs, onChange) {
   }
 
   // Grouped under whoever provides them. An extension watching six domains would
-  // otherwise bury this host's readings in a list of unexplained names.
+  // otherwise bury this host's readings.
   const byOwner = new Map()
   for (const group of byGroup.keys()) {
     const owner = sourceLabel(group)
@@ -271,8 +264,8 @@ function refSelect(value, refs, onChange) {
   }
   fill(chosen, value)
 
-  // Changing source picks that source's first reading: the one showing belongs to the source
-  // being left, and leaving it there would read as a choice nobody made.
+  // Changing source picks that source's first reading: the one showing belongs to the
+  // source being left.
   source.onchange = () => {
     fill(source.value, null)
     onChange(select.value)
@@ -284,8 +277,7 @@ function refSelect(value, refs, onChange) {
 
 // -- pages -----------------------------------------------------------------
 
-// Which cards are open. Collapsed by default so the list stays an overview, and short
-// enough to drag around.
+// Which cards are open. Collapsed by default so the list stays an overview.
 const expanded = new Set()
 
 function renderPages() {
@@ -293,11 +285,9 @@ function renderPages() {
   refreshPruned()
 }
 
-/** The field slots a kind has. An extension's page declares them, since only its renderer
- * reads `fields` at all. The clock face draws from its groups and ignores them, so offering
- * seven pickers offered seven controls that did nothing. */
-/** What the picker calls a kind. The card used to shout the bare value in capitals, and
- * "dial" beside "CPU" reads as a slip rather than a style. */
+/** The field slots a kind has. An extension's page declares them, since only its
+ * renderer reads `fields` at all. */
+/** What the picker calls a kind. */
 function kindLabel(kind) {
   const option = $("kind").querySelector(`option[value="${CSS.escape(kind)}"]`)
   return (option && option.textContent) || titleCase(kind)
@@ -332,8 +322,8 @@ function pageCard(page, index) {
   const open = expanded.has(page.id)
   const settings = (caps.extension_page_settings || {})[page.kind] || []
 
-  // A page starts out titled after its kind, and an extension's ships titled after itself,
-  // so the name is only worth a second look once somebody has edited it.
+  // A page starts out titled after its kind, so the name is only worth a second look
+  // once somebody has edited it.
   const titled = el("span", { className: "given" })
   const showTitle = () => {
     const given = (page.title || "").trim()
@@ -358,7 +348,6 @@ function pageCard(page, index) {
 
   const remove = el("button", { type: "button", className: "danger small",
                                 textContent: "✕", title: "Remove this page" })
-  // Asked for, the button being next to the one that opens a card.
   remove.onclick = () => {
     if (config.pages.length <= 1) return toast("Keep at least one page", true)
     if (!window.confirm(`Remove ${page.title || page.kind}?`)) return undefined
@@ -368,7 +357,7 @@ function pageCard(page, index) {
   }
 
   // The heading is the handle. A card holds a text field and two pickers, so dragging it
-  // from anywhere meant dragging it out from under whichever one was being used.
+  // from anywhere meant dragging it out from under whichever one was in use.
   const kind = el("h3", { title: "Drag to reorder" },
                   el("span", { className: "kind", textContent: kindLabel(page.kind) }),
                   titled)
@@ -394,12 +383,10 @@ function pageCard(page, index) {
 
 /** Drag one of `items` to another place in it.
  *
- * The tag names the list a drag came from. A page card is draggable, as are the rows
- * inside it, and without one a row dropped on its card would reorder the pages. The events
- * are stopped on the way up for the same reason.
- *
- * `along` is the axis the list runs, setting which half of an item counts as before it and
- * which edge is marked. A `handle` has to be held for the drag to start.
+ * The tag names the list a drag came from: a page card is draggable, as are the rows
+ * inside it, and without one a row dropped on its card would reorder the pages. `along`
+ * is the axis the list runs, setting which half of an item counts as before it. A
+ * `handle` has to be held for the drag to start.
  */
 function reorderable(node, items, index, { tag, along, handle }) {
   node.draggable = !handle
@@ -452,7 +439,7 @@ function poolFor(name) {
   return refs.length ? refs : availableRefs()
 }
 
-/** The readings a page is made of, one row per slot. */
+/** Draw the readings a page is made of, one row per slot. */
 function slotList(page, shape) {
   const rows = []
 
@@ -479,7 +466,7 @@ function slotList(page, shape) {
   return el("ol", null, rows)
 }
 
-/** Another slot, while the kind has room for one. */
+/** Add another slot, while the kind has room for one. */
 function addSlot(page, shape) {
   const current = shape.many ? page[shape.many] || [] : []
   if (!shape.many || current.length >= shape.max) return null
@@ -510,8 +497,8 @@ function moveButtons(index) {
     })
 }
 
-/** A page id no page in the list is using. `taken` is added to, so a recipe adding two
- * pages of one kind gets two ids. */
+/** Return a page id no page in the list is using. `taken` is added to, so a recipe
+ * adding two pages of one kind gets two ids. */
 function freshId(base, taken) {
   const stamp = Date.now().toString(36).slice(-4)
   let id = `${base}${stamp}`
@@ -528,8 +515,7 @@ function newPage(kind) {
   const taken = pageIds()
   const offered = (caps.extension_pages || []).find((page) => page.kind === kind)
   if (offered) {
-    // An extension declares its page: take the fields and title it shipped with, the
-    // shape being its badge module's business.
+    // An extension declares its page: take the fields and title it shipped with.
     return { ...offered, id: freshId(offered.id || kind, taken) }
   }
   const shape = SHAPE[kind]
@@ -544,8 +530,7 @@ function newPage(kind) {
   return page
 }
 
-/** Add the installed extensions' pages to the kind picker, which lists the built-ins in
- * groups it declares. */
+/** Add the installed extensions' pages to the kind picker. */
 function offerExtensionPages() {
   const picker = $("kind")
   const offered = (caps.extension_pages || []).filter(
@@ -559,8 +544,8 @@ function offerExtensionPages() {
 
 /** Fill the Quick Add picker with the recipes this host can fill in.
  *
- * Replaced rather than appended to, since installing an extension or plugging in a GPU
- * changes which of them the host offers. */
+ * Replaced rather than appended to: installing an extension changes what is offered.
+ */
 function offerRecipes() {
   const picker = $("recipe")
   const listed = caps.recipes || []
@@ -589,7 +574,7 @@ function quickAdd(name) {
   renderPages()
 }
 
-/** Tell the user when a page they configured will not appear on the badge. */
+/** Say when a page somebody configured will not appear on the badge. */
 async function refreshPruned() {
   try {
     const shown = await api(configPath("/api/preview"))
@@ -606,11 +591,11 @@ async function refreshPruned() {
 
 // -- extension settings ----------------------------------------------------
 
-/** A box per installed extension, titled with its name, holding whatever it can be told.
+/** Draw a box per installed extension, titled with its name, holding what it can be told.
  *
- * Every discovered one, and not only those with settings. An extension that asks to be
- * told nothing still gets a box, and one that failed to import is reported here instead of
- * showing up as a page that never draws. */
+ * Every discovered one, so an extension that failed to import is reported here instead
+ * of showing up as a page that never draws.
+ */
 function renderSettings() {
   const schema = caps.extension_settings || {}
   const installed = caps.extensions || []
@@ -624,8 +609,7 @@ function renderSettings() {
     catalogueBox())
 }
 
-// Which extension boxes are open. Collapsed to start with, as a page card is: the column
-// is then a list of what is installed, and not a wall of every setting at once.
+// Which extension boxes are open. Collapsed to start with, as a page card is.
 const openExtensions = new Set()
 
 /** The catalogue's entry for an extension, where it has one. */
@@ -639,8 +623,8 @@ function displayName(name) {
   return (listed && listed.title) || name
 }
 
-/** What an extension has to be told before it reports anything, beside its name. Worth
- * the heading: an extension waiting on a token looks the same as one that is working. */
+/** What an extension has to be told before it reports anything: one waiting on a token
+ * looks the same as one that is working. */
 function wants(needs) {
   return needs ? el("span", { className: "wants", textContent: `needs ${needs}` }) : null
 }
@@ -666,8 +650,8 @@ async function refreshCatalogue() {
   renderSettings()
 }
 
-// What has a newer release, by short name. Kept apart from the catalogue: asking an index
-// takes seconds, and the list draws without it.
+// What has a newer release, by short name. Kept apart from the catalogue: asking an
+// index takes seconds, and the list draws without it.
 let behind = {}
 // Why the last check came back with nothing, or null where it came back with an answer.
 // Without this a check that could not reach the index reads as everything being current.
@@ -695,10 +679,10 @@ async function refreshOutdated() {
   renderSettings()
 }
 
-/** The published extensions, each with the one button that applies to it.
+/** Draw the published extensions, each with the one button that applies to it.
  *
- * A fixed list: PyPI cannot be asked which packages are statsbadge extensions. The box
- * below takes any requirement, so a third-party one goes in there. */
+ * A fixed list: PyPI cannot be asked which packages are statsbadge extensions.
+ */
 function catalogueBox() {
   const box = el("section", { className: "offer" },
                  el("h3", { textContent: "Extensions" }))
@@ -718,10 +702,7 @@ function catalogueBox() {
   return box
 }
 
-/** Where the update check stands, and a way to run it again.
- *
- * It asks an index over the network and is run once on load, so a slow or unreachable
- * one used to leave the tab looking exactly like everything being current. */
+/** Draw where the update check stands, and a way to run it again. */
 function updateCheck() {
   const said = checking ? "Checking for updates..."
     : behindWhy ? `Could not check for updates: ${behindWhy}`
@@ -780,8 +761,7 @@ function offerButton(entry) {
       onclick: () => changeExtension(verb, entry.name),
     })
   }
-  // Keyed on what is here: an entry listed but absent is restored by installing it, the
-  // repair `ext add` makes.
+  // Keyed on what is here: an entry listed but absent is restored by installing it.
   const verb = entry.installed ? "remove" : "add"
   return el("button", {
     type: "button",
@@ -830,8 +810,7 @@ async function changeExtension(verb, name) {
   if (!done.ok) {
     toast(done.why || "could not do that", true)
   } else {
-    // Only where it took: a copy in statsbadge's own environment survives a build, and
-    // nothing at all happened where there was nothing to do.
+    // Only where it took: a copy in statsbadge's own environment survives a build.
     if (!(done.stuck || []).length && !done.nothing) {
       toast({ add: `Installed ${name}`, remove: `Removed ${name}`,
               upgrade: `Updated ${name}`, disable: `Switched ${name} off`,
@@ -906,13 +885,12 @@ function extensionBox(extension, settings) {
   return box
 }
 
-// How much of a secret is shown, and the most x's drawn after it. Enough to tell which key is
-// in there without putting the key on the screen.
+// How much of a secret is shown, and the most x's drawn after it.
 const SECRET_SHOWN = 6
 const SECRET_MAX = 18
 
-/** A stored secret as something safe to leave on screen. Empty for one that is not set, which
- * the sheet draws as "not set" - the two have to be told apart. */
+/** Mask a stored secret for the screen. Empty for one that is not set, which the sheet
+ * draws as "not set": the two have to be told apart. */
 function masked(value) {
   const text = value === null || value === undefined ? "" : String(value)
   if (!text) return ""
@@ -920,14 +898,14 @@ function masked(value) {
   return shown + "x".repeat(Math.max(4, Math.min(SECRET_MAX, text.length - shown.length)))
 }
 
-// Which extensions have their secrets open for editing. Module level, so a redraw - and a
-// capabilities refresh after a save is one - does not close the box under the typing.
+// Which extensions have their secrets open for editing. Module level, so a redraw does
+// not close the box under the typing.
 const editingSecrets = new Set()
 
-/** The API keys, masked behind a button.
+/** Draw the API keys, masked behind a button.
  *
- * Masked and never hidden: "not set" must be told from "set to the wrong one", and the
- * first few characters are what somebody checking would recognise. */
+ * Masked and never hidden: "not set" must be told from "set to the wrong one".
+ */
 function secretsBlock(name, stored, secrets) {
   const open = editingSecrets.has(name)
   const block = el("div", { className: "secrets" })
@@ -954,12 +932,12 @@ function secretsBlock(name, stored, secrets) {
   return block
 }
 
-// Ids for the controls built here, so each has a label pointing at it. Only ever compared with
-// the label beside it, so a counter that keeps climbing across redraws is enough.
+// Ids for the controls built here, so each has a label pointing at it. Only ever
+// compared with the label beside it.
 let controlSerial = 0
 
-/** A form row: the name, then the control it names. Two siblings and not one wrapping the
- * other, so both land in the tracks of whichever grid the row is added to. */
+/** A form row: the name, then the control it names. Two siblings and not one wrapping
+ * the other, so both land in the tracks of whichever grid the row is added to. */
 function settingRow(stored, setting, options) {
   const id = `setting${++controlSerial}`
   const label = el("label", { htmlFor: id, textContent: setting.label || setting.key })
@@ -970,8 +948,8 @@ function settingRow(stored, setting, options) {
     input = el("input", { type: "checkbox", id, checked: !!current })
     input.onchange = () => { stored[setting.key] = input.checked; markDirty() }
   } else if (setting.type === "number") {
-    // The bounds are the browser's to enforce while it is being typed; the host clamps what
-    // arrives, a typed value being able to leave the field out of range.
+    // The bounds are the browser's to enforce while it is being typed; the host clamps
+    // what arrives, a typed value being able to leave the field out of range.
     input = el("input", { type: "number", id, min: setting.min, max: setting.max,
                           step: setting.step, placeholder: setting.placeholder,
                           value: current === null || current === undefined ? "" : current })
@@ -988,9 +966,8 @@ function settingRow(stored, setting, options) {
     input = el("input", { type: "text", id,
                           value: current === null || current === undefined ? "" : current })
     if (setting.secret) {
-      // Shown in full, editing these being about reading one back and replacing
-      // it. Kept out of autofill and the spellchecker, neither of which has any business with
-      // a token.
+      // Shown in full, editing these being about reading one back and replacing it.
+      // Kept out of autofill and the spellchecker.
       input.autocomplete = "off"
       input.spellcheck = false
       input.placeholder = (options && options.reveal) ? "paste the key here" : ""
@@ -1011,8 +988,7 @@ function settingRow(stored, setting, options) {
 
 function renderLook() {
   const theme = $("theme")
-  // Grouped by mode: which of them suit a lit room is the first thing anybody is choosing
-  // between, and a flat list of twenty-two had the pairs scattered through it.
+  // Grouped by mode: a flat list of twenty-two had the pairs scattered through it.
   theme.replaceChildren(...[["dark", "Dark"], ["light", "Light"]].map(([mode, heading]) =>
     el("optgroup", { label: heading }, caps.themes
       .filter((entry) => entry.mode === mode)
@@ -1076,11 +1052,12 @@ function bindCheck(id, key) {
   input.onchange = () => { config[key] = input.checked; markDirty() }
 }
 
-/** Off, the backlight's level, or a reading for the lights to follow. The stored value is
- * false, true, or a field ref.
+/** Off, the backlight's level, or a reading for the lights to follow. The stored value
+ * is false, true, or a field ref.
  *
- * Which of the three comes first, and the reading is then picked the way a page picks one -
- * by source and then by metric - rather than from one list of every reading this host has. */
+ * Which of the three comes first, and the reading is then picked the way a page picks
+ * one, by source and then by metric.
+ */
 function renderCaseLights() {
   // The flag has always stored "theme", from when a palette named the level.
   const mode = $("caselights")
@@ -1088,13 +1065,13 @@ function renderCaseLights() {
   const chosen = stored === true ? "theme" : stored ? "reading" : "off"
   const refs = numericRefs()
   const offered = [["off", "Off"], ["theme", "Follow the Backlight"]]
-  // Nothing numeric to follow means nothing to offer following. A stored ref still counts,
-  // so a host that has stopped sending one does not silently drop it.
+  // Nothing numeric to follow means nothing to offer following. A stored ref still
+  // counts, so a host that has stopped sending one does not silently drop it.
   if (refs.length || chosen === "reading") offered.push(["reading", "Follow a Reading"])
   mode.replaceChildren(...offered.map(([value, text]) =>
     el("option", { value, textContent: text, selected: value === chosen })))
 
-  // Held on to while the mode moves off it and back, so leaving and returning lands on the
+  // Held on while the mode moves off it and back, so leaving and returning lands on the
   // reading that was picked rather than on the first in the list.
   let following = typeof stored === "string" ? stored : refs[0]
 
@@ -1115,8 +1092,7 @@ function renderCaseLights() {
 
 function renderButtons() {
   // What the badge answers itself, then what it asks this host to run, under the heading
-  // the host asks for. A group exists once something is in it, so every heading has rows
-  // under it.
+  // the host asks for.
   const groups = new Map()
   const offer = (heading, option) => {
     if (!groups.has(heading)) groups.set(heading, [])
@@ -1148,17 +1124,16 @@ function renderButtons() {
 
 // -- the theme preview ----------------------------------------------------
 //
-// The palette comes from the host, for every theme and not only the tinted ones. Deriving
-// there holds the preview and what reaches the badge together, while the browser
-// needs no colour arithmetic.
+// The palette comes from the host, for every theme and not only the tinted ones, which
+// holds the preview and what reaches the badge together.
 
-// Which preview request is the current one. Clicking along the swatches starts several, and
-// they can come back in any order. Without this the last reply wins, not the last
-// click, and the panel ends up showing a colour nobody chose.
+// Which preview request is the current one. Clicking along the swatches starts several,
+// and they can come back in any order: without this the last reply wins, not the last
+// click.
 let previewWanted = 0
 
-/** Which family of accents the picker is showing. Follows the stored one when the panel opens,
- * so what is on screen is the row the chosen colour came from. */
+/** Which family of accents the picker is showing. Follows the stored one when the panel
+ * opens, so what is on screen is the row the chosen colour came from. */
 let family = null
 
 function familyOf(accent) {
@@ -1170,8 +1145,7 @@ function familyOf(accent) {
 }
 
 function renderTint() {
-  // Whether a theme takes an accent comes from the host, so no list is held here: a derived
-  // theme is built from the one chosen, and a written palette is fixed as drawn.
+  // Whether a theme takes an accent comes from the host, so no list is held here.
   const record = (caps.themes || []).find((entry) => entry.name === config.theme)
   const derived = Boolean(record && record.derived)
   for (const node of all("[data-tint]")) node.hidden = !derived
@@ -1218,9 +1192,8 @@ function swatches() {
 
 // -- the preview -----------------------------------------------------------
 //
-// Four pages at the badge's 320x240, drawn in its faces. The colours and the
-// two graph series come from /api/theme: this file holds no palette and no rule for picking
-// one, only where a page puts things.
+// Four pages at the badge's 320x240, drawn in its faces. The colours and the two graph
+// series come from /api/theme; this file holds only where a page puts things.
 
 const W = 320
 const H = 240
@@ -1237,10 +1210,9 @@ const ICONS = {
 
 // -- what a badge shows for a number ---------------------------------------
 //
-// draw.fmt, draw.short_unit and pages.fraction_of, in the browser.
-//
-// The badge cannot answer for them: pages.py imports draw, and draw expects the firmware's
-// globals. A check compares these against the badge's for a table of readings.
+// draw.fmt, draw.short_unit and pages.fraction_of, in the browser. The badge cannot
+// answer for them: pages.py imports draw, and draw expects the firmware's globals. A
+// check compares these against the badge's for a table of readings.
 
 const SCALE = {
   temp: 100, power: 250, package_w: 150, rpm: 6000,
@@ -1248,9 +1220,8 @@ const SCALE = {
   up_bps: 12.5e6, down_bps: 12.5e6, read_bps: 500e6, write_bps: 500e6,
   volts: 1.6,
 }
-// pages.PERCENT. Longer than the live view's list further down, which is a different job:
-// `cores` is a list of percentages, and a gauge needs to know that where a printed reading
-// does not.
+// pages.PERCENT. Longer than the live view's list further down: `cores` is a list of
+// percentages, and a gauge needs to know that where a printed reading does not.
 const PERCENT_FIELDS = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores"]
 
 const isPercent = (field) => PERCENT_FIELDS.includes(field) || field.endsWith("_pct")
@@ -1275,7 +1246,7 @@ function duration(seconds) {
   return `${Math.floor(whole / 60)}m`
 }
 
-/** A number as a badge would show it: short, and never wider than its box. */
+/** Format a number as a badge would show it: short, and never wider than its box. */
 function fmt(value, field) {
   if (value === null || value === undefined) return "--"
   if (typeof value === "boolean") return value ? "yes" : "no"
@@ -1300,8 +1271,7 @@ function shortUnit(field) {
 }
 
 /** Where a value sits on 0-1, for a gauge. A rate is scaled by the busiest the host has
- * seen, which travels with the frame. A fixed full scale pegs a fast link and idles a
- * slow one. */
+ * seen, which travels with the frame. */
 function fractionOf(ref, value, frame) {
   if (value === null || value === undefined || typeof value === "string"
       || typeof value === "boolean") return null
@@ -1313,8 +1283,8 @@ function fractionOf(ref, value, frame) {
   return Math.max(0, Math.min(1, value / top))
 }
 
-/** A reading out of the frame, by "group.field". The badge reads a list's first entry the
- * same way, a host with two GPUs having sent both. */
+/** A reading out of the frame, by "group.field". A list's first entry is read the same
+ * way, a host with two GPUs having sent both. */
 function readingOf(frame, ref) {
   const [group, field] = ref.split(".")
   let held = (frame || {})[group]
@@ -1344,16 +1314,15 @@ const READOUT_X = DIAL_C[0] + DIAL_OUTER + DIAL_GAP
 const READOUT_W = W - READOUT_X - DIAL_GAP
 const READOUT_H = 38
 
-// look.readout_rows: level with the top of the dial, lifted only where the rows would run
-// past the band.
+// look.readout_rows: level with the top of the dial, lifted only where the rows would
+// run past the band.
 function readoutRows(count) {
   const room = BODY_TOP + BODY_H - 6 - count * READOUT_H
   const top = Math.max(BODY_TOP + 6, Math.min(DIAL_C[1] - DIAL_OUTER, room))
   return Array.from({ length: count }, (_, index) => top + index * READOUT_H)
 }
 
-// pages.NAMES and pages.name_for. The badge names a reading in the room it has: "DOWN"
-// against the host's "Download".
+// pages.NAMES and pages.name_for. The badge names a reading in the room it has.
 const NAMES = {
   "cpu.pct": "LOAD", "cpu.temp": "TEMP", "cpu.freq": "CLOCK", "cpu.procs": "PROCS",
   "mem.pct": "USED", "mem.used_mb": "USED", "mem.total_mb": "TOTAL", "mem.swap_pct": "SWAP",
@@ -1380,7 +1349,7 @@ function nameFor(ref) {
 }
 
 // The pages the preview draws, and the readings behind them. The same refs the default
-// layout uses, so a preview shows a page somebody will actually have.
+// layout uses.
 const DIAL = { field: "cpu.pct", readouts: ["cpu.temp", "cpu.freq", "cpu.procs"] }
 const BARS = "cpu.cores"
 const SERIES = ["net.down_bps", "net.up_bps"]
@@ -1419,8 +1388,8 @@ function chrome(ctx, palette, title, current) {
 
 const hostName = () => readingOf(frameNow, "sys.host") || "workshop-pc"
 
-// draw._pips: a dash per page, four high with rounded ends. Every pip is the same size and
-// only the current one's colour differs.
+// draw._pips: a dash per page, four high with rounded ends. Only the current one's
+// colour differs.
 const PIP_ROOM = W - PAD * 4
 const PIP_MAX_W = 14
 const PIP_GAP = 5
@@ -1644,8 +1613,8 @@ function drawGraph(ctx, palette, series) {
   })
 }
 
-// FIELD_ICONS for disk: the arrows invert between a link and a disk, since storage is drawn
-// against the disk and a write goes down into it.
+// FIELD_ICONS for disk: the arrows invert between a link and a disk, storage being drawn
+// against the disk.
 const TILES = [["FULL", "74.2%", 0.742, "l"], ["READ", "50.0MB/s", 0.5, "u"],
                ["WRITE", "8.0MB/s", 0.08, "o"], ["USED", "687.3GB", 0.62, "a"]]
 
@@ -1697,8 +1666,7 @@ let shown = null
 let frameNow = null
 let rings = {}
 
-/** The rings the graph plots. Seeded from the host, or the graph stays flat for half a
- * minute, then appended from each frame. */
+/** The rings the graph plots. Seeded from the host, then appended from each frame. */
 async function seedHistory() {
   try {
     rings = await api(`/api/history?keys=${SERIES.join(",")}&points=${GRAPH_POINTS}`)
@@ -1774,8 +1742,7 @@ function rampAt(stops, at) {
 
 // -- which badge -----------------------------------------------------------
 //
-// One layout per badge, and a default for a badge with nothing saved. The picker
-// in the header names which of them the page is editing; `null` is the default.
+// One layout per badge, and a default for a badge with nothing saved. `null` is the default.
 
 const REMEMBERED = "statsbadge.whose"
 
@@ -1854,11 +1821,11 @@ async function forgetBadge(id) {
   toast("Forgotten")
 }
 
-/** Page ids made this badge's own.
+/** Return page ids made this badge's own.
  *
- * An extension keys what it does per page by page id - which city a clock page shows - so two
- * badges must not carry the same one. Done where a badge stops drawing the default, gaining a
- * layout stored, and derived from the badge id so switching back and forth is stable. */
+ * An extension keys what it does per page by page id, so two badges must not carry the
+ * same one. Derived from the badge id, so switching back and forth is stable.
+ */
 function ownIds(pages, badgeId) {
   const tag = badgeId.slice(0, 4)
   return pages.map((page) => (String(page.id).endsWith(`-${tag}`)
@@ -1868,12 +1835,11 @@ function ownIds(pages, badgeId) {
 // -- general settings ------------------------------------------------------
 
 /** What this install knows whichever badge is showing it, as against a layout, which is
- * one badge's. Saved on its own button and not with the layout: `/api/settings` writes it
- * to the sources at once, where a layout waits for Save. */
+ * one badge's. `/api/settings` writes it to the sources at once, where a layout waits
+ * for Save. */
 async function renderGeneral() {
   const node = $("general")
-  // Kept across the redraw, the heading being the page's and not this function's, as the
-  // badge list keeps its own.
+  // Kept across the redraw, the heading being the page's and not this function's.
   const heading = node.querySelector("h2")
   let host
   try {
@@ -1931,19 +1897,19 @@ function renderBadges() {
   renderStale()
 }
 
-/** One box per paired badge: what to call it, what it is, and the two things that can be
- * done to it. The one the rest of the page is configuring is marked. */
+/** Draw one box per paired badge: what to call it, what it is, and what can be done to
+ * it. The one the rest of the page is configuring is marked. */
 function badgeBox(id) {
   // A badge nobody has named announces itself by its id, leaving no name to show while
-  // the field is left empty, and not filled with the id under the id.
+  // the field is left empty.
   const named = badges[id].name && badges[id].name !== id ? badges[id].name : ""
   const nameId = `badge${++controlSerial}`
   const name = el("input", { type: "text", id: nameId, value: named,
                              placeholder: "Give it a name" })
   const heading = el("h3", { textContent: named || "Unnamed badge" })
 
-  // A moment after the typing stops as well as on the way out of the field, so a name that
-  // is typed and then left alone is still saved. Only leaving it shows that.
+  // A moment after the typing stops as well as on the way out of the field, so a name
+  // that is typed and then left alone is still saved.
   let pending = null
   const store = (announce) => {
     window.clearTimeout(pending)
@@ -1982,7 +1948,7 @@ function badgeBox(id) {
   return box
 }
 
-/** What a badge is drawing, without opening it: the layout it is on and the headline
+/** What a badge is drawing without opening it: the layout it is on and the headline
  * settings off it. The id leads, being the thing to quote when a badge misbehaves. */
 function facts(id) {
   const record = badges[id]
@@ -2007,16 +1973,15 @@ function appLabel(state) {
   return `${changes} file${changes === 1 ? "" : "s"} behind`
 }
 
-/** A theme by the name the picker calls it. An unknown one is a theme this host no longer
- * ships, which the badge is still drawing, so its stored name shows instead. */
+/** A theme by the name the picker calls it. An unknown one is a theme this host no
+ * longer ships, so its stored name shows instead. */
 function themeLabel(name) {
   const record = (caps.themes || []).find((entry) => entry.name === name)
   return (record && record.label) || name || "unset"
 }
 
-/** Saved apart from the layout, since what a badge is called is nothing the badge draws,
- * so there is no revision to wait for. The list of badges is left alone, the field being
- * typed in being inside it. */
+/** Saved apart from the layout, what a badge is called being nothing the badge draws.
+ * The list of badges is left alone, the field being typed in being inside it. */
 async function rename(id, wanted) {
   const result = await api(`/api/badges/${id}`, {
     method: "PUT",
@@ -2030,8 +1995,7 @@ async function rename(id, wanted) {
 
 // -- pairing ---------------------------------------------------------------
 //
-// Off until asked for. Badges then ask to be let in and show a code; approving one here is
-// what pairs it.
+// Off until asked for. Badges then ask to be let in and show a code.
 
 let pairingPoll = null
 
@@ -2051,8 +2015,7 @@ async function answer(requestId, approve) {
                            { method: "POST" })
   toast(approve ? "Badge paired" : "Denied")
   badges = await api("/api/badges")
-  // Straight to the badge just paired, since configuring it is what comes next - unless there
-  // are edits for another one, which are not worth interrupting for.
+  // Straight to the badge just paired, unless there are edits for another one.
   if (approve && result.approved && !dirty) {
     await switchTo(result.approved)
   } else {
@@ -2130,9 +2093,9 @@ async function watchPairing(announce) {
 
 // -- over USB --------------------------------------------------------------
 //
-// The app and the badge's WiFi details only travel over USB: /v1 carries readings and a
-// layout, never code. This drives the install `statsbadge install` does, against whichever
-// badge is plugged in, which need not be the one the picker is on.
+// The app and the badge's WiFi details only travel over USB. This drives the install
+// `statsbadge install` does, against whichever badge is plugged in, which need not be
+// the one the picker is on.
 
 let installPoll = null
 let installer = null
@@ -2159,17 +2122,16 @@ function closeInstaller() {
   }
 }
 
-/** The panel: what is plugged in, the WiFi details if any are wanted, and the log.
+/** Draw the panel: what is plugged in, the WiFi details if any are wanted, and the log.
  *
- * WiFi is off unless it is asked for. Sending a network replaces whatever the badge has,
- * and an update should not be a way to lose the one it is already on. */
+ * WiFi is off unless it is asked for. Sending a network replaces whatever the badge has.
+ */
 function installerBox() {
   const status = el("p", { className: "found", textContent: "Looking for a badge…" })
   const ssid = el("input", { type: "text", id: "ssid", placeholder: "Network name" })
   const password = el("input", { type: "password", id: "wifipass" })
   // A picker, not a field. The firmware takes a fixed set of countries, and one outside
-  // that set leaves the radio unable to associate: the screen then shows a badge that
-  // cannot reach the host, with no clue about the region.
+  // that set leaves the radio unable to associate.
   const region = el("select", { id: "region" },
                     el("option", { value: "", textContent: "Leave as it is" }))
   const zone = el("input", { type: "number", id: "zone", min: -12, max: 14, step: 1,
@@ -2274,7 +2236,8 @@ function installSummary(result) {
 /** One line when a badge is behind what this host would install.
  *
  * A guess, from what the badge was last seen holding: another machine can have installed
- * something else since, and the answer is only ever a reason to plug it in and look. */
+ * something else since.
+ */
 function renderStale() {
   const names = Object.keys(badges)
     .filter((id) => badges[id].app && badges[id].app.behind)
@@ -2294,9 +2257,8 @@ function renderStale() {
 
 // -- help ------------------------------------------------------------------
 //
-// What this computer needs set up by hand. Every platform hides its sensors somewhere
-// different. Two need a human: macOS puts power and temperatures behind sudo, Windows
-// puts them behind a driver.
+// What this computer needs set up by hand. macOS puts power and temperatures behind
+// sudo, Windows puts them behind a driver.
 
 async function renderHelp() {
   const node = $("help")
@@ -2359,7 +2321,7 @@ function macHelp(state) {
   return box
 }
 
-/** Windows: a normal process is told nothing, so this reads the LibreHardwareMonitor
+/** Windows: a normal process is told nothing, so this reads what LibreHardwareMonitor
  * already wrote. */
 function windowsHelp(state) {
   const box = el("section", null,
@@ -2399,15 +2361,13 @@ function windowsHelp(state) {
 
 const PERCENT = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"]
 
-// Everything on a frame beside the groups of readings: collect.FRAME_SCALARS, held to it by
-// a test. `peaks` is shown but kept out of the signature below: it is scale, not a reading,
-// and comes and goes with what has been measured.
+// Everything on a frame beside the groups of readings: collect.FRAME_SCALARS, held to it
+// by a test. `peaks` is kept out of the signature below: it is scale, not a reading.
 const FRAME_SCALARS = ["v", "t", "seq", "slow_rev"]
 const FRAME_META = FRAME_SCALARS.concat(["peaks"])
 
 // Which groups the last frame carried, so a source that only learns what it can report
-// once running shows up here first: Cloudflare lists an account's domains after it is given
-// a token. Fetched every second regardless, so noticing costs nothing.
+// once running shows up here first.
 let liveGroups = ""
 
 async function renderLive() {
@@ -2450,8 +2410,7 @@ async function renderLive() {
 }
 
 /** The groups this host measures itself with. Anything else on a frame came from an
- * extension, including the ones an extension only finds out about once it is running and
- * so does not declare. */
+ * extension, the ones it only finds out about once running included. */
 function hostGroups() {
   const extensions = new Set((caps.extensions || []).map((extension) => extension.name))
   const groups = new Set()
@@ -2467,15 +2426,14 @@ function fillGroups(node, groups) {
   node.hidden = !groups.length
 }
 
-// The most of a shaped reading that goes on a line. All of it is on
-// the row's tooltip.
+// The most of a shaped reading that goes on a line. All of it is on the row's tooltip.
 const SHOWN = 48
 
-/** A reading as one line.
+/** Format a reading as one line.
  *
- * Not everything a source reports is a number or a list of them: the ISS carries where it is
- * as an object and its ground track as a list of points. The quakes source sends a list of
- * quakes. Those read as `[object Object]` and a row of `NaN`. */
+ * Not everything a source reports is a number or a list of them: the ISS carries where
+ * it is as an object. Those read as `[object Object]` and a row of `NaN`.
+ */
 function reading(value) {
   if (value === null || value === undefined) return "unknown"
   if (typeof value === "number") {
@@ -2513,9 +2471,8 @@ function readingList(item) {
 
 function renderSources() {
   $("sources").querySelector("ul").replaceChildren(...caps.sources.map((source) => {
-    // A fault goes underneath what a source provides instead of replacing it, and one it
-    // has recovered from is a footnote: an upstream 503 an hour ago should not still be a
-    // source's whole description.
+    // A fault goes underneath what a source provides instead of replacing it, and one
+    // it has recovered from is a footnote.
     const row = el("li", { className: source.last_fault ? "faulty" : null,
                            textContent: `${source.name} → ${source.provides.join(", ") || "nothing"}` })
     if (source.last_fault) {
@@ -2532,19 +2489,14 @@ function renderSources() {
 
 /** What an extension offers, as one string, so a change in it can be noticed cheaply. */
 function capsSignature() {
-  // Each source's current fault, and not how many it has had. One failing every poll
-  // counts one a second, and a signature that moved with it would redraw every field,
-  // `/api/preview` and all, once a second for as long as it was broken.
+  // Each source's current fault, and not how many it has had. A signature that moved
+  // with the count would redraw every field once a second for as long as it was broken.
   const faults = (caps.sources || []).map((source) => [source.name, source.last_fault])
   return JSON.stringify([caps.available, caps.extension_settings, caps.graphed,
                          caps.group_source, caps.extension_pages, caps.recipes, faults])
 }
 
-/** Refetch capabilities and redraw if what the host offers has changed.
- *
- * An extension may not have its groups at startup. A token pasted in the browser is what
- * lets the Cloudflare one list an account's domains, and it lists them on a thread a moment
- * after the save lands. */
+/** Refetch capabilities and redraw if what the host offers has changed. */
 async function refreshCaps() {
   // Never over unsaved work: these renderers rebuild their inputs from `config`, and a redraw
   // part way through typing an API key moves the caret out from under it.
@@ -2564,11 +2516,7 @@ async function refreshCaps() {
   return true
 }
 
-/** Look again for a while, since what a save sets off does not finish inside the reply.
- *
- * The Cloudflare source is handed its token synchronously and then goes to the network, so the
- * domains land seconds later. Backing off and not polling, since this watches for one
- * thing to arrive and does not keep a display current. */
+/** Look again for a while, since what a save sets off does not finish inside the reply. */
 async function refreshCapsSoon(delays = [400, 1200, 3000, 6000]) {
   for (const delay of delays) {
     await new Promise((wake) => setTimeout(wake, delay))
@@ -2595,11 +2543,10 @@ async function save() {
     $("save").disabled = true
     toast(`Saved. ${whose ? badgeName(whose) : "A badge on the default"} `
           + `will pick up revision ${result.rev}.`)
-    // Settings reach the sources on the save, and what a source does with them may be to go and
-    // find out what it can offer. Not awaited: the save is done either way.
+    // Settings reach the sources on the save, and what a source does with them may be to
+    // go and find out what it can offer. Not awaited: the save is done either way.
     refreshCapsSoon().catch(() => {})
-    // Each badge's box shows the settings off its layout, which a save is what moves. Kept
-    // to what is in hand if the fetch fails, the save itself having landed.
+    // Each badge's box shows the settings off its layout, which a save is what moves.
     badges = await api("/api/badges").catch(() => badges)
     renderWhose()
     renderPages()
@@ -2638,8 +2585,7 @@ async function boot() {
   const form = pick("main form")
   form.onsubmit = (event) => {
     event.preventDefault()
-    // At the top: added at the bottom it lands off the end of a long list, and the first thing
-    // anyone does with a new page is configure it.
+    // At the top: added at the bottom it lands off the end of a long list.
     config.pages.unshift(newPage($("kind").value))
     expanded.add(config.pages[0].id)
     markDirty()

@@ -13,8 +13,7 @@ from statsbadge import auth, server
 
 
 def test_badge_provisioned_by_another_process_is_accepted(h):
-    """A badge provisioned by the CLI while the server runs is accepted without a
-    restart."""
+    """A badge provisioned by the CLI while the server runs is accepted without a restart."""
     other = auth.Store(os.path.join(h.dir, "badges.json"))
     secret = other.provision("latecomer0001", "written by the CLI")
     seq = 500
@@ -295,8 +294,7 @@ def test_unreadable_badge_store_is_not_treated_as_empty():
 
 
 def test_a_badge_can_be_given_a_name(h):
-    """A badge takes the name it is given, and falls back to its id when that is
-    cleared."""
+    """A badge takes the name it is given, and falls back to its id when that is cleared."""
     assert h.service.badges.list_badges()[h.badge_id]["name"] == "test"
 
     status, body = h.raw("PUT", f"/api/badges/{h.badge_id}",
@@ -323,12 +321,7 @@ def test_a_badge_can_be_given_a_name(h):
 
 
 def test_the_pairing_delay_does_not_escalate(h):
-    """One flat wait between attempts, however many there have been.
-
-    The delay used to double per attempt to a 30s cap, which a badge retrying after a
-    dropped reply reached in five tries and then sat at. Pairing needs a human to open the
-    window and approve the code, so the wait is only here to stop a tight loop.
-    """
+    """One flat wait between attempts, however many there have been."""
     badges = h.service.badges
     badges.begin_pairing(ttl=300)
     try:

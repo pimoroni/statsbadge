@@ -1,9 +1,4 @@
-"""What is held between frames, and what a theme change drops.
-
-Run under the WASM port by `node tools/wasm/run.mjs`. Every cache here holds something
-painted in a theme's colours, so one left behind after a switch draws a widget in the
-palette before last - which reads as a rendering fault and is a missing line.
-"""
+"""What is held between frames, and what a theme change drops."""
 
 import unittest
 
@@ -15,8 +10,7 @@ import worldmap
 
 class Registered(unittest.TestCase):
     def test_every_container_in_draw_is_registered(self):
-        """`_cached` returns what it registers, so a cache is declared by being built
-        through it. One built by hand is what this finds."""
+        """`_cached` returns what it registers, so one built by hand is what this finds."""
         # Named as holding no colour: a face with its measurements, and the list itself.
         exempt = {"_fonts", "_weights", "_CLEARS"}
         loose = []
@@ -46,15 +40,15 @@ class Registered(unittest.TestCase):
                 self.assertEqual(len(held), 0, f"draw.{name} survived a theme change")
 
     def test_state_that_is_not_a_container_is_registered_too(self):
-        """The waterfall's scroll buffer is a second of columns painted in the ramp they
-        were drawn with, and the map's pens are keyed by theme."""
+        """The waterfall's scroll buffer and the map's pens both hold theme colours."""
         self.assertTrue(draw.waterfall_reset in draw._CLEARS)
         self.assertTrue(worldmap.forget in draw._CLEARS)
 
 
 class ATintIsANewTheme(unittest.TestCase):
-    """A derived theme keeps its name when it is built from another accent, so anything
-    baked under the name would go on being drawn in the colours it was baked in."""
+    """A derived theme keeps its name when built from another accent, so anything baked
+    under the name would go on being drawn in the colours it was baked in.
+    """
 
     def setUp(self):
         draw.prepare()

@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""Put the version being built into the briefcase table of pyproject.toml.
-
-    python3 tools/app_version.py [VERSION]
-
-The tag is the version everywhere else, read from installed metadata or from git. Briefcase
-takes a static one, so CI writes it in before packaging.
-
-Only the release numbers travel. A Windows installer takes three numbers, and macOS
-compares CFBundleVersion as one. `1.3.3.post27.dev0+6ca7eb1` is the app
-that was built from a commit after 1.3.3, and it is packaged as 1.3.3.
-"""
+"""Put the version being built into the briefcase table of pyproject.toml."""
 
 import pathlib
 import re
@@ -23,7 +13,7 @@ LINE = re.compile(r'^(version\s*=\s*)"[^"]*"$', re.M)
 
 
 def release(version):
-    """The leading numbers, as three of them."""
+    """Return the leading numbers, as three of them."""
     found = re.match(r"\D*(\d+(?:\.\d+)*)", version)
     if not found:
         raise SystemExit(f"no version numbers in {version!r}")
@@ -32,7 +22,7 @@ def release(version):
 
 
 def current():
-    """What is being built: the installed distribution, or the nearest tag."""
+    """Return what is being built: the installed distribution, or the nearest tag."""
     from importlib.metadata import PackageNotFoundError, version as installed
     try:
         return installed("statsbadge")

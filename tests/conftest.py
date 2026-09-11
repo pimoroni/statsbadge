@@ -1,9 +1,4 @@
-"""Fixtures for the suite, and the path and builtins setup every test file relies on.
-
-pytest imports this before any test module, which makes the badge stand-ins work:
-`look` builds a Theme at import, so cannot be imported without `color`, and every module
-under `badge_app/` reaches `look`. Installing them here is the one ordering guarantee.
-"""
+"""Fixtures for the suite, and the path and builtins setup every test file relies on."""
 
 import ast
 import html.parser
@@ -22,14 +17,14 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-import badgefakes  # noqa: E402  the paths above have to be set before this
+import badgefakes  # noqa: E402
 
 badgefakes.install()
 
 from statsbadge import auth, install, server  # noqa: E402
 
 # badge/wasm/ is MicroPython, run against the firmware by `node tools/wasm/run.mjs`. It
-# reaches `screen` and `rect`, so it cannot be imported here at all, let alone collected.
+# reaches `screen` and `rect`, so it cannot be imported here at all.
 collect_ignore_glob = ["badge/wasm/*.py"]
 
 class Harness:
@@ -86,10 +81,7 @@ def h():
 
 @pytest.fixture(autouse=True)
 def _tidy_enrolments(request):
-    """Clear anything a test left waiting: a request counts against the enrolment cap.
-
-    Only for tests that took the harness, so the rest never start a server.
-    """
+    """Clear anything a test left waiting: a request counts against the enrolment cap."""
     yield
     if "h" not in request.fixturenames:
         return
@@ -135,12 +127,7 @@ class Markup(html.parser.HTMLParser):
 
 
 class ConfigUI:
-    """The config UI as data: what index.html defines, and what app.js binds each id to.
-
-    Matching a binding as a substring - `'bindCheck("animate", "animate")' in script` -
-    breaks on a reformat, and passes a control bound to a setting the server
-    rejects. Reading the calls out gives the pair to check against the real schema.
-    """
+    """The config UI as data: what index.html defines, and what app.js binds each id to."""
 
     def __init__(self, web):
         self.markup = (web / "index.html").read_text(encoding="utf-8")
@@ -170,17 +157,14 @@ class ConfigUI:
     @property
     def constants(self):
         """The script's `const NAME = <number>` declarations, several of which restate a
-        figure from look.py: JavaScript cannot import it, so the two are checked instead."""
+        figure from look.py: JavaScript cannot import it, so the two are checked instead.
+        """
         return {name: float(value) if "." in value else int(value)
                 for name, value in re.findall(
                     r"^const ([A-Z][A-Z0-9_]*) = (-?[\d.]+)\s*$", self.script, re.M)}
 
     def function(self, name):
-        """One named function's body, to the brace that closes it.
-
-        Slicing a fixed number of characters after the name reads whatever happens to
-        follow, so a helper moved in above the line under test quietly empties the check.
-        """
+        """Return one named function's body, to the brace that closes it."""
         start = self.script.index(f"function {name}")
         opened = self.script.index("{", start)
         depth = 0
@@ -194,7 +178,7 @@ class ConfigUI:
         raise AssertionError(f"unbalanced braces in {name}")
 
     def _call_at(self, start):
-        """From the bracket after the name, to the one that closes it."""
+        """Return from the bracket after the name, to the one that closes it."""
         opened = self.script.index("(", start)
         depth = 0
         for position in range(opened, len(self.script)):
@@ -214,13 +198,7 @@ def ui(web_dir):
 
 @pytest.fixture(scope="session")
 def badge_constants():
-    """Read a badge module's module-level constants without importing it.
-
-    Several of these have to agree with a host-side figure, and `badge_app/app.py`
-    cannot be imported on a host at all. Matching the assignment as text breaks on a
-    comment or a reflow, and proves nothing about the value, so the source is parsed and the
-    constants evaluated in order, each seeing the ones above it.
-    """
+    """Read a badge module's module-level constants without importing it."""
     def constants(module):
         # A name for one of the app's modules, or a Path for an extension's. Not sniffed
         # out of the string: a Windows path has no forward slash in it.
@@ -236,9 +214,9 @@ def badge_constants():
             if not all(isinstance(name, ast.Name) for name in names):
                 continue
             try:
-                value = eval(  # noqa: S307  a module in this repo, constants only
+                value = eval(  # noqa: S307
                     compile(ast.Expression(node.value), module, "eval"), {}, dict(found))
-            except Exception:  # noqa: BLE001  anything needing the firmware is not a constant
+            except Exception:  # noqa: BLE001
                 continue
             if isinstance(target, ast.Tuple):
                 found.update(zip((name.id for name in names), value, strict=True))

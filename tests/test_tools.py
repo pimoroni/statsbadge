@@ -6,11 +6,7 @@ import tempfile
 
 
 def test_a_packed_font_reads_back_the_way_it_was_written():
-    """The encoder and the decoder are held to each other here.
-
-    They were once a definition each, in make_icon_font.py and read_af.py. Two that
-    disagree do not fail: the font packs, loads, and draws wrong.
-    """
+    """The encoder and the decoder are held to each other here."""
     import af
 
     def glyph(codepoint, contours, **fields):
@@ -46,11 +42,7 @@ def test_a_packed_font_reads_back_the_way_it_was_written():
 
 
 def test_the_fonts_that_shipped_repack_to_the_same_bytes(repo_root):
-    """Every .af in the tree, read and written again, is the file that shipped.
-
-    Holds the encoder to what it wrote before the container became one module, on the wide
-    path and the narrow one. Needs neither the fonts group nor a .ttf to build from.
-    """
+    """Every .af in the tree, read and written again, is the file that shipped."""
     import af
 
     fonts = sorted(path for directory in ("src", "extensions")
@@ -69,7 +61,8 @@ def test_the_fonts_that_shipped_repack_to_the_same_bytes(repo_root):
 
 def test_a_glyph_the_font_format_cannot_hold_is_refused():
     """A malformed corpus line, a point outside a signed byte, and a codepoint past a u16
-    are each refused by name."""
+    are each refused by name.
+    """
 
     import make_icon_font as tool
 
@@ -94,8 +87,7 @@ def test_a_glyph_the_font_format_cannot_hold_is_refused():
                 continue
             raise AssertionError(f"accepted a line with a {why}")
 
-    # Points and the advance are signed bytes, so the caller is told which glyphs are
-    # outside that.
+    # Points and the advance are signed bytes, so the caller is told which glyphs are out.
     glyph = tool.Glyph(ord("a"))
     glyph.contours = [[(0, 0), (200, -50), (10, -300)]]
     assert tool.out_of_range([glyph]) == [ord("a")]
@@ -114,8 +106,7 @@ def test_a_glyph_the_font_format_cannot_hold_is_refused():
     # Header, glyph table, one contour length, then the points.
     assert len(blob) == 12 + 8 + 2 + 5 * 2, len(blob)
 
-    # Codepoints are a u16, so a Material Symbol above that has to be remapped in the
-    # corpus.
+    # Codepoints are a u16, so a Material Symbol above that is remapped in the corpus.
     high = tool.Glyph(0x1FFF0)
     high.contours = [[(0, 0), (10, 0), (10, -10), (0, 0)]]
     try:

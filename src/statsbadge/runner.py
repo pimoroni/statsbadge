@@ -1,11 +1,4 @@
-"""The collector, the HTTP server and the beacon, started and stopped together.
-
-serve and pair block on it; the tray runs it on a thread and keeps the main one for the
-icon.
-
-Kept out of __main__.py, which `python -m statsbadge` loads under another name. Importing
-it from the tray would build a second copy of the module.
-"""
+"""The collector, the HTTP server and the beacon, started and stopped together."""
 
 import errno
 import json
@@ -61,11 +54,7 @@ class Stack:
         self._thread.start()
 
     def stop(self):
-        """Wind down in the order the CLI has always used, the thread first.
-
-        shutdown() only where a thread is serving. Against a server that never started
-        serving, it waits for a loop that will not run.
-        """
+        """Wind down in the order the CLI has always used, the thread first."""
         if self._stopped:
             return
         self._stopped = True
@@ -82,7 +71,7 @@ class Stack:
         return server._local_addresses()
 
     def status(self):
-        """What the tray shows, read fresh each time. Every store behind this is locked."""
+        """Return what the tray shows, read fresh each time."""
         badges = self.service.badges
         return {
             "port": self.port,
@@ -94,14 +83,7 @@ class Stack:
 
 
 def already_serving(port, host="127.0.0.1", timeout=0.5):
-    """Another statsbadge on this port, as its /v1/hello, or None.
-
-    That endpoint is unauthenticated: a badge asks it before it holds a secret.
-
-    On Windows this is the only guard against two instances. Server sets SO_REUSEADDR,
-    under which a second bind to a listening port succeeds and the two split incoming
-    connections between them. Elsewhere the bind fails.
-    """
+    """Return another statsbadge on this port, as its /v1/hello, or None."""
     try:
         with urllib.request.urlopen(f"http://{host}:{port}/v1/hello",
                                     timeout=timeout) as response:

@@ -1,27 +1,4 @@
-"""Time the ways of drawing the clock's marks and hands, on a badge.
-
-    mpremote connect PORT run tools/bench_clockface.py
-
-The dial is a rectangle per mark placed by a mat3, costing a render() per mark. The
-alternative is sixty four-point contours collected into two shape.custom calls under
-NON_ZERO, which the rasteriser takes as two render() calls for the whole set.
-
-Two things this exists to check:
-
-- The face image is allocated once, outside every timed region. Allocating a 168x168
-  image per iteration measures garbage collection, not drawing.
-- Whether re-aiming one cached shape beats building a fresh one depends on the firmware,
-  and the last section measures that. MicroPython only advances its free-block hint
-  for single-block allocations (py/gc.c, n_free == 1), so a loop that allocates nothing
-  but multi-block objects rescans the allocation table from a stale index every time, and
-  the per-draw cost climbs without bound. With 32-byte GC blocks and a six-float mat3 the
-  boxed mat3 is one block and the cached path is both flat and fastest, which is why
-  clockface.py caches. On a build with either of those changed, a fresh shape box - one
-  block, so it keeps the hint moving - is the faster way round.
-
-Both implementations are inlined rather than imported from clockface, so they can be
-compared side by side. Keep the geometry in step with clockface.py if that changes.
-"""
+"""Time the ways of drawing the clock's marks and hands, on a badge."""
 
 import gc
 import math
@@ -41,7 +18,7 @@ HAND_IN, HAND_OUT, HAND_HALF = -RADIUS * 0.13, RADIUS * 0.86, RADIUS * 0.048
 
 ROUNDS = 7
 
-# One image, reused by every case
+# One image, reused by every case.
 face = image(SIZE, SIZE)
 face.antialias = image.X4
 
@@ -53,7 +30,7 @@ def blank():
 
 
 def measure(name, per_round, fn, unit=1000.0, suffix="ms"):
-    """Minimum of several rounds: the badge composites as well, so a mean is noise."""
+    """Return the minimum of several rounds: the badge composites too, so a mean is noise."""
     times = []
     fn(2)
     for _ in range(ROUNDS):
@@ -65,7 +42,7 @@ def measure(name, per_round, fn, unit=1000.0, suffix="ms"):
     print(f"{name:<36} {times[0]:>9.3f} {times[len(times) // 2]:>9.3f} {suffix}")
 
 
-# ── geometry, the old way and the new ────────────────────────────────────────
+# -- geometry, the old way and the new ---------------------------------------
 def blunt(centre, degrees, inner, outer, half_width):
     radians = math.radians(degrees)
     ax, ay = math.sin(radians), -math.cos(radians)
@@ -85,7 +62,7 @@ def bar(centre, degrees, inner, outer, half_width):
     return s
 
 
-# mat3.trs builds the same transform in one call, so one boxed mat3 instead of a chain
+# mat3.trs builds the same transform in one call, so one boxed mat3 instead of a chain.
 HAS_TRS = hasattr(mat3, "trs")
 
 
@@ -95,7 +72,7 @@ def bar_trs(centre, degrees, inner, outer, half_width):
     return s
 
 
-# ── the dial, four ways ──────────────────────────────────────────────────────
+# -- the dial, four ways ----------------------------------------------------
 def bake_contours(n):
     for _ in range(n):
         blank()
@@ -135,7 +112,7 @@ def bake_list(n):
 
 
 def bake_reaimed(n):
-    # Two shapes re-aimed sixty times: the fewest allocations, and what clockface.py does
+    # Two shapes re-aimed sixty times: the fewest allocations, and what clockface.py does.
     for _ in range(n):
         blank()
         hour_mark = shape.rectangle(rect(-HOUR_HALF, -HOUR_OUT, HOUR_HALF * 2.0, HOUR_OUT - HOUR_IN))
@@ -178,7 +155,7 @@ if HAS_TRS:
     measure("mat3.trs, fresh shapes, 1 list draw", 10, bake_list_trs)
     measure("mat3.trs, 2 shapes re-aimed", 10, bake_reaimed_trs)
 
-# ── one hand, the per-frame path ─────────────────────────────────────────────
+# -- one hand, the per-frame path -------------------------------------------
 CACHED = shape.rectangle(rect(-HAND_HALF, -HAND_OUT, HAND_HALF * 2.0, HAND_OUT - HAND_IN))
 
 
@@ -223,7 +200,7 @@ if HAS_TRS:
     measure("fresh shape, mat3.trs", 300, hand_trs, 1.0, "us")
     measure("cached shape, mat3.trs", 300, hand_cached_trs, 1.0, "us")
 
-# ── whether a cached shape's per-draw cost stays flat ────────────────────────
+# -- whether a cached shape's per-draw cost stays flat ----------------------
 BLOCK = 300
 BLOCKS = 12
 

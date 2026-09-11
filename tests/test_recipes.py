@@ -9,8 +9,7 @@ from statsbadge.collect import Collector
 EVERYTHING = {"available": {group: list(fields) for group, fields in model.GROUPS.items()}}
 
 # Which pool each slot of each kind draws from, mirroring SHAPE in web/app.js. A recipe
-# naming a field the picker would not have offered draws a page nobody can read: a gauge
-# with no full scale sits empty, a graph with no history ring is a flat line.
+# naming a field the picker would not have offered draws a page nobody can read.
 POOLS = {
     "dial": ("gauge", "any"),
     "dials": (None, "gauge"),
@@ -80,8 +79,7 @@ def test_a_recipe_this_host_cannot_fill_is_not_offered():
     assert "gpu" not in offered, sorted(offered)
     assert "cpu" in offered, sorted(offered)
 
-    # The readouts beside a gauge are not the page: what this host has is kept, the rest
-    # dropped, and the dial is still worth adding.
+    # The readouts beside a gauge are not the page: what this host has is kept.
     cpu = offered["cpu"]["pages"][0]
     assert cpu["readouts"] == ["cpu.temp", "cpu.freq", "cpu.procs"], cpu
 
@@ -119,12 +117,9 @@ def test_an_extension_kind_is_only_a_recipe_while_it_is_installed():
 
 
 def test_a_recipe_the_host_offers_saves_and_reaches_the_badge(h):
-    """What Quick Add does: the pages come back from /api/capabilities and are PUT as they
-    arrived, bar their ids."""
-    # A collector of this test's own, standing in for the harness's, so what capabilities
-    # offers and what the preview prunes are read off the same frame. A thread samples the
-    # harness's every 0.2s, and a source that drops a reading for one sample would offer a
-    # recipe here and prune its page below. Twice, since a rate needs two.
+    """What Quick Add does: the pages come back from /api/capabilities and are PUT back."""
+    # A collector of this test's own, so what capabilities offers and what the preview
+    # prunes are read off the same frame. Twice, since a rate needs two.
     collector = Collector(interval=1.0)
     collector.sample_once()
     collector.sample_once()
@@ -146,8 +141,7 @@ def test_a_recipe_the_host_offers_saves_and_reaches_the_badge(h):
 
         _status, sent = h.raw("GET", "/api/preview")
         shown = {page["id"] for page in sent["pages"]}
-        # Offered because this host reports the fields, so nothing is pruned on the way to
-        # the badge.
+        # Offered because this host reports the fields, so nothing is pruned on the way.
         for page in added[:24]:
             assert page["id"] in shown, (page, sorted(shown))
     finally:

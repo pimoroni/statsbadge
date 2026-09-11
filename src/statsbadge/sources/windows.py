@@ -1,13 +1,4 @@
-"""Windows sensors via LibreHardwareMonitor's web server.
-
-Windows gives a normal process no temperatures, fan speeds or package power: reading
-them means a driver. LibreHardwareMonitor already ships one, and its "Remote Web
-Server" publishes everything as JSON, so this reads that rather than shipping a
-driver of its own.
-
-Run LibreHardwareMonitor, then Options -> Remote Web Server -> Run, and point
-`--lhm-url` at it if it is not on the default port 8085.
-"""
+"""Windows sensors via LibreHardwareMonitor's web server."""
 
 import json
 import urllib.error
@@ -61,8 +52,8 @@ class LibreHardwareMonitor(Source):
         gpu_temp = _pick(readings, ("gpu",), ("core",), "°C")
         gpu_load = _pick(readings, ("gpu",), ("core",), "%")
         gpu_power = _pick(readings, ("gpu",), ("package", "total"), "W")
-        # VRAM comes as three figures in MB. The frame carries what is used and how
-        # full that leaves it.
+        # VRAM comes as three figures in MB. The frame carries what is used and how full
+        # that leaves it.
         vram_used = _pick(readings, ("gpu",), ("memory used",), "MB")
         vram_total = _pick(readings, ("gpu",), ("memory total",), "MB")
         if any(v is not None for v in (gpu_temp, gpu_load, gpu_power, vram_used)):
@@ -80,7 +71,7 @@ class LibreHardwareMonitor(Source):
             frame["gpu"] = gpus
 
         # Every voltage the CPU reports, in the order it reports them, with the labels
-        # for the lanes beside them. A bar each is what these are for.
+        # for the lanes beside them.
         volts = [(_lane(path[-1]), round(value, 3))
                  for path, _label, value, unit, _top in readings
                  if unit == "V" and _under(path, ("cpu",))]
@@ -110,11 +101,7 @@ def _fetch(url, timeout):
 
 
 def _walk(node, path):
-    """Flatten LHM's tree into (path, label, value, unit, highest) readings.
-
-    Every sensor carries the highest it has been seen to reach, which is the only full
-    scale a voltage has: nothing else records how far a rail can swing.
-    """
+    """Flatten LHM's tree into (path, label, value, unit, highest) readings."""
     label = str(node.get("Text", ""))
     here = path + [label] if label else path
     raw = node.get("Value")
@@ -128,7 +115,7 @@ def _walk(node, path):
 
 
 def _parse(raw):
-    """LHM formats values as "45.0 °C" or "1,234 RPM"."""
+    """Parse LHM's formatting, which is "45.0 °C" or "1,234 RPM"."""
     if raw is None:
         return None
     text = str(raw).strip().replace(",", "")
@@ -141,19 +128,19 @@ def _parse(raw):
 
 
 def _under(path, branch_words):
-    """Whether a reading sits under one of these branches."""
+    """Return whether a reading sits under one of these branches."""
     joined = " ".join(path).lower()
     return any(word in joined for word in branch_words)
 
 
 def _lane(label):
-    """A voltage's label, short enough for a bar: "CPU Core #1" is "Core #1"."""
+    """Shorten a voltage's label to fit a bar: "CPU Core #1" is "Core #1"."""
     text = str(label).strip()
     return text[4:].strip() if text.lower().startswith("cpu ") else text
 
 
 def _pick(readings, branch_words, label_words, unit):
-    """First reading under a branch whose label matches, in preference order."""
+    """Return the first reading under a branch whose label matches, in preference order."""
     for want in label_words:
         for path, label, value, got_unit, _top in readings:
             if got_unit != unit:

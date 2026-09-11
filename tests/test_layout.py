@@ -139,8 +139,7 @@ def test_a_reading_prints_as_one_string_with_its_unit():
     assert draw.reading(None, "pct") == "--"
     assert draw.reading("workshop-pc", "host") == "workshop-pc"
 
-    # A byte figure carries its prefix on the number and its base in the unit, so one
-    # unit serves every size the reading grows to.
+    # A byte figure carries its prefix on the number and its base in the unit.
     assert draw.reading(800, "read_bps") == "800B/s"
     assert draw.reading(819200, "read_bps") == "800KB/s"
     assert draw.reading(52428800, "read_bps") == "50.0MB/s"
@@ -149,8 +148,7 @@ def test_a_reading_prints_as_one_string_with_its_unit():
     assert draw.reading(12600, "used_mb") == "12.3GB"
     assert draw.reading(3 * 1024 ** 2, "total_mb") == "3.0TB"
 
-    # A field can arrive as a list - a load average, per-core loads - which has no hash and
-    # cannot reach the table keyed on a value.
+    # A field can arrive as a list, which has no hash and cannot reach a table keyed on value.
     assert draw.reading([1.52, 1.18, 0.94], "load") == "1.5 1.2 0.9"
     # Sixteen per-core loads overflow a slot, and three of the sixteen misreport it.
     assert draw.reading([31.0] * 16, "cores") == "16 values"
@@ -163,8 +161,7 @@ def test_a_reading_prints_as_one_string_with_its_unit():
 
 
 def test_a_page_carries_only_what_its_kind_declared():
-    """A page keeps the settings its kind declared, at the declared type, and drops the
-    rest."""
+    """A page keeps the settings its kind declared, at the declared type, and drops the rest."""
     schema = {"clockface": [{"key": "place", "label": "Place", "type": "text"},
                             {"key": "big", "label": "Big", "type": "bool"}]}
     config = {"pages": [{"id": "a", "kind": "clockface", "title": "Tokyo",
@@ -194,8 +191,7 @@ def test_the_field_picker_offers_each_reading_once(ui):
 
 
 def test_every_kind_picks_from_a_pool_that_suits_it(ui):
-    """Every kind with a slot names the pool it picks from, and one with none has no
-    fields."""
+    """Every kind with a slot names the pool it picks from, and one with none has no fields."""
     ui = ui.script
     shape = ui[ui.index("const SHAPE = {"):ui.index("async function api(")]
     pools = ui[ui.index("const POOLS = {"):]
@@ -223,8 +219,7 @@ def test_every_kind_picks_from_a_pool_that_suits_it(ui):
 
 
 def test_the_ui_is_told_what_a_gauge_can_scale():
-    """The described model marks which fields have a top end, so the UI can keep uptime off
-    a gauge."""
+    """The described model marks which fields have a top end, to keep uptime off a gauge."""
     described = model.describe()
     assert "full_scale" in described and described["full_scale"], described.keys()
     assert "temp" in described["full_scale"]
@@ -235,8 +230,7 @@ def test_the_ui_is_told_what_a_gauge_can_scale():
 
 
 def test_a_layout_is_stored_per_badge(h, ui):
-    """A save for one badge is not a save for another, and a badge without one draws the
-    default."""
+    """A save for one badge is not a save for another, and one without draws the default."""
     other = "badgetwo00000002"
     other_secret = h.service.badges.provision(other, "second badge")
     try:
@@ -258,8 +252,7 @@ def test_a_layout_is_stored_per_badge(h, ui):
         # The table stays behind: it names every other badge paired with this host.
         assert "badges" not in sent, "a badge is told about every other badge here"
 
-        # The first is still on the default, and its revision has not moved, or every badge
-        # refetches a layout that did not change.
+        # The first is still on the default, and its revision has not moved.
         _status, mine = h.signed("GET", "/v1/layout")
         assert mine["theme"] == default["theme"], mine["theme"]
         assert mine["rev"] == default["rev"], "a save for one badge moved another's revision"
@@ -276,8 +269,7 @@ def test_a_layout_is_stored_per_badge(h, ui):
         assert listing[other]["configured"] is True
         assert listing[h.badge_id]["configured"] is False
 
-        # The list carries what each is drawing, read off the merged layout, so a badge on
-        # the default reports the default's settings.
+        # The list carries what each is drawing, read off the merged layout.
         assert listing[other]["theme"] == "mono", listing[other]
         assert listing[other]["interval_ms"] == 2000, listing[other]
         assert listing[h.badge_id]["theme"] == default["theme"], listing[h.badge_id]
@@ -288,20 +280,17 @@ def test_a_layout_is_stored_per_badge(h, ui):
         _status, edited = h.raw("GET", f"/api/config?badge={other}")
         assert edited["theme"] == "mono"
 
-        # A layout cannot be stored against a badge that is not paired here, or a typo in
-        # the query string configures a phantom.
+        # A layout cannot be stored against a badge that is not paired here.
         status, refused = h.raw("PUT", "/api/config?badge=nobody",
                                 json.dumps(theirs).encode(),
                                 {"Content-Type": "application/json"})
         assert status == 404, (status, refused)
 
-        # An extension doing per-page work fetches for every badge at once, so it is told
-        # about all their pages.
+        # An extension doing per-page work fetches for every badge at once.
         everywhere = {page["id"] for page in h.service.config.all_pages()}
         assert {page["id"] for page in default["pages"]} <= everywhere
 
-        # Forgetting a badge takes its layout with it, or the next badge to hold that id is
-        # handed it.
+        # Forgetting a badge takes its layout with it, or the next to hold that id gets it.
         assert h.service.config.configured() == [other]
         h.raw("DELETE", f"/api/badges/{other}")
         assert h.service.config.configured() == []
@@ -360,11 +349,7 @@ def test_a_badge_block_sits_over_the_default():
 
 
 def test_a_unit_the_badge_cannot_guess_travels_with_the_layout():
-    """A field with no suffix to read a unit off is sent its unit with the layout.
-
-    What the badge does with them is `Units` in tests/badge/wasm/test_units.py: it keeps
-    the families `fmt` rescales, so `_mb` prints as 11.1G and takes a B.
-    """
+    """A field with no suffix to read a unit off is sent its unit with the layout."""
     from statsbadge.sources.base import Source
 
     class Meter(Source):
@@ -378,8 +363,7 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout():
             frame["energy"] = {"kwh": 0.25, "spend_p": 316.8}
 
     source = Meter({})
-    # A collector of this test's own, so the frame it samples is the frame it reads. A
-    # thread samples the harness's, and lands between the append and the read.
+    # A collector of this test's own, so the frame it samples is the frame it reads.
     collector = Collector(interval=1.0)
     collector.extensions.append(source)
     collector.sample_once()
@@ -396,14 +380,8 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout():
     assert "spend_p" not in units, units
 
 
-
-
 def test_a_row_of_a_name_and_a_figure_takes_the_unit_in_the_figure():
-    """A grid row has one slot, so `reading` returns the two together.
-
-    That no kind prints a bare figure is `EveryFigureCarriesAUnit` in
-    tests/badge/wasm/test_units.py, which renders each of them and watches.
-    """
+    """A grid row has one slot, so `reading` returns the two together."""
     sys.path.insert(0, install.app_source_dir())
     import draw
     import pages
@@ -421,10 +399,8 @@ def test_a_row_of_a_name_and_a_figure_takes_the_unit_in_the_figure():
     assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
 
 
-
 def test_an_api_key_is_masked_until_it_is_asked_for(ui):
-    """A secret setting is masked rather than hidden, so unset and wrong can be told
-    apart."""
+    """A secret setting is masked rather than hidden, so unset and wrong are told apart."""
     ui = ui.script
     assert "function masked(" in ui and "Edit secrets" in ui
     # A secret does not go in the ordinary run of rows, or it would be on screen anyway
@@ -432,8 +408,7 @@ def test_an_api_key_is_masked_until_it_is_asked_for(ui):
     # Reopened by name, so a redraw does not close the box under someone's typing
     assert "editingSecrets" in ui
 
-    # Stored and coerced like any other setting: masking is the UI's business, and the host
-    # hands the value back or it could not be edited.
+    # Stored and coerced like any other setting: masking is the UI's business.
     schema = {"thing": [{"key": "api_token", "type": "text", "secret": True}]}
     stored = layout.validate({**layout.DEFAULT_CONFIG,
                               "settings": {"thing": {"api_token": "sekrit"}}},
@@ -442,8 +417,7 @@ def test_an_api_key_is_masked_until_it_is_asked_for(ui):
 
 
 def test_a_number_setting_is_held_to_its_bounds(ui):
-    """A number setting is clamped to the bounds its extension declared, on this side as
-    well as in the browser."""
+    """A number setting is clamped to the bounds its extension declared, on this side too."""
     schema = {"thing": [{"key": "every", "type": "number", "min": 60, "max": 3600,
                          "unit": "seconds"},
                         {"key": "loose", "type": "number"}]}
@@ -463,12 +437,7 @@ def test_a_number_setting_is_held_to_its_bounds(ui):
 
 
 def test_every_display_setting_lands_on_a_known_value():
-    """A flag, a choice and a bounded number each come back usable however they arrive.
-
-    validate() is the only thing between the HTTP API and a badge that cannot show a
-    traceback, so every setting is pinned here: what it is when absent, what junk falls
-    back to, and where a number is clamped.
-    """
+    """A flag, a choice and a bounded number each come back usable however they arrive."""
     def stored(**sent):
         return layout.validate({**layout.DEFAULT_CONFIG, **sent})
 
@@ -512,8 +481,7 @@ def test_every_display_setting_lands_on_a_known_value():
 
 
 def test_a_setting_that_is_not_a_number_is_refused():
-    """Clamping is for a number out of range. A value that is not a number at all is a bad
-    request, and reaches the caller as one rather than as a guess."""
+    """Clamping is for a number out of range; one that is not a number is a bad request."""
     for bad in ("abc", None, [1]):
         try:
             layout.validate({**layout.DEFAULT_CONFIG, "interval_ms": bad})

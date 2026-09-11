@@ -1,17 +1,4 @@
-"""Ready-made pages, loaded from recipes.toml.
-
-A recipe is a page, or a few, with the fields already picked: "GPU Overview" against a
-dial and four dropdowns. It is data, so a new one is a table in the file and needs no
-release of anything.
-
-An extension contributes its own in the same shape, through `badge_recipes` on its source.
-
-`offered` is what the config UI lists. Only what the host reports gets there: a page keeps
-the fields this machine can fill, and a recipe with no page left is not offered, which is
-the check `layout.prune` makes. Which pool a slot draws from is not checked, so a graph
-pointed at a field the host keeps no history for is an authoring mistake in the file rather
-than something caught here.
-"""
+"""Ready-made pages, loaded from recipes.toml."""
 
 import copy
 import tomllib
@@ -19,8 +6,8 @@ from importlib import resources
 
 from . import layout
 
-# The recipe built from layout.DEFAULT_PAGES rather than written out again, so what a new
-# badge shows and what this puts back cannot drift apart.
+# Built from layout.DEFAULT_PAGES rather than written out again, so what a new badge
+# shows and what this puts back cannot drift apart.
 DEFAULTS = "defaults"
 
 
@@ -33,7 +20,7 @@ WRITTEN = _load()
 
 
 def written():
-    """The recipes in recipes.toml, in the order it names them."""
+    """Return the recipes in recipes.toml, in the order it names them."""
     return [_record(name, entry) for name, entry in WRITTEN.items()]
 
 
@@ -53,11 +40,7 @@ def _defaults():
 
 
 def offered(capabilities, extra=()):
-    """Every recipe this host can fill in, each trimmed to the fields it reports.
-
-    `extra` is what the installed extensions contribute, which is filtered the same way:
-    an extension's page kind is only drawable while it is installed.
-    """
+    """Return every recipe this host can fill in, each trimmed to the fields it reports."""
     kinds = set(layout.KINDS)
     kinds |= {page.get("kind") for page in capabilities.get("extension_pages") or ()}
     available = capabilities.get("available") or {}
@@ -75,11 +58,7 @@ def offered(capabilities, extra=()):
 
 
 def _fitted(page, kinds, available):
-    """One page with the fields this host cannot fill dropped, or None if nothing is left.
-
-    A recipe's gauge is the page: without the field it points at there is no page to add. A
-    readout beside it is not, and a list of fields keeps whichever of them arrived.
-    """
+    """Return one page with the fields this host cannot fill dropped, or None."""
     if page.get("kind") not in kinds:
         return None
 

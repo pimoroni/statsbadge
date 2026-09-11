@@ -1,14 +1,4 @@
-"""The HTTP server the badge talks to, and the config UI beside it.
-
-Every response goes out as a single `write()` with TCP_NODELAY set. Flushing headers and
-body separately costs a badge 247ms a request against 7ms, Nagle holding the body until
-lwIP acknowledges the headers. DEVELOPMENT.md has the measurements.
-
-Two audiences on one port:
-
-  /v1/*    the badge. Every request HMAC-signed, see auth.py.
-  /api/*   the config UI. Loopback only, because it can mint pairing secrets.
-"""
+"""The HTTP server the badge talks to, and the config UI beside it."""
 
 import http.server
 import ipaddress
@@ -39,9 +29,8 @@ REASONS = {
 # Lines of install progress kept for the UI to poll.
 INSTALL_LOG = 400
 
-# Settings the host keeps for itself, under this name in layout.json's settings. Declared
-# in the shape an extension declares its settings: the block is handed to the sources, and
-# a stored key nobody declared would be whatever a browser felt like sending.
+# Settings the host keeps for itself, under this name in layout.json's settings.
+# Declared in the shape an extension declares its settings.
 HOST = "host"
 HOST_SETTINGS = (
     {"key": "lhm_url", "label": "Its address", "type": "text"},
@@ -77,8 +66,6 @@ class Service:
         self.config = layout.Config(os.path.join(config_dir, "layout.json"))
         self.badges = auth.Store(os.path.join(config_dir, "badges.json"))
         self.identity = identity.load(config_dir)
-        # Stored settings reach the sources as they are constructed, so an extension
-        # configured in the browser works from the next start with no flags to remember.
         source_config = dict(source_config or {})
         stored = self.config.snapshot().get("settings") or {}
         source_config["extensions"] = layout.merge_settings(
@@ -87,9 +74,8 @@ class Service:
         for key, value in (stored.get(HOST) or {}).items():
             if key in HOST_KEYS and value not in (None, ""):
                 source_config[key] = value
-        # One cache for every source that resolves a location: a town is looked up once for
-        # the install. Beside the config and not under extensions/, which holds one file
-        # per extension.
+        # One cache for every source that resolves a location. Beside the config, not
+        # under extensions/, which holds one file per extension.
         self.geocoder = geocode.Geocoder(
             state.Store(os.path.join(config_dir, "geocode.json")))
         self.collector = Collector(interval=interval, config=source_config,
@@ -115,20 +101,17 @@ class Service:
         return names
 
     def extension_catalogue(self):
-        """What the UI offers, and whether this install can act on it."""
+        """Return what the UI offers, and whether this install can act on it."""
         listed = extensions.describe(tooling.read_disabled(self.config_dir))
         where = library.current(self.config_dir)
         for record in listed:
-            # Only what the library built can be uninstalled from here. The rest is the
-            # environment's, and the most this can do about one is stop loading it.
+            # Only what the library built can be uninstalled from here.
             record["managed"] = bool(where and library.holds(where, record["name"]))
         return {
             "offered": extensions.offered(
                 installed=listed,
                 wanted=tooling.read_wanted(self.config_dir),
                 disabled=tooling.read_disabled(self.config_dir)),
-            # Extensions go beside the config, so any layout can manage them. All this
-            # needs is something to install with.
             "manageable": library.installer() is not None,
             "prefix": sys.prefix,
         }
@@ -144,11 +127,7 @@ class Service:
                 "nothing": not changed, "needs_usb": [], "restart": []}
 
     def change_extensions(self, verb, asking):
-        """Install or remove, then take up the result without a restart.
-
-        One at a time. Two rebuilds at once would race over the same environment, and the
-        second would be resolved from a list the first had already replaced.
-        """
+        """Install or remove, then take up the result without a restart."""
         with self._installing:
             done = tooling.apply(self.config_dir, verb, asking,
                                  {record["name"] for record in extensions.describe()})
@@ -165,18 +144,14 @@ class Service:
                 answer["needs_usb"] = sorted({
                     name for name, _path in extensions.badge_modules(
                         self.collector.extensions)})
-                # An upgrade is normally taken up in place. What could not be, because
-                # its modules would not drop, is on disk and not in this process.
+                # An upgrade is normally taken up in place. What could not be is on disk
+                # and not in this process.
                 answer["restart"] = sorted(
                     {tooling.short_name(name) for name in self.collector.stale})
             return answer
 
     def help(self):
-        """What the Help tab shows: this platform, and where its sensors stand.
-
-        A request to itself rather than part of capabilities, which is polled: asking
-        sudo anything costs a moment, and nobody needs the answer once a second.
-        """
+        """Return what the Help tab shows: this platform, and where its sensors stand."""
         system = platform.system()
         block = {"platform": system, "sources": [s.name for s in self.collector.sources]}
         if system == "Darwin":
@@ -199,11 +174,7 @@ class Service:
         return block
 
     def host_settings(self):
-        """Every host setting at the value the sources are working from.
-
-        Read off the collector rather than the store, so a value given on the command line
-        shows up as the answer in force even though nothing saved it.
-        """
+        """Return every host setting at the value the sources are working from."""
         return {key: self.collector.config.get(key) for key in HOST_KEYS}
 
     def set_host_settings(self, asked):
@@ -218,7 +189,7 @@ class Service:
         return self.host_settings()
 
     def extension_kinds(self):
-        """Page kinds that only the installed extensions can draw."""
+        """Return page kinds that only the installed extensions can draw."""
         return tuple(
             page["kind"]
             for page in extensions.badge_pages(self.collector.extensions)
@@ -226,76 +197,54 @@ class Service:
         )
 
     def extension_settings(self):
-        """What each installed extension can be told, for the UI and the validator."""
+        """Return what each installed extension can be told, for the UI and the validator."""
         return extensions.settings_schema(self.collector.extensions)
 
     def extension_page_settings(self):
-        """What an extension's pages can be told, keyed by page kind."""
+        """Return what an extension's pages can be told, keyed by page kind."""
         return extensions.page_settings_schema(self.collector.extensions)
 
     def settings_schema(self):
-        """Every settings block `validate` checks, the host's among the extensions'.
-
-        Kept apart from `extension_settings`, which is the UI's list of extensions to draw
-        a form for. The host's settings are edited in the Help tab instead.
-        """
+        """Return every settings block `validate` checks, the host's among the extensions'."""
         return {**self.extension_settings(), HOST: list(HOST_SETTINGS)}
 
     def announce_pages(self):
-        """Tell the sources about the pages already stored, at startup.
-
-        Every badge's, since a source doing per-page work fetches for all of them at once.
-        replace_config covers a later save; without this one does nothing until someone
-        presses Save.
-        """
+        """Tell the sources about the pages already stored, at startup."""
         extensions.configure_pages(self.collector.extensions, self.config.all_pages())
 
     def capabilities(self):
         caps = self.collector.capabilities()
-        # Each command's heading and label, so the picker can group the commands without
-        # knowing which is which.
         caps["commands"] = commands.records()
-        # With each one's label, mode and whether it takes an accent, so the picker groups
-        # them and offers the swatches without holding a list.
         caps["themes"] = layout.theme_records()
-        # What a button can be bound to that the badge does itself, labelled: the UI offers
-        # these in the same list as the commands.
+        # What a button can be bound to that the badge does itself, labelled.
         caps["local_actions"] = [{"action": action, "label": label}
                                  for action, label in layout.LOCAL_ACTIONS]
-        # The colours too, so the UI's swatches cannot drift from the badge's tables.
-        # Four families of twelve, the same for every page. The picker shows them as tabs.
+        # Four families of twelve, the same for every page.
         caps["accents"] = {family: [list(accent) for accent in derive.accents(family)]
                            for family in derive.ACCENT_FAMILIES}
         caps["accent_family"] = derive.DEFAULT_FAMILY
-        # How a second accent can be picked, so the HTML holds no copy of the list.
         caps["accent_b_rules"] = list(layout.ACCENT_B_RULES)
         caps["kinds"] = list(layout.KINDS)
-        # Every discovered extension, not only those with something to be told: one that failed
-        # to import is reported here instead of showing up as a page that never draws.
+        # Every discovered extension, so one that failed to import is reported rather
+        # than showing up as a page that never draws.
         caps["extensions"] = extensions.describe()
         caps["extension_pages"] = extensions.badge_pages(self.collector.extensions)
         caps["extension_settings"] = self.extension_settings()
         caps["extension_page_settings"] = self.extension_page_settings()
-        # Read after the extensions above, since a recipe of a kind nothing installed can
-        # draw is not offered.
+        # Read after the extensions above: a recipe of a kind nothing installed can draw
+        # is not offered.
         caps["recipes"] = recipes.offered(caps, extensions.recipes(self.collector.extensions))
         return caps
 
     def replace_config(self, incoming, badge_id=None):
-        """Store a layout from the UI and hand the new settings to the sources.
-
-        Applied here and not at the next restart, which gets a location typed in the
-        browser into the next sample. `badge_id` says whose layout this is; without one
-        it is the default.
-        """
+        """Store a layout from the UI and hand the new settings to the sources."""
         rev = self.config.replace(incoming, self.extension_kinds(),
                                  self.settings_schema(),
                                  self.extension_page_settings(), badge_id)
         # One answer per machine, so settings are read back from the store and not from a badge.
         extensions.configure(self.collector.extensions,
                              self.config.snapshot().get("settings"))
-        # Pages too, so a source doing per-page work sees new ones without a restart. Every
-        # badge's, since it fetches for all of them at once.
+        # Pages too, so a source doing per-page work sees new ones without a restart.
         extensions.configure_pages(self.collector.extensions, self.config.all_pages())
         return rev
 
@@ -303,11 +252,11 @@ class Service:
         return extensions.badge_modules(self.collector.extensions)
 
     def app_state(self, badge_id):
-        """Whether a badge is behind what an install would put on it, or None."""
+        """Return whether a badge is behind what an install would put on it, or None."""
         return pushed.behind(self.config_dir, badge_id, self.badge_modules())
 
     def install_options(self, asked, http_port):
-        """What the browser is allowed to set, with the rest from this host."""
+        """Return what the browser is allowed to set, with the rest from this host."""
         options = {}
         for key in ("name", "ssid", "password", "region", "port_dev"):
             if asked.get(key) is not None:
@@ -319,13 +268,12 @@ class Service:
         options["config_dir"] = self.config_dir
         options["host"] = (_local_addresses() or ["127.0.0.1"])[0]
         options["port"] = http_port
-        # The browser asked for this, having been told what it costs. There is nobody
-        # here to prompt.
+        # The browser asked for this, having been told what it costs.
         options["yes"] = True
         return options
 
     def install_state(self):
-        """The install running now, or the last one, and whether a badge is plugged in."""
+        """Return the install running now, or the last one, and whether a badge is present."""
         job = self._job
         return {
             "running": bool(job and job["running"]),
@@ -333,8 +281,7 @@ class Service:
             "log": list(job["log"]) if job else [],
             "result": job["result"] if job else None,
             "ports": install.find_ports(),
-            # The picker is built from these. A region outside the set leaves the radio
-            # unable to associate, so it must not be typed.
+            # A region outside the set leaves the radio unable to associate.
             "regions": list(install.REGIONS),
         }
 
@@ -367,7 +314,6 @@ class Service:
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    # Off, plus the single write below: this is the whole 30x.
     disable_nagle_algorithm = True
     server_version = "statsbadge"
     sys_version = ""
@@ -472,8 +418,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _badge_api(self, method, path, body):
         service = self.service
 
-        # Unauthenticated: a badge has to find the host and learn whether pairing is open before
-        # it holds a secret. Neither leaks stats.
+        # Unauthenticated: a badge has to find the host and learn whether pairing is open
+        # before it holds a secret. Neither leaks stats.
         if path == "/v1/hello" and method == "GET":
             return self._json(200, {
                 "server": "statsbadge",
@@ -482,8 +428,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": service.identity["name"],
                 "host": service.collector.latest().get("sys", {}).get("host"),
                 "pairing": service.badges.pairing_active(),
-                # The default's: this is the one call a badge makes before it can prove who it
-                # is. It watches for changes on the revision in a signed stats frame instead.
+                # The default's: this is the one call a badge makes before it can prove
+                # who it is.
                 "layout_rev": service.config.rev,
                 "interval_ms": service.config.layout_for().get("interval_ms", 1000),
             })
@@ -510,34 +456,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 outcome["name"] = service.identity["name"]
             return self._json(200, outcome)
 
-        # Everything past here is signed over `self.path` and not the routing path, the query
-        # string changing the response.
+        # Everything past here is signed over `self.path` and not the routing path, the
+        # query string changing the response.
         badge_id = service.badges.verify(method, self.path, _lower(self.headers), body)
 
         if path == "/v1/stats" and method == "GET":
             frame = dict(service.collector.latest())
-            # This badge's revision. It refetches when the number moves, so a save for one badge
-            # must not send the others after a layout nothing changed.
+            # This badge's revision, so a save for one badge does not send the others.
             frame["layout_rev"] = service.config.rev_for(badge_id)
             # A badge names the slow readings it already has, so a domain's traffic is not
-            # sent sixty times a minute. The state travels in the query, leaving the host one
-            # frame for all badges.
-            #
-            # Asking also marks the badge as able to read the answer; an older app gets every group
-            # inline.
+            # sent sixty times a minute. Asking also marks the badge as able to read the
+            # answer; an older app gets every group inline.
             held = self._query().get("have")
             if held is not None:
                 slow = service.collector.slow_groups()
                 for group in slow:
                     frame.pop(group, None)
                 if frame.get("peaks"):
-                    # A new dict: the one in the frame is the collector's, shared with every
-                    # other badge.
+                    # A new dict: the one in the frame is the collector's, shared with
+                    # every other badge.
                     frame["peaks"] = {ref: value
                                       for ref, value in frame["peaks"].items()
                                       if ref.split(".")[0] not in slow}
                 if held != str(frame.get("slow_rev")):
-                    # Under one key, so the badge can keep what it is handed without knowing
+                    # Under one key, so the badge keeps what it is handed without knowing
                     # which groups are the slow ones.
                     frame["slow"] = service.collector.slow_part()
             return self._json(200, frame)
@@ -550,12 +492,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             query = self._query()
             keys = [k for k in (query.get("keys") or "").split(",") if k]
             points = max(1, min(160, int(query.get("points") or 48)))
-            # v=2 carries the spacing of the points and the age of the newest, which puts them
-            # on a time axis. v=3 adds `spacing` for each ring a source answers for itself,
-            # those being on a clock of their own.
-            #
-            # Asked for and not assumed: an older app would hand the wrapper straight to a graph
-            # and animate an hourly series as though it arrived every second.
+            # v=2 carries the spacing of the points and the age of the newest. v=3 adds
+            # `spacing` for each ring a source answers for itself. Asked for and not
+            # assumed: an older app would animate an hourly series as though it arrived
+            # every second.
             version = query.get("v")
             if version in ("2", "3"):
                 return self._json(200, service.collector.history_at(
@@ -585,12 +525,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/capabilities" and method == "GET":
             return self._json(200, service.capabilities())
 
-        # The palette a theme draws with, for the UI to preview. A tinted theme is derived here
-        # and not in the browser, so the preview cannot drift from what reaches the badge.
+        # A tinted theme is derived here and not in the browser, so the preview cannot
+        # drift from what reaches the badge.
         if path == "/api/theme" and method == "GET":
             query = self._query()
-            # A retired name resolves here as it does on the way in, so a preview of one
-            # shows what it now draws with rather than refusing it.
+            # A retired name resolves here as it does on the way in.
             theme, aliased = layout.resolve_theme(query.get("theme") or themes.DEFAULT, None)
             if theme not in layout.THEMES:
                 return self._fail(400, f"unknown theme: {theme!r}")
@@ -605,14 +544,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if second not in layout.ACCENT_B_RULES:
                 return self._fail(400, f"unknown second accent rule: {second!r}")
             palette = layout.palette_for(theme, tint, second)
-            # The two graph series resolved here too, by the badge's rule, so the preview
-            # draws them without the browser carrying it.
+            # The two graph series resolved here too, by the badge's rule.
             return self._json(200, {"theme": theme, "tint": tint, "second": second,
                                     "palette": palette,
                                     "series": layout.series_colours(palette)})
 
         # One layout per badge, and a default for a badge with nothing saved yet.
-        # `?badge=` says whose; without it, the default.
+        # `?badge=` says whose.
         if path == "/api/config":
             whose = self._query().get("badge") or None
             if method == "GET":
@@ -629,8 +567,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/stats" and method == "GET":
             return self._json(200, service.collector.latest())
 
-        # The readings behind the preview's graph. The badge asks over /v1 for itself; this
-        # is the same rings, for a UI that is already loopback-only.
+        # The readings behind the preview's graph, the same rings the badge asks for.
         if path == "/api/history" and method == "GET":
             query = self._query()
             keys = [key for key in (query.get("keys") or "").split(",") if key]
@@ -672,9 +609,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {"pairing": False})
 
         if path == "/api/badges" and method == "GET":
-            # With whether each has a layout of its own, which the badge picker has to say,
-            # and the few things off that layout the list shows without opening it. The
-            # layout is the merged one, so a badge on the default reports what it draws.
+            # With whether each has a layout of its own, and the few things off it the
+            # list shows without opening it. The layout is the merged one.
             configured = set(service.config.configured())
             listed = {}
             for badge_id, record in service.badges.list_badges().items():
@@ -685,7 +621,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     pages=len(block.get("pages") or ()),
                     theme=block.get("theme"),
                     interval_ms=block.get("interval_ms"),
-                    # What was last seen on it against what an install would put there.
+                    # What was last seen on it against what an install would put there,
                     # None where nothing has been recorded for this badge yet.
                     app=service.app_state(badge_id),
                 )
@@ -700,9 +636,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/api/badges/") and method == "DELETE":
             badge_id = path[len("/api/badges/"):]
-            # The forgotten badge's layout goes too, or it sits in the file naming an
-            # unreachable badge and is handed to whatever next holds that id. The same for
-            # what that badge was last seen holding.
+            # The forgotten badge's layout goes too, or it is handed to whatever next
+            # holds that id.
             service.config.forget(badge_id)
             pushed.forget(service.config_dir, badge_id)
             return self._json(200, {"forgotten": service.badges.forget(badge_id)})
@@ -737,16 +672,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if verb in ("disable", "enable"):
                 return self._json(200, service.switch_extensions(verb, asking))
             # Minutes, in the worst case: uv resolves and downloads the whole environment.
-            # One of the pool's threads waits on it; the badge keeps being served on
-            # another.
+            # One of the pool's threads waits on it; the badge keeps being served.
             return self._json(200, service.change_extensions(verb, asking))
 
         # Polled while an install runs, and to tell whether a badge is plugged in.
         if path == "/api/install" and method == "GET":
             return self._json(200, service.install_state())
 
-        # Writes WiFi credentials and can mint a pairing secret, both of which the
-        # loopback-only rule above is what stands between this and the network.
+        # Writes WiFi credentials and can mint a pairing secret; the loopback-only rule
+        # above is what stands between these and the network.
         if path == "/api/install" and method == "POST":
             options = service.install_options(json.loads(body or b"{}"),
                                               self.server.server_address[1])
@@ -757,11 +691,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self._fail(404, "no such endpoint")
 
     def _tokens(self):
-        """The UI's accent and ramp, generated from the dark theme.
-
-        The stylesheet used to carry these as hex typed in by hand, where a palette moving
-        left them stale. The greys around them belong to the UI and stay there.
-        """
+        """Return the UI's accent and ramp, generated from the dark theme."""
         dark = themes.written()[themes.DEFAULT]
 
         def hexed(colour):
@@ -795,12 +725,7 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
         super().server_bind()
 
     def handle_error(self, request, client_address):
-        """A client dropping a pooled connection is not a fault.
-
-        Keep-alive parks a thread in readline waiting for the next request. A peer that
-        closes without shutting down resets the socket instead of ending it cleanly, so
-        that read fails with nothing in flight to lose.
-        """
+        """A client dropping a pooled connection is not a fault."""
         exc = sys.exc_info()[1]
         if isinstance(exc, (ConnectionResetError, BrokenPipeError, TimeoutError)):
             if self.verbose:
@@ -821,12 +746,10 @@ def _lower(headers):
     return {key.lower(): value for key, value in headers.items()}
 
 
-# How long a set of addresses stands. They change when an interface does, and every
-# request that shows them or bakes one into a badge would otherwise pay for the lookup
-# below again.
+# How long a set of addresses stands. They change when an interface does.
 ADDRESSES_FOR = 30.0
-# Long enough for a resolver that is going to answer. A host whose name is in neither
-# DNS nor mDNS blocks for seconds, and a request must not wait for that.
+# Long enough for a resolver that is going to answer. A name in neither DNS nor mDNS
+# blocks for seconds.
 NAME_LOOKUP = 1.0
 
 _addresses = None
@@ -834,7 +757,7 @@ _addresses_at = 0.0
 
 
 def _local_addresses():
-    """Addresses a badge could reach this host on, best guess first."""
+    """Return addresses a badge could reach this host on, best guess first."""
     global _addresses, _addresses_at
     now = time.monotonic()
     if _addresses is not None and now - _addresses_at < ADDRESSES_FOR:
@@ -857,13 +780,7 @@ def _local_addresses():
 
 
 def _named_addresses(timeout=NAME_LOOKUP):
-    """What this host's name resolves to, given a moment to answer.
-
-    On a thread, since the call has no timeout of its own: a macOS box whose hostname
-    nothing can resolve takes it past the point where the browser has given up on the
-    request. The route the socket above picked is the useful answer anyway; this only adds
-    the other interfaces.
-    """
+    """Return what this host's name resolves to, given a moment to answer."""
     answer = []
 
     def look():

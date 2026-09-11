@@ -1,9 +1,4 @@
-"""Themes and the 320x240 layout.
-
-Everything drawn is a vector shape taking its colours from here, which makes a theme a
-table of colours and one gradient rule: swapping the theme restyles the badge with no
-assets to rebuild.
-"""
+"""Themes and the 320x240 layout."""
 
 import math
 
@@ -18,77 +13,56 @@ BODY_MID = BODY_TOP + BODY_H // 2
 
 PAD = 10
 
-# The gauge, its gap and the right margin are all DIAL_GAP. The radius is as large
-# as that leaves room for. The dial, the ring stack and a clock face all draw here.
 DIAL_GAP = 16
 DIAL_OUTER = 82
 DIAL_INNER = 62
-# Nudged down, since a gauge with its gap at the bottom carries its weight high and looks
-# as though it sits above centre when it is on it.
 DIAL_C = (DIAL_GAP + DIAL_OUTER, BODY_TOP + BODY_H // 2 + 2)
-# A 270 degree sweep with the gap centred on the bottom, so it looks like a gauge.
-# Angles start at the top, running clockwise: 225 is lower-left, and 495 is 135 once
-# round, which is lower-right.
+# Angles start at the top and run clockwise, so this is a 270 degree sweep from
+# lower-left to lower-right with the gap centred on the bottom.
 DIAL_FROM = 225.0
 DIAL_TO = 495.0
 
 READOUT_X = DIAL_C[0] + DIAL_OUTER + DIAL_GAP
 READOUT_W = W - READOUT_X - DIAL_GAP
 READOUT_H = 38
-# A row stating its own full scale puts that where the bar went, and needs the height
-# back: at READOUT_H the note and the next row's name touch.
 READOUT_NOTE_H = 46
 
 
 def readout_rows(count, height=READOUT_H):
-    """Where each of `count` readout rows starts.
-
-    Level with the top of the dial, lifted only if that many rows would run past the
-    band. Every split page uses this, so nothing moves between them.
-    """
+    """Return the top of each of `count` readout rows."""
     room = BODY_TOP + BODY_H - 6 - count * height
     top = max(BODY_TOP + 6, min(DIAL_C[1] - DIAL_OUTER, room))
     return [top + index * height for index in range(count)]
 
 
-# The app carries a text font of its own, and does not borrow one off the badge. What is
-# in /system/assets belongs to the firmware and can change underneath. Built from Lexend
-# by tools/make_text_font.py.
 FONT_FILE = "fonts/lexend-regular.af"
 FONT_NAME = "lexend"
 
-# Only if the app's font did not arrive: an install that predates it, or a partial copy.
-# Text is the one thing the app cannot draw a page without, so it borrows one.
+# For an install predating the app's own font, or a partial copy.
 FALLBACK_FONT_PATH = "/system/assets/fonts/MonaSans-Medium.af"
 
-# The app's Material Symbols, built from ci/badge-icons.txt by tools/make_icon_font.py.
-# A name and not a path. An install puts it in the app directory, and where that is
-# depends on how the app was started, so draw.add_font searches.
+# A name, not a path: draw.add_font searches, since the app directory depends on
+# how the app was started.
 ICON_FILE = "icons.af"
 APP_DIR = "/system/apps/stats"
 
-# The ends of the ambient scale, in raw `badge.light_level()` counts. Darkness reads 46-53
-# and a lit room 4500. A phone torch reads 61706, so BRIGHT sits well below the maximum.
+# Raw `badge.light_level()` counts. Darkness reads 46-53, a lit room 4500, a phone
+# torch 61706.
 LIGHT_DIM = 48
 LIGHT_BRIGHT = 4000
-# What ambient light is allowed to take away. A curtained room gets this much of the
-# configured brightness, and full daylight all of it. Off zero, a dark room at zero
-# reading as a fault.
+# The fraction of configured brightness a curtained room gets. Off zero, so a dark
+# room does not read as a fault.
 LIGHT_FLOOR = 0.1
 LIGHT_SPAN = math.log(LIGHT_BRIGHT / LIGHT_DIM)
 
 
 def ambient_fraction(raw):
-    """Where a raw light reading sits on 0-1, logarithmically.
-
-    Most of the useful range is between a curtained room and an overcast window, which
-    is a small fraction of the way up the sensor's scale.
-    """
+    """Map a raw light reading onto 0-1, logarithmically."""
     return max(0.0, min(1.0, math.log(max(raw, LIGHT_DIM) / LIGHT_DIM) / LIGHT_SPAN))
 
 
-# Sizes are point sizes for the .af font. The size is the font's em scaled, a capital
-# stands draw.CAP of it, and text(x, y) puts the baseline at y + size.
+# Point sizes for the .af font. A capital stands draw.CAP of the size, and
+# text(x, y) puts the baseline at y + size.
 SIZE_TITLE = 19
 SIZE_HUGE = 44
 SIZE_BIG = 26
@@ -96,9 +70,8 @@ SIZE_LABEL = 12
 SIZE_VALUE = 17
 SIZE_SMALL = 11
 
-# Several gauges in the body band, keyed by how many there are. Where their centres go,
-# the ring radii, and the type sizes that fit inside one. An arc is charged for by its
-# edges, so four cost the same frame as one and the radii are as large as the band allows.
+# Body-band gauges keyed by how many there are: centres, ring radii, and the type
+# sizes that fit inside one.
 DIALS = {
     1: {"centres": ((160, 125),), "outer": 74, "inner": 56,
         "value": SIZE_HUGE, "label": SIZE_VALUE},
@@ -111,27 +84,16 @@ DIALS = {
 }
 
 
-# Colours a theme's ramp is resolved to when it is built, letting a gauge fill by lookup.
-# Sixty-five is a quarter of a percent of 100, and steps of one or two in a channel.
 RAMP_STEPS = 65
 
 PALE_SUM = 384
 
-# How far a banded row sits from the page, in counts of lightness on all three channels.
+# Lightness counts, on all three channels.
 STRIPE = 10
 
 
 class Theme:
-    """A palette's colours, plus the ramp a gauge fills with as it climbs.
-
-    `accent_b` is a second colour used sparingly - the chrome, and a graph's second series;
-    it falls back to the accent. `stripe` is derived rather than named in a palette, so
-    a palette cannot state it wrong. A case light's brightness is not here: it is not a
-    colour, and it follows the backlight.
-
-    Built from the palette data in a layout, and held as `color` objects: one built
-    per pen set is 36.5us against 18.4 for one already made.
-    """
+    """A palette's colours, plus the ramp a gauge fills with as it climbs."""
 
     def __init__(self, name, bg, panel, ink, dim, accent, ramp, grid=None,
                  accent_b=None, image=None):
@@ -142,32 +104,22 @@ class Theme:
         self.dim = color.rgb(*dim)
         self.accent = color.rgb(*accent)
         self.accent_b = color.rgb(*accent_b) if accent_b else self.accent
-        # Stops in OKLCH, so the table interpolates there. sRGB turns the green-to-amber
-        # leg olive, 39 counts adrift at 0.64 of the ramp.
+        # Stops in OKLCH, so the table interpolates there. sRGB turns the
+        # green-to-amber leg olive, 39 counts adrift at 0.64 of the ramp.
         self.ramp = tuple((pos, color.rgb(*rgb).to_oklch()) for pos, rgb in ramp)
         self.grid = color.rgb(*grid) if grid else self.dim
-        # What a cache keys on. The name does not move when a derived theme is built again
-        # from another accent, so anything baked under it outlived the colours it was baked
-        # in. Built once, here, and not per frame.
         self.key = (name, tuple(bg), tuple(accent),
                     tuple(accent_b) if accent_b else tuple(accent),
                     tuple(ramp[0][1]), tuple(ramp[-1][1]))
         self.pale = sum(bg) >= PALE_SUM
-        # `lighten` has nowhere to go on a page that is already near white.
         self.stripe = self.bg.darken(STRIPE) if self.pale else self.bg.lighten(STRIPE)
         self.steps = tuple(color.ramp(self.ramp, RAMP_STEPS))
-        # Keyed by shade count, to be assigned into an indexed image's table in one
-        # write. Held apart from `ramp`, which would draw a photograph as a heat map.
+        # Keyed by shade count, to assign into an indexed image's table in one write.
         self.image = {count: tuple(color.rgb(*rgb) for rgb in greys)
                       for count, greys in (image or {}).items()}
 
     def at(self, fraction):
-        """The ramp colour for a 0-1 value, off a table built with the theme.
-
-        Interpolating per call is 30us against 12 for a lookup, and a page with sixteen
-        bars asks sixteen times a frame. The table is built by `color.ramp` in 850us,
-        against 4.9ms to interpolate the same 65 steps here.
-        """
+        """Return the ramp colour for a 0-1 value."""
         if fraction <= 0.0:
             return self.steps[0]
         if fraction >= 1.0:
@@ -175,11 +127,8 @@ class Theme:
         return self.steps[int(fraction * (RAMP_STEPS - 1) + 0.5)]
 
 
-
-# Until the first layout lands, and for a layout that carries no palette. Every other
-# theme is data on the host, in statsbadge/themes.toml, and travels in the layout. This one
-# is that file's default copied out, since MicroPython cannot read it, and a check holds
-# the two the same.
+# themes.toml's default, copied out because MicroPython cannot read it. A check
+# holds the two the same.
 THEMES = {
     "dark": Theme(
         "dark",
@@ -199,12 +148,7 @@ def get(name):
 
 
 def from_palette(name, palette):
-    """A theme out of the colours the host sent, or None if they are not usable.
-
-    A palette arrives over the network, so it is checked here and the colours are built
-    here: a bad one would otherwise be a crash on every frame instead of a page in the
-    theme it booted with.
-    """
+    """Build a theme from the colours the host sent, or None if unusable."""
     if not isinstance(palette, dict):
         return None
     try:
@@ -219,8 +163,6 @@ def from_palette(name, palette):
                      for pos, rgb in palette["ramp"])
         if not ramp:
             return None
-        # Keyed by the number of shades, matching an indexed image's table length. A host
-        # too old to send these leaves a theme that draws no pictures, and still builds.
         image = {len(greys): [tuple(int(v) for v in rgb[:3]) for rgb in greys]
                  for greys in (palette.get("image") or {}).values()}
         return Theme(name, ramp=ramp,

@@ -1,11 +1,4 @@
-"""The host's half of what the app does: the settings it sends, and the figures both
-sides have to agree on.
-
-The app itself is built and driven in tests/badge/wasm/test_app.py, and its HTTP client
-against a real server in tests/badge/wasm/test_net.py. Two tests here still read source,
-both on code that cannot be run: `__init__.py` starts the app on import, and `main()`
-never returns.
-"""
+"""The host's half of what the app does: the settings it sends, and the shared figures."""
 
 import json
 import pathlib
@@ -17,11 +10,7 @@ from statsbadge import install, layout
 
 
 def test_the_entry_point_starts_the_app_and_can_be_quit():
-    """__init__.py runs the app, and binds `on_exit` before main() blocks.
-
-    Read rather than run: importing this module here would start the app. app.py
-    starting nothing is checked by tests/badge/wasm/test_app.py, which imports it.
-    """
+    """__init__.py runs the app, and binds `on_exit` before main() blocks."""
     entry = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(
         encoding="utf-8")
     assert "app.main(APP_DIR)" in entry, "nothing starts the app"
@@ -31,10 +20,9 @@ def test_the_entry_point_starts_the_app_and_can_be_quit():
 
 
 def test_setup_waves_through_a_server_already_paired():
-    """Setup joins a host this badge already holds credentials for without enrolling
-    again."""
-    # Setup is reachable after a few failed polls, so it is easy to arrive at with nothing
-    # wrong, and the host will not be in pairing mode.
+    """Setup joins a host this badge already holds credentials for without enrolling again."""
+    # Setup is reachable after a few failed polls, so it is easy to arrive at with
+    # nothing wrong, and the host will not be in pairing mode.
     source = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text(encoding="utf-8")
     assert "_already_paired" in source, "no already-paired path in setup"
     ask = source[source.index("def _ask_to_join"):]
@@ -47,8 +35,8 @@ def test_setup_waves_through_a_server_already_paired():
 
 def test_a_beacon_goes_out_on_every_interface_it_can_name():
     """A subnet broadcast is worked out per interface, since Windows reports none."""
-    # Without one the only packet leaving is the global broadcast, which on a machine with
-    # a virtual switch goes out by whichever interface holds the default route.
+    # Without one the only packet leaving is the global broadcast, which on a machine
+    # with a virtual switch goes out by whichever interface holds the default route.
     from statsbadge import beacon
 
     assert beacon._subnet_broadcast("10.10.1.155", "255.255.255.0") == "10.10.1.255"
@@ -70,11 +58,7 @@ def test_a_beacon_goes_out_on_every_interface_it_can_name():
 
 
 def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
-    """A scan runs for two beacon intervals, so it cannot fall between two beacons.
-
-    The two sides never import each other, and `badge_constants` evaluates the badge's
-    numbers rather than matching them as text.
-    """
+    """A scan runs for two beacon intervals, so it cannot fall between two beacons."""
     from statsbadge import beacon
 
     badge = badge_constants("net.py")
@@ -91,11 +75,7 @@ def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
 
 
 def test_a_full_battery_is_not_an_alarm():
-    """A battery is read the other way up from a load, so a full one is calm.
-
-    `Gauges` in tests/badge/wasm/test_draw.py covers the drawing: the severity picks
-    the colour, the reading sets the sweep.
-    """
+    """A battery is read the other way up from a load, so a full one is calm."""
 
     sys.path.insert(0, install.app_source_dir())
     import pages
@@ -109,8 +89,7 @@ def test_a_full_battery_is_not_an_alarm():
 
 
 def test_the_badge_dims_to_suit_the_room(ui):
-    """The scale separates a dark room, a curtained one and a lit one, topping out below
-    the sensor's rail."""
+    """The scale separates a dark room, a curtained one and a lit one, below the rail."""
     # Measured on the badge as raw u16 stepping in sixteens: darkness 48, curtains closed
     # 320, a lit room 4500. A phone torch and a sunny sill both read 61400, railed.
 
@@ -154,11 +133,7 @@ def test_idle_paging_is_off_by_default_and_bounded(ui):
 
 
 def test_the_host_offers_three_actions_the_badge_answers_itself():
-    """The three actions `LocalActions` drives in tests/badge/wasm/test_app.py.
-
-    Written out on both sides: the badge cannot import this, and the prefix is what keeps
-    a press for one of them off the wire.
-    """
+    """The three actions `LocalActions` drives in tests/badge/wasm/test_app.py."""
     actions = dict(layout.LOCAL_ACTIONS)
     assert set(actions) == {"badge.prev", "badge.next", "badge.brightness"}, actions
     for action in actions:
@@ -166,8 +141,7 @@ def test_the_host_offers_three_actions_the_badge_answers_itself():
 
 
 def test_a_press_that_closes_a_modal_screen_stops_there():
-    """A modal screen returns with its button still down, so the press is rolled forward
-    before `buttons()` sees it."""
+    """A modal screen returns with its button still down, so the press is rolled forward."""
     app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
 
     loop = app[app.index("def main("):]
@@ -178,11 +152,7 @@ def test_a_press_that_closes_a_modal_screen_stops_there():
 
 
 def test_the_badge_can_report_on_itself_with_no_host(ui):
-    """The badge page reads the badge, so a prune on what the host can fill keeps it.
-
-    `PageKinds` in tests/badge/wasm/test_pages.py renders every kind the app has a
-    handler for, this one included.
-    """
+    """The badge page reads the badge, so a prune on what the host can fill keeps it."""
     config = layout.validate({"pages": [{"id": "b1", "kind": "badge", "title": "Badge"},
                                         {"id": "cpu", "kind": "dial", "field": "cpu.pct"}]})
     page = config["pages"][0]
@@ -191,8 +161,7 @@ def test_the_badge_can_report_on_itself_with_no_host(ui):
     kept = layout.prune(config["pages"], {"available": {}})
     assert [p["kind"] for p in kept] == ["badge"], kept
 
-    # The kind picker is written out in the page rather than built from the API, so a new
-    # kind can reach the badge and be forgotten in the browser.
+    # The kind picker is written out in the page rather than built from the API.
     markup = ui.markup
     app = ui.script
     offered = set(re.findall(r'<option value="([a-z]+)">', markup))

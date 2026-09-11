@@ -1,40 +1,5 @@
 #!/usr/bin/env python3
-"""Build an .af text font from a .ttf or .otf.
-
-    python3 tools/make_text_font.py build/fonts/Lexend-Medium.ttf \\
-            --out src/statsbadge/badge_app/fonts/lexend-medium.af
-
-Needs the fonts dependency group: uv sync --group fonts.
-
-The container is tools/af.py's and the contour cleaning is make_icon_font's. What differs
-from an icon font is the geometry, and all of it:
-
-  - an icon is fitted to a box and given a made-up advance, because it stands alone. A
-    text glyph keeps the font's own advance and side bearing, or the words do not space.
-  - an icon scales on whichever axis is tighter. A text font takes one scale for every
-    glyph, from the cap height, or the letters do not share a baseline.
-
-The conventions here are not assumed. They are read out of the reference font, which is
-MonaSans-Medium.af, by tools/read_af.py:
-
-    H       bbox x 8  y   0  w 70  h 81  advance 88   points x 8..79  y -81..0
-    p       bbox x 8  y -18  w 56  h 78  advance 69
-    space   bbox 0 0 0 0                 advance 25   no contours
-
-So: a capital stands 81 units, the unit look.py's sizes are given in. Points are
-y-down from the baseline, so ink above it is negative. bbox_y is y-up and goes negative
-only for a descender. bbox_x is the left side bearing, and x is measured from the pen.
-
-Coordinates and the advance are signed and unsigned bytes, so nothing may exceed 127 and
-254 respectively. At a cap height of 81 the reference font's widest glyph reaches 90, which
-leaves room; a font whose ascenders or advances are unusually long is reported rather than
-wrapped, because a wrapped advance draws every glyph on the spot.
-
---wide lifts that to 16 bits and records the em in the header, putting the cap in a much
-finer grid. A font drawn at a large point size needs that: at a cap of 81 a glyph filling
-a 240px screen quantises to steps of nearly two pixels. The default wide cap keeps the
-cap-to-em ratio, so a given font_size draws the same height either way.
-"""
+"""Build an .af text font from a .ttf or .otf."""
 
 import argparse
 import pathlib
@@ -52,7 +17,7 @@ from make_icon_font import (  # noqa: E402
 
 # What the badge draws: printable ASCII, the degree sign for a temperature, and the
 # Latin-1 letters a hostname or an OS string can arrive with. Not the whole of Latin-1:
-# every glyph is bytes on a badge, and the reference font's 310 of them cost 66KB.
+# the reference font's 310 glyphs cost 66KB.
 def default_codepoints():
     wanted = list(range(0x20, 0x7F))
     wanted.append(0xB0)                                   # degree sign
@@ -68,34 +33,27 @@ def default_codepoints():
 
 
 CAP_HEIGHT = 81           # units a capital stands in the reference font
-# --wide packs coordinates as 16-bit, so the cap can stand in a much finer grid.
-# Eight times the reference, which keeps the cap-to-em ratio exact (648/1024 ==
-# 81/128) so a given font_size draws the same height either way.
+# --wide packs coordinates as 16-bit, so the cap can stand in a much finer grid. Eight
+# times the reference, which keeps the cap-to-em ratio exact (648/1024 == 81/128).
 WIDE_CAP_HEIGHT = CAP_HEIGHT * 8
-# Half a unit, keeping what the simplifier gives up inside the rounding the point grid
-# already costs.
+# Half a unit, keeping what the simplifier gives up inside the point grid's rounding.
 
-# Scaled with --cap: a tolerance means nothing except against the size of the glyph it is
-# thinning, and at a high cap a fixed one leaves contours over the 512-point buffer.
+# Scaled with --cap: a tolerance means nothing except against the size of the glyph it
+# is thinning, and at a high cap a fixed one leaves contours over the 512-point buffer.
 QUALITY = 0.5
 MAX_ADVANCE = 254
 # The glyph renderer converts one contour at a time into a fixed buffer and silently
-# skips any that does not fit: the glyph loses a piece, or draws nothing where it had
-# one contour.
-
-# The limit is per contour, so four contours of 200 in one glyph are fine.
-
-# Measured with synthetic glyphs, not read off the constant: on a firmware whose buffer
-# is 256, 256 points draws and 257 draws zero pixels.
-
-# picovector 39a44c3 raises the buffer to 512, the ceiling here. A badge on an older build
-# stops at 256, which is why the longest contour is reported on every build.
+# skips any that does not fit, so the glyph loses a piece. The limit is per contour, so
+# four contours of 200 in one glyph are fine. Measured with synthetic glyphs: on a
+# firmware whose buffer is 256, 256 points draws and 257 draws zero pixels. picovector
+# 39a44c3 raises it to 512, the ceiling here, which is why the longest contour is
+# reported on every build.
 MAX_CONTOUR = 512
 SAFE_CONTOUR = 256        # what an unraised firmware manages
 
 
 def cap_scale(face, sample="H", cap=CAP_HEIGHT):
-    """Font units per output unit, so that a capital stands `cap`."""
+    """Return font units per output unit, so that a capital stands `cap`."""
     if face.get_char_index(ord(sample)) == 0:
         raise SystemExit(f"the font has no {sample!r} to measure a cap height from")
     import freetype
@@ -107,18 +65,17 @@ def cap_scale(face, sample="H", cap=CAP_HEIGHT):
 
 
 def text_glyph(face, codepoint, scale, tolerance):
-    """One glyph on the reference font's terms. None if the font has not got it."""
+    """Return one glyph on the reference font's terms, or None if the font lacks it."""
     import freetype
     if face.get_char_index(codepoint) == 0:
         return None
-    # The same flags cap_scale measured with. Hinting changes an outline, so a scale taken
-    # under one set of flags and glyphs built under another do not share a cap height.
+    # The same flags cap_scale measured with. Hinting changes an outline, so a scale
+    # taken under one set of flags does not share a cap height with another.
     face.load_char(codepoint, freetype.FT_LOAD_PEDANTIC)
 
     glyph = Glyph(codepoint)
     # advance.x is in the outline's units, not 26.6. After set_char_size the two agree,
-    # and dividing by 64 as well gives every glyph an advance of about one, stacking a
-    # line of text in one place.
+    # and dividing by 64 as well gives every glyph an advance of about one.
     glyph.advance = round(face.glyph.advance.x / scale)
 
     source = Bounds(face.glyph.outline.get_bbox())
@@ -142,12 +99,7 @@ def text_glyph(face, codepoint, scale, tolerance):
 
 
 def check(glyphs, wide=False):
-    """Anything the container cannot hold or the badge cannot draw with.
-
-    The lower bound on an advance matters as much as the upper one. A units mix-up
-    produces a glyph with ink and no advance, which packs and loads perfectly happily,
-    then draws every letter of a word in the same place.
-    """
+    """Return anything the container cannot hold or the badge cannot draw with."""
     max_coord = WIDE_COORD_MAX if wide else COORD_MAX
     max_advance = 0xFFFF if wide else MAX_ADVANCE
     problems = []
@@ -210,12 +162,12 @@ def main():
     if args.weight is not None:
         try:
             face.set_var_design_coords([args.weight])
-        except Exception as exc:  # noqa: BLE001  a static font has no axes
+        except Exception as exc:  # noqa: BLE001
             raise SystemExit(f"--weight needs a variable font: {exc}") from None
 
     cap = args.cap if args.cap is not None else (WIDE_CAP_HEIGHT if args.wide else CAP_HEIGHT)
-    # The em is the cap on the reference font's terms, so the same font_size draws
-    # the same height whichever width the font was packed at.
+    # The em is the cap on the reference font's terms, so the same font_size draws the
+    # same height whichever width the font was packed at.
     units_per_em = round(cap * NARROW_UNITS_PER_EM / CAP_HEIGHT) if args.wide else None
     quality = (args.quality if args.quality is not None
                else QUALITY * cap / CAP_HEIGHT)

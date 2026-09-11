@@ -62,8 +62,7 @@ def test_extension_settings_are_declared_stored_and_applied(h):
 
 
 def test_undeclared_settings_are_dropped_but_absent_extensions_are_kept():
-    """A key nobody asked for goes; a whole block for an extension still to load
-    stays, or disabling one would be what deletes its configuration."""
+    """A key nobody asked for goes; a whole block for an extension still to load stays."""
     schema = {"clock": [{"key": "latitude", "type": "number"}]}
     incoming = {**layout.DEFAULT_CONFIG, "settings": {
         "clock": {"latitude": "1.5", "sneaky": "no"},
@@ -81,8 +80,8 @@ def test_undeclared_settings_are_dropped_but_absent_extensions_are_kept():
 
 def test_an_extension_page_survives_without_fields():
     """A page survives pruning once its extension is installed, fields or no fields."""
-    # A map page draws from the extension's group and declares none, so there is nothing in
-    # the host's field list to confirm it by.
+    # A map page draws from the extension's group and declares none, so there is nothing
+    # in the host's field list to confirm it by.
     capabilities = {"available": {"cpu": ["pct"]},
                     "extension_pages": [{"kind": "quakemap", "from_extension": "quakes"}]}
     pages = [{"id": "cpu", "kind": "dial", "field": "cpu.pct"},
@@ -109,9 +108,7 @@ def test_a_declared_group_is_offered_kept_and_recorded():
         def sample(self, frame, _dt):
             frame["site"] = {"hits": 40.0, "cached_pct": 62.0}
 
-    # A collector of this test's own, so the frame it samples is the frame it reads. A
-    # thread samples the harness's, and one already walking the source list writes its
-    # frame after the append.
+    # A collector of this test's own, so the frame it samples is the frame it reads.
     collector = Collector(interval=1.0)
     collector.extensions.append(Site({}))
     collector.sample_once()
@@ -152,8 +149,7 @@ def test_a_slow_group_travels_only_when_it_changes(h):
             frame["feed"] = {"hits": self.hits}
 
     feed = Feed({})
-    # This one serves the badge below, standing in for the harness's collector. Only this
-    # test samples it, so every frame it reads back is one it made.
+    # This one serves the badge below, standing in for the harness's collector.
     collector = Collector(interval=1.0)
     collector.extensions.append(feed)
     was, h.service.collector = h.service.collector, collector
@@ -191,8 +187,8 @@ def test_a_slow_group_travels_only_when_it_changes(h):
         assert moved["slow_rev"] == rev + 1, (moved["slow_rev"], rev)
         assert moved["slow"]["feed"] == {"hits": 40.0}, moved["slow"]
 
-        # On the badge, what it holds goes back into every later frame, and `peaks` merges into
-        # the fast ones rather than replacing them.
+        # On the badge, what it holds goes back into every later frame, and `peaks` merges
+        # into the fast ones rather than replacing them.
         sys.path.insert(0, install.app_source_dir())
         import pages
 
@@ -209,8 +205,7 @@ def test_a_slow_group_travels_only_when_it_changes(h):
 
 
 def test_a_declared_group_is_named_on_the_badge_too():
-    """A group's host-side name travels with the layout, since the badge holds only the
-    key."""
+    """A group's host-side name travels with the layout, the badge holding only the key."""
     # A key named after a domain draws as CF_GADGETOID_COM, and the dots cannot be recovered.
     sys.path.insert(0, install.app_source_dir())
     import pages
@@ -240,10 +235,7 @@ def test_a_declared_group_is_named_on_the_badge_too():
 
 
 def test_a_bar_can_be_named_by_whoever_sent_it():
-    """A source sends lane names beside the values, and only the renderer reads them.
-
-    `Lanes` in tests/badge/wasm/test_pages.py draws the bars with them and without.
-    """
+    """A source sends lane names beside the values, and only the renderer reads them."""
     # Numbered lanes suit a core and are no use for a domain. The companion field is
     # declared nowhere: the picker offers the list, the names ride along in the frame.
     from statsbadge.sources.base import Source
@@ -273,7 +265,6 @@ def test_a_bar_can_be_named_by_whoever_sent_it():
     frame = collector.latest()
     assert pages.value_of(frame, "edge.cached") == [87.0, 74.5]
     assert pages.value_of(frame, "edge.cached" + pages.LANE_NAMES) == ["a.com", "b.com"]
-
 
 
 def test_stored_settings_beat_the_command_line():
@@ -390,9 +381,7 @@ def test_an_extension_installed_since_start_is_taken_up_without_a_restart():
 
 
 def test_an_upgraded_extension_is_rebuilt_rather_than_kept():
-    """A release installed over a running one has to be taken up, not held off until a
-    restart: the metadata would report the new version while the code, and the badge
-    module the installer compares against, stayed the old one."""
+    """A release installed over a running one has to be taken up, not held off."""
     from statsbadge import extensions as ext
 
     class Fake:
@@ -447,8 +436,7 @@ def test_an_upgraded_extension_is_rebuilt_rather_than_kept():
 
 
 def test_an_upgrade_whose_modules_will_not_drop_still_asks_for_a_restart():
-    """`forget` can only clear what an entry point names. One it cannot is reported, so
-    the caller can say the new release is on disk and not in this process."""
+    """`forget` can only clear what an entry point names. One it cannot is reported."""
     from statsbadge import extensions as ext
 
     class Entry:
@@ -498,8 +486,7 @@ def test_forgetting_an_extension_drops_the_package_and_what_is_under_it():
 
 
 def test_the_app_keeps_what_extensions_reach_into_it_for():
-    """Every attribute a badge module uses from draw, look, worldmap or pages is
-    there."""
+    """Every attribute a badge module uses from draw, look, worldmap or pages is there."""
     # Those resolve on the badge alone, so a helper whose only callers are extensions
     # reads as unused here and taking it out is a crash dialog after launch.
     import ast

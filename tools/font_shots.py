@@ -1,31 +1,14 @@
-"""Shoot the same pages in every candidate font, on a badge.
-
-    python3 tools/font_shots.py                 copy the fonts, then run the badge side
-    mpremote connect PORT mount . run tools/font_shots.py     the badge side alone
-    python3 tools/shots.py build/shots                        the frames, as PNGs
-
-Fonts have to be on the badge's own filesystem: `font.load()` on a file under
-`mpremote mount` dies in a UnicodeDecodeError partway through, because the mount serves it
-as text, and takes the REPL with it. So the host half of this copies them to /fonts first.
-
-Pages rather than a specimen line. A font is chosen for how a reading looks inside a ring
-and whether the label under it still reads, which a row of letters does not show.
-"""
+"""Shoot the same pages in every candidate font, on a badge."""
 
 import os
 import sys
 
 # Whatever is in badge_app/fonts, so a candidate is compared by dropping it in there and
-# running this. The app's own font is among them and gets shot too, which is the point: a
-# candidate is only interesting next to what it would replace.
+# running this. The app's own font is among them and gets shot too.
 
 
 def copy_to_badge(port=None):
-    """Put the fonts where the badge can load them from.
-
-    pathlib and subprocess are imported here rather than at the top: the badge compiles
-    this whole module before deciding which half to run, and has neither.
-    """
+    """Put the fonts where the badge can load them from."""
     import pathlib
     import subprocess
 
@@ -77,8 +60,8 @@ def run_on_badge():
             "fields": ["cpu.pct", "gpu.pct", "mem.pct", "disk.pct"]}
     theme = look.get(look.DEFAULT)
 
-    # Whatever the host half copied over. The app's own font is registered by prepare under
-    # look.FONT_NAME, so it is in the registry already and shot alongside the rest.
+    # Whatever the host half copied over. The app's own font is registered by prepare
+    # under look.FONT_NAME, so it is shot alongside the rest.
     candidates = [look.FONT_NAME]
     try:
         for entry in sorted(os.listdir("/fonts")):

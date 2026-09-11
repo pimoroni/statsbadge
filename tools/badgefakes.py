@@ -1,21 +1,10 @@
-"""Stand-ins for the badge's builtins, so the app's pure-logic modules import on a host.
-
-The firmware injects `color`, `shape`, `vec2` and the rest into builtins. `look` builds
-a Theme at import, so nothing under `badge_app/` can be imported without them. These cover
-the surfaces that are arithmetic and layout; what rasterises is left alone. Faking a
-rasteriser proves nothing about the one on the badge, so anything that draws is tested
-against the real firmware under the WASM port instead - see DEVELOPMENT.md.
-
-`install()` before the first `import look`, and note what is left out in NOT_FAKED.
-`tests/test_badgefakes.py` holds this to the builtins list in `ci/ruff.toml`, so a firmware
-name arriving without a decision here fails there and not as a NameError later.
-"""
+"""Stand-ins for the badge's builtins, so the app's pure-logic modules import on a host."""
 
 import builtins
 import time
 
-# Declared in ci/ruff.toml but not provided here, and why. Everything that draws belongs to
-# the badge test suite; the rest is used only inside `badge_app/app.py`, which cannot be
+# Declared in ci/ruff.toml but not provided here. Everything that draws belongs to the
+# badge test suite; the rest is used only inside `badge_app/app.py`, which cannot be
 # imported on a host at all.
 NOT_FAKED = {
     "screen": "draws",
@@ -72,12 +61,7 @@ NOT_FAKED = {
 
 
 class Colour:
-    """Enough of the badge's `color` for the app modules to be imported here.
-
-    A theme holds `color` objects, so `look` cannot be imported without one. Only what the
-    app calls of it, and only far enough to be compared: what the firmware does is measured
-    on the badge, not here.
-    """
+    """Enough of the badge's `color` for the app modules to be imported here."""
 
     def __init__(self, r, g, b, a=255):
         self.r, self.g, self.b, self.a = int(r) & 255, int(g) & 255, int(b) & 255, a
@@ -104,8 +88,7 @@ class Colour:
 
     def to_oklch(self):
         # The app converts a palette's stops so the ramp interpolates perceptually. Only
-        # a colour coming back matters here, so this stands in for the transform, which is
-        # measured on the badge.
+        # a colour coming back matters here.
         return self
 
     def to_rgb(self):
@@ -136,12 +119,7 @@ class Colour:
         return self.with_alpha(255).mix(background, 255 - self.a)
 
     def difference(self, other):
-        """Near enough to order two candidates: sRGB distance scaled so black to white is 100.
-
-        The firmware's is perceptual, and what it reports for a given pair is measured on the
-        badge. This only has to put a clear difference above a threshold and a near match
-        below it.
-        """
+        """Order two candidates: sRGB distance scaled so black to white is 100."""
         gap = sum((a - b) ** 2 for a, b in ((self.r, other.r), (self.g, other.g),
                                             (self.b, other.b))) ** 0.5
         return 100.0 * gap / (3 * 255 ** 2) ** 0.5
@@ -160,8 +138,7 @@ class Colour:
 
 
 class Outline:
-    """Stands in for a shape, so the functions that build one can be called here. What it
-    rasterises to is the badge's business; this only has to be handed around."""
+    """Stands in for a shape, so the functions that build one can be called here."""
 
     def __init__(self, points):
         self.points = list(points)
@@ -171,8 +148,7 @@ class Outline:
 
 
 class Shape:
-    """The stroke flags draw.py names at import, and enough of the rest to build a shape.
-    Mirrors picovector's `stroke_flags_t`, though the values are free to change."""
+    """The stroke flags draw.py names at import, and enough of the rest to build a shape."""
 
     PATH_OPEN = 1 << 2
     ALIGN_CENTER = 2
@@ -185,8 +161,7 @@ class Shape:
 
 
 class Brush:
-    """`brush.gradient` far enough to see what a gauge was built from. What the firmware makes
-    of the stops is measured on the badge; here they only have to be readable back."""
+    """`brush.gradient` far enough to see what a gauge was built from."""
 
     CONICAL = "conical"
     LINEAR = "linear"
@@ -205,7 +180,7 @@ class Brush:
 
 
 class Vec2:
-    """A point, far enough to be built and read back. The rasterising is the badge's."""
+    """A point, far enough to be built and read back."""
 
     def __init__(self, x, y):
         self.x, self.y = float(x), float(y)
@@ -237,11 +212,7 @@ def install():
 
 
 def _install_ticks():
-    """MicroPython's tick helpers, which the app uses for every interval it measures.
-
-    ticks_ms wraps on the badge and ticks_diff covers that; here the clocks are handed in by
-    the tests, so subtraction covers it.
-    """
+    """MicroPython's tick helpers, which the app uses for every interval it measures."""
     if hasattr(time, "ticks_diff"):
         return
     time.ticks_ms = lambda: int(time.monotonic() * 1000)

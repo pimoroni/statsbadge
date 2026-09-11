@@ -1,11 +1,6 @@
-"""`select.poll`, over the sockets in socket.py.
+"""`select.poll`, over the sockets in socket.py."""
 
-The runtime has a select of its own, and this shadows it: its poll works on streams the
-runtime opened, and the ones here live in node. Nothing else in the app polls, so there
-is nothing else to shadow.
-"""
-
-from socket import POLLERR, POLLHUP, POLLIN, POLLOUT  # noqa: F401  net.py reads them here
+from socket import POLLERR, POLLHUP, POLLIN, POLLOUT  # noqa: F401
 
 
 class poll:
@@ -19,8 +14,7 @@ class poll:
         self._watching = [held for held in self._watching if held[0] is not sock]
 
     def poll(self, _timeout=0):
-        """Whatever is ready now. The caller yields between calls, and node fills its
-        buffers while it does."""
+        """Return whatever is ready now."""
         ready = []
         for sock, wanted in self._watching:
             flags = sock.poll_flags(wanted)

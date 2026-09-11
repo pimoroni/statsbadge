@@ -1,13 +1,4 @@
-"""What a source has to implement.
-
-The class attributes here are declarations the config UI reads. `provides` and `groups`
-say what lands in the frame, `settings` and `page_settings` say what can be set.
-`label` names the source in the picker.
-
-All four are read off the instance and not off the class. A source that only learns its
-groups from the network, a domain per site on an account, can set them in `__init__`
-and have them offered as soon as they are known.
-"""
+"""What a source has to implement."""
 
 import subprocess
 import urllib.error
@@ -17,13 +8,7 @@ from .. import geocode, state
 
 
 def readable(exc):
-    """A fault as one line somebody can act on.
-
-    `type(exc).__name__: exc` is an exception's own repr, and for the ones a
-    source actually hits it appears twice: `HTTPError: HTTP Error 503: Service Unavailable`.
-    The name is kept for anything not recognised here, since an unexpected fault is worth
-    knowing the type of.
-    """
+    """A fault as one line somebody can act on."""
     if isinstance(exc, urllib.error.HTTPError):
         where = urllib.parse.urlsplit(exc.url or "").netloc
         return f"HTTP {exc.code} {exc.reason}" + (f" from {where}" if where else "")
@@ -44,8 +29,7 @@ class Source:
     name = "source"
 
     # What the config UI heads this source's groups with, where `name` does not read as
-    # a title: "cloudflare" is a package, "Cloudflare" is the name. Without one the name
-    # is titled.
+    # a title. Without one the name is titled.
     label = None
 
     # Which groups this source can contribute to, for the config UI's benefit.
@@ -62,12 +46,10 @@ class Source:
     #   hint      a line of explanation, optional
     #   secret    an API key or token, kept masked behind a button in the UI
     #
-    # A source with no settings gets no UI section. What is not declared here is only
-    # settable from --extension.
+    # What is not declared here is only settable from --extension.
     settings = ()
 
-    # What this source puts in the frame that the model does not define, for the config
-    # UI to offer and `prune` to keep a page drawing. Keyed by group name:
+    # What this source puts in the frame that the model does not define, keyed by group:
     #
     #   label     what the UI calls the group
     #   slow      the readings change far slower than the badge polls, so they travel
@@ -88,35 +70,25 @@ class Source:
     groups = {}
 
     # Settings belonging to one page and not to the source, in the shape of `settings`.
-    # A source doing different work per page implements `pages(instances)`, handed every
-    # page of its kinds whenever the config changes.
+    # A source doing different work per page implements `pages(instances)`.
     page_settings = ()
 
-    # Where the badge is: `place`, `latitude` and `longitude`, set by the host. One per
-    # install, and a page naming a location overrides it.
+    # Where the badge is: `place`, `latitude` and `longitude`, set by the host. A page
+    # naming a location overrides it.
     home = {}
 
     def __init__(self, config):
         self.config = config
         self.faults = 0
         self.last_fault = None
-        # What this source worked out, as against what it was told. Namespaced by source
-        # name and written by the host. This one is in memory; the persistent one is in
-        # place by the time `start` runs.
+        # What this source worked out, as against what it was told. The persistent one
+        # is in place by the time `start` runs.
         self.store = state.Store()
-        # Shared with every other source, so a town is looked up once for the install. In
-        # memory here too, replaced by the host's before `start`.
+        # Shared with every other source, so a town is looked up once for the install.
         self.geocode = geocode.Geocoder()
 
     def location(self, page=None):
-        """Where a page is set to, or where the badge is: (latitude, longitude, label).
-
-        Coordinates beat a name, and a page beats the badge, so one badge holds a clock for
-        Sheffield and a clock for Tokyo. None where neither names a location, and while a
-        failed geocode is backed off.
-
-        Geocoding waits on the network, so call this from a fetch thread and not `sample`.
-        """
+        """Return where a page is set to, or where the badge is: (latitude, longitude, label)."""
         for where in (page, self.home):
             where = where or {}
             latitude, longitude = where.get("latitude"), where.get("longitude")
@@ -128,25 +100,11 @@ class Source:
         return None
 
     def configure(self, settings):
-        """Take settings while running, on every save and not only on a change.
-
-        The default suits a source that reads `self.config` as it samples. One that
-        copies values out in `__init__` has to override this and copy them again.
-
-        Merged, not replaced: a key that does not arrive keeps the value it had. A field
-        is cleared by sending it as null, as the config UI does. A caller that omits it
-        leaves the source on the value it had.
-        """
+        """Take settings while running, on every save and not only on a change."""
         self.config.update(settings)
 
     def series(self):
-        """Rings this source keeps itself, keyed "group.field".
-
-        The collector samples a ring at its own interval, which is right for a sensor and
-        wrong for anything fetched: ninety samples of a reading that moves once a minute is
-        a minute and a half of staircase. A source that can answer for its own history -
-        Cloudflare reports by the hour, a day at a time - hands one over here instead, on
-        the spacing it is really on:
+        """Return the rings this source keeps itself, keyed "group.field".
 
             {"cf_pinout_xyz.requests": {"points": [12.0, 9.5, None, ...],
                                         "every_ms": 3600000, "age_ms": 240000}}
@@ -156,43 +114,31 @@ class Source:
         with `history` rather than `graphed` so the collector keeps no ring of its own.
 
         Called on the collector's thread as a reply is composed, so nothing here may wait
-        on a network: hand over what the fetcher last brought back.
+        on a network.
         """
         return {}
 
     def pages(self, instances):
-        """Take the pages configured for this source's kinds, on every config change.
-
-        `instances` is a list of page dicts, each carrying whatever `page_settings`
-        declared. A source that samples the same thing for every page ignores this.
-        """
+        """Take the pages configured for this source's kinds, on every config change."""
 
     @classmethod
     def available(cls, _config=None):
-        """True if this source can run here. Cheap: no sampling, no subprocesses.
-
-        The config is optional because the two callers differ: a built-in source is handed
-        it (`sources/__init__.py`), an extension is not (`extensions.py`). Keep the
-        parameter, or moving a source between the two raises TypeError.
-        """
+        """Return True if this source can run here, without sampling or subprocesses."""
         return False
 
     def start(self):
-        """Called once before the first sample. Spawn helpers here, and read `store` here."""
+        """Run once before the first sample. Spawn helpers here, and read `store` here."""
 
     def stop(self):
-        """Called on shutdown. Reap helpers here."""
+        """Run on shutdown. Reap helpers here."""
 
     def sample(self, frame, dt):
         """Fill in what this source can measure.
 
-        `frame` is a dict from model.empty_frame(); mutate it. `dt` is seconds since
-        the previous sample, for anything that needs a rate. Only set a field if the
-        value is real - leave it absent so a later source can fill it.
-
-        Be prompt. Every source shares the collector's thread, and the first sample is
-        taken while the server is starting up. Anything that waits on a network belongs
-        on a thread started by `start`, with this serving what it last brought back.
+        `frame` is a dict from model.empty_frame(); mutate it. `dt` is seconds since the
+        previous sample. Only set a field if the value is real, so a later source can
+        fill it. Every source shares the collector's thread, so anything that waits on a
+        network belongs on a thread started by `start`.
         """
         raise NotImplementedError
 
@@ -204,15 +150,9 @@ class Source:
     def note_ok(self):
         """Record that the work succeeded, which clears a fault.
 
-        A source has to call this itself, since nothing outside it can judge. One that
-        fetches on a thread fails and recovers on a schedule of its own, with `sample` handing
-        over the last good reading is no evidence that the next fetch landed.
-
-        So this goes at the point the work a fault was noted for succeeded. A fault that
-        is not transient, a missing sudoers rule, is never cleared.
-
-        The count is kept: a source failing every third poll is worth knowing about while it
-        is working.
+        A source has to call this itself, at the point the work a fault was noted for
+        succeeded: `sample` handing over the last good reading is no evidence that the
+        next fetch landed. The count is kept.
         """
         self.last_fault = None
 

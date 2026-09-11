@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""One picture in every theme's shades, as a sheet to look at.
-
-    python3 tools/image_themes.py somewhere/photo.jpg          # into build/image-themes
-    python3 tools/image_themes.py photo.jpg --levels 4
-    python3 tools/image_themes.py photo.jpg --out /tmp/look
-
-The badge takes the indices the host dithered and writes the theme's shades into the
-image's colour table. This does that second half on the host, so whether a ramp is any
-good becomes something to look at and not a set of numbers. Every theme at once is the
-only way to see that one has gone muddy.
-
-Each tile is drawn on that theme's background with its ink beside it. A picture is only
-ever seen on a page, and shades that look fine on white can disappear on the page they
-are going on.
-
-"""
+"""One picture in every theme's shades, as a sheet to look at."""
 
 import argparse
 import io
@@ -27,15 +12,15 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
 from statsbadge import derive, imaging, layout  # noqa: E402
 
-# The tile, and the room around it. A picture is shown at the size the badge draws it, since
-# what a dither looks like is a question about pixels and scaling it answers a different one.
+# The tile, and the room around it. A picture is shown at the size the badge draws it:
+# what a dither looks like is a question about pixels.
 PAD = 10
 LABEL_H = 14
 COLUMNS = 4
 
 
 def sheet(indices, width, height, themes, levels, tint):
-    """Every theme's take on one picture, as an RGB raster and its size."""
+    """Return every theme's take on one picture, as an RGB raster and its size."""
     tile_w, tile_h = width + PAD * 2, height + PAD * 2 + LABEL_H
     rows = -(-len(themes) // COLUMNS)
     sheet_w, sheet_h = tile_w * COLUMNS, tile_h * rows
@@ -64,8 +49,8 @@ def sheet(indices, width, height, themes, levels, tint):
                 for x in range(wide):
                     at_pixel = ((strip + y) * sheet_w + left + PAD + step * wide + x) * 3
                     raster[at_pixel:at_pixel + 3] = bytes(shade)
-        # A rule in the ink, so a tile whose picture has vanished into its page still shows
-        # where it was.
+        # A rule in the ink, so a tile whose picture has vanished into its page still
+        # shows where it was.
         for x in range(width):
             at_pixel = ((strip + 8) * sheet_w + left + PAD + x) * 3
             raster[at_pixel:at_pixel + 3] = bytes(ink)
@@ -73,16 +58,7 @@ def sheet(indices, width, height, themes, levels, tint):
 
 
 def test_card():
-    """A picture that asks the ramp the questions worth asking, as PNG bytes.
-
-    The default, so looking at what a theme does to a picture never means helping
-    yourself to somebody's holiday snap off a public timeline.
-
-    It carries the three things a four-level dither can get wrong. A smooth sweep is where
-    banding and the Bayer texture show. Flat patches at each level are where a ramp with
-    two shades too close together stops having four. Edges at several angles are what the
-    crop scores and what a dither can turn to mush.
-    """
+    """Return a picture that asks the ramp the questions worth asking, as PNG bytes."""
     from PIL import Image, ImageDraw
 
     width, height = 640, 480
@@ -107,11 +83,7 @@ def test_card():
 
 
 def write_cards(data):
-    """A thumbnail per preset and a palette per theme, for the badge-side probe to import.
-
-    Generated rather than committed: a thumbnail is bytes, and bytes do not belong in a
-    source file. Written into build/, which the badge sees over the mount.
-    """
+    """Write a thumbnail per preset and a palette per theme, for the badge-side probe."""
     import base64
     import json
 
@@ -120,8 +92,8 @@ def write_cards(data):
         png = imaging.thumbnail(data, preset, "landscape")
         lines.append(f'{preset.upper()} = "{base64.b64encode(png).decode()}"\n')
     tint = layout.DEFAULT_CONFIG["tint"]
-    # A few themes rather than all twenty: what the probe is checking is that a palette
-    # reaches an image's table, and three of them show that as well as every one would.
+    # A few themes rather than all twenty: what the probe checks is that a palette reaches
+    # an image's table, and three show that as well as every one would.
     wanted = ("dark", "luminescence", "mono")
     lines.append("PALETTES = "
                  + json.dumps({name: layout.palette_for(name, tint) for name in wanted})
@@ -184,8 +156,8 @@ def main(argv=None):
         write_png(path, raster, sheet_w, sheet_h)
         print(f"{path}  {len(themes)} themes at {width}x{height}, {levels} shades")
 
-    # What each theme is actually asking for: a sheet shows which looks wrong and this
-    # says why: a picture is as colourful as the theme's own accent is.
+    # What each theme is actually asking for: a sheet shows which looks wrong, and this
+    # says why.
     print()
     print(f"{'theme':22} {'accent share':>13} {'strongest shade':>16}")
     for name in themes:

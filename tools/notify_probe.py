@@ -1,17 +1,4 @@
-"""Draw the notifications page on a badge, with pictures and without, dumping the frames.
-
-    python3 tools/image_themes.py --cards            # writes build/probe_pictures.py
-    mpremote connect PORT mount . run tools/notify_probe.py
-    python3 tools/shots.py build/shots               # the frames, as PNGs
-
-Mount the repo root: frames go to /remote/build/shots. The pictures come from
-build/probe_pictures.py, which is generated - a thumbnail is bytes, and bytes do not belong
-in a source file.
-
-This covers the half that cannot be checked on the host. An indexed PNG has to decode on
-the firmware, its table has to come back the size the bit depth implies, and writing the
-theme's shades into it has to recolour the picture. Each of those is a print here.
-"""
+"""Draw the notifications page on a badge, with pictures and without, dumping the frames."""
 
 import gc
 import sys
@@ -67,7 +54,7 @@ def shot(name):
 
 
 def report(theme):
-    """What the firmware makes of each picture, which is the part the host cannot answer."""
+    """Report what the firmware makes of each picture, which the host cannot answer."""
     print(f"theme {theme.name}: ramps for {sorted(theme.image)} shades")
     for preset, data in sorted(PICTURES.items()):
         draw.clear_cache()
@@ -105,8 +92,8 @@ PAGES = [
                                        "feed.followers"]}, "high"),
 ]
 
-# Built from a palette the host sent rather than `look.get`, which is the one theme the app
-# carries to boot with and has no picture ramp: a picture needs a layout to have landed.
+# Built from a palette the host sent rather than `look.get`: a picture needs a layout to
+# have landed.
 THEMES = ("dark", "luminescence", "mono")
 
 for name in THEMES:
@@ -114,9 +101,8 @@ for name in THEMES:
     report(theme)
     for label, page, preset in PAGES:
         frame = frame_with(PICTURES.get(preset) if preset else None)
-        # Three, because a label is drawn live on its first sighting, baked into a
-        # sprite on its second and blitted from then on. The middle one is the most
-        # expensive frame this page has. The third is what a poll costs.
+        # Three, because a label is drawn live on its first sighting, baked into a sprite
+        # on its second and blitted from then on. The third is what a poll costs.
         draw.clear_cache()
         taken = []
         for _ in range(3):

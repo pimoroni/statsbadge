@@ -1,9 +1,4 @@
-"""Every page kind, drawn.
-
-Run under the WASM port, against real picovector and the real fonts, by
-`node tools/wasm/run.mjs`. `pages.render` reaches `screen`, `image` and `tween`, so on a
-host these could only be read as text.
-"""
+"""Every page kind, drawn."""
 
 import unittest
 
@@ -27,8 +22,7 @@ FRAME = {
     "sys": {"host": "desk", "os": "macOS 15.5", "up_s": 384000},
 }
 
-# One page per kind, each carrying what that kind needs. Every ref is in FRAME, though a
-# kind drawing "unknown" everywhere would still pass: what is under test is that it draws.
+# One page per kind, each carrying what that kind needs. What is under test is that it draws.
 PAGES = (
     {"kind": "dial", "title": "CPU", "field": "cpu.pct", "readouts": ["cpu.temp"]},
     {"kind": "dials", "title": "Load", "fields": ["cpu.pct", "mem.pct", "disk.pct"]},
@@ -47,11 +41,7 @@ PAGES = (
 
 
 def chrome_only(theme, title, index, total):
-    """The band with the chrome drawn and no handler after it.
-
-    `pages.render` covers the band with the background before it dispatches, so a kind
-    measured against a cleared screen would pass having drawn nothing.
-    """
+    """The band with the chrome drawn and no handler after it."""
     draw.background(theme, title, index, total, None)
     return body_pixels()
 
@@ -84,7 +74,8 @@ class PageKinds(unittest.TestCase):
 
     def test_a_page_puts_the_clip_back(self):
         """The pages are drawn one after another into the same screen, so a clip left
-        behind takes a bite out of whatever is drawn next."""
+        behind takes a bite out of whatever is drawn next.
+        """
         for page in PAGES:
             screen.clip = rect(0, 0, screen.width, screen.height)  # noqa: F821
             pages.render(page, FRAME, {}, self.theme, 0, 1)
@@ -96,10 +87,7 @@ class PageKinds(unittest.TestCase):
 
 
 class Lanes(unittest.TestCase):
-    """A source can send names beside a list of readings, and the bars take them.
-
-    Numbered lanes suit a core and are no use for a domain.
-    """
+    """A source can send names beside a list of readings, and the bars take them."""
 
     def setUp(self):
         draw.prepare()

@@ -5,8 +5,7 @@ import struct
 
 
 def test_a_picture_is_cropped_to_what_is_in_it():
-    """A picture is cropped to the busiest part and sent as indices on a ramp, not
-    colours."""
+    """A picture is cropped to the busiest part and sent as indices on a ramp."""
     # One image then suits every badge whatever theme it is on.
     from PIL import Image
 

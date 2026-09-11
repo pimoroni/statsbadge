@@ -1,8 +1,4 @@
-"""Everything psutil can answer on any platform. CPU, memory, disk, network and battery.
-
-Rates are computed here from counter deltas, because the badge should not have to
-remember the previous frame to draw a network graph.
-"""
+"""Everything psutil can answer on any platform: CPU, memory, disk, network, battery."""
 
 import os
 import platform
@@ -130,15 +126,7 @@ class Portable(Source):
 
 
 def default_disk():
-    """The filesystem "how full is my disk" means.
-
-    On macOS that is not "/". The root is a sealed, read-only system volume, and shares
-    an APFS container with the data volume, so it reports the system's 12G against the
-    container's size: 9% on a disk that is 86% full.
-
-    Both volumes report the container's free space, so the data volume is the one whose
-    `used` is the answer.
-    """
+    """Return the filesystem "how full is my disk" means."""
     if platform.system() == "Darwin":
         for candidate in ("/System/Volumes/Data", "/"):
             if os.path.isdir(candidate):
@@ -147,7 +135,7 @@ def default_disk():
 
 
 def _rate(now, before, dt):
-    """Bytes per second, clamped at zero so a counter reset reads as idle."""
+    """Return bytes per second, clamped at zero so a counter reset reads as idle."""
     delta = now - before
     if delta < 0:
         return 0
@@ -155,11 +143,7 @@ def _rate(now, before, dt):
 
 
 def _busiest_iface():
-    """The interface with the most traffic that is up and not loopback.
-
-    Guessing beats making the user name their interface, and on a laptop that moves
-    between wifi and ethernet the guess is the one they want.
-    """
+    """Return the interface with the most traffic that is up and not loopback."""
     stats = psutil.net_if_stats()
     best = None
     for name, counters in psutil.net_io_counters(pernic=True).items():
@@ -177,8 +161,7 @@ def _busiest_iface():
 
 
 # What the chip is called, with the trademarks, the word CPU and the clock speed taken
-# out: the badge draws this on one 320 pixel line, and "Intel(R) Core(TM) i7-10750H CPU @
-# 2.60GHz" is mostly punctuation.
+# out: the badge draws this on one 320 pixel line.
 _CPU_NOISE = re.compile(r"\((?:R|TM|r|tm)\)|\bCPU\b|\bProcessor\b|\s+\d+-Core\b|@.*$")
 
 
@@ -201,9 +184,8 @@ def _cpu_name():
                     if line.startswith("model name"):
                         return _tidy_cpu(line.split(":", 1)[1].strip())
         elif system == "Windows":
-            # platform.processor() there is "Intel64 Family 6 Model 165 Stepping 2,
-            # GenuineIntel": the stepping, and not the name anyone knows the chip by.
-            # The registry holds what the chip calls itself, and reading it is instant.
+            # platform.processor() there is the stepping, and not the name anyone knows
+            # the chip by. The registry holds what the chip calls itself.
             import winreg
             with winreg.OpenKey(
                     winreg.HKEY_LOCAL_MACHINE,

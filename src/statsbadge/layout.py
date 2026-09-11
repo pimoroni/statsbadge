@@ -1,12 +1,4 @@
-"""What the badge draws: pages, tiles and themes.
-
-A page is data wherever it can be: the badge ships the kinds, and a page names one and
-the fields that go in it. Rearranging a display is then a config change the badge picks
-up on its next poll.
-
-`rev` increments on every change. The badge sees it in each stats frame and refetches
-the layout only when it moves, so the common case is one small GET a second.
-"""
+"""What the badge draws: pages, tiles and themes."""
 
 import copy
 import json
@@ -37,45 +29,35 @@ KINDS = {
 _FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
               "rings": 4, "spark": 6, "radar": 6, "notify": 6}
 
-# The widest a setting may be, as (low, high). validate() clamps to these rather than
-# refusing, so a config edited by hand still loads. The sliders in the UI offer a narrower
-# range inside them, which someone is likely to want.
-#   Under 250ms the badge spends its whole frame budget on HTTP; a minute is the longest
-#   gap where a reading still reads as live.
+# The widest a setting may be, as (low, high). validate() clamps rather than refusing,
+# so a config edited by hand still loads.
 INTERVAL_MS = (250, 60000)
-#   Eight points is a plot with a shape; past 160 they are under a pixel apart.
 GRAPH_POINTS = (8, 160)
-#   Zero is off, and an hour is the longest wait before paging unattended.
+# Zero is off.
 IDLE_ADVANCE_S = (0, 3600)
-#   How long each page is held once it is paging by itself.
 ADVANCE_EVERY_S = (1, 600)
 BRIGHTNESS = (0.05, 1.0)
 
 # "over" draws the incoming page over the outgoing one; "deck" moves them together.
 SLIDE_STYLES = ("off", "over", "deck")
 
-# How the sparkline page separates one row from the next: a band behind every other row, a
-# hairline between them, or nothing.
+# How the sparkline page separates one row from the next.
 ROW_STYLES = ("zebra", "rules", "none")
 
-# One colour for the reading, or the ramp swept round the arc. Only the dial's gauge is
-# large enough to read a ramp off.
+# One colour for the reading, or the ramp swept round the arc.
 GAUGE_FILLS = ("solid", "ramp")
 
-# How a derived theme picks its second accent. A written-down palette names one, or gets
-# the accent again.
+# How a derived theme picks its second accent.
 ACCENT_B_RULES = derive.ACCENT_B_RULES
 
-# The names, from the file itself; a theme is data. The file also holds which take an
-# accent, what each is called, and which half of the picker each belongs in.
+# The names, from the file itself; a theme is data.
 THEMES = tuple(themes.THEMES)
 
 # Retired names, resolved once at load. Nothing downstream sees a retired name.
 resolve_theme = themes.resolve
 theme_records = themes.records
 
-# Bindings the badge handles on-device and never sends to the host. Here so the UI can
-# offer them alongside the host's commands.
+# Bindings the badge handles on-device and never sends to the host.
 LOCAL_ACTIONS = (
     ("badge.prev", "previous page"),
     ("badge.next", "next page"),
@@ -133,15 +115,7 @@ DEFAULT_CONFIG = {
 
 
 class Config:
-    """The layouts, persisted, each with a revision the badge that draws it can watch.
-
-    One layout per badge, and one for a badge with nothing saved yet. The file holds the
-    default at the top level and the rest under `badges`, keyed by badge id, so a single-badge
-    file is the default and every badge carries on showing what it showed.
-
-    A badge is never sent the table. It names every other badge paired with this host, which
-    is nothing to do with the one asking.
-    """
+    """The layouts, persisted, each with a revision the badge that draws it can watch."""
 
     def __init__(self, path):
         self.path = path
@@ -185,11 +159,7 @@ class Config:
         os.replace(tmp, self.path)
 
     def set_settings(self, name, block):
-        """Store one block of settings, leaving every layout alone.
-
-        Settings are the host's answers and not a badge's, so nothing here moves a
-        revision: no badge refetches for a Windows sensor URL.
-        """
+        """Store one block of settings, leaving every layout alone."""
         with self._lock:
             settings = self.data.setdefault("settings", {})
             settings[name] = {**(settings.get(name) or {}), **block}
@@ -198,16 +168,12 @@ class Config:
         return kept
 
     def snapshot(self):
-        """The whole file, table included."""
+        """Return the whole file, table included."""
         with self._lock:
             return copy.deepcopy(self.data)
 
     def layout_for(self, badge_id=None):
-        """The layout one badge is configured with, or the default.
-
-        Extension settings come with it wherever they are stored, so a UI editing any badge
-        sees the same ones and hands them back as it found them.
-        """
+        """Return the layout one badge is configured with, or the default."""
         with self._lock:
             own = (self.data.get("badges") or {}).get(str(badge_id or ""))
             data = copy.deepcopy(self.data)
@@ -218,16 +184,12 @@ class Config:
         return data
 
     def configured(self):
-        """Badge ids with a layout stored, as against those on the default."""
+        """Return badge ids with a layout stored, as against those on the default."""
         with self._lock:
             return sorted(self.data.get("badges") or {})
 
     def all_pages(self):
-        """Every page configured anywhere, deduped by id.
-
-        What a source doing per-page work has to be told about. It is handed the pages of
-        the kinds it draws and keys what it fetches by page id, so it needs every badge's.
-        """
+        """Return every page configured anywhere, deduped by id."""
         with self._lock:
             blocks = [self.data] + list((self.data.get("badges") or {}).values())
             seen, pages = set(), []
@@ -244,22 +206,13 @@ class Config:
         return self.rev_for(None)
 
     def rev_for(self, badge_id=None):
-        """The revision of the layout this badge draws, which it watches for changes.
-
-        The one on its layout, so saving for one badge leaves every other badge holding
-        what it already drew.
-        """
+        """Return the revision of the layout this badge draws."""
         with self._lock:
             own = (self.data.get("badges") or {}).get(str(badge_id or ""))
             return (own if own is not None else self.data).get("rev", 1)
 
     def _next_rev(self):
-        """One counter across every layout in the file, so a revision is never reused.
-
-        Taken as the highest anywhere plus one, and not kept as a key. A badge comparing
-        what it holds with what a frame reports must never see a number it has already
-        drawn.
-        """
+        """Return one counter across every layout in the file, so a revision is not reused."""
         revs = [self.data.get("rev", 1)]
         revs += [block.get("rev", 1)
                  for block in (self.data.get("badges") or {}).values()]
@@ -267,11 +220,7 @@ class Config:
 
     def replace(self, incoming, extra_kinds=(), settings_schema=None,
                 page_settings_schema=None, badge_id=None):
-        """Validate and store a whole layout from the UI. Returns its new revision.
-
-        With a badge id it becomes that badge's, whatever it was showing before. Without
-        one it is the default, drawn by any badge with nothing saved.
-        """
+        """Validate and store a whole layout from the UI, returning its new revision."""
         cleaned = validate(incoming, extra_kinds, settings_schema, page_settings_schema)
         with self._lock:
             cleaned["rev"] = self._next_rev()
@@ -289,11 +238,7 @@ class Config:
         return cleaned["rev"]
 
     def forget(self, badge_id):
-        """Drop a badge's layout. True if there was one.
-
-        Called when a pairing is forgotten: the layout would otherwise sit in the file naming a
-        badge nothing can reach, and be handed to whatever next held that id.
-        """
+        """Drop a badge's layout. True if there was one."""
         with self._lock:
             if str(badge_id) not in (self.data.get("badges") or {}):
                 return False
@@ -302,12 +247,7 @@ class Config:
         return True
 
     def for_badge(self, capabilities=None, badge_id=None):
-        """The layout as the badge should see it: pruned to fields that exist.
-
-        The chosen theme travels as its colours and not only its name, so the badge draws
-        this host's palette and not whatever its copy of the app shipped with. 213 bytes,
-        on a payload that is only refetched when `rev` moves.
-        """
+        """Return the layout as the badge should see it: pruned to fields that exist."""
         data = self.layout_for(badge_id)
         data.pop("settings", None)
         if capabilities:
@@ -320,22 +260,14 @@ class Config:
 
 
 def field_units(pages, capabilities):
-    """What an extension called the units of the fields these pages draw.
-
-    A field the badge cannot place gets no unit at all, and a graph of kWh is then a picture
-    of a number.
-
-    Everything declared, the model's included: the badge answers for the families it
-    rescales itself and reads this for the rest, so a fan's rpm arrives here rather than
-    being a bare number on the page.
-    """
+    """Return what an extension called the units of the fields these pages draw."""
     declared = capabilities.get("units") or {}
     return {field: declared[field] for _group, field in _refs_of(pages)
             if declared.get(field)}
 
 
 def _refs_of(pages):
-    """Every (group, field) a page draws, from whichever key holds its refs."""
+    """Return every (group, field) a page draws, from whichever key holds its refs."""
     for page in pages or ():
         refs = list(page.get("fields") or ())
         for key in ("field", "readouts"):
@@ -348,15 +280,7 @@ def _refs_of(pages):
 
 
 def group_labels(pages, capabilities):
-    """What to call the groups these pages draw, where the badge cannot work it out.
-
-    The badge falls back to the group key where one page draws a field from several, which is
-    fine for `cpu` and comes out CF_GADGETOID_COM for a group named after a domain. The dots
-    cannot be recovered from the key.
-
-    So an extension's declared groups travel with the layout. The model's are left out: the
-    badge shows CPU at arm's length.
-    """
+    """Return what to call the groups these pages draw, where the badge cannot work it out."""
     owned = capabilities.get("group_source") or {}
     known = capabilities.get("group_labels") or {}
     labels = {}
@@ -375,20 +299,13 @@ def group_labels(pages, capabilities):
 
 
 def _clamped(value, bounds):
-    """A setting brought inside its bounds, which are a (low, high) pair up the file."""
+    """Return a setting brought inside its bounds."""
     low, high = bounds
     return max(low, min(high, value))
 
 
 def tint_accent(incoming, current):
-    """The accent a tinted theme is built from, checked against what is offered.
-
-    Restricted to a measured list. Every accent on it gives a legible theme in either
-    mode, and a chosen one cannot produce a page nobody can read.
-
-    Anything unrecognised falls back to what was stored, and does not raise. This arrives
-    from a UI, and a theme is not worth refusing a whole config over.
-    """
+    """Return the accent a tinted theme is built from, checked against what is offered."""
     if isinstance(incoming, (list, tuple)) and len(incoming) >= 3:
         try:
             wanted = tuple(max(0, min(255, int(part))) for part in incoming[:3])
@@ -400,7 +317,7 @@ def tint_accent(incoming, current):
 
 
 def palette_for(theme, tint, second="same"):
-    """The palette a theme draws with: derived from the accent, or looked up."""
+    """Return the palette a theme draws with: derived from the accent, or looked up."""
     theme, tint = resolve_theme(theme, tint)
     return themes.palette(theme, tint, second)
 
@@ -414,11 +331,7 @@ PALE_SUM = 384
 
 
 def series_colours(palette):
-    """What a graph draws its two series in.
-
-    Worked out here for the config UI's preview, which then carries no rule of its own.
-    `draw._series_colour` is where the behaviour lives; a check holds the two together.
-    """
+    """Return what a graph draws its two series in."""
     background = palette["bg"]
     pale = sum(background) >= PALE_SUM
 
@@ -475,15 +388,7 @@ DISPLAY_SETTINGS = {
 
 def validate(incoming, extra_kinds=(), settings_schema=None,
              page_settings_schema=None):
-    """Reject anything the badge could not draw, and normalise the rest.
-
-    The config UI is the only writer, but it arrives over HTTP: a bad `kind` on the badge is
-    a crash dialog in a launcher and not a 400.
-
-    `extra_kinds` are the kinds installed extensions contribute, and `page_settings_schema`
-    what those let a single page be told. Anything undeclared is dropped, so a page cannot
-    smuggle keys to the badge.
-    """
+    """Reject anything the badge could not draw, and normalise the rest."""
     if not isinstance(incoming, dict):
         raise ValueError("config must be an object")
 
@@ -493,8 +398,7 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
     if theme not in THEMES:
         raise ValueError(f"unknown theme: {theme!r}")
     out["theme"] = theme
-    # A retired theme name carries the accent it stood for, which wins over any tint sent
-    # with it.
+    # A retired theme name carries the accent it stood for, which wins over any tint sent.
     out["tint"] = tint_accent(aliased or incoming.get("tint"), out["tint"])
 
     for key, rule in DISPLAY_SETTINGS.items():
@@ -534,11 +438,7 @@ def validate(incoming, extra_kinds=(), settings_schema=None,
 
 
 def _validate_settings(incoming, schema):
-    """Keep the declared keys of each extension, in the declared type.
-
-    An extension with no schema keeps its block as it stands, because uninstalling or
-    disabling one must not be what throws away everything it was told.
-    """
+    """Keep the declared keys of each extension, in the declared type."""
     stored = {}
     if not isinstance(incoming, dict):
         return stored
@@ -557,22 +457,14 @@ def _validate_settings(incoming, schema):
 
 
 def coerce_settings(block, declared):
-    """One block of settings in the types declared for it, anything undeclared dropped.
-
-    The host's own settings go through this as well as the extensions', so the two are
-    normalised the same way whether a save or the Help tab wrote them.
-    """
+    """Return one settings block in the types declared for it, anything undeclared dropped."""
     entries = {entry["key"]: entry for entry in (declared or ()) if entry.get("key")}
     return {key: _coerce_setting(block[key], entry)
             for key, entry in entries.items() if key in block}
 
 
 def _coerce_setting(value, entry):
-    """One setting in the type it was declared as, or None where it is not answerable.
-
-    None and not a default, so a field cleared in the UI comes through unset. A source
-    asking for a latitude has to tell "unset" from "the equator".
-    """
+    """Return one setting in the declared type, or None where it is not answerable."""
     kind = entry.get("type", "text")
     if kind == "bool":
         return bool(value)
@@ -599,11 +491,7 @@ def _coerce_setting(value, entry):
 
 
 def merge_settings(from_command_line, stored):
-    """Per-extension settings, with the stored ones over anything given on the CLI.
-
-    The UI is the live editor, so what it saved wins; --extension is for a first run and
-    for a host with no browser near it.
-    """
+    """Return per-extension settings, with the stored ones over anything given on the CLI."""
     merged = {name: dict(block) for name, block in (from_command_line or {}).items()}
     for name, block in (stored or {}).items():
         merged.setdefault(name, {}).update(block)
@@ -665,7 +553,7 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
 
 
 def _is_ref(value):
-    """A field reference is "group.field", both non-empty."""
+    """Return whether a field reference is "group.field", both non-empty."""
     if not isinstance(value, str) or value.count(".") != 1:
         return False
     group, field = value.split(".")
@@ -673,11 +561,7 @@ def _is_ref(value):
 
 
 def prune(pages, capabilities):
-    """Drop pages whose data this host does not produce.
-
-    A laptop with no discrete GPU should not page through an empty GPU dial, and the
-    user should not have to know that to get a sensible default.
-    """
+    """Drop pages whose data this host does not produce."""
     available = capabilities.get("available", {})
     # The pages an installed extension draws. A map page declares no fields, so there is
     # nothing in the host's field list to confirm it by.
@@ -694,8 +578,7 @@ def prune(pages, capabilities):
             kept.append(page)
             continue
         if page.get("kind") not in KINDS:
-            # An extension page declares its own group, which is absent from the model's field
-            # list.
+            # An extension page declares its own group, absent from the model's field list.
             fields = [f for f in page.get("fields", []) if has(f)]
             if (fields or page.get("from_extension")
                     or page.get("kind") in from_extensions):

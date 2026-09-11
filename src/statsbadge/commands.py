@@ -1,10 +1,4 @@
-"""Things a badge button can ask the host to do.
-
-Every command is opt-in: the config maps a button to a command name, and a name not
-in the registry is refused. Nothing here takes an argument from the badge that
-reaches a shell, because a signed request is still a request from a device that
-lives in a bag.
-"""
+"""Things a badge button can ask the host to do."""
 
 import platform
 import shutil
@@ -76,8 +70,8 @@ def mute():
     raise CommandError("unsupported platform")
 
 
-# MediaRemote's MRCommand numbers. Private, so they come from the framework's order and
-# not from anything documented: next is 4 and previous is 5, that way round.
+# MediaRemote's MRCommand numbers. Private, so they come from the framework's order:
+# next is 4 and previous is 5, that way round.
 MR_PLAY, MR_PAUSE, MR_TOGGLE, MR_NEXT, MR_PREVIOUS = 0, 1, 2, 4, 5
 
 # What each thing a button can ask of whatever is playing is called at either end.
@@ -91,11 +85,7 @@ _MEDIA = {
 
 
 def _media_remote(command):
-    """Send a MediaRemote command to whatever holds the now playing route.
-
-    MediaRemote is a private framework with no scripting dictionary, so it is loaded
-    through Foundation.
-    """
+    """Send a MediaRemote command to whatever holds the now playing route."""
     _osascript(f"""use framework "Foundation"
 set mediaRemote to current application's NSBundle's bundleWithPath:"/System/Library/PrivateFrameworks/MediaRemote.framework/"
 mediaRemote's load()
@@ -167,7 +157,7 @@ def sleep_host():
 
 
 def screenshot():
-    """Take a screenshot on the host. Returns where it went, not the image."""
+    """Take a screenshot on the host, returning where it went rather than the image."""
     import os
     import time
     target = os.path.expanduser(f"~/Desktop/badge-{int(time.time())}.png")
@@ -203,7 +193,7 @@ _LABELS = {"play_pause": "Play/Pause"}
 
 
 def records():
-    """Every command, with the heading and label the button picker shows it under."""
+    """Return every command, with the heading and label the button picker shows it under."""
     return [{"name": name,
              "group": "Media" if name in _MEDIA else "Local",
              "label": _LABELS.get(name, name)}

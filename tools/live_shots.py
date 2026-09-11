@@ -1,15 +1,4 @@
-"""Fetch the real layout and real stats, draw every page, and dump each to the host.
-
-    statsbadge serve
-    mpremote connect PORT mount . run tools/live_shots.py
-    python3 tools/shots.py build/shots
-
-Unlike tools/probe.py this uses whatever the host actually reports, so it shows what a
-page looks like when a field is missing - which on macOS is every temperature.
-
-One render a page, which is all any of them needs except the waterfall: that one puts down a
-column a frame and needs 278 of them, so `tools/waterfall_shot.py` shoots it instead.
-"""
+"""Fetch the real layout and real stats, draw every page, and dump each to the host."""
 
 import os
 import sys
@@ -23,9 +12,8 @@ import pages as pages_module
 import look
 import wifi
 
-# The badge modules an extension had pushed, imported the way the app imports them, so a page
-# kind an extension registers can be shot as well. From the badge's own ext directory, since
-# that is where an asset beside a module was installed to.
+# The badge modules an extension had pushed, imported the way the app imports them. From
+# the badge's own ext directory, since that is where an asset beside a module was installed.
 EXT_DIR = look.APP_DIR + "/ext"
 try:
     sys.path.insert(0, EXT_DIR)
@@ -75,13 +63,12 @@ for page in layout["pages"]:
 keys = ",".join(graph_keys) or "cpu.pct"
 history = get(f"/v1/history?keys={keys}&points={layout.get('graph_points', 48)}")
 
-# The colours the host sent, not the one theme this app was built with: a page drawn in the
-# default dark is not what the badge is showing.
+# The colours the host sent, not the one theme this app was built with: a page drawn in
+# the default dark is not what the badge is showing.
 theme = (look.from_palette(layout.get("theme", look.DEFAULT), layout.get("palette"))
          or look.get(layout.get("theme", look.DEFAULT)))
 # What the app does on landing a layout. Without it a group named after a domain draws as
-# CF_GADGETOID_COM, which is the fallback for a label that never arrived and not what the
-# badge shows.
+# CF_GADGETOID_COM, the fallback for a label that never arrived.
 pages_module.LABELS = layout.get("labels") or {}
 pages = layout["pages"]
 print(f"theme {layout.get('theme')}, {len(pages)} pages, "

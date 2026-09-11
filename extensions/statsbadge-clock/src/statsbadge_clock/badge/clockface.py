@@ -1,10 +1,4 @@
-"""The badge side of the clock extension.
-
-Installed into the app's `ext/` directory by `statsbadge install`, and registers itself on
-import.
-
-`lcd` is DSEG7 Classic Bold, under the SIL Open Font License.
-"""
+"""The badge side of the clock extension."""
 
 import machine
 import math
@@ -19,7 +13,7 @@ ICON_SIZE = 32
 
 
 def _high_low(weather):
-    """The day's range as "H 24 L 12", or None."""
+    """Return the day's range as "H 24 L 12", or None."""
     unit = weather.get("temp_unit") or ""
     parts = []
     for mark, key in (("H", "high"), ("L", "low")):
@@ -33,10 +27,8 @@ LCD_FONT = "lcd"
 LCD_FILE = "lcd.af"
 
 # Lexend's digits and colon, packed --wide. The app's narrow copy visibly flattens the
-# counter of a nought at the 84pt this draws.
-#
-# Thirteen glyphs, 3KB. The H is never drawn; it stands 648 units, the cap the font was
-# packed to, so tools/read_af.py can measure it.
+# counter of a nought at the 84pt this draws. Thirteen glyphs, 3KB; the H is never drawn
+# but stands 648 units, the cap the font was packed to, so tools/read_af.py can measure it.
 DIGITS_FONT = "digits"
 DIGITS_FILE = "digits.af"
 
@@ -96,8 +88,7 @@ FACES = {
         "sec_ring": None, "sweep": None,
     },
     # The Amsterdam platform clock: oval marks over a minute track of dots, and a
-    # stop-to-go second hand that runs a revolution out in 57 seconds and waits at twelve
-    # for the minute. Colours and geometry measured off a render of the dial.
+    # stop-to-go second hand that runs a revolution out in 57 seconds and waits at twelve.
     "amsterdam": {
         "label": "Amsterdam",
         "face": (228, 228, 230), "marks": (59, 76, 145),
@@ -124,14 +115,14 @@ DIGITAL = {
             "ghost": "88", "colon": "glyph"},
 }
 
-# Cleared on a theme change: keyed by theme, ten themes would hold forty dials at 113KB each.
+# Cleared on a theme change: ten themes would hold forty dials at 113KB each.
 _face_cache = {}
 _hands_cache = {}
 _baked_for = None
 
 
 def _colours(spec, theme, themed):
-    """The face's own livery, or the page theme's where it carries none or `themed` is set."""
+    """Return the face's own livery, or the page theme's where it carries none."""
     return {
         "face": color.rgb(*spec["face"]) if spec["face"] and not themed else theme.panel,
         "marks": color.rgb(*spec["marks"]) if spec["marks"] and not themed else theme.dim,
@@ -142,46 +133,37 @@ def _colours(spec, theme, themed):
 
 
 def _bar(inner, outer, half_width):
-    """A blunt-ended bar pointing at twelve, from the origin for _aim to place."""
+    """Return a blunt-ended bar pointing at twelve, from the origin for _aim to place."""
     return shape.rectangle(rect(-half_width, -outer, half_width * 2.0, outer - inner))
 
 
 def _aim(bar, centre, degrees):
-    """Point a bar at a clock angle. Translate before rotate, since each call right-multiplies.
+    """Point a bar at a clock angle.
 
-    Re-aiming a baked bar beats rebuilding it, 653us against 958us a draw, but only while
-    shape and mat3 each fit one GC block: MicroPython advances its free-block hint on
-    single-block allocations only (py/gc.c, n_free == 1). True at 32-byte blocks and a
-    six-float mat3. See tools/bench_clockface.py.
+    Translate before rotate, since each call right-multiplies.
     """
     bar.transform = mat3().translate(centre[0], centre[1]).rotate(degrees)
     return bar
 
 
 def _oval(inner, outer, half_width):
-    """A round-ended bar pointing at twelve, from the origin for _aim to place."""
+    """Return a round-ended bar pointing at twelve, from the origin for _aim to place."""
     return shape.rounded_rectangle(
         rect(-half_width, -outer, half_width * 2.0, outer - inner), half_width)
 
 
 def _dot(radius_at, size):
-    """A dot on the minute track, at twelve, for _aim to place."""
+    """Return a dot on the minute track, at twelve, for _aim to place."""
     return shape.circle(vec2(0, -radius_at), size)
 
 
 def _ring(radius_at, outer, band):
-    """A ring around a point on a hand, at twelve, for _aim to place.
-
-    An arc, not a disc inside a disc: the dial and the hands below show through the hole.
-    """
+    """Return a ring around a point on a hand, at twelve, for _aim to place."""
     return shape.arc(vec2(0, -radius_at), outer - band, outer, 0, 360)
 
 
 def _bake_face(spec, pens):
-    """The dial, baked per face: sixty anti-aliased marks cost most of a frame, every frame.
-
-    Timed by tools/bench_clockface.py.
-    """
+    """Bake the dial: sixty anti-aliased marks cost most of a frame, every frame."""
     size = RADIUS * 2 + 4
     face = image(size, size)
     face.antialias = image.X4
@@ -222,14 +204,7 @@ def _bake_face(spec, pens):
 
 
 def _bake_hands(spec):
-    """Each hand as the shapes that draw it, which one _aim per shape points together.
-
-    An oval hand is a round-ended bar with a rectangle over its tail cap, squaring the end
-    off.
-
-    A ring is cut out of the second hand: the stick stops at the band and picks up on the
-    far side, so nothing crosses the hole.
-    """
+    """Return each hand as the shapes that draw it, one _aim per shape."""
     oval = spec["hands_style"] == "ovals"
     bar = _oval if oval else _bar
 
@@ -255,7 +230,7 @@ def _bake_hands(spec):
 
 
 def _face(name, theme, themed):
-    """(spec, pens, dial, hands), baking on first use."""
+    """Return (spec, pens, dial, hands), baking on first use."""
     global _baked_for
     if _baked_for != theme.key:
         _face_cache.clear()
@@ -278,13 +253,12 @@ def _hand(parts, degrees, pen):
 
 
 # A stop-to-go second hand turns at the speed its AC movement drives it at, which swings
-# sinusoidally over each step: fastest between two marks, slowest across one.
+# sinusoidally over each step:
 #
 #   speed(u) = 1 - STEP_RIPPLE * cos(2 * pi * u)
 #
-# integrated below. The cosine averages out over the step, so the hand still covers exactly
-# one mark in one step whatever the ripple. At 1.0 it stops dead on each mark; under that
-# it crawls across and never quite stops.
+# integrated below. The cosine averages out over the step, so the hand covers exactly one
+# mark in one step whatever the ripple.
 STEP_RIPPLE = 0.6
 TWO_PI = math.pi * 2.0
 
@@ -296,12 +270,7 @@ _spring_over = None
 
 
 def _spring(phase_ms, over_ms):
-    """How far the hour and minute hands have closed on the new minute, 0 to 1.
-
-    A tween read at a phase rather than run, since `at` takes milliseconds and clamps at
-    both ends. `tween` is named here and not at module scope: a host importing this module
-    has no firmware to take it from.
-    """
+    """Return how far the hour and minute hands have closed on the new minute, 0 to 1."""
     global _spring_tween, _spring_over
     if _spring_over != over_ms:
         _spring_tween = tween(0.0, 1.0, over_ms, tween.CUBIC_OUT)
@@ -310,19 +279,12 @@ def _spring(phase_ms, over_ms):
 
 
 def _step(fraction):
-    """How far a second hand is through one step, 0 to 1, for a fraction of its time."""
+    """Return how far a second hand is through one step, 0 to 1."""
     return fraction - STEP_RIPPLE / TWO_PI * math.sin(TWO_PI * fraction)
 
 
 def _angles(hour, minute, second, sweep):
-    """Degrees clockwise from twelve for the hour, minute and second hands.
-
-    Without a `sweep` the second hand crosses the dial once a minute at the frame rate and
-    the other two creep after it.
-
-    With one it is a stop-to-go movement: sixty steps in fewer than sixty seconds, a wait
-    upright at twelve, then the minute springs all three hands on together.
-    """
+    """Return degrees clockwise from twelve for the hour, minute and second hands."""
     if sweep is None:
         return ((hour % 12) * 30.0 + minute * 0.5, minute * 6.0 + second * 0.1,
                 second * 6.0)
@@ -341,8 +303,7 @@ def _angles(hour, minute, second, sweep):
 
 
 def _register_font():
-    """The installed copy first, then this module's directory for a checkout over
-    `mpremote mount`."""
+    """Return the installed copy first, then this module's directory for a checkout."""
     here = globals().get("__file__") or ""
     beside = here.rsplit("/", 1)[0] + "/icons.af" if "/" in here else "icons.af"
     draw.add_font(WEATHER_FONT, look.APP_DIR + "/ext/icons.af", beside)
@@ -350,8 +311,7 @@ def _register_font():
 
 WIDEST_TIME = "44:44"
 # Shown until the first reading lands. Spaces and a colon, since neither digit font packs
-# a hyphen: a glyph the font lacks measures narrow and draws wide, which put the minutes
-# off the right-hand edge.
+# a hyphen: a missing glyph measures narrow and draws wide.
 BLANK_TIME = "  :  "
 BLANK_MINUTES = BLANK_TIME.partition(":")[2]
 
@@ -369,7 +329,7 @@ def _colon_alpha():
 
 
 def _digits_font(spec):
-    """The font name for a digital face, loading it on first use."""
+    """Return the font name for a digital face, loading it on first use."""
     wanted = spec["font"]
     if not draw.has_font(wanted):
         here = globals().get("__file__") or ""
@@ -380,11 +340,7 @@ def _digits_font(spec):
 
 
 def _digital(clock, weather, label, theme, spec):
-    """The band with no dial, laid out as a desk clock.
-
-    Hours and minutes are drawn as separate strings, so a proportional font cannot kern the
-    colon into them.
-    """
+    """Draw the band with no dial, laid out as a desk clock."""
     left, right = look.PAD + 2, look.W - look.PAD - 2
     top = look.BODY_TOP + 6
 
@@ -537,8 +493,7 @@ def render(page, frame, _history, theme):
                        (wind, look.SIZE_SMALL, theme.dim)), top=y)
 
 
-# A PCF85063A drifts a second or two a day, about as stale as a reading by the time it
-# lands.
+# A PCF85063A drifts a second or two a day.
 RESYNC_S = 30
 
 _synced = False
@@ -551,8 +506,7 @@ _phase_at = 0
 
 
 def _zone_offset(host, there):
-    """Seconds between the host's local time and the location a page shows, within twelve
-    hours of zero."""
+    """Return seconds between the host's local time and the location a page shows."""
     if not host or not there or there.get("hour") is None or host.get("hour") is None:
         return 0
     theirs = there["hour"] * 3600 + there["minute"] * 60 + there.get("seconds", 0)
@@ -561,11 +515,7 @@ def _zone_offset(host, there):
 
 
 def _local_time(offset=0):
-    """Hour, minute and a fractional second, off the badge's hardware clock.
-
-    Whole seconds from time.localtime(), which costs 14us; the fraction from ticks since that
-    second changed, clamped at one.
-    """
+    """Return hour, minute and a fractional second, off the badge's hardware clock."""
     global _phase_second, _phase_at
     parts = time.localtime()
     whole = parts[5]
@@ -579,11 +529,7 @@ def _local_time(offset=0):
 
 
 def _resync(clock, seq=None):
-    """Set the badge's clock from the host's: the first reading, then only past RESYNC_S.
-
-    Setting it lands the sub-second at zero, which shows as a stumble in the sweep. `seq`
-    gates on new readings, one poll's time being redrawn forty-five times a second.
-    """
+    """Set the badge's clock from the host's: the first reading, then only past RESYNC_S."""
     global _synced, _synced_seq
     if _synced and seq == _synced_seq:
         return
@@ -600,8 +546,8 @@ def _resync(clock, seq=None):
     drift = (theirs - ours + 43200) % 86400 - 43200
     if _synced and -RESYNC_S <= drift <= RESYNC_S:
         return
-    # (year, month, day, weekday, hour, minute, second, subsecond). The weekday is recomputed
-    # from the date, so what goes in that slot does not matter.
+    # (year, month, day, weekday, hour, minute, second, subsecond). The weekday is
+    # recomputed from the date.
     machine.RTC().datetime((parts[0], parts[1], parts[2], parts[6],
                             hour, minute, second, 0))
     _synced = True

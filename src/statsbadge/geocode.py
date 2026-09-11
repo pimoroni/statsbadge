@@ -1,15 +1,4 @@
-"""Turning a location into coordinates, once per install, and back again.
-
-A clock page is drawn for a location, and so is anything weather-shaped after it. One
-lookup here serves all of them, against one cache: asking twice means geocoding twice and
-holding two answers that can disagree.
-
-`lookup` is Open-Meteo's geocoder, which needs neither key nor account. `nearest` runs the
-other way, naming a coordinate that arrived without one - a burnt area, a quake, whatever
-the space station is over. That direction is answered from `cities.tsv.gz`. Open-Meteo has
-no reverse endpoint, and the services that do are shared ones whose usage policies rule out
-software installed on many machines querying them systematically.
-"""
+"""Turning a location into coordinates, once per install, and back again."""
 
 import gzip
 import json
@@ -24,7 +13,7 @@ from . import state
 SEARCH = "https://geocoding-api.open-meteo.com/v1/search"
 TIMEOUT = 8.0
 # Seconds before a name that failed is looked up again. The geocoder is the part of this
-# most likely to rate limit, and a page redrawing does not need to find that out again.
+# most likely to rate limit.
 RETRY_AFTER = 60.0
 
 # What the badge-wide location is stored under, and what a page overrides it with.
@@ -33,34 +22,23 @@ KEYS = ("place", "latitude", "longitude")
 # GeoNames cities15000, packed by tools/make_cities.py. CC BY 4.0.
 CITIES = "cities.tsv.gz"
 # How much further than the closest settlement a bigger one may be and still be the name
-# given. Los Angeles is ringed by towns of their own, and "8 km NE of Rosemead" names a
-# fire nobody can place.
+# given. Los Angeles is ringed by towns of their own.
 NEAR_ENOUGH_KM = 25.0
 EARTH_KM = 6371.0
-# Bearings are named to sixteen points, matching the USGS strings the quakes page already
-# draws: "77 km N of Ruteng", "67 km WSW of Puerto Madero".
+# Bearings are named to sixteen points, matching the USGS strings the quakes page draws.
 POINTS = ("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
           "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
 
 
 class Geocoder:
-    """Locations to (latitude, longitude, label), cached and backed off per name.
-
-    `Geocoder()` caches in memory. The server hands it a store, so a location costs one
-    request for the life of an install and a known location still resolves with Open-Meteo
-    unreachable.
-    """
+    """Locations to (latitude, longitude, label), cached and backed off per name."""
 
     def __init__(self, store=None):
         self.store = store or state.Store()
         self._retry_at = {}
 
     def lookup(self, place):
-        """Coordinates for a location, or None while a failed lookup is backed off.
-
-        Raises what the request raised, and LookupError where the name finds nothing, so a
-        misspelled location is reported instead of drawing nothing and saying nothing.
-        """
+        """Return coordinates for a location, or None while a failed lookup is backed off."""
         key = (place or "").strip().lower()
         if not key:
             return None
@@ -78,7 +56,7 @@ class Geocoder:
         return found
 
     def nearest(self, latitude, longitude):
-        """`nearest`, reachable from the geocoder a source is already handed."""
+        """Call `nearest`, reachable from the geocoder a source is already handed."""
         return nearest(latitude, longitude)
 
     def _search(self, place):
@@ -99,12 +77,7 @@ class Geocoder:
 
 
 def _in_country(found, country):
-    """The first result in a named country, or the best known of them all.
-
-    Results arrive ordered by how well known they are, so "Sheffield" is Yorkshire's and
-    "Sheffield, US" is Alabama's. A country matches on its code and on its name, since
-    somebody typing a country has no reason to know which of the two Open-Meteo answers with.
-    """
+    """Return the first result in a named country, or the best known of them all."""
     for candidate in found:
         if country in (candidate.get("country_code", "").lower(),
                        candidate.get("country", "").lower()):
@@ -113,18 +86,17 @@ def _in_country(found, country):
 
 
 def home_from(config):
-    """The badge-wide location out of a host config, as a source is handed it."""
+    """Return the badge-wide location out of a host config, as a source is handed it."""
     return {key: (config or {}).get(key) for key in KEYS
             if (config or {}).get(key) not in (None, "")}
 
 
-# The settlement table, read on the first call that needs it. A host drawing nothing that
-# arrives as bare coordinates never pays for the read.
+# The settlement table, read on the first call that needs it.
 _cities = None
 
 
 def cities():
-    """Every packed settlement, as (name, country, latitude, longitude, thousands)."""
+    """Return every packed settlement, as (name, country, latitude, longitude, thousands)."""
     global _cities
     if _cities is None:
         packed = resources.files(__package__).joinpath(CITIES).read_bytes()
@@ -140,15 +112,7 @@ def cities():
 
 
 def nearest(latitude, longitude):
-    """What to call a coordinate that arrived without a name, or None with no table.
-
-    `{"name", "country", "km", "bearing", "text"}`, where `text` reads "62 km NE of
-    Castelo Branco, PT" - the way USGS names a quake, so a page can draw it beside one.
-
-    The closest settlement is not always the one to name. A fire in the hills above a city
-    is closest to some suburb of it, so the largest settlement within NEAR_ENOUGH_KM of the
-    closest is the one given.
-    """
+    """Return what to call a coordinate that arrived without a name, or None with no table."""
     table = cities()
     if not table:
         return None
@@ -183,7 +147,7 @@ def nearest(latitude, longitude):
 
 
 def _wrap(degrees):
-    """A longitude difference the short way round, so either side of the date line is near."""
+    """Return a longitude difference the short way round."""
     return (degrees + 180.0) % 360.0 - 180.0
 
 
@@ -196,7 +160,7 @@ def _km_between(from_lat, from_lon, to_lat, to_lon):
 
 
 def _bearing(from_lat, from_lon, to_lat, to_lon):
-    """Which way the coordinate lies from the settlement, to one of sixteen points."""
+    """Return which way the coordinate lies from the settlement, to one of sixteen points."""
     first, second = math.radians(from_lat), math.radians(to_lat)
     along = math.radians(_wrap(to_lon - from_lon))
     east = math.sin(along) * math.cos(second)
