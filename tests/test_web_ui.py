@@ -138,3 +138,26 @@ def test_quick_add_is_a_picker_of_its_own_beside_the_kinds(ui):
     added = ui.function("quickAdd")
     assert "freshId(" in added, added
     assert "markDirty()" in added, "adding pages does not enable Save"
+
+
+def test_every_slider_stays_inside_what_the_server_takes(ui):
+    import html.parser
+
+    class Ranges(html.parser.HTMLParser):
+        found = {}
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "input" and attrs.get("type") == "range":
+                self.found[attrs["id"]] = (float(attrs["min"]), float(attrs["max"]))
+
+    parser = Ranges()
+    parser.feed(ui.markup)
+    bounds = {"interval_ms": (layout.INTERVAL_MS, 1), "graph_points": (layout.GRAPH_POINTS, 1),
+              "idle_advance_s": (layout.IDLE_ADVANCE_S, 1),
+              "advance_every_s": (layout.ADVANCE_EVERY_S, 1),
+              "brightness": (layout.BRIGHTNESS, 100)}
+    assert set(parser.found) == {c for c, s in ui.bindings.items() if s in bounds}
+    for control, (low, high) in parser.found.items():
+        (floor, ceiling), scale = bounds[ui.bindings[control]]
+        assert floor * scale <= low and high <= ceiling * scale, (control, low, high)

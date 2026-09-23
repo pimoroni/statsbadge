@@ -1029,8 +1029,11 @@ function bindRange(id, key, format, scale) {
   const input = $(id)
   const out = pick(`output[for="${id}"]`)
   const factor = scale || 1
-  input.value = Math.round((config[key] || 0) * factor)
-  out.textContent = format(input.value)
+  const value = Math.round((config[key] || 0) * factor)
+  input.min = Math.min(Number(input.min), value)
+  input.max = Math.max(Number(input.max), value)
+  input.value = value
+  out.textContent = format(String(value))
   input.oninput = () => {
     config[key] = factor === 1
       ? parseInt(input.value, 10)
