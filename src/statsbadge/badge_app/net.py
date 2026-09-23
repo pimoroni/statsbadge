@@ -128,9 +128,9 @@ class Config:
             self.active = next(iter(self.hosts), None)
         # Start above whatever was last written: anything in flight when the badge lost
         # power never reached flash.
+        self._flushed = self.seq
         for entry in self.hosts.values():
             entry["seq"] = int(entry.get("seq", 0)) + self.SEQ_FLUSH
-        self._flushed = self.seq
         return self.paired
 
     def save(self):
