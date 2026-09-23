@@ -237,24 +237,22 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
   }
 
   function offerExtensionPages() {
-    const picker = kindPicker
     const offered = (caps.extension_pages || []).filter(
-      (page) => ![...picker.options].some((option) => option.value === page.kind))
+      (page) => ![...kindPicker.options].some((option) => option.value === page.kind))
     if (!offered.length) return
-    const group = picker.querySelector("optgroup[label=\"Extensions\"]")
-      || picker.appendChild(el("optgroup", { label: "Extensions" }))
+    const group = kindPicker.querySelector("optgroup[label=\"Extensions\"]")
+      || kindPicker.appendChild(el("optgroup", { label: "Extensions" }))
     group.append(...offered.map(
       (page) => el("option", { value: page.kind, textContent: page.title || page.kind })))
   }
 
   function offerRecipes() {
-    const picker = recipePicker
     const listed = caps.recipes || []
-    const wanted = picker.value
-    picker.replaceChildren(...listed.map((recipe) => el("option", {
+    const wanted = recipePicker.value
+    recipePicker.replaceChildren(...listed.map((recipe) => el("option", {
       value: recipe.name, textContent: recipe.title, title: recipe.summary || null })))
-    if (listed.some((recipe) => recipe.name === wanted)) picker.value = wanted
-    picker.hidden = !listed.length
+    if (listed.some((recipe) => recipe.name === wanted)) recipePicker.value = wanted
+    recipePicker.hidden = !listed.length
     quickAddButton.hidden = !listed.length
   }
 
@@ -278,9 +276,8 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
       if (mine !== prunedWanted) return
       const kept = new Set(shown.pages.map((page) => page.id))
       const dropped = config.pages.filter((page) => !kept.has(page.id)).map((page) => page.title)
-      const node = status
-      node.textContent = `Not shown on the badge, because this host reports no data for them: ${dropped.join(", ")}`
-      node.hidden = !dropped.length
+      status.textContent = `Not shown on the badge, because this host reports no data for them: ${dropped.join(", ")}`
+      status.hidden = !dropped.length
     } catch {}
   }
 

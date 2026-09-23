@@ -37,29 +37,27 @@ export function createLook({ controls, outputs, caseLights, caseLightRef, button
   }
 
   function renderCaseLights() {
-    const mode = caseLights
     const stored = config.caselights
     const chosen = stored === true ? "theme" : stored ? "reading" : "off"
     const refs = numericRefs(caps)
     const offered = [["off", "Off"], ["theme", "Follow the Backlight"]]
     if (refs.length || chosen === "reading") offered.push(["reading", "Follow a Reading"])
-    mode.replaceChildren(...offered.map(([value, text]) =>
+    caseLights.replaceChildren(...offered.map(([value, text]) =>
       el("option", { value, textContent: text, selected: value === chosen })))
 
     let following = typeof stored === "string" ? stored : refs[0]
 
-    const row = caseLightRef
-    row.hidden = chosen !== "reading"
-    row.replaceChildren(...refSelect(caps, following, refs, (ref) => {
+    caseLightRef.hidden = chosen !== "reading"
+    caseLightRef.replaceChildren(...refSelect(caps, following, refs, (ref) => {
       following = ref
       config.caselights = ref
       changed()
     }))
 
-    mode.onchange = () => {
-      const value = mode.value
+    caseLights.onchange = () => {
+      const value = caseLights.value
       config.caselights = value === "off" ? false : value === "theme" ? true : following
-      row.hidden = value !== "reading"
+      caseLightRef.hidden = value !== "reading"
       changed()
     }
   }

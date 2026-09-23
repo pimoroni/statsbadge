@@ -3,14 +3,13 @@ import { el, toast } from "./dom.js"
 
 export function createGeneral({ holder }) {
   async function renderGeneral() {
-    const node = holder
-    const heading = node.querySelector("h2")
+    const heading = holder.querySelector("h2")
     let host
     try {
       host = await api("/api/settings")
     } catch (error) {
-      node.replaceChildren(heading,
-                           el("p", { className: "bad", textContent: error.message }))
+      holder.replaceChildren(heading,
+                             el("p", { className: "bad", textContent: error.message }))
       return
     }
 
@@ -32,7 +31,7 @@ export function createGeneral({ holder }) {
       return renderGeneral()
     }).catch((error) => toast(error.message, true))
 
-    node.replaceChildren(
+    holder.replaceChildren(
       heading,
       el("section", null,
          el("h3", { textContent: "Where this badge is" }),

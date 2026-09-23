@@ -3,19 +3,18 @@ import { el, toast } from "./dom.js"
 
 export function createHelp({ holder }) {
   async function renderHelp() {
-    const node = holder
-    const intro = node.querySelector("p")
+    const intro = holder.querySelector("p")
     let facts
     try {
       facts = await api("/api/help")
     } catch (error) {
-      node.replaceChildren(intro, el("p", { className: "bad", textContent: error.message }))
+      holder.replaceChildren(intro, el("p", { className: "bad", textContent: error.message }))
       return
     }
     const reading = el("section", null,
                        el("h2", { textContent: "Reading now" }),
                        el("p", { textContent: (facts.sources || []).join(", ") || "nothing" }))
-    node.replaceChildren(intro, ...helpFor(facts), reading)
+    holder.replaceChildren(intro, ...helpFor(facts), reading)
   }
 
   function helpFor(facts) {

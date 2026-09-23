@@ -28,15 +28,14 @@ export function createBadges({ picker, note, holder, stale, pairButton, pairingP
 
   function renderWhose() {
     const ids = Object.keys(badges)
-    const select = picker
-    select.replaceChildren(
+    picker.replaceChildren(
       ...ids.map((id) => el("option", { value: id, textContent: badgeName(badges, id) })),
       el("option", { value: "",
                      textContent: ids.length
                        ? "Default, for any other badge"
                        : "No badge paired yet" }))
-    select.value = whose || ""
-    select.onchange = () => onSwitch(select.value).catch((error) => toast(error.message, true))
+    picker.value = whose || ""
+    picker.onchange = () => onSwitch(picker.value).catch((error) => toast(error.message, true))
 
     const own = whose && badges[whose] && badges[whose].configured
     note.textContent = whose && !own
@@ -46,11 +45,10 @@ export function createBadges({ picker, note, holder, stale, pairButton, pairingP
 
   function renderBadges() {
     const ids = Object.keys(badges)
-    const node = holder
     if (ids.length) {
-      node.replaceChildren(node.querySelector("h2"), ...ids.map(badgeBox))
+      holder.replaceChildren(holder.querySelector("h2"), ...ids.map(badgeBox))
     } else {
-      node.replaceChildren(node.querySelector("h2"), el("section", null, el("p", {
+      holder.replaceChildren(holder.querySelector("h2"), el("section", null, el("p", {
         textContent: "None paired. Use the USB installer, or pair over the network." })))
     }
     renderStale()
@@ -173,25 +171,23 @@ export function createBadges({ picker, note, holder, stale, pairButton, pairingP
       clearInterval(pairingPoll)
       pairingPoll = null
     }
-    const panel = pairingPanel
-    const button = pairButton
 
     const paint = (state, pending) => {
       if (!state.active) {
-        panel.close()
-        button.textContent = "Pair a badge…"
-        button.onclick = () => startPairing().catch((error) => toast(error.message, true))
+        pairingPanel.close()
+        pairButton.textContent = "Pair a badge…"
+        pairButton.onclick = () => startPairing().catch((error) => toast(error.message, true))
         return false
       }
-      button.textContent = "Stop pairing"
-      button.onclick = () => stopPairing().catch((error) => toast(error.message, true))
-      panel.replaceChildren(...[
+      pairButton.textContent = "Stop pairing"
+      pairButton.onclick = () => stopPairing().catch((error) => toast(error.message, true))
+      pairingPanel.replaceChildren(...[
         el("p", { textContent: `On the badge: launch Stats, press B to set up, and pick ${(state.hosts || []).join(" / ")}:${state.port}` }),
         el("p", { textContent: `closes in ${state.expires_in}s` }),
         pending.length ? el("p", { textContent: "Approve the one whose code matches." }) : null,
         pending.length ? pendingList(pending) : null,
       ].filter(Boolean))
-      if (!panel.open) panel.show()
+      if (!pairingPanel.open) pairingPanel.show()
       return true
     }
 
@@ -219,14 +215,13 @@ export function createBadges({ picker, note, holder, stale, pairButton, pairingP
     const names = Object.keys(badges)
       .filter((id) => badges[id].app && badges[id].app.behind)
       .map((id) => badgeName(badges, id))
-    const node = stale
-    node.hidden = !names.length
+    stale.hidden = !names.length
     if (!names.length) return
     const one = names.length === 1
     const button = el("button", { type: "button", className: "small",
                                   textContent: "Update…" })
     button.onclick = onUpdate
-    node.replaceChildren(
+    stale.replaceChildren(
       `${names.join(", ")} ${one ? "was" : "were"} last seen running an older app. Connect ${one ? "it" : "them"} by USB to update.`,
       button)
   }
