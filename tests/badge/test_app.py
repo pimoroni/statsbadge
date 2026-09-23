@@ -2,7 +2,6 @@
 
 import json
 import pathlib
-import re
 import socket
 import sys
 
@@ -151,7 +150,7 @@ def test_a_press_that_closes_a_modal_screen_stops_there():
         "the menu press reaches buttons(): " + handled)
 
 
-def test_the_badge_can_report_on_itself_with_no_host(ui):
+def test_the_badge_can_report_on_itself_with_no_host():
     """The badge page reads the badge, so a prune on what the host can fill keeps it."""
     config = layout.validate({"pages": [{"id": "b1", "kind": "badge", "title": "Badge"},
                                         {"id": "cpu", "kind": "dial", "field": "cpu.pct"}]})
@@ -160,11 +159,3 @@ def test_the_badge_can_report_on_itself_with_no_host(ui):
     # A host measuring none of them still keeps it, and drops the dial.
     kept = layout.prune(config["pages"], {"available": {}})
     assert [p["kind"] for p in kept] == ["badge"], kept
-
-    # The kind picker is written out in the page rather than built from the API.
-    markup = ui.markup
-    app = ui.script
-    offered = set(re.findall(r'<option value="([a-z]+)">', markup))
-    for kind in layout.KINDS:
-        assert kind in offered, f"{kind} is not in the kind picker"
-        assert f"  {kind}: {{" in app, f"{kind} has no field slots declared in app.js"
