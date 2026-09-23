@@ -1,6 +1,8 @@
 import { $, all, el, pick, titleCase, toast } from "./js/dom.js"
 import { api, configPath } from "./js/api.js"
+import { nextId, settingRow } from "./js/forms.js"
 import { readingOf } from "./js/format.js"
+import { fieldLabel, numericRefs, poolFor, refSelect } from "./js/refs.js"
 import { drawThumb, H, rgb, SCREENS, SERIES, THUMB_H, THUMB_W, W } from "./js/preview.js"
 
 let config = null
@@ -40,133 +42,6 @@ function bindTabs() {
     opening = Number(window.localStorage.getItem(REMEMBERED_TAB))
   } catch {}
   showSheet(tabs[opening] ? opening : 0)
-}
-
-function availableRefs() {
-  const refs = []
-  const available = (caps && caps.available) || {}
-  for (const group of Object.keys(available).sort()) {
-    for (const field of available[group]) refs.push(`${group}.${field}`)
-  }
-  return refs
-}
-
-function preferredRefs() {
-  const printable = availableRefs().filter(
-    (ref) => !listFields().includes(ref.split(".")[1])
-             && !itemFields().includes(ref.split(".")[1]))
-  return [...new Set(numericRefs().concat(printable))]
-}
-
-function numericRefs() {
-  return availableRefs().filter((ref) => {
-    const field = ref.split(".")[1]
-    return !["name", "host", "os", "arch", "cpu_name", "iface", "charging"]
-      .includes(field) && !listFields().includes(field)
-      && !itemFields().includes(field)
-  })
-}
-
-function listFields() {
-  return caps.list_fields || ["cores", "load"]
-}
-
-function itemFields() {
-  return caps.item_fields || []
-}
-
-function itemRefs() {
-  return availableRefs().filter((ref) => itemFields().includes(ref.split(".")[1]))
-}
-
-function notifyRefs() {
-  return [...new Set(itemRefs().concat(numericRefs()))]
-}
-
-function gaugeRefs() {
-  const percent = caps.percent_fields || []
-  const scaled = Object.keys(caps.full_scale || {})
-  return numericRefs().filter((ref) => {
-    const field = ref.split(".")[1]
-    return percent.includes(field) || scaled.includes(field)
-  })
-}
-
-function seriesRefs() {
-  const kept = caps.graphed || []
-  const withHistory = numericRefs().filter((ref) => kept.includes(ref))
-  return withHistory.length ? withHistory : numericRefs()
-}
-
-function listRefs() {
-  return availableRefs().filter((ref) => listFields().includes(ref.split(".")[1]))
-}
-
-const POOLS = {
-  gauge: gaugeRefs,
-  series: seriesRefs,
-  list: listRefs,
-  notify: notifyRefs,
-  any: preferredRefs,
-}
-
-function groupLabel(group) {
-  return (caps.group_labels || {})[group] || group
-}
-
-const HOST_SOURCE = "This host"
-
-function sourceLabel(group) {
-  return (caps.group_source || {})[group] || HOST_SOURCE
-}
-
-function fieldLabel(ref) {
-  const [group, field] = ref.split(".")
-  const labels = (caps.field_labels || {})[group] || {}
-  return labels[field] || titleCase(field)
-}
-
-function refSelect(value, refs, onChange) {
-  const options = [...new Set(refs)]
-  if (value && !options.includes(value)) options.unshift(value)
-
-  const byGroup = new Map()
-  for (const ref of options) {
-    const group = ref.split(".")[0]
-    if (!byGroup.has(group)) byGroup.set(group, [])
-    byGroup.get(group).push(ref)
-  }
-
-  const byOwner = new Map()
-  for (const group of byGroup.keys()) {
-    const owner = sourceLabel(group)
-    if (!byOwner.has(owner)) byOwner.set(owner, [])
-    byOwner.get(owner).push(group)
-  }
-  const owners = [...byOwner.keys()].sort(
-    (a, b) => (a === HOST_SOURCE ? -1 : 0) - (b === HOST_SOURCE ? -1 : 0))
-
-  const chosen = String(value || options[0] || "").split(".")[0]
-  const source = el("select", { "aria-label": "Source" }, owners.map(
-    (owner) => el("optgroup", { label: owner }, byOwner.get(owner).map(
-      (group) => el("option", { value: group, textContent: groupLabel(group),
-                                selected: group === chosen })))))
-
-  const select = el("select", { "aria-label": "Reading" })
-  const fill = (group, ref) => {
-    select.replaceChildren(...(byGroup.get(group) || []).map(
-      (each) => el("option", { value: each, textContent: fieldLabel(each),
-                               selected: each === ref })))
-  }
-  fill(chosen, value)
-
-  source.onchange = () => {
-    fill(source.value, null)
-    onChange(select.value)
-    markDirty()
-  }
-  select.onchange = () => { onChange(select.value); markDirty() }
-  return [source, select]
 }
 
 const expanded = new Set()
@@ -224,7 +99,7 @@ function pageCard(page, index) {
   }
   showTitle()
 
-  const titleId = `page${++controlSerial}`
+  const titleId = nextId("page")
   const title = el("input", { type: "text", id: titleId, value: page.title || "" })
   title.oninput = () => { page.title = title.value; showTitle(); markDirty() }
 
@@ -254,12 +129,12 @@ function pageCard(page, index) {
   if (open) {
     item.append(el("label", { htmlFor: titleId, textContent: "Title" }), title,
                 slotList(page, shape),
-                ...(shape.scaled ? settingRow(page, MAX_SETTING) : []),
-                ...settings.flatMap((setting) => settingRow(page, setting)),
+                ...(shape.scaled ? settingRow(page, MAX_SETTING, markDirty) : []),
+                ...settings.flatMap((setting) => settingRow(page, setting, markDirty)),
                 el("footer", null, moveButtons(index), addSlot(page, shape)))
   } else {
     const refs = shape.one ? [page[shape.one]] : (page[shape.many] || [])
-    const named = refs.filter(Boolean).map(fieldLabel)
+    const named = refs.filter(Boolean).map((ref) => fieldLabel(caps, ref))
     const extra = settings.map((setting) => page[setting.key]).filter(Boolean)
     if (shape.scaled && page.max) extra.push(`full scale ${page.max}`)
     item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
@@ -313,19 +188,14 @@ function reorderable(node, items, index, { tag, along, handle }) {
   }
 }
 
-function poolFor(name) {
-  const refs = (POOLS[name] || POOLS.any)()
-  return refs.length ? refs : availableRefs()
-}
-
 function slotList(page, shape) {
   const rows = []
 
   if (shape.one) {
     rows.push(el("li", null,
                  el("span", { textContent: page.kind === "bars" ? "List" : "Gauge" }),
-                 refSelect(page[shape.one], poolFor(shape.pool),
-                           (value) => { page[shape.one] = value })))
+                 refSelect(caps, page[shape.one], poolFor(caps, shape.pool),
+                           (value) => { page[shape.one] = value; markDirty() })))
   }
 
   const current = shape.many ? page[shape.many] || [] : []
@@ -335,7 +205,8 @@ function slotList(page, shape) {
     drop.onclick = () => { current.splice(slot, 1); markDirty(); renderPages() }
     const row = el("li", null,
                    el("span", { className: "grip", textContent: "⋮" }),
-                   refSelect(ref, poolFor(shape.many_pool), (value) => { current[slot] = value }),
+                   refSelect(caps, ref, poolFor(caps, shape.many_pool),
+                             (value) => { current[slot] = value; markDirty() }),
                    drop)
     reorderable(row, current, slot, { tag: "slot", along: "y" })
     rows.push(row)
@@ -350,7 +221,7 @@ function addSlot(page, shape) {
   const add = el("button", { type: "button", className: "small add",
                              textContent: `Add ${singular(shape.slots).toLowerCase()}` })
   add.onclick = () => {
-    page[shape.many] = current.concat([poolFor(shape.many_pool)[0]])
+    page[shape.many] = current.concat([poolFor(caps, shape.many_pool)[0]])
     markDirty()
     renderPages()
   }
@@ -391,7 +262,7 @@ function newPage(kind) {
     return { ...offered, id: freshId(offered.id || kind, taken) }
   }
   const shape = shapeFor(kind)
-  const pool = numericRefs()
+  const pool = numericRefs(caps)
   const page = { id: freshId(kind, taken), kind, title: kind }
   if (shape.one) {
     page[shape.one] = kind === "bars" ? "cpu.cores" : (pool[0] || "cpu.pct")
@@ -699,7 +570,7 @@ function extensionBox(extension, settings) {
   const stored = config.settings[extension.name]
   for (const setting of settings) {
     if (setting.secret) continue
-    box.append(...settingRow(stored, setting))
+    box.append(...settingRow(stored, setting, markDirty))
     if (setting.hint) box.append(el("p", { textContent: setting.hint }))
   }
   const secrets = settings.filter((setting) => setting.secret)
@@ -725,7 +596,7 @@ function secretsBlock(name, stored, secrets) {
 
   if (open) {
     for (const setting of secrets) {
-      block.append(...settingRow(stored, setting, { reveal: true }))
+      block.append(...settingRow(stored, setting, markDirty, { reveal: true }))
       if (setting.hint) block.append(el("p", { textContent: setting.hint }))
     }
   } else {
@@ -743,48 +614,6 @@ function secretsBlock(name, stored, secrets) {
   }
   block.append(button)
   return block
-}
-
-let controlSerial = 0
-
-function settingRow(stored, setting, options) {
-  const id = `setting${++controlSerial}`
-  const label = el("label", { htmlFor: id, textContent: setting.label || setting.key })
-  const current = stored[setting.key] !== undefined ? stored[setting.key] : setting.default
-
-  let input
-  if (setting.type === "bool") {
-    input = el("input", { type: "checkbox", id, checked: !!current })
-    input.onchange = () => { stored[setting.key] = input.checked; markDirty() }
-  } else if (setting.type === "number") {
-    input = el("input", { type: "number", id, min: setting.min, max: setting.max,
-                          step: setting.step, placeholder: setting.placeholder,
-                          value: current === null || current === undefined ? "" : current })
-    input.oninput = () => {
-      stored[setting.key] = input.value === "" ? null : Number(input.value)
-      markDirty()
-    }
-  } else if (setting.type === "choice") {
-    input = el("select", { id }, (setting.options || []).map(
-      (option) => el("option", { value: option, textContent: option,
-                                 selected: option === current })))
-    input.onchange = () => { stored[setting.key] = input.value; markDirty() }
-  } else {
-    input = el("input", { type: "text", id,
-                          value: current === null || current === undefined ? "" : current })
-    if (setting.secret) {
-      input.autocomplete = "off"
-      input.spellcheck = false
-      input.placeholder = (options && options.reveal) ? "paste the key here" : ""
-    }
-    input.oninput = () => {
-      stored[setting.key] = input.value === "" ? null : input.value
-      markDirty()
-    }
-  }
-  return setting.unit
-    ? [label, input, el("small", { textContent: setting.unit })]
-    : [label, input]
 }
 
 function renderLook() {
@@ -853,7 +682,7 @@ function renderCaseLights() {
   const mode = $("caselights")
   const stored = config.caselights
   const chosen = stored === true ? "theme" : stored ? "reading" : "off"
-  const refs = numericRefs()
+  const refs = numericRefs(caps)
   const offered = [["off", "Off"], ["theme", "Follow the Backlight"]]
   if (refs.length || chosen === "reading") offered.push(["reading", "Follow a Reading"])
   mode.replaceChildren(...offered.map(([value, text]) =>
@@ -863,9 +692,10 @@ function renderCaseLights() {
 
   const row = $("caselightref")
   row.hidden = chosen !== "reading"
-  row.replaceChildren(...refSelect(following, refs, (ref) => {
+  row.replaceChildren(...refSelect(caps, following, refs, (ref) => {
     following = ref
     config.caselights = ref
+    markDirty()
   }))
 
   mode.onchange = () => {
@@ -1204,7 +1034,7 @@ function renderBadges() {
 
 function badgeBox(id) {
   const named = badges[id].name && badges[id].name !== id ? badges[id].name : ""
-  const nameId = `badge${++controlSerial}`
+  const nameId = nextId("badge")
   const name = el("input", { type: "text", id: nameId, value: named,
                              placeholder: "Give it a name" })
   const heading = el("h3", { textContent: named || "Unnamed badge" })
