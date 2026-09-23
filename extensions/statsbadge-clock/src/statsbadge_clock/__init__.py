@@ -1,22 +1,17 @@
 """A clock and weather page."""
 
-import json
 import os
 import threading
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 
-from statsbadge.sources.base import Source
+from statsbadge.sources import web
+from statsbadge.sources.base import PollingSource
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-FETCH_POLL = 1.0
 # Open-Meteo allows 10,000 calls a day.
 FETCH_INTERVAL = 900.0
 RETRY_AFTER = 60.0
-GEOCODED = "geocoded"
 
 # Open-Meteo units to what the badge shows.
 TEMPERATURE_UNITS = {"celsius": "C", "fahrenheit": "F"}
@@ -73,7 +68,7 @@ def _clock_at(utc_offset):
     }
 
 
-class Clock(Source):
+class Clock(PollingSource):
     name = "clock"
     provides = ("clock", "weather")
 
@@ -89,7 +84,7 @@ class Clock(Source):
     settings = (
         {"key": "place", "label": "Default place", "type": "text",
          "hint": "A town or city, and a country if the name is a common one: Sheffield, "
-                 "or Sheffield, US. Weather is not displayed until a location is set"},
+                 "or Sheffield, US. Leave empty to use the badge's location"},
         {"key": "latitude", "label": "Default latitude", "type": "number",
          "min": -90, "max": 90, "step": 0.001, "unit": "degrees",
          "hint": "Instead of the name, for a spot no name lands on"},
@@ -152,39 +147,10 @@ class Clock(Source):
         super().__init__(config)
         self._weather = {}
         self._next_weather = 0.0
-        self._retry_at = 0.0
         self._targets = {}
         self._page_order = []
         self._lock = threading.Lock()
-        self._fetcher = None
-        self._wake = threading.Event()
-        self._stop = threading.Event()
         self._read_settings()
-
-    def start(self):
-        """Run API fetches on a thread, off the main one."""
-        if self._fetcher is None:
-            self._stop.clear()
-            self._fetcher = threading.Thread(target=self._fetch_loop, daemon=True,
-                                             name="statsbadge-clock")
-            self._fetcher.start()
-
-    def stop(self):
-        self._stop.set()
-        self._wake.set()
-        if self._fetcher is not None:
-            self._fetcher.join(timeout=2.0)
-            self._fetcher = None
-
-    def _fetch_loop(self):
-        while not self._stop.is_set():
-            try:
-                self._refresh()
-            except Exception as exc:
-                # The fetcher must not die: clock pages would go on drawing stale data.
-                self.note_fault(exc)
-            self._wake.wait(FETCH_POLL)
-            self._wake.clear()
 
     def pages(self, instances):
         """Record the location each configured page is set to."""
@@ -208,28 +174,18 @@ class Clock(Source):
                     spec["lat"], spec["lon"] = was.get("lat"), was.get("lon")
             self._page_order = order
             self._targets = targets
-        self._wake.set()
+        self.wake()
 
     def _read_settings(self):
-        was = getattr(self, "place", None)
-        self.place = (self.config.get("place") or "").strip()
-        self.latitude = self.config.get("latitude")
-        self.longitude = self.config.get("longitude")
-        self.units = self.config.get("units", "celsius")
-        self.wind_units = self.config.get("wind_units", "kmh")
-        if self.wind_units not in WIND_UNITS:
-            self.wind_units = "kmh"
-        if was != self.place or not hasattr(self, "_located"):
-            self._located = None
-            self._located_for = None
+        self.units = self.config["units"]
+        self.wind_units = self.config["wind_units"]
 
     def configure(self, settings):
         """Update a location while running."""
         super().configure(settings)
         self._read_settings()
         self._next_weather = 0.0
-        self._retry_at = 0.0
-        self._wake.set()
+        self.wake()
 
     def sample(self, frame, dt):
         """Return the host clock, and whatever forecast the fetcher last stored."""
@@ -256,94 +212,40 @@ class Clock(Source):
                                     **_clock_at(spec["data"].get("utc_offset")))
         return out
 
-    def _refresh(self):
+    def poll(self):
         """Fetch the default location and any page location whose timer has elapsed."""
-        where = self._where()
-        if where is None:
-            self._weather = {}
-        elif time.monotonic() >= self._next_weather:
+        if time.monotonic() >= self._next_weather:
+            self._next_weather = time.monotonic() + RETRY_AFTER
             try:
-                self._weather = self._fetch(where)
-                self._next_weather = time.monotonic() + FETCH_INTERVAL
-                self.note_ok()
-            except Exception as exc:
-                self._next_weather = time.monotonic() + RETRY_AFTER
-                self.note_fault(exc)
+                # The clock's own default where it has one, else the badge's.
+                where = self.location(self.config)
+                self._weather = self._fetch(where) if where else {}
+                if where:
+                    self._next_weather = time.monotonic() + FETCH_INTERVAL
+                self.note_ok("default")
+            except Exception as exc:  # noqa: BLE001
+                self.note_fault(exc, key="default")
         # The pages' places. Fetched outside the lock, against a snapshot: a spec dropped
         # meanwhile is written to and discarded.
         with self._lock:
-            specs = list(self._targets.values())
-        for spec in specs:
+            specs = list(self._targets.items())
+        for key, spec in specs:
             if time.monotonic() < spec["next"]:
                 continue
+            spec["next"] = time.monotonic() + RETRY_AFTER
             try:
                 if spec["lat"] is None or spec["lon"] is None:
-                    found = self._geocode(spec["place"])
+                    found = self.geocode.lookup(spec["place"])
                     if not found:
-                        spec["next"] = time.monotonic() + RETRY_AFTER
                         continue
                     spec["lat"], spec["lon"], spec["label"] = found
                 spec["data"] = self._fetch(
                     (spec["lat"], spec["lon"], spec["label"] or spec["place"]),
                     local_time=True)
                 spec["next"] = time.monotonic() + FETCH_INTERVAL
-                self.note_ok()
-            except Exception as exc:
-                spec["next"] = time.monotonic() + RETRY_AFTER
-                self.note_fault(exc)
-
-    def _where(self):
-        """Return the default location as (latitude, longitude, label), or None if unset."""
-        if self.latitude is not None and self.longitude is not None:
-            return (self.latitude, self.longitude, None)
-        if not self.place:
-            return None
-        if self._located is None or self._located_for != self.place:
-            if time.monotonic() < self._retry_at:
-                return None
-            self._located_for = self.place
-            try:
-                self._located = self._geocode(self.place)
-            except Exception as exc:
-                self._located = None
-                self._retry_at = time.monotonic() + RETRY_AFTER
-                self.note_fault(exc)
-        return self._located
-
-    def _geocode(self, place):
-        """Resolve a place name to coordinates using Open-Meteo's geocoder."""
-        key = place.strip().lower()
-        cached = (self.store.get(GEOCODED) or {}).get(key)
-        if cached and len(cached) == 3:
-            return (cached[0], cached[1], cached[2])
-
-        name, _, country = place.partition(",")
-        name = name.strip()
-        country = country.strip().lower()
-
-        if not name:
-            return None
-
-        url = ("https://geocoding-api.open-meteo.com/v1/search"
-               f"?name={urllib.parse.quote(name)}&count=10&language=en&format=json")
-        with urllib.request.urlopen(url, timeout=8) as response:
-            found = json.loads(response.read().decode("utf-8")).get("results") or []
-        if not found:
-            raise LookupError(f"could not find {place!r}")
-        match = found[0]
-        if country:
-            for candidate in found:
-                if country in (candidate.get("country_code", "").lower(),
-                               candidate.get("country", "").lower()):
-                    match = candidate
-                    break
-        label = ", ".join(part for part in (match.get("name"),
-                                            match.get("country_code")) if part)
-        located = (match["latitude"], match["longitude"], label)
-        table = dict(self.store.get(GEOCODED) or {})
-        table[key] = list(located)
-        self.store.set(GEOCODED, table)
-        return located
+                self.note_ok(key)
+            except Exception as exc:  # noqa: BLE001
+                self.note_fault(exc, key=key)
 
     @staticmethod
     def _today(series):
@@ -366,8 +268,7 @@ class Clock(Source):
             # Without this daily[0] is the UTC day and utc_offset_seconds is 0.
             "&timezone=auto"
         )
-        with urllib.request.urlopen(url, timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        payload = web.fetch_json(url, timeout=8)
         current = payload.get("current", {})
         code = current.get("weather_code")
         condition = CONDITIONS.get(code, "?") if code is not None else None

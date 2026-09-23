@@ -44,7 +44,7 @@ Every clock page then has settings of its own, so two pages can show two cities.
 
 **Theme colours** draws a stylised face in the page theme instead of its livery: the railway clock in Mondaine red, the Amsterdam navy and the Koppel black all give way to the theme's panel, ink, dim and accent. Squircle and the two digital faces are themed either way, so the setting doesn't affect them.
 
-Without a location the clock still keeps time, and the weather readouts read "no location set".
+Without a place of its own the clock uses the badge's location from General Settings. With neither, it still keeps time, and the weather readouts read "no location set".
 
 The same settings work from the command line, for a host with no browser near it. Anything stored by the UI wins over the flag.
 
@@ -55,6 +55,6 @@ statsbadge serve --extension clock.latitude=53.38 --extension clock.longitude=-1
 
 ## Notes
 
-The hands run off the badge's clock, set once from the host, so they keep time when the host goes away and the second hand sweeps whether or not a reading has landed. A place name is looked up once ever, not once a launch.
+The hands run off the badge's clock, set once from the host, so they keep time when the host goes away and the second hand sweeps whether or not a reading has landed. A place name is looked up once ever, not once a launch, in the same cache every extension shares.
 
 The seven segments are [DSEG](https://github.com/keshikan/DSEG) by keshikan, under the SIL Open Font License, whose text travels with the package.
