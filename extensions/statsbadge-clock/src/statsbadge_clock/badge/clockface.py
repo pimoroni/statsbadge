@@ -560,6 +560,4 @@ def _resync(clock, seq=None):
     _synced = True
 
 
-pages.EXTRA["clockface"] = render
-# Register the clock face as an animated page, so it is redrawn every frame.
-pages.ANIMATED.add("clockface")
+pages.register("clockface", render, api=1, animated=True)

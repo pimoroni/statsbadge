@@ -1,7 +1,7 @@
 """Turning a page descriptor from the host into a drawn page.
 
 A page is data: `{"kind": "dial", "field": "cpu.pct", "readouts": [...]}`. An extension
-that needs to draw something these kinds cannot registers a renderer in `EXTRA`.
+that needs to draw something these kinds cannot calls `register`.
 """
 
 import time
@@ -9,11 +9,38 @@ import time
 import draw
 import look
 
-# Extension renderers by page kind, registered as `pages.EXTRA["weather"] = render`.
+# What an extension's badge module is written against. statsbadge.badge_api lists it.
+API = 1
+
+# Extension renderers by page kind.
 EXTRA = {}
 
 # Kinds with something that moves unprompted, so they get a frame with no new data.
 ANIMATED = set()
+
+
+def register(kind, render, api, animated=False):
+    """Draw pages of `kind` with `render(page, frame, history, theme)`.
+
+    `api` is the `API` the module was written against. One written against another is
+    refused, and its pages say which side to update. `animated` asks for frames with no
+    new data.
+    """
+    if api != API:
+        EXTRA[kind] = _mismatched("update the extension" if api < API
+                                  else "update the stats app")
+        return False
+    EXTRA[kind] = render
+    if animated:
+        ANIMATED.add(kind)
+    return True
+
+
+def _mismatched(advice):
+    def render(_page, _frame, _history, theme):
+        draw.blit_label(advice, look.SIZE_VALUE, theme.dim, look.W // 2, look.BODY_MID,
+                        align=1)
+    return render
 
 
 # Whether a gauge sweeps to each new reading or steps to it, from the layout.

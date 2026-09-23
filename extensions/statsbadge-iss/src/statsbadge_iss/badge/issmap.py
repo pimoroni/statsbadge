@@ -296,6 +296,6 @@ def render(page, frame, _history, theme):
     _band(theme, where, iss.get("aboard"), at)
 
 
-pages.EXTRA["issmap"] = render
-# Left out of pages.ANIMATED: the station covers 0.06 pixels a second on a
-# whole-world map, and a frame is 78ms with all 288 polygons in view.
+# Not animated: the station covers 0.06 pixels a second on a whole-world map, and a
+# frame is 78ms with all 288 polygons in view.
+pages.register("issmap", render, api=1)

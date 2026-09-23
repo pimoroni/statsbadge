@@ -86,6 +86,36 @@ class PageKinds(unittest.TestCase):
                              f"{page['kind']} left a clip behind")
 
 
+class Registering(unittest.TestCase):
+    def tearDown(self):
+        for kind in ("current", "stale", "ahead"):
+            pages.EXTRA.pop(kind, None)
+            pages.ANIMATED.discard(kind)
+
+    def test_a_module_written_against_another_api_is_told_so(self):
+        drawn = []
+        self.assertTrue(pages.register("current", lambda *_: drawn.append(1), api=pages.API,
+                                       animated=True))
+        self.assertTrue("current" in pages.ANIMATED)
+        self.assertFalse(pages.register("stale", lambda *_: drawn.append(1),
+                                        api=pages.API - 1, animated=True))
+        self.assertFalse(pages.register("ahead", lambda *_: drawn.append(1), api=pages.API + 1))
+        self.assertFalse("stale" in pages.ANIMATED)
+
+        written = []
+        blit_label = draw.blit_label
+        draw.blit_label = lambda text, *_args, **_kwargs: written.append(text)
+        try:
+            theme = look.get(look.DEFAULT)
+            for kind in ("current", "stale", "ahead"):
+                pages.render({"kind": kind, "title": kind}, FRAME, {}, theme, 0, 1)
+        finally:
+            draw.blit_label = blit_label
+        self.assertEqual(drawn, [1])
+        self.assertTrue("update the extension" in written, written)
+        self.assertTrue("update the stats app" in written, written)
+
+
 class TrendMove(unittest.TestCase):
     def test_the_move_is_written_as_its_reading_is(self):
         written = []
