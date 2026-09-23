@@ -7,10 +7,6 @@ name: Extension
 on:
   workflow_call:
     inputs:
-      repository:
-        description: The extension's repository, where it is not the caller's
-        type: string
-        default: ""
       directory:
         description: Where the extension sits in its repository
         type: string
@@ -42,7 +38,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          repository: ${{ inputs.repository || github.repository }}
           path: extension
 
       - uses: actions/checkout@v7
