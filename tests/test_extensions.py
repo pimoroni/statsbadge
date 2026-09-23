@@ -435,6 +435,36 @@ def test_an_upgraded_extension_is_rebuilt_rather_than_kept():
         ext._entries = was
 
 
+def test_a_source_is_named_by_its_entry_point():
+    from statsbadge import extensions as ext
+    from statsbadge.sources.base import Source
+
+    class Misnamed(Source):
+        name = "something-else"
+
+        @classmethod
+        def available(cls, _config=None):
+            return True
+
+        def __init__(self, config):
+            super().__init__(config)
+            self.given = config
+
+    class Entry:
+        name = "meter"
+
+        def load(self):
+            return Misnamed
+
+    was = ext._entries
+    ext._entries = lambda: [Entry()]
+    try:
+        loaded = ext.load({"extensions": {"meter": {"key": "k"}}})
+    finally:
+        ext._entries = was
+    assert [(source.name, source.given) for source in loaded] == [("meter", {"key": "k"})]
+
+
 def test_an_upgrade_whose_modules_will_not_drop_still_asks_for_a_restart():
     """`forget` can only clear what an entry point names. One it cannot is reported."""
     from statsbadge import extensions as ext

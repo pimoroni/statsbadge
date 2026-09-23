@@ -31,9 +31,9 @@ def load(config=None, state_dir=None, geocoder=None):
             print(f"statsbadge: extension {entry.name!r} failed to start: {exc}",
                   file=sys.stderr)
             continue
-        source.name = getattr(source, "name", entry.name)
-        # Namespaced by the entry point name rather than by whatever the class calls
-        # itself: the entry point is what pip installed and what --without names.
+        # The entry point is what pip installed and what --without names, so it names the
+        # source everywhere, whatever the class calls itself.
+        source.name = entry.name
         source.store = state.for_source(state_dir, entry.name)
         if geocoder is not None:
             source.geocode = geocoder
