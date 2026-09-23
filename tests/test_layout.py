@@ -34,6 +34,14 @@ def test_every_field_has_a_name_for_the_ui():
             assert described["field_labels"].get(group, {}).get(field), (group, field)
 
 
+def test_every_page_of_many_fields_is_held_to_its_cap():
+    refs = [f"cpu.f{index}" for index in range(10)]
+    for kind, cap in layout._FIELD_MAX.items():
+        page = {"id": "p", "kind": kind, "fields": refs}
+        kept = layout.validate({**layout.DEFAULT_CONFIG, "pages": [page]})["pages"][0]
+        assert len(kept["fields"]) == cap, (kind, len(kept["fields"]))
+
+
 def test_a_dials_page_takes_up_to_four_fields():
     base = dict(layout.DEFAULT_CONFIG)
     refs = ["cpu.pct", "gpu.pct", "mem.pct", "disk.pct", "cpu.temp"]

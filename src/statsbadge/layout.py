@@ -518,11 +518,11 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
         clean["field"] = field
     elif kind == "badge":
         pass
-    elif kind in ("dials", "graph", "grid", "text", "rings", "spark", "radar"):
+    elif kind in _FIELD_MAX:
         fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
         if not fields:
             raise ValueError(f"page {page_id} needs at least one field")
-        clean["fields"] = fields[:_FIELD_MAX.get(kind, 6)]
+        clean["fields"] = fields[:_FIELD_MAX[kind]]
     else:
         # An extension's page. Keep its fields; the shape is the badge's business.
         clean["fields"] = [f for f in (page.get("fields") or []) if _is_ref(f)][:8]
