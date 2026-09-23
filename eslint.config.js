@@ -48,4 +48,14 @@ export default [
       curly: ["error", "multi-line"],
     },
   },
+  {
+    files: ["src/statsbadge/web/js/*.js"],
+    ignores: ["src/statsbadge/web/js/main.js", "src/statsbadge/web/js/dom.js"],
+    rules: {
+      "no-restricted-globals": ["error", {
+        name: "document",
+        message: "Only main.js and dom.js read the page. Take the element as an argument.",
+      }],
+    },
+  },
 ]
