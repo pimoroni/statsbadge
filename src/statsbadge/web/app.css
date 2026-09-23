@@ -544,16 +544,11 @@ main > section > ol {
   header h3 {
     flex: 1;
     margin: 0;
-    cursor: grab;
     user-select: none;
     display: flex;
     align-items: baseline;
     gap: 8px;
     min-width: 0;
-  }
-
-  header h3:active {
-    cursor: grabbing;
   }
 
   header h3 .kind {
@@ -579,20 +574,21 @@ main > section > ol {
     flex: none;
   }
 
-  ol .grip {
-    background: var(--panel2);
-    color: var(--ink);
-    padding: 3px 7px;
-    font-size: var(--text-sm);
+  .grip {
+    flex: none;
+    width: 20px;
+    height: 24px;
+    background: var(--dim);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z'/%3E%3C/svg%3E") center / 20px no-repeat;
     cursor: grab;
     user-select: none;
   }
 
-  ol .grip:hover {
-    background: var(--line);
+  .grip:hover {
+    background: var(--ink);
   }
 
-  ol .grip:active {
+  .grip:active {
     cursor: grabbing;
   }
 

@@ -14,6 +14,10 @@ function singular(label) {
 
 const REORDER = "application/x-statsbadge-reorder"
 
+function dragGrip() {
+  return el("span", { className: "grip", title: "Drag to reorder", "aria-hidden": "true" })
+}
+
 function freshId(base, taken) {
   const stamp = Date.now().toString(36).slice(-4)
   let id = `${base}${stamp}`
@@ -94,10 +98,11 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
       return renderPages()
     }
 
-    const heading = el("h3", { title: "Drag to reorder" },
+    const heading = el("h3", null,
                        el("span", { className: "kind", textContent: pageKindTitle(page.kind) }),
                        titled)
-    const item = el("li", null, el("header", null, heading, toggle, remove))
+    const grip = dragGrip()
+    const item = el("li", null, el("header", null, grip, heading, toggle, remove))
 
     if (open) {
       item.append(el("label", { htmlFor: titleId, textContent: "Title" }), title,
@@ -113,23 +118,20 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
       item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
     }
 
-    reorderable(item, config.pages, index, { list: "page", along: "x", handle: heading })
+    reorderable(item, config.pages, index, { list: "page", along: "x", handle: grip })
     return item
   }
 
   function reorderable(node, items, index, { list, along, handle }) {
-    node.draggable = !handle
-    if (handle) {
-      handle.onpointerdown = () => { node.draggable = true }
-      handle.onpointerup = () => { node.draggable = false }
-    }
-    node.ondragstart = (event) => {
+    handle.draggable = true
+    handle.ondragstart = (event) => {
       event.stopPropagation()
       node.dataset.dragging = ""
       event.dataTransfer.setData(REORDER, JSON.stringify({ list, index }))
+      const box = node.getBoundingClientRect()
+      event.dataTransfer.setDragImage(node, event.clientX - box.left, event.clientY - box.top)
     }
-    node.ondragend = () => {
-      node.draggable = !handle
+    handle.ondragend = () => {
       delete node.dataset.dragging
       delete node.dataset.over
     }
@@ -177,12 +179,13 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
       const drop = el("button", { type: "button", className: "small", textContent: "−",
                                   title: "Remove this slot" })
       drop.onclick = () => { current.splice(slot, 1); changed(); renderPages() }
+      const grip = dragGrip()
       const row = el("li", null,
-                     el("span", { className: "grip", textContent: "⋮" }),
+                     grip,
                      refSelect(capabilities, ref, poolFor(capabilities, shape.many_pool),
                                (value) => { current[slot] = value; changed() }),
                      drop)
-      reorderable(row, current, slot, { list: "slot", along: "y" })
+      reorderable(row, current, slot, { list: "slot", along: "y", handle: grip })
       rows.push(row)
     })
 
