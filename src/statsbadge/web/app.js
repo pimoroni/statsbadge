@@ -2573,8 +2573,8 @@ async function save() {
     if (whose && badges[whose]) badges[whose].configured = true
     dirty = false
     $("save").disabled = true
-    toast(`Saved. ${whose ? badgeName(whose) : "A badge on the default"} `
-          + `will pick up revision ${result.rev}.`)
+    toast(`Saved. ${whose ? badgeName(whose) : "Badges using the default layout"} `
+          + "will update shortly.")
     // Settings reach the sources on the save, and what a source does with them may be to
     // go and find out what it can offer. Not awaited: the save is done either way.
     refreshCapsSoon().catch(() => {})
