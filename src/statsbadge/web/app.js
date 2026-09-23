@@ -22,6 +22,7 @@ function el(tag, props, ...children) {
 let config = null
 let caps = null
 let dirty = false
+let edits = 0
 let whose = null
 let badges = {}
 
@@ -55,6 +56,7 @@ function toast(message, bad) {
 
 function markDirty() {
   dirty = true
+  edits += 1
   $("save").disabled = false
 }
 
@@ -2538,14 +2540,17 @@ async function save() {
     if (whose && badges[whose] && !badges[whose].configured) {
       config.pages = ownIds(config.pages, whose)
     }
+    const sent = edits
     const result = await api(configPath(), {
       method: "PUT",
       body: JSON.stringify(config),
     })
     config.rev = result.rev
     if (whose && badges[whose]) badges[whose].configured = true
-    dirty = false
-    $("save").disabled = true
+    if (edits === sent) {
+      dirty = false
+      $("save").disabled = true
+    }
     toast(`Saved. ${whose ? badgeName(whose) : "Badges using the default layout"} will update shortly.`)
     // Settings reach the sources on the save, and what a source does with them may be to
     // go and find out what it can offer. Not awaited: the save is done either way.
