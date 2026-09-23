@@ -59,6 +59,17 @@ class Requests(unittest.TestCase):
         self.assertEqual(self.client.http_status, 200)
         self.assertTrue(self.client.sock is held, "it reconnected for the second request")
 
+    def test_a_connection_the_host_dropped_is_replaced(self):
+        import js
+
+        self.client.get("/v1/stats")
+        self.finish()
+        js.sb_drop(self.client.sock._handle)
+        self.client.get("/v1/stats")
+        self.assertTrue(self.finish(), "the request never finished")
+        self.assertEqual(self.client.http_status, 200, self.client.error)
+        self.assertEqual(self.client.failures, 0)
+
     def test_the_counter_goes_up_and_the_host_takes_it(self):
         for _ in range(3):
             self.client.get("/v1/stats")

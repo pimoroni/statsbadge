@@ -313,6 +313,17 @@ class Client:
         self._gen = self._exchange(method, path, body or b"")
 
     def _exchange(self, method, path, body):
+        reused = self.sock is not None
+        try:
+            yield from self._attempt(method, path, body)
+        except OSError:
+            # A pooled connection the host dropped while idle. Retried once, on a new one.
+            if not reused or self.http_status is not None:
+                raise
+            self.close()
+            yield from self._attempt(method, path, body)
+
+    def _attempt(self, method, path, body):
         if self.sock is None:
             self._connect()
             yield from self._connecting()
@@ -343,6 +354,8 @@ class Client:
             line = self.sock.readline()
             if line is None:
                 continue
+            if not line:
+                raise OSError(ECONNRESET)
             if line in (b"\r\n", b"\n"):
                 break
             if line.startswith(b"HTTP/"):
@@ -362,6 +375,8 @@ class Client:
         while got < length:
             yield
             read = self.sock.readinto(view[got:length])
+            if read == 0:
+                raise OSError(ECONNRESET)
             if read:
                 got += read
         self.body = bytes(view[:got])
