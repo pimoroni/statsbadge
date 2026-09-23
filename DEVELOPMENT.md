@@ -136,9 +136,10 @@ runs a handler on the main thread between bytecodes, and that thread is inside t
 toolkit, so `tray` blocks SIGINT and SIGTERM and waits for them in `sigwait` on a thread.
 `launchctl bootout` sends SIGTERM.
 
-**A second bind to a listening port succeeds on Windows.** `Server` sets `SO_REUSEADDR`,
-which there means the two split incoming connections, where macOS and Linux fail the bind.
-So `tray` asks `/v1/hello` before binding, and that check is the only single-instance guard.
+**A second bind to a listening port succeeds on Windows under `SO_REUSEADDR`**, and the
+two split incoming connections, where macOS and Linux fail the bind. So `Server` sets it
+everywhere but Windows, and the failed bind is the single-instance guard. `/v1/hello` only
+says whether what holds the port is statsbadge.
 
 **`sys.stdout` is None under `pythonw`, and inside a `.app` bundle.** This package prints
 about 145 times, so `logs.start` replaces the streams before anything else in `cmd_tray`.

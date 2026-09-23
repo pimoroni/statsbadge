@@ -29,13 +29,16 @@ class Stack:
 
     @classmethod
     def start(cls, service, host="0.0.0.0", port=8420, verbose=False, announce=True):
-        service.start()
         try:
             httpd = server.make_server(service, host, port, verbose)
         except OSError as exc:
-            service.stop()
             if exc.errno == errno.EADDRINUSE:
                 raise AddressInUse(port, already_serving(port)) from exc
+            raise
+        try:
+            service.start()
+        except BaseException:
+            httpd.server_close()
             raise
         announcer = None
         if announce:

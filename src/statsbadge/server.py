@@ -735,12 +735,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    # On Windows SO_REUSEADDR lets a second server bind the same port and split its
+    # connections, where macOS and Linux refuse the bind.
+    allow_reuse_address = sys.platform != "win32"
     verbose = False
-
-    def server_bind(self):
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        super().server_bind()
 
     def handle_error(self, request, client_address):
         """A client dropping a pooled connection is not a fault."""

@@ -485,9 +485,22 @@ def test_a_print_survives_having_nowhere_to_print():
 
 # -- the port ---------------------------------------------------------------
 
+def test_a_second_server_on_a_held_port_starts_nothing(h):
+    class Service:
+        started = False
+
+        def start(self):
+            self.started = True
+
+    second = Service()
+    with pytest.raises(runner.AddressInUse) as caught:
+        runner.Stack.start(second, "127.0.0.1", h.port, announce=False)
+    assert caught.value.by and caught.value.by["server"] == "statsbadge", caught.value.by
+    assert not second.started
+
+
 def test_a_port_nobody_holds_answers_nothing():
     """A free port answers nothing, which the single-instance check reads."""
-    # The only guard on Windows, where SO_REUSEADDR lets a second bind succeed.
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         free = sock.getsockname()[1]
