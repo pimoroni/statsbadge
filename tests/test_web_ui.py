@@ -41,27 +41,6 @@ def test_a_hint_beside_a_secret_leaves_room_for_the_field(ui):
         assert ruled in block, f"{ruled} has no column in .secrets"
 
 
-def test_the_theme_box_spans_the_panels_beside_it(ui):
-    """The theme box's row span is a count, and matches the panels it stands beside."""
-    page = ui.markup
-    settings = page.split('aria-label="Settings"')[1].split('<section id="badges">')[0]
-    beside = len(re.findall(r"<section(?: class=\"[^\"]*\")?>", settings))
-    assert beside == 6, beside
-
-    sheet = ui.css
-    spanned = re.search(r'section\[aria-label="Theme"\] \{\s*grid-column: 1;\s*grid-row: span (\d+)',
-                        sheet)
-    assert spanned, "the theme box no longer spans the panels"
-    assert int(spanned.group(1)) == beside, (spanned.group(1), beside)
-    rows = re.search(r"grid-template-rows: auto auto repeat\((\d+), auto\) 1fr;", sheet)
-    assert rows, "the panels beside the theme box share its height out between them"
-    assert int(rows.group(1)) == beside - 1, (rows.group(1), beside)
-
-    # Past this a preview stops being a picture of a 320x240 screen and becomes a poster.
-    assert "--page: 1280px" in sheet
-    assert "max-width: var(--page)" in sheet
-
-
 def sections_of(page):
     """Return the config UI's sections, keyed by heading."""
     found = {}

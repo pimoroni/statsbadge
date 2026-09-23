@@ -996,8 +996,17 @@ main section[aria-current] {
 }
 
 main > section[aria-label="Settings"] {
-  > section[aria-label="Theme"] {
+  > section[aria-label="Theme"],
+  > .column {
     grid-column: 1 / -1;
+  }
+
+  > .column {
+    display: grid;
+    grid-template-columns: subgrid;
+    row-gap: var(--gap);
+    align-content: start;
+    align-items: start;
   }
 
   > h2 {
@@ -1009,14 +1018,12 @@ main > section[aria-label="Settings"] {
 
   @media (width >= 56rem) {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    grid-template-rows: auto auto repeat(5, auto) 1fr;
 
     > section[aria-label="Theme"] {
       grid-column: 1;
-      grid-row: span 6;
     }
 
-    > section:not([aria-label="Theme"], :has(> section)) {
+    > .column {
       grid-column: 2;
     }
   }
