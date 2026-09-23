@@ -571,8 +571,7 @@ async function refreshPruned() {
     const kept = new Set(shown.pages.map((page) => page.id))
     const dropped = config.pages.filter((page) => !kept.has(page.id)).map((page) => page.title)
     const node = pick('section[aria-label="Pages"] p[role="status"]')
-    node.textContent = "Not shown on the badge, because this host reports no data for "
-      + `them: ${dropped.join(", ")}`
+    node.textContent = `Not shown on the badge, because this host reports no data for them: ${dropped.join(", ")}`
     node.hidden = !dropped.length
   } catch (error) {
     // advisory
@@ -682,9 +681,7 @@ function catalogueBox() {
   }
   if (!catalogue.manageable) {
     box.append(el("p", { textContent:
-      "Installing needs uv or pip, and this server can reach neither. It runs from "
-      + `${catalogue.prefix}, and a tray started at login carries the PATH it was given `
-      + "then. Add them with uv pip install, or start it again from a terminal." }))
+      `Installing needs uv or pip, and this server can reach neither. It runs from ${catalogue.prefix}, and a tray started at login carries the PATH it was given then. Add them with uv pip install, or start it again from a terminal.` }))
   }
   box.append(el("ul", { className: "catalogue" }, ...catalogue.offered.map(offerRow)))
   box.append(updateCheck())
@@ -813,12 +810,10 @@ async function changeExtension(verb, name) {
     // Installed into the environment itself, where a build beside the config cannot
     // reach it.
     for (const entry of done.stuck || []) {
-      toast(`Unable to uninstall ${entry.name}. It is installed in statsbadge's own `
-            + "environment, so whatever put it there has to take it out.", true)
+      toast(`Unable to uninstall ${entry.name}. It is installed in statsbadge's own environment, so whatever put it there has to take it out.`, true)
     }
     for (const entry of done.shadowed || []) {
-      toast(`${entry.name} is already installed in statsbadge's own environment. `
-            + "That copy is the one that runs.")
+      toast(`${entry.name} is already installed in statsbadge's own environment. That copy is the one that runs.`)
     }
     if (verb !== "remove" && (done.needs_usb || []).includes(name)) {
       toast("Run statsbadge install to push its page to the badge")
@@ -1911,16 +1906,12 @@ async function renderGeneral() {
     heading,
     el("section", null,
        el("h3", { textContent: "Where this badge is" }),
-       el("p", { textContent: "A town or city, and a country if the name is a common one: "
-                              + "Sheffield, or Sheffield, US. Looked up once and kept, so "
-                              + "every extension asking gets the same answer, and a page "
-                              + "naming somewhere else overrides it." }),
+       el("p", { textContent: "A town or city, and a country if the name is a common one: Sheffield, or Sheffield, US. Looked up once and kept, so every extension asking gets the same answer, and a page naming somewhere else overrides it." }),
        el("label", { htmlFor: "hostplace", textContent: "Location" }), place,
        el("label", { htmlFor: "hostlat", textContent: "Latitude" }), latitude,
        el("label", { htmlFor: "hostlon", textContent: "Longitude" }), longitude,
        el("menu", null, save),
-       el("p", { textContent: "Coordinates win over the name, for a spot no name lands on. "
-                              + "Clear all three to set nowhere." })))
+       el("p", { textContent: "Coordinates win over the name, for a spot no name lands on. Clear all three to set nowhere." })))
 }
 
 function renderBadges() {
@@ -2098,8 +2089,7 @@ async function watchPairing(announce) {
     button.onclick = () => stopPairing().catch((error) => toast(error.message, true))
     // Filtered: replaceChildren writes a null out as the word, where el() drops one.
     panel.replaceChildren(...[
-      el("p", { textContent: "On the badge: launch Stats, press B to set up, and pick "
-                             + `${(state.hosts || []).join(" / ")}:${state.port}` }),
+      el("p", { textContent: `On the badge: launch Stats, press B to set up, and pick ${(state.hosts || []).join(" / ")}:${state.port}` }),
       el("p", { textContent: `closes in ${state.expires_in}s` }),
       pending.length ? el("p", { textContent: "Approve the one whose code matches." }) : null,
       pending.length ? pendingList(pending) : null,
@@ -2286,8 +2276,7 @@ function renderStale() {
                                 textContent: "Update…" })
   button.onclick = openInstaller
   node.replaceChildren(
-    `${names.join(", ")} ${one ? "was" : "were"} last seen running an older app. `
-    + `Connect ${one ? "it" : "them"} by USB to update.`,
+    `${names.join(", ")} ${one ? "was" : "were"} last seen running an older app. Connect ${one ? "it" : "them"} by USB to update.`,
     button)
 }
 
@@ -2317,11 +2306,7 @@ function helpFor(facts) {
   if (facts.platform === "Windows") return [windowsHelp(facts.lhm || {})]
   return [el("section", null,
              el("h2", { textContent: "Linux" }),
-             el("p", { textContent: "Temperatures, fans and power come from the kernel "
-                                    + "through psutil, and need nothing set up. The tray "
-                                    + "needs GTK bindings from your distribution, and "
-                                    + "GNOME hosts none without the AppIndicator "
-                                    + "extension." }))]
+             el("p", { textContent: "Temperatures, fans and power come from the kernel through psutil, and need nothing set up. The tray needs GTK bindings from your distribution, and GNOME hosts none without the AppIndicator extension." }))]
 }
 
 /** macOS: GPU and thermal pressure are readable by anyone, power and temperatures are
@@ -2330,28 +2315,22 @@ function helpFor(facts) {
 function macHelp(state) {
   const box = el("section", null,
                  el("h2", { textContent: "macOS" }),
-                 el("p", { textContent: "GPU load, VRAM, thermal pressure and, on Apple "
-                                        + "Silicon, temperatures need no setup." }))
+                 el("p", { textContent: "GPU load, VRAM, thermal pressure and, on Apple Silicon, temperatures need no setup." }))
   if (!state.there) {
-    box.append(el("p", { textContent: "powermetrics is missing, so package power, CPU and "
-                                      + "GPU clocks and GPU power are unavailable." }))
+    box.append(el("p", { textContent: "powermetrics is missing, so package power, CPU and GPU clocks and GPU power are unavailable." }))
     return box
   }
   if (state.permitted) {
     box.append(el("p", { className: "good",
-                         textContent: "Package power, CPU and GPU clocks and GPU power "
-                                      + "are on, via powermetrics." }))
+                         textContent: "Package power, CPU and GPU clocks and GPU power are on, via powermetrics." }))
     return box
   }
   box.append(
-    el("p", { textContent: "Package power, CPU and GPU clocks and GPU power need "
-                           + "powermetrics, which runs as root. To let sudo run it, and "
-                           + "only it, without a password, run:" }),
+    el("p", { textContent: "Package power, CPU and GPU clocks and GPU power need powermetrics, which runs as root. To let sudo run it, and only it, without a password, run:" }),
     el("pre", { textContent: `sudo visudo -f ${state.file}` }),
     el("p", { textContent: "and add:" }),
     el("pre", { textContent: state.sudoers }),
-    el("p", { textContent: "Restart statsbadge to apply. statsbadge itself does not run "
-                           + "as root." }))
+    el("p", { textContent: "Restart statsbadge to apply. statsbadge itself does not run as root." }))
   return box
 }
 
@@ -2360,15 +2339,10 @@ function macHelp(state) {
 function windowsHelp(state) {
   const box = el("section", null,
                  el("h2", { textContent: "Windows" }),
-                 el("p", { textContent: "Temperatures, fan speeds and package power need "
-                                        + "a kernel driver on Windows. statsbadge reads "
-                                        + "them from LibreHardwareMonitor's web server." }))
+                 el("p", { textContent: "Temperatures, fan speeds and package power need a kernel driver on Windows. statsbadge reads them from LibreHardwareMonitor's web server." }))
   box.append(state.reading
     ? el("p", { className: "good", textContent: "Connected to LibreHardwareMonitor." })
-    : el("p", { textContent: "Not connected. Run LibreHardwareMonitor and turn on "
-                             + "Options > Remote Web Server > Run. Download it from the "
-                             + "project's GitHub releases; the similarly named .com site "
-                             + "is unofficial." }))
+    : el("p", { textContent: "Not connected. Run LibreHardwareMonitor and turn on Options > Remote Web Server > Run. Download it from the project's GitHub releases; the similarly named .com site is unofficial." }))
 
   const field = el("input", { type: "text", id: "lhmurl", value: state.url || "",
                               placeholder: state.default })
@@ -2568,8 +2542,7 @@ async function save() {
     if (whose && badges[whose]) badges[whose].configured = true
     dirty = false
     $("save").disabled = true
-    toast(`Saved. ${whose ? badgeName(whose) : "Badges using the default layout"} `
-          + "will update shortly.")
+    toast(`Saved. ${whose ? badgeName(whose) : "Badges using the default layout"} will update shortly.`)
     // Settings reach the sources on the save, and what a source does with them may be to
     // go and find out what it can offer. Not awaited: the save is done either way.
     refreshCapsSoon().catch(() => {})
