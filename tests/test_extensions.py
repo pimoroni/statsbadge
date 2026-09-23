@@ -624,3 +624,22 @@ def test_quakes_fetches_on_its_own_thread_and_backs_off(monkeypatch):
     source.poll()
     assert source.last_fault == "HTTP 503"
     assert source._next > time.monotonic() + 30, "a failure was retried at once"
+
+
+def test_the_station_s_position_working_leaves_the_crew_s_fault_standing(monkeypatch):
+    from statsbadge.sources import web
+    from statsbadge.sources.base import SourceError
+    from statsbadge_iss import CREW, ISS
+
+    def answer(url, **_options):
+        if url == CREW:
+            raise SourceError("HTTP 502")
+        if "positions" in url:
+            return []
+        return {"latitude": 1, "longitude": 2, "solar_lat": 3, "solar_lon": 4}
+
+    monkeypatch.setattr(web, "fetch_json", answer)
+    source = ISS({})
+    assert (source.units, source.crew_wanted) == ("kilometres", True)
+    source.poll()
+    assert source.last_fault == "HTTP 502", "the position landing cleared the crew's fault"
