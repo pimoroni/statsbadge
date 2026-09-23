@@ -2507,7 +2507,8 @@ function capsSignature() {
   // with the count would redraw every field once a second for as long as it was broken.
   const faults = (caps.sources || []).map((source) => [source.name, source.last_fault])
   return JSON.stringify([caps.available, caps.extension_settings, caps.graphed,
-                         caps.group_source, caps.extension_pages, caps.recipes, faults])
+                         caps.group_source, caps.extension_pages, caps.recipes, faults,
+                         caps.commands, caps.local_actions, caps.themes])
 }
 
 /** Refetch capabilities and redraw if what the host offers has changed. */
@@ -2527,6 +2528,9 @@ async function refreshCaps() {
   renderPages()
   renderSettings()
   renderSources()
+  renderButtons()
+  renderCaseLights()
+  renderThemes()
   return true
 }
 
