@@ -139,7 +139,7 @@ def test_a_palette_can_carry_a_second_accent(h, ui):
     assert draw._series_colour(theme, 1) == theme.accent_b
     assert draw._series_colour(theme, 0) == theme.accent
     # With none named, the ramp still answers for the second series.
-    plain = look.from_palette("dark", themes.written()["dark"])
+    plain = look.from_palette("dark", layout.palette_for("dark", accent))
     assert plain.accent_b == plain.accent
     assert draw._series_colour(plain, 1) != plain.accent
 
@@ -356,19 +356,17 @@ def test_a_graph_s_two_series_read_apart():
     import draw
     import look
 
-    assert layout.SERIES_FLOOR == draw.SERIES_FLOOR
-    assert layout.SERIES_ALPHA == draw.SERIES_ALPHA
-    assert layout.PALE_SUM == look.PALE_SUM
-
     for name in themes.THEMES:
         for accent in (derive.accents()[6], derive.accents("saturated")[0]):
             palette = layout.palette_for(name, accent)
-            first, second = layout.series_colours(palette)
+            first, second = palette["series"]
             assert tuple(first) == tuple(palette["accent"])
-            # Which candidate it lands on is not checked against `draw._series_colour`:
-            # that runs on FakeColour, whose `difference` is sRGB distance.
+            # The badge draws what the host chose, at the alpha it chose it for.
             theme = look.from_palette(name, palette)
-            assert draw._series_colour(theme, 0) == theme.accent
+            assert [draw._series_colour(theme, i) for i in (0, 1)] == [
+                badgefakes.Colour.rgb(*rgb) for rgb in palette["series"]]
+            assert [draw._series_alpha(theme, i) for i in (0, 1)] == palette["series_alpha"]
+            assert theme.pale == palette["pale"]
             # `dim` is the last resort. Membership and not colour, since mono's dim and
             # its cold end are the same grey.
             chosen = {tuple(palette["ramp"][0][1]), tuple(palette["ramp"][-1][1])}
@@ -376,7 +374,7 @@ def test_a_graph_s_two_series_read_apart():
                 chosen.add(tuple(palette["accent_b"]))
             assert tuple(second) in chosen, f"{name} fell back to dim"
             # Seen against the page, which the floor is there to keep true.
-            alpha = layout.SERIES_ALPHA[0 if sum(palette["bg"]) >= layout.PALE_SUM else 1]
+            alpha = palette["series_alpha"][1]
             shown = tuple(round(pen * alpha / 255.0 + bg * (1 - alpha / 255.0))
                           for pen, bg in zip(second, palette["bg"], strict=True))
             assert derive.apart(palette["bg"], shown) >= layout.SERIES_FLOOR, (name, second)
@@ -587,9 +585,9 @@ def test_the_ui_takes_its_colours_from_the_host(h, ui):
     assert "drawDial" in web and "drawGraph" in web, "the preview does not draw the pages"
     assert "--pv-" not in web + sheet, "the preview still keeps colours in the sheet"
     # The rule for a graph's second series is the badge's, resolved on the host and sent.
-    assert "shown.series" in web, "the UI picks the second series itself"
+    assert "shown.palette.series" in web, "the UI picks the second series itself"
     _status, shown = h.raw("GET", "/api/theme?theme=dark")
-    assert len(shown.get("series") or []) == 2, shown
+    assert len(shown["palette"].get("series") or []) == 2, shown
     # The UI's accent and ramp are generated from the dark theme, not typed in.
     assert "--ramp-0:" not in sheet, "the sheet still declares the ramp by hand"
     assert "--accent:" not in sheet, "the sheet still declares the accent by hand"

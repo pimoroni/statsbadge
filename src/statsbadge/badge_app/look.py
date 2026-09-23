@@ -86,8 +86,6 @@ DIALS = {
 
 RAMP_STEPS = 65
 
-PALE_SUM = 384
-
 # Lightness counts, on all three channels.
 STRIPE = 10
 
@@ -96,7 +94,7 @@ class Theme:
     """A palette's colours, plus the ramp a gauge fills with as it climbs."""
 
     def __init__(self, name, bg, panel, ink, dim, accent, ramp, grid=None,
-                 accent_b=None, image=None):
+                 accent_b=None, image=None, pale=False, series=None, series_alpha=None):
         self.name = name
         self.bg = color.rgb(*bg)
         self.panel = color.rgb(*panel)
@@ -111,7 +109,10 @@ class Theme:
         self.key = (name, tuple(bg), tuple(accent),
                     tuple(accent_b) if accent_b else tuple(accent),
                     tuple(ramp[0][1]), tuple(ramp[-1][1]))
-        self.pale = sum(bg) >= PALE_SUM
+        self.pale = pale
+        self.series = (tuple(color.rgb(*rgb) for rgb in series) if series
+                       else (self.accent, self.accent_b))
+        self.series_alpha = tuple(series_alpha) if series_alpha else (255, 255)
         self.stripe = self.bg.darken(STRIPE) if self.pale else self.bg.lighten(STRIPE)
         self.steps = tuple(color.ramp(self.ramp, RAMP_STEPS))
         # Keyed by shade count, to assign into an indexed image's table in one write.
@@ -168,6 +169,9 @@ def from_palette(name, palette):
         return Theme(name, ramp=ramp,
                      grid=tuple(int(v) for v in grid[:3]) if grid else None,
                      accent_b=tuple(int(v) for v in second[:3]) if second else None,
-                     image=image, **colours)
+                     image=image, pale=bool(palette.get("pale")),
+                     series=[tuple(int(v) for v in rgb[:3])
+                             for rgb in palette.get("series") or ()],
+                     series_alpha=palette.get("series_alpha"), **colours)
     except (TypeError, ValueError, KeyError, IndexError):
         return None

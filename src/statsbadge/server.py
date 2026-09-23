@@ -561,11 +561,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             second = query.get("second") or "same"
             if second not in layout.ACCENT_B_RULES:
                 return self._fail(400, f"unknown second accent rule: {second!r}")
-            palette = layout.palette_for(theme, tint, second)
-            # The two graph series resolved here too, by the badge's rule.
             return self._json(200, {"theme": theme, "tint": tint, "second": second,
-                                    "palette": palette,
-                                    "series": layout.series_colours(palette)})
+                                    "palette": layout.palette_for(theme, tint, second)})
 
         # One layout per badge, and a default for a badge with nothing saved yet.
         # `?badge=` says whose.
