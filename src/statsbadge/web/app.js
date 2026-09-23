@@ -3,6 +3,7 @@ import { api, configPath } from "./js/api.js"
 import { nextId, settingRow } from "./js/forms.js"
 import { fieldLabel, numericRefs, poolFor, refSelect } from "./js/refs.js"
 import { createScreens } from "./js/screens.js"
+import { createLook } from "./js/look.js"
 import { createThemes } from "./js/themes.js"
 
 let config = null
@@ -20,6 +21,20 @@ const themes = createThemes({
   second: $("accentb"),
   changed: markDirty,
   repaint: () => screens.show(config, caps),
+})
+const look = createLook({
+  controls: Object.fromEntries(["interval", "brightness", "points", "idle", "advance", "smooth",
+                                "rows", "slide", "gaugefill", "animate", "plotanim", "autobright"]
+    .map((id) => [id, $(id)])),
+  outputs: Object.fromEntries(all("output[for]").map((out) => [out.getAttribute("for"), out])),
+  caseLights: $("caselights"),
+  caseLightRef: $("caselightref"),
+  buttons: { a: $("btn-a"), b: $("btn-b"), c: $("btn-c") },
+  changed: markDirty,
+  onGaugeFill: () => {
+    screens.show(config, caps)
+    themes.paintThumbs()
+  },
 })
 
 function markDirty() {
@@ -628,119 +643,7 @@ function secretsBlock(name, stored, secrets) {
 
 function renderLook() {
   themes.render(config, caps)
-
-  bindRange("interval", "interval_ms", (value) => `${value} ms`)
-  bindRange("brightness", "brightness", (value) => `${value}%`, 100)
-  bindRange("points", "graph_points", (value) => `${value}`)
-  bindRange("idle", "idle_advance_s", (value) => (value === "0" ? "off" : `${value}s idle`))
-  bindRange("advance", "advance_every_s", (value) => `${value}s`)
-
-  bindSelect("smooth", () => (config.smooth === false ? "straight" : "curved"),
-             (value) => { config.smooth = value === "curved" })
-  bindSelect("rows", () => config.rows || "zebra", (value) => { config.rows = value })
-  const turn = () => (typeof config.slide === "string" ? config.slide
-    : (config.slide ? "over" : "off"))
-  bindSelect("slide", turn, (value) => { config.slide = value })
-  bindSelect("gaugefill", () => config.gauge_fill || "solid", (value) => {
-    config.gauge_fill = value
-    screens.show(config, caps)
-    themes.paintThumbs()
-  })
-
-  bindCheck("animate", "animate")
-  bindCheck("plotanim", "plot_animation")
-  bindCheck("autobright", "auto_brightness")
-
-  renderCaseLights()
-  renderButtons()
-}
-
-function bindRange(id, key, format, scale) {
-  const input = $(id)
-  const out = pick(`output[for="${id}"]`)
-  const factor = scale || 1
-  const value = Math.round((config[key] || 0) * factor)
-  input.min = Math.min(Number(input.min), value)
-  input.max = Math.max(Number(input.max), value)
-  input.value = value
-  out.textContent = format(String(value))
-  input.oninput = () => {
-    config[key] = factor === 1
-      ? parseInt(input.value, 10)
-      : parseInt(input.value, 10) / factor
-    out.textContent = format(input.value)
-    markDirty()
-  }
-}
-
-function bindSelect(id, read, write) {
-  const select = $(id)
-  select.value = read()
-  select.onchange = () => { write(select.value); markDirty() }
-}
-
-function bindCheck(id, key) {
-  const input = $(id)
-  input.checked = !!config[key]
-  input.onchange = () => { config[key] = input.checked; markDirty() }
-}
-
-function renderCaseLights() {
-  const mode = $("caselights")
-  const stored = config.caselights
-  const chosen = stored === true ? "theme" : stored ? "reading" : "off"
-  const refs = numericRefs(caps)
-  const offered = [["off", "Off"], ["theme", "Follow the Backlight"]]
-  if (refs.length || chosen === "reading") offered.push(["reading", "Follow a Reading"])
-  mode.replaceChildren(...offered.map(([value, text]) =>
-    el("option", { value, textContent: text, selected: value === chosen })))
-
-  let following = typeof stored === "string" ? stored : refs[0]
-
-  const row = $("caselightref")
-  row.hidden = chosen !== "reading"
-  row.replaceChildren(...refSelect(caps, following, refs, (ref) => {
-    following = ref
-    config.caselights = ref
-    markDirty()
-  }))
-
-  mode.onchange = () => {
-    const value = mode.value
-    config.caselights = value === "off" ? false : value === "theme" ? true : following
-    row.hidden = value !== "reading"
-    markDirty()
-  }
-}
-
-function renderButtons() {
-  const groups = new Map()
-  const offer = (heading, option) => {
-    if (!groups.has(heading)) groups.set(heading, [])
-    groups.get(heading).push(option)
-  }
-  for (const local of caps.local_actions || []) {
-    offer("Badge", el("option", { value: local.action, textContent: titleCase(local.label) }))
-  }
-  for (const command of caps.commands || []) {
-    const option = el("option", { value: command.name, textContent: titleCase(command.label) })
-    offer(command.group, option)
-  }
-
-  const offered = [
-    el("option", { value: "", textContent: "Nothing" }),
-    ...[...groups].map(([label, options]) => el("optgroup", { label }, options)),
-  ]
-  for (const which of ["a", "b", "c"]) {
-    const select = $(`btn-${which}`)
-    select.replaceChildren(...offered.map((option) => option.cloneNode(true)))
-    select.value = (config.buttons && config.buttons[which]) || ""
-    select.onchange = () => {
-      config.buttons = config.buttons || {}
-      config.buttons[which] = select.value || null
-      markDirty()
-    }
-  }
+  look.render(config, caps)
 }
 
 const REMEMBERED = "statsbadge.whose"
@@ -1383,8 +1286,7 @@ async function refreshCaps() {
   renderPages()
   renderSettings()
   renderSources()
-  renderButtons()
-  renderCaseLights()
+  look.refresh(config, caps)
   themes.refresh(config, caps)
   return true
 }
