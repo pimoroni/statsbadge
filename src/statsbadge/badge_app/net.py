@@ -452,51 +452,78 @@ class Client:
             return None
 
 
-def discover(timeout_ms=DISCOVER_MS, wanted=None):
-    """Listen for host beacons, so nobody has to type an IP address."""
-    found = []
-    sock = None
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setblocking(False)
-        sock.bind(("0.0.0.0", BEACON_PORT))
-        deadline = time.ticks_add(time.ticks_ms(), timeout_ms)
-        while time.ticks_diff(deadline, time.ticks_ms()) > 0:
-            try:
-                packet, address = sock.recvfrom(256)
-            except OSError:
-                time.sleep_ms(50)
-                continue
-            try:
-                beacon = json.loads(packet)
-            except ValueError:
-                continue
-            if not beacon.get("statsbadge"):
-                continue
-            entry = {
-                "id": beacon.get("id"),
-                # Trust the packet's source address over the payload: it is where
-                # replies reach.
-                "host": address[0],
-                "port": int(beacon.get("port", 8420)),
-                "name": beacon.get("host") or address[0],
-                "every_ms": int(beacon.get("every_ms", BEACON_EVERY_MS)),
-            }
-            if not any(e["host"] == entry["host"] and e["port"] == entry["port"]
-                       for e in found):
-                found.append(entry)
-            if wanted and entry["id"] in wanted:
-                break
-    except OSError:
-        pass
-    finally:
-        if sock:
-            try:
+class Listener:
+    """Host beacons, gathered as they arrive without waiting on any."""
+
+    def __init__(self):
+        self.found = []
+        self.sock = None
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.setblocking(False)
+            sock.bind(("0.0.0.0", BEACON_PORT))
+            self.sock = sock
+        except OSError:
+            if sock:
                 sock.close()
+
+    def step(self):
+        """Take what has arrived, returning the hosts not heard before."""
+        heard = []
+        while self.sock:
+            try:
+                packet, address = self.sock.recvfrom(256)
+            except OSError:
+                break
+            entry = _beacon(packet, address)
+            if entry is None or any(e["host"] == entry["host"] and e["port"] == entry["port"]
+                                    for e in self.found):
+                continue
+            self.found.append(entry)
+            heard.append(entry)
+        return heard
+
+    def close(self):
+        if self.sock:
+            try:
+                self.sock.close()
             except OSError:
                 pass
-    return found
+            self.sock = None
+
+
+def _beacon(packet, address):
+    try:
+        beacon = json.loads(packet)
+    except ValueError:
+        return None
+    if not isinstance(beacon, dict) or not beacon.get("statsbadge"):
+        return None
+    return {
+        "id": beacon.get("id"),
+        # Trust the packet's source address over the payload: it is where replies reach.
+        "host": address[0],
+        "port": int(beacon.get("port", 8420)),
+        "name": beacon.get("host") or address[0],
+        "every_ms": int(beacon.get("every_ms", BEACON_EVERY_MS)),
+    }
+
+
+def discover(timeout_ms=DISCOVER_MS, wanted=None):
+    """Listen for host beacons for a while, so nobody has to type an IP address."""
+    listener = Listener()
+    try:
+        deadline = time.ticks_add(time.ticks_ms(), timeout_ms)
+        while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+            for entry in listener.step():
+                if wanted and entry["id"] in wanted:
+                    return listener.found
+            time.sleep_ms(50)
+        return listener.found
+    finally:
+        listener.close()
 
 
 def hello(host, port, timeout_ms=4000):
