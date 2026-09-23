@@ -35,6 +35,7 @@ export default [
         FunctionExpression: { parameters: "first" },
         VariableDeclarator: "first",
       }],
+      "no-empty": ["error", { allowEmptyCatch: true }],
       "no-var": "error",
       "prefer-const": "error",
       "prefer-template": "error",
