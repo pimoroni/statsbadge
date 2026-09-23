@@ -42,6 +42,10 @@ main {
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -238,10 +242,6 @@ dialog.installer {
     margin-bottom: 10px;
   }
 
-  .fields[hidden] {
-    display: none;
-  }
-
   menu {
     display: flex;
     gap: 8px;
@@ -273,20 +273,12 @@ main > p.stale {
   padding: 8px 10px;
 }
 
-main > p.stale[hidden] {
-  display: none;
-}
-
 main > section {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
   gap: var(--gap);
   padding: var(--gap);
   align-items: start;
-}
-
-main > section[hidden] {
-  display: none;
 }
 
 main > section > :is(form, ol, menu, p, section:has(> section)) {
@@ -347,20 +339,12 @@ main > section section:not(:has(> section)) {
     justify-self: end;
   }
 
-  > [hidden] {
-    display: none;
-  }
-
   > :last-child {
     margin-bottom: 0;
   }
 }
 
-main > section section[hidden] {
-  display: none;
-}
-
-main section > span:is([data-tint], .refs):not([hidden]) {
+main section > span:is([data-tint], .refs) {
   grid-column: 2 / -1;
   display: flex;
   align-items: center;
@@ -996,8 +980,7 @@ main section[aria-current] {
 }
 
 main > section[aria-label="Settings"] {
-  > section[aria-label="Theme"],
-  > .column {
+  > section[aria-label="Theme"], > .column {
     grid-column: 1 / -1;
   }
 
@@ -1080,14 +1063,6 @@ main > section section[aria-label="Theme"] {
     > select {
       justify-self: stretch;
       max-width: 100%;
-    }
-
-    > [hidden] {
-      display: none;
-    }
-
-    &[hidden] {
-      display: none;
     }
   }
 

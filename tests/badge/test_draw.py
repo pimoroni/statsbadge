@@ -1,9 +1,7 @@
 """Drawing: gauges, plots, rows and the room each takes."""
 
 import builtins
-import html.parser
 import pathlib
-import re
 import sys
 
 import badgefakes
@@ -523,77 +521,6 @@ def test_a_notifications_page_sorts_messages_from_counters():
     # Minutes up to ninety, then hours, then days.
     assert [draw.ago(s) for s in (None, 5, 90, 4000, 100000, 400000)] == [
         None, "just now", "1m ago", "66m ago", "27h ago", "4d ago"]
-
-
-def rules_of(css):
-    """Return every rule in the sheet, as its full selector and the declarations under it."""
-    chain, declarations, found, buffer = [], [], [], ""
-    for char in css:
-        if char == "{":
-            above, _, selector = buffer.rpartition(";")
-            if declarations:
-                declarations[-1] += above
-            chain.append(selector.strip())
-            declarations.append("")
-            buffer = ""
-        elif char == "}":
-            declarations[-1] += buffer
-            found.append((" ".join(chain).replace(" &", ""), declarations[-1]))
-            chain.pop()
-            declarations.pop()
-            buffer = ""
-        else:
-            buffer += char
-    return found
-
-
-def test_a_hidden_row_is_actually_hidden(web_dir):
-    """No rule giving a row a display outranks the browser's one selector for `hidden`."""
-    css = (web_dir / "app.css").read_text(encoding="utf-8")
-    markup = (web_dir / "index.html").read_text(encoding="utf-8")
-
-    class Hidden(html.parser.HTMLParser):
-        """Every element the page starts out hiding, and how a rule could name it."""
-
-        def __init__(self):
-            super().__init__()
-            self.depth, self.found = 0, []
-
-        def handle_starttag(self, tag, attrs):
-            attrs = dict(attrs)
-            if "hidden" in attrs:
-                named = {tag} | {f".{name}" for name in attrs.get("class", "").split()}
-                named |= {f"[{key}]" for key in attrs if key.startswith("data-")}
-                self.found.append((tag, self.depth, named))
-            if tag not in ("input", "link", "meta", "br"):
-                self.depth += 1
-
-        def handle_endtag(self, _tag):
-            self.depth -= 1
-
-    parser = Hidden()
-    parser.feed(markup)
-    assert len({depth for _tag, depth, _named in parser.found}) > 1, parser.found
-
-    # The two selectors are otherwise close enough for source order to settle which wins.
-    rules = rules_of(css)
-    hiding = {selector for selector, declarations in rules
-              if selector.endswith("[hidden]") and "display: none" in declarations}
-    for selector, declarations in rules:
-        last = re.split(r"[\s>+~]+", selector)[-1]
-        if "display:" not in declarations or "[hidden]" in selector:
-            continue
-        if f"{selector}[hidden]" in hiding:
-            continue
-        if not (selector.startswith("main") or selector == last):
-            continue            # it cannot reach inside a sheet
-        for tag, depth, named in parser.found:
-            if tag == "section":
-                continue        # the sheets, hidden by a rule elsewhere
-            for each in named:
-                found = (re.search(rf"\b{each}\b", last) if each.isalpha()
-                         else each in last)
-                assert not found, (selector, tag, depth, each)
 
 
 def test_a_picture_is_cropped_to_the_block_it_is_in():
