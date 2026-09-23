@@ -597,3 +597,30 @@ def test_the_badge_api_version_is_the_app_s():
     for path in BADGE_MODULES:
         source = path.read_text(encoding="utf-8")
         assert f"api={badge_api.VERSION}" in source, f"{path} registers no page at this API"
+
+
+def test_quakes_fetches_on_its_own_thread_and_backs_off(monkeypatch):
+    import time
+
+    from statsbadge.sources import web
+    from statsbadge.sources.base import SourceError
+    from statsbadge_quakes import Quakes
+
+    source = Quakes({})
+    assert (source.min_mag, source.count, source.order) == (4.0, 10, "recent")
+    feed = {"features": [{"properties": {"mag": 5.2, "place": "off Coimbra", "time": 1000},
+                          "geometry": {"coordinates": [-9.1, 40.2, 10.0]}}]}
+    monkeypatch.setattr(web, "fetch_json", lambda _url, **_options: feed)
+    source.poll()
+    frame = {}
+    source.sample(frame, 1.0)
+    assert frame["quakes"]["biggest"] == 5.2 and source.last_fault is None
+
+    def refused(_url, **_options):
+        raise SourceError("HTTP 503")
+
+    monkeypatch.setattr(web, "fetch_json", refused)
+    source._next = 0.0
+    source.poll()
+    assert source.last_fault == "HTTP 503"
+    assert source._next > time.monotonic() + 30, "a failure was retried at once"
