@@ -63,3 +63,21 @@ def test_a_bundle_with_no_trust_store_is_given_one():
             os.environ.pop(key, None)
             if value is not None:
                 os.environ[key] = value
+
+
+def test_a_flag_before_the_verb_survives_it(monkeypatch):
+    from statsbadge import __main__ as cli
+
+    seen = []
+    monkeypatch.setattr(cli, "cmd_autostart", seen.append)
+    monkeypatch.setattr(cli, "cmd_extensions", seen.append)
+    monkeypatch.setattr(cli, "trust_store", lambda: None)
+    monkeypatch.setattr(cli.library, "sweep", lambda _where: None)
+    monkeypatch.setattr(cli.library, "activate", lambda _where: None)
+
+    cli.main(["autostart", "--port", "9000", "enable"])
+    cli.main(["autostart", "enable", "--port", "9001"])
+    cli.main(["autostart", "enable"])
+    cli.main(["ext", "--without", "clock", "add", "x"])
+    assert [args.port for args in seen[:3]] == [9000, 9001, cli.DEFAULT_PORT]
+    assert seen[3].without == ["clock"] and seen[3].names == ["x"]
