@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -107,6 +108,50 @@ def test_one_counter_is_accepted_once_under_concurrency(monkeypatch):
         for thread in threads:
             thread.join()
         assert sorted(outcomes) == ["accepted", "replayed request"], outcomes
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
+def test_secrets_are_never_on_disk_readable_by_others(monkeypatch):
+    replace = os.replace
+    modes = []
+
+    def replacing(source, target):
+        modes.append(os.stat(source).st_mode & 0o777)
+        replace(source, target)
+
+    monkeypatch.setattr(os, "replace", replacing)
+    with tempfile.TemporaryDirectory() as where:
+        path = os.path.join(where, "badges.json")
+        auth.Store(path).provision("private00001", "private")
+        assert modes == [0o600], [oct(mode) for mode in modes]
+        assert os.stat(path).st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32",
+                    reason="a replace racing a replace is refused on Windows")
+def test_concurrent_saves_do_not_share_a_scratch_file():
+    with tempfile.TemporaryDirectory() as where:
+        store = auth.Store(os.path.join(where, "badges.json"))
+        for index in range(8):
+            store.provision(f"writer{index:06d}", "writer")
+        failures = []
+
+        def saving():
+            try:
+                for _ in range(50):
+                    store.save()
+            except OSError as exc:
+                failures.append(exc)
+
+        threads = [threading.Thread(target=saving) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert not failures, failures
+        assert os.listdir(where) == ["badges.json"], os.listdir(where)
+        with open(os.path.join(where, "badges.json"), encoding="utf-8") as handle:
+            assert len(json.load(handle)["badges"]) == 8
 
 
 def test_reload_never_lowers_a_counter(h):

@@ -2,6 +2,7 @@
 
 import json
 import os
+import tempfile
 import threading
 
 # The most keys in a store. A cache keyed by something a user types grows by one on
@@ -39,7 +40,7 @@ class Store:
                     del merged[key]
             payload = json.dumps(merged, indent=2, sort_keys=True)
             if self.path:
-                _write(self.path, payload)
+                write(self.path, payload)
             self._data = merged
 
     def forget(self, key):
@@ -49,7 +50,7 @@ class Store:
             merged = dict(self._data)
             del merged[key]
             if self.path:
-                _write(self.path, json.dumps(merged, indent=2, sort_keys=True))
+                write(self.path, json.dumps(merged, indent=2, sort_keys=True))
             self._data = merged
 
     def all(self):
@@ -82,11 +83,21 @@ def _read(path):
     return stored if isinstance(stored, dict) else {}
 
 
-def _write(path, payload):
+def write(path, text, mode=0o644):
+    """Replace a file in one step, never leaving a partial one or a wider mode behind."""
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as handle:
-        handle.write(payload)
-    os.replace(tmp, path)
+    handle, tmp = tempfile.mkstemp(dir=directory or ".",
+                                   prefix=os.path.basename(path) + ".", suffix=".tmp")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
