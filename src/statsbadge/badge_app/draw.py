@@ -792,30 +792,12 @@ def graph(theme, series, labels, maximum=None, shift=None):
         blit_label(name, look.SIZE_SMALL, theme.dim, x + 14, y - 2)
 
 
-SERIES_ALPHA = (200, 150)
-# How far from the page a series must land, `difference` measuring black to white as 100.
-SERIES_FLOOR = 20
-
-
 def _series_alpha(theme, index):
-    return SERIES_ALPHA[0] if index == 0 or theme.pale else SERIES_ALPHA[1]
+    return theme.series_alpha[index]
 
 
 def _series_colour(theme, index):
-    """Return the colours for the two graph series."""
-    if index == 0:
-        return theme.accent
-    alpha = _series_alpha(theme, index)
-    if theme.accent_b != theme.accent:
-        if theme.bg.difference(theme.accent_b.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
-            return theme.accent_b
-    cold, hot = theme.at(0.0), theme.at(1.0)
-    order = ((cold, hot) if theme.accent.difference(cold) >= theme.accent.difference(hot)
-             else (hot, cold))
-    for pen in order:
-        if theme.bg.difference(pen.with_alpha(alpha).over(theme.bg)) >= SERIES_FLOOR:
-            return pen
-    return theme.dim
+    return theme.series[index]
 
 
 def grid(theme, entries):
@@ -1076,11 +1058,15 @@ def banner(theme, title, message, detail=None):
         cursor += height + gap
 
 
+# How far from what it sits on a pen must land, `difference` measuring black to white as 100.
+READABLE_FLOOR = 20
+
+
 def readable(pen, over, toward):
     """Return `pen` if it can be seen on `over`, else the same hue stepped toward `toward`."""
     for alpha in (255, 128):
         candidate = pen if alpha == 255 else pen.with_alpha(alpha).over(toward)
-        if over.difference(candidate) >= SERIES_FLOOR:
+        if over.difference(candidate) >= READABLE_FLOOR:
             return candidate
     return toward
 

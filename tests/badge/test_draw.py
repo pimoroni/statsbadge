@@ -10,7 +10,7 @@ import badgefakes
 
 import pytest
 
-from statsbadge import install, layout, themes
+from statsbadge import install, layout
 
 # The clock extension's badge-side modules and fonts, as a checkout has them.
 CLOCK_BADGE = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
@@ -372,7 +372,7 @@ def test_sparkline_rows_can_be_told_apart(ui):
             == dark.stripe.b - dark.bg.b == look.STRIPE), "the band shifts hue"
 
     # Toward the ink on a dark page and away from it on a pale one.
-    pale = look.from_palette("light", themes.written()["light"])
+    pale = look.from_palette("light", layout.palette_for("light", layout.DEFAULT_CONFIG["tint"]))
     assert pale.pale and not dark.pale
     assert pale.stripe.r < pale.bg.r and dark.stripe.r > dark.bg.r
 

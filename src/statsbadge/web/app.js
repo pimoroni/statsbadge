@@ -1185,7 +1185,7 @@ function swatches() {
 // -- the preview -----------------------------------------------------------
 //
 // Four pages at the badge's 320x240, drawn in its faces. The colours and the two graph
-// series come from /api/theme; this file holds only where a page puts things.
+// series come from /api/theme's palette; this file holds only where a page puts things.
 
 const W = 320
 const H = 240
@@ -1532,13 +1532,8 @@ const DOWN = [0.12, 0.2, 0.55, 0.86, 0.7, 0.52, 0.62, 0.44, 0.2, 0.1, 0.08, 0.3,
               0.62, 0.5, 0.72, 0.9, 0.55, 0.2, 0.12, 0.1, 0.26, 0.42, 0.3, 0.18, 0.12]
 const UP = [0.05, 0.08, 0.14, 0.2, 0.16, 0.12, 0.18, 0.14, 0.08, 0.05, 0.04, 0.1, 0.16, 0.2,
             0.14, 0.1, 0.16, 0.22, 0.12, 0.06, 0.05, 0.04, 0.09, 0.13, 0.1, 0.07, 0.05]
-// draw.SERIES_ALPHA: on a pale page a translucent area washes out, so both go solid.
-const SERIES_ALPHA = [200, 150]
-const PALE_SUM = 384
-
 function drawGraph(ctx, palette, series) {
   chrome(ctx, palette, "NETWORK", 4)
-  const pale = palette.bg[0] + palette.bg[1] + palette.bg[2] >= PALE_SUM
 
   // Both series share a scale, as the badge's graph does, so one cannot dwarf the other.
   const plots = SERIES.map((ref) => rings[ref] || [])
@@ -1564,7 +1559,7 @@ function drawGraph(ctx, palette, series) {
   ctx.fillText("0", PAD, top + height - 8)
 
   const plot = (points, index) => {
-    ctx.globalAlpha = (index === 0 || pale ? SERIES_ALPHA[0] : SERIES_ALPHA[1]) / 255
+    ctx.globalAlpha = palette.series_alpha[index] / 255
     ctx.beginPath()
     ctx.moveTo(left, bottom)
     points.forEach((value, at) => {
@@ -1681,7 +1676,7 @@ function paintScreens() {
   SCREENS.forEach((paint, index) => {
     const ctx = holder.children[index].getContext("2d")
     ctx.setTransform(2, 0, 0, 2, 0, 0)
-    paint(ctx, shown.palette, shown.series, frameNow)
+    paint(ctx, shown.palette, shown.palette.series, frameNow)
   })
 }
 

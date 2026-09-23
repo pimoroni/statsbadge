@@ -356,12 +356,16 @@ def tint_accent(incoming, current):
 
 
 def palette_for(theme, tint, second="same"):
-    """Return the palette a theme draws with: derived from the accent, or looked up."""
+    """Return the palette a theme draws with, with what the badge would otherwise derive."""
     theme, tint = resolve_theme(theme, tint)
-    return themes.palette(theme, tint, second)
+    palette = themes.palette(theme, tint, second)
+    pale = sum(palette["bg"]) >= PALE_SUM
+    return {**palette, "pale": pale, "series": series_colours(palette),
+            "series_alpha": [SERIES_ALPHA[0], SERIES_ALPHA[0 if pale else 1]]}
 
 
-# Alpha for the first series and the second, copied from badge_app/draw.py.
+# Alpha for the first series and the second. On a pale page a translucent area washes
+# out, so both go to the first.
 SERIES_ALPHA = (200, 150)
 # How far a series colour has to sit from the background, on derive.apart's 0-100 scale.
 SERIES_FLOOR = 20
