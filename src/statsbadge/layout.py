@@ -5,7 +5,7 @@ import json
 import threading
 import time
 
-from . import derive, state, themes
+from . import derive, model, state, themes
 
 # Every page the badge can draw, in the order the UI offers them. `one` and `many` name
 # the page keys holding a single field and a list of up to `max`, `pool` and `many_pool`
@@ -270,17 +270,39 @@ class Config:
         if capabilities:
             data["pages"] = prune(data.get("pages", []), capabilities)
             data["labels"] = group_labels(data["pages"], capabilities)
-            data["units"] = field_units(data["pages"], capabilities)
+            lit_by = data.get("caselights")
+            data.update(field_facts(data["pages"], capabilities,
+                                    [lit_by] if _is_ref(lit_by) else ()))
         data["palette"] = palette_for(data.get("theme"), data["tint"],
                                       data.get("accent_b", "same"))
         return data
 
 
-def field_units(pages, capabilities):
-    """Return what an extension called the units of the fields these pages draw."""
-    declared = capabilities.get("units") or {}
-    return {field: declared[field] for _group, field in _refs_of(pages)
-            if declared.get(field)}
+def field_facts(pages, capabilities, extra=()):
+    """Return the unit, full scale and percentage of each field these pages draw, by ref.
+
+    An extension's group answers from what that extension declared, so a field it calls
+    `temp` takes nothing from `cpu.temp`.
+    """
+    declared = capabilities.get("declared_fields") or {}
+    units, scales, percent = {}, {}, []
+    refs = [f"{group}.{field}" for group, field in _refs_of(pages)] + list(extra)
+    for ref in refs:
+        group, _dot, field = ref.partition(".")
+        if group in declared:
+            entry = declared[group].get(field) or {}
+            unit, scale = entry.get("unit"), entry.get("full_scale")
+            is_percent = bool(entry.get("percent")) or field.endswith("_pct")
+        else:
+            unit, scale = model.UNITS.get(field), model.FULL_SCALE.get(field)
+            is_percent = field in model.PERCENT_FIELDS or field.endswith("_pct")
+        if unit:
+            units[ref] = unit
+        if scale:
+            scales[ref] = float(scale)
+        if is_percent and ref not in percent:
+            percent.append(ref)
+    return {"units": units, "scales": scales, "percent": percent}
 
 
 def _refs_of(pages):

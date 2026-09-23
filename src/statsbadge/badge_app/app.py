@@ -509,6 +509,7 @@ class App:
         # Replaced, not updated: a group dropped from every page should stop being named.
         pages_module.LABELS = self.setting("labels") or {}
         draw.use_units(self.setting("units"))
+        pages_module.use_facts(self.setting("scales"), self.setting("percent"))
         pages_module.forget_layout()
         animate = bool(self.setting("animate", False))
         if animate != pages_module.ANIMATE:

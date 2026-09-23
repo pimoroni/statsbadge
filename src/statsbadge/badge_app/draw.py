@@ -278,7 +278,7 @@ def _duration(seconds):
     return f"{seconds // 60}m"
 
 
-# Units by field name, off the layout, for fields this module has no opinion on.
+# Units by ref, off the layout, for readings this module does not format itself.
 UNITS = {}
 
 
@@ -289,37 +289,33 @@ def use_units(units):
     _readings.clear()
 
 
-def short_unit(field):
-    """Return what follows the number."""
+def short_unit(ref):
+    """Return what follows the number. `fmt` puts a prefix on some, so theirs are its."""
+    field = ref.rpartition(".")[2]
     if field.endswith("_bps"):
         return "B/s"
     if field == "cores" or field == "pct" or field.endswith("_pct"):
         return "%"
-    if field == "temp":
-        return "°C"
-    if field in ("power", "package_w"):
-        return "W"
-    if field in ("freq", "clock"):
-        return "MHz"
     if field.endswith("_mb"):
         return "B"
     if field in ("uptime_s", "secs_left"):
         return ""
-    return UNITS.get(field, "")
+    return UNITS.get(ref, "")
 
 
 _readings = _cached({})
 
 
-def reading(value, field):
+def reading(value, ref):
     """Return a value with its unit, for a slot with no room to place one separately."""
+    field = ref.rpartition(".")[2]
     # Numbers only: a field can also arrive as a list of core loads.
     if type(value) is float or type(value) is int:
-        key = (value, field)
+        key = (value, ref)
         text = _readings.get(key)
         if text is not None:
             return text
-        text = fmt(value, field) + short_unit(field)
+        text = fmt(value, field) + short_unit(ref)
         if len(_readings) > 240:
             _readings.clear()
         _readings[key] = text
@@ -328,7 +324,7 @@ def reading(value, field):
     if value is None or isinstance(value, (str, bool, list, tuple)):
         # A load average is a queue length, not a percentage.
         return text
-    return text + short_unit(field)
+    return text + short_unit(ref)
 
 
 def background(theme, title, index, total, subtitle=None):
@@ -536,7 +532,7 @@ def at_axis(value):
     return 0.0 if value is None else value
 
 
-def bars(theme, values, maximum=100.0, field="pct", fractions=None, names=None):
+def bars(theme, values, maximum=100.0, ref="cpu.cores", fractions=None, names=None):
     """Draw a stack of horizontal bars."""
     if not values:
         return
@@ -547,7 +543,7 @@ def bars(theme, values, maximum=100.0, field="pct", fractions=None, names=None):
     height = max(4, slot - 3)
     names = ([str(names[i]) if i < len(names) else "" for i in range(count)] if names
              else [f"{i}" for i in range(count)])
-    readings = [reading(values[i], field) for i in range(count)]
+    readings = [reading(values[i], ref) for i in range(count)]
     label_w = column_width(names, look.SIZE_SMALL)
     value_w = column_width(readings, look.SIZE_SMALL)
     x = look.PAD + label_w + COLUMN_GAP
@@ -742,7 +738,8 @@ def axis_top(peak, field):
 
 def graph(theme, series, labels, maximum=None, shift=None):
     """Draw one or two series over time, as filled areas."""
-    field = labels[0][1] if labels else "pct"
+    ref = labels[0][1] if labels else "cpu.pct"
+    field = ref.rpartition(".")[2]
     if maximum is None:
         # Flattened past the gaps: max() over the series compares None against a float.
         peak = axis_top(max((p for s in series for p in s if p is not None),
@@ -750,7 +747,7 @@ def graph(theme, series, labels, maximum=None, shift=None):
     else:
         peak = max(maximum, 1.0) * 1.15
 
-    peak_text = reading(peak, field)
+    peak_text = reading(peak, ref)
     left = look.PAD + column_width((peak_text, "0"), look.SIZE_SMALL) + 4
     top = look.BODY_TOP + 8
     width = look.W - left - look.PAD
@@ -786,7 +783,7 @@ def graph(theme, series, labels, maximum=None, shift=None):
 
     blit_label(peak_text, look.SIZE_SMALL, theme.dim, look.PAD, top - 4)
     blit_label("0", look.SIZE_SMALL, theme.dim, look.PAD, top + height - 8)
-    for index, (name, _field) in enumerate(labels[:2]):
+    for index, (name, _ref) in enumerate(labels[:2]):
         pen = _series_colour(theme, index)
         x = left + index * 110
         y = look.H - look.FOOTER_H - 14

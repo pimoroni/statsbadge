@@ -64,6 +64,8 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
 
     pages.__dict__["tween"] = FakeTween
     was = pages.ANIMATE
+    facts = layout.field_facts([{"fields": ["cpu.pct"]}], {})
+    pages.use_facts(facts["scales"], facts["percent"])
     try:
         pages.ANIMATE = False
         pages.sweep_reset()
@@ -99,6 +101,7 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
     finally:
         pages.ANIMATE = was
         pages.sweep_reset()
+        pages.use_facts({}, ())
         pages.__dict__.pop("tween", None)
 
 def test_a_slide_is_a_style_the_ui_offers(ui):
