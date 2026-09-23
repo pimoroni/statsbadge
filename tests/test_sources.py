@@ -619,3 +619,35 @@ def test_one_part_of_a_source_working_leaves_another_s_fault_standing():
     assert source.last_fault == "ValueError: no position"
     source.note_ok("where")
     assert (source.last_fault, source.faults) == (None, 3)
+
+
+def test_a_polling_source_survives_a_raise_and_polls_on_a_wake():
+    import threading
+
+    from statsbadge.sources.base import PollingSource
+
+    class Flaky(PollingSource):
+        name = "flaky"
+        POLL_S = 60.0
+
+        def __init__(self, config):
+            super().__init__(config)
+            self.polled = threading.Semaphore(0)
+            self.calls = 0
+
+        def poll(self):
+            self.calls += 1
+            self.polled.release()
+            if self.calls == 1:
+                raise ValueError("first go")
+
+    source = Flaky({})
+    source.start()
+    try:
+        assert source.polled.acquire(timeout=2)
+        source.wake()
+        assert source.polled.acquire(timeout=2), "a wake did not poll"
+        assert source.faults == 1 and source.last_fault == "ValueError: first go"
+    finally:
+        source.stop()
+    assert source._poller is None

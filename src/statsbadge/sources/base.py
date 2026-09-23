@@ -1,6 +1,7 @@
 """What a source has to implement."""
 
 import subprocess
+import threading
 import urllib.error
 import urllib.parse
 
@@ -120,8 +121,9 @@ class Source:
         how far apart they are and `age_ms` how old the newest is now. Declare the field
         with `history` rather than `graphed` so the collector keeps no ring of its own.
 
-        Called on the collector's thread as a reply is composed, so nothing here may wait
-        on a network.
+        Called on a request's thread as a reply is composed, while `sample` may be
+        running on the collector's, so nothing here may wait on a network and what it
+        reads has to be safe to read from there.
         """
         return {}
 
@@ -176,3 +178,54 @@ class Source:
 
     def __repr__(self):
         return f"<{self.name}>"
+
+
+class PollingSource(Source):
+    """A source that fetches on a thread of its own, which calls `poll` about once a
+    second and at once on `wake`. `poll` decides whether anything is due."""
+
+    POLL_S = 1.0
+
+    def __init__(self, config):
+        super().__init__(config)
+        self._wake = threading.Event()
+        self._stop = threading.Event()
+        self._poller = None
+
+    def poll(self):
+        """Fetch whatever is due. A raise is noted as a fault and the thread carries on."""
+        raise NotImplementedError
+
+    def sample(self, frame, dt):
+        raise NotImplementedError
+
+    @property
+    def stopping(self):
+        return self._stop.is_set()
+
+    def start(self):
+        if self._poller is None:
+            self._stop.clear()
+            self._poller = threading.Thread(target=self._run, daemon=True,
+                                            name=f"statsbadge-{self.name}")
+            self._poller.start()
+
+    def stop(self):
+        self._stop.set()
+        self._wake.set()
+        if self._poller is not None:
+            self._poller.join(timeout=2.0)
+            self._poller = None
+
+    def wake(self):
+        """Poll now, as after a setting that changes what to fetch."""
+        self._wake.set()
+
+    def _run(self):
+        while not self._stop.is_set():
+            try:
+                self.poll()
+            except Exception as exc:  # noqa: BLE001
+                self.note_fault(exc)
+            self._wake.wait(self.POLL_S)
+            self._wake.clear()
