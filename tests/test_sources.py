@@ -538,7 +538,8 @@ def test_a_clock_psutil_cannot_know_is_left_out(monkeypatch):
     reply = collections.namedtuple("scpufreq", "current min max")
     source = portable.Portable({})
     for current, shown in ((4, None), (3504.0, 3504)):
-        monkeypatch.setattr(portable.psutil, "cpu_freq", lambda current=current: reply(current, 0, current))
+        monkeypatch.setattr(portable.psutil, "cpu_freq",
+                            lambda current=current: reply(current, 0, current), raising=False)
         frame = model.empty_frame()
         source.sample(frame, 1.0)
         assert frame["cpu"].get("freq") == shown, (current, frame["cpu"])
