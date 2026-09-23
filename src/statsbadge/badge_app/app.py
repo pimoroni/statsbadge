@@ -333,7 +333,11 @@ class App:
 
     def forget_host(self):
         """Drop everything belonging to the host we were talking to."""
-        self.client.close()
+        self.stop_listening()
+        self.client.reset()
+        self._pending = None
+        self._next_poll = time.ticks_ms()
+        self.frame = {}
         self.layout = None
         self.layout_rev = NO_REV
         self.history = {}

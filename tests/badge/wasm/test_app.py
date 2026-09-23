@@ -110,6 +110,20 @@ class Hunting(unittest.TestCase):
         self.assertIsNone(one._listener)
 
 
+class ForgettingAHost(unittest.TestCase):
+    def test_nothing_of_the_old_host_is_carried_to_the_next(self):
+        one = paired()
+        one.frame = {"sys": {"host": "old desk"}}
+        one.client.failures = 3
+        one.client.get("/v1/stats")
+        one._pending = "stats"
+        one.forget_host()
+        self.assertIsNone(one._pending)
+        self.assertEqual(one.client.failures, 0)
+        self.assertTrue(one.client.step(), "a request from the old host is still going")
+        self.assertFalse(one.subtitle() == "old desk", one.subtitle())
+
+
 class Paging(unittest.TestCase):
     def test_a_badge_with_no_layout_has_no_page_to_turn_to(self):
         one = app.App()
