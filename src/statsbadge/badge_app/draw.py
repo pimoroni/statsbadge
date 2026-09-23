@@ -1244,7 +1244,7 @@ def radar(theme, entries):
 
 
 def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
-          hot=None, shift=None):
+          hot=None, shift=None, field=""):
     """Draw one big reading, which way it is going, and where it has been."""
     blit_label(name, look.SIZE_LABEL, theme.dim, look.PAD + 2, look.BODY_TOP + 8)
     reading_w = blit_label(value_text, look.SIZE_HUGE, theme.ink, look.PAD,
@@ -1255,8 +1255,8 @@ def trend(theme, value_text, unit_text, name, delta, points, peak, fraction,
 
     if delta is not None:
         x = look.W - look.PAD
-        blit_label(f"{abs(delta):.1f}", look.SIZE_VALUE, theme.ink, x, look.BODY_TOP + 30,
-                   align=2)
+        blit_label(fmt(abs(delta), field), look.SIZE_VALUE, theme.ink, x,
+                   look.BODY_TOP + 30, align=2)
         # Drawn, not written: the text font has no arrows, and a missing glyph is a silent gap.
         _arrow(theme, x - 46, look.BODY_TOP + 34, delta,
                fraction if hot is None else hot)
