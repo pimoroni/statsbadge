@@ -60,6 +60,9 @@ class socket:
         self._fill()
         at = self._held.find(b"\n")
         if at < 0:
+            if self._state() & ENDED:
+                line, self._held = self._held, b""
+                return line
             return None
         line, self._held = self._held[:at + 1], self._held[at + 1:]
         return line
@@ -67,7 +70,7 @@ class socket:
     def readinto(self, view):
         self._fill()
         if not self._held:
-            return None
+            return 0 if self._state() & ENDED else None
         room = len(view)
         taken, self._held = self._held[:room], self._held[room:]
         view[:len(taken)] = taken

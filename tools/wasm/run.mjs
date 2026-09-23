@@ -96,6 +96,16 @@ globalThis.sb_recv = (handle) => {
   return chunk.toString("base64")
 }
 
+// The host going away under an idle connection, which the badge only finds on next use.
+globalThis.sb_drop = (handle) => {
+  const held = connections.get(handle)
+  if (held) {
+    held.sock.destroy()
+    held.ended = true
+  }
+  return 1
+}
+
 globalThis.sb_close = (handle) => {
   const held = connections.get(handle)
   if (held) {
