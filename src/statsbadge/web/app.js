@@ -565,9 +565,13 @@ function quickAdd(name) {
 }
 
 /** Say when a page somebody configured will not appear on the badge. */
+let prunedWanted = 0
+
 async function refreshPruned() {
+  const mine = ++prunedWanted
   try {
-    const shown = await api(configPath("/api/preview"))
+    const shown = await api("/api/preview", { method: "POST", body: JSON.stringify(config) })
+    if (mine !== prunedWanted) return
     const kept = new Set(shown.pages.map((page) => page.id))
     const dropped = config.pages.filter((page) => !kept.has(page.id)).map((page) => page.title)
     const node = pick('section[aria-label="Pages"] p[role="status"]')

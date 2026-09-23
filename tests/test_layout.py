@@ -23,6 +23,24 @@ def test_pruning_drops_absent_groups():
     assert cpu["readouts"] == [], cpu
 
 
+def test_an_unsaved_layout_is_pruned_as_it_would_be_sent(h):
+    """The UI asks which of the pages being edited would reach the badge, before a save."""
+    _status, config = h.raw("GET", "/api/config")
+    config["pages"] = config["pages"] + [
+        {"id": "unsavedcpu", "kind": "dial", "title": "CPU", "field": "cpu.pct"},
+        {"id": "unsavedgone", "kind": "dial", "title": "Gone", "field": "nosuch.pct"},
+    ]
+    status, shown = h.raw("POST", "/api/preview", json.dumps(config).encode())
+    assert status == 200, (status, shown)
+    ids = [page["id"] for page in shown["pages"]]
+    assert "unsavedcpu" in ids and "unsavedgone" not in ids, ids
+
+    _status, stored = h.raw("GET", "/api/config")
+    assert "unsavedcpu" not in [page["id"] for page in stored["pages"]], "the preview saved"
+    status, _bad = h.raw("POST", "/api/preview", b"[]")
+    assert status == 400, status
+
+
 def test_every_field_has_a_name_for_the_ui():
     """The pickers show these, so a field with none shows a column name instead."""
     from statsbadge import model

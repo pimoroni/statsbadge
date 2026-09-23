@@ -611,6 +611,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, service.config.for_badge(
                 service.capabilities(), self._query().get("badge") or None))
 
+        if path == "/api/preview" and method == "POST":
+            try:
+                pages = layout.validate(json.loads(body or b"{}"), service.extension_kinds(),
+                                        service.settings_schema(),
+                                        service.extension_page_settings())["pages"]
+            except ValueError as exc:
+                return self._fail(400, str(exc))
+            return self._json(200, {"pages": layout.prune(pages, service.capabilities())})
+
         if path == "/api/pair" and method == "GET":
             state = service.badges.pairing_state()
             state["hosts"] = _local_addresses()
