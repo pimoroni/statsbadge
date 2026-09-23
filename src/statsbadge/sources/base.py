@@ -7,8 +7,14 @@ import urllib.parse
 from .. import geocode, state
 
 
+class SourceError(Exception):
+    """A fault written to be read, which is shown as it stands."""
+
+
 def readable(exc):
     """A fault as one line somebody can act on."""
+    if isinstance(exc, SourceError):
+        return str(exc)
     if isinstance(exc, urllib.error.HTTPError):
         where = urllib.parse.urlsplit(exc.url or "").netloc
         return f"HTTP {exc.code} {exc.reason}" + (f" from {where}" if where else "")
@@ -80,7 +86,8 @@ class Source:
     def __init__(self, config):
         self.config = config
         self.faults = 0
-        self.last_fault = None
+        # What stands in the way of each part of this source's work, oldest first.
+        self._standing = {}
         # What this source worked out, as against what it was told. The persistent one
         # is in place by the time `start` runs.
         self.store = state.Store()
@@ -142,19 +149,30 @@ class Source:
         """
         raise NotImplementedError
 
-    def note_fault(self, exc):
-        """Record that this source's work failed, for the config UI and `statsbadge probe`."""
-        self.faults += 1
-        self.last_fault = readable(exc)
+    @property
+    def last_fault(self):
+        """The oldest fault still standing, for the config UI and `statsbadge probe`."""
+        return next(iter(self._standing.values()), None)
 
-    def note_ok(self):
-        """Record that the work succeeded, which clears a fault.
+    def note_fault(self, exc, key=None):
+        """Record that this source's work failed. `key` names which part of it, where a
+        source does several things that fail apart."""
+        self.faults += 1
+        self._standing[key] = readable(exc)
+
+    def note_ok(self, key=None):
+        """Record that the work `key` names succeeded, which clears its fault.
 
         A source has to call this itself, at the point the work a fault was noted for
         succeeded: `sample` handing over the last good reading is no evidence that the
         next fetch landed. The count is kept.
         """
-        self.last_fault = None
+        self._standing.pop(key, None)
+
+    def note_waiting(self, why, key=None):
+        """Record why this source is doing nothing, such as a setting it has not been
+        given, without counting it as a fault. `note_ok` clears it."""
+        self._standing[key] = why
 
     def __repr__(self):
         return f"<{self.name}>"
