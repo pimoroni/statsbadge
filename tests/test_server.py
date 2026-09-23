@@ -7,6 +7,7 @@ import socket
 import sys
 import time
 
+import statsbadge
 from statsbadge import auth, collect, identity, layout, server
 
 
@@ -247,6 +248,7 @@ def test_config_api_is_loopback_only(h):
     local._dispatch("GET")
     assert local.answered[0] == 200, local.answered
     assert "kinds" in local.answered[1], local.answered
+    assert local.answered[1]["statsbadge_version"] == statsbadge.version()
 
     # A badge path is not behind the guard: badges are on the network by definition.
     badge = caller(h, "10.0.0.5", "/v1/hello")
