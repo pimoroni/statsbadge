@@ -977,7 +977,9 @@ function settingRow(stored, setting, options) {
 // -- look and buttons ------------------------------------------------------
 
 function renderLook() {
+  themeTab = null
   renderThemes()
+  renderTint()
   fetchPalettes()
 
   bindRange("interval", "interval_ms", (value) => `${value} ms`)
@@ -1109,7 +1111,7 @@ function renderButtons() {
   }
 }
 
-// -- the theme preview ----------------------------------------------------
+// -- the theme picker -----------------------------------------------------
 //
 // The palette comes from the host, for every theme and not only the tinted ones, which
 // holds the preview and what reaches the badge together.
@@ -1154,13 +1156,17 @@ function renderThemes() {
                                 "aria-pressed": String(record.name === config.theme) },
                     el("canvas", { width: THUMB_W * 2, height: THUMB_H * 2 }),
                     el("span", { textContent: cardLabel(record) }))
-    card.onclick = () => { config.theme = record.name; markDirty(); renderThemes() }
+    card.onclick = () => {
+      config.theme = record.name
+      markDirty()
+      renderThemes()
+      preview()
+    }
     return card
   }))
   $("theme").replaceChildren(tabs, cards)
   for (const node of all("[data-tint]")) node.hidden = themeTab !== "tinted"
   paintThumbs()
-  renderTint()
 }
 
 async function fetchPalettes() {
