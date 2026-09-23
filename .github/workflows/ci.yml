@@ -154,26 +154,19 @@ jobs:
       # server ships those files as they are.
       - run: npm run lint
 
-  # Every extension, those in repositories of their own included, against this commit:
-  # a change here that breaks one fails here and not after a release.
+  # The extensions in this repository, the way their own repositories check the rest.
   extensions:
-    name: Extension ${{ matrix.repository || matrix.directory }}
+    name: Extension ${{ matrix.directory }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - directory: extensions/statsbadge-clock
-          - directory: extensions/statsbadge-iss
-          - directory: extensions/statsbadge-quakes
-          - repository: Gadgetoid/statsbadge-bluesky
-          - repository: Gadgetoid/statsbadge-cloudflare
-          - repository: Gadgetoid/statsbadge-mastodon
-          - repository: Gadgetoid/statsbadge-octopus
-          - repository: Gadgetoid/statsbadge-wildfires
+        directory:
+          - extensions/statsbadge-clock
+          - extensions/statsbadge-iss
+          - extensions/statsbadge-quakes
     uses: ./.github/workflows/extension.yml
     with:
-      repository: ${{ matrix.repository || '' }}
-      directory: ${{ matrix.directory || '.' }}
+      directory: ${{ matrix.directory }}
       statsbadge-ref: ${{ github.sha }}
       artifact: ""
 
