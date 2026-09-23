@@ -12,6 +12,8 @@ function singular(label) {
   return label.endsWith("s") ? label.slice(0, -1) : label
 }
 
+const REORDER = "application/x-statsbadge-reorder"
+
 function freshId(base, taken) {
   const stamp = Date.now().toString(36).slice(-4)
   let id = `${base}${stamp}`
@@ -111,11 +113,11 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
       item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
     }
 
-    reorderable(item, config.pages, index, { tag: "page", along: "x", handle: heading })
+    reorderable(item, config.pages, index, { list: "page", along: "x", handle: heading })
     return item
   }
 
-  function reorderable(node, items, index, { tag, along, handle }) {
+  function reorderable(node, items, index, { list, along, handle }) {
     node.draggable = !handle
     if (handle) {
       handle.onpointerdown = () => { node.draggable = true }
@@ -124,7 +126,7 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
     node.ondragstart = (event) => {
       event.stopPropagation()
       node.dataset.dragging = ""
-      event.dataTransfer.setData("text/plain", `${tag}:${index}`)
+      event.dataTransfer.setData(REORDER, JSON.stringify({ list, index }))
     }
     node.ondragend = () => {
       node.draggable = !handle
@@ -147,9 +149,10 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
       event.stopPropagation()
       const after = node.dataset.over === "after"
       delete node.dataset.over
-      const [from, at] = event.dataTransfer.getData("text/plain").split(":")
-      const moved = parseInt(at, 10)
-      if (from !== tag || Number.isNaN(moved)) return
+      const carried = event.dataTransfer.getData(REORDER)
+      if (!carried) return
+      const { list: from, index: moved } = JSON.parse(carried)
+      if (from !== list) return
       let target = after ? index + 1 : index
       if (moved < target) target -= 1
       if (target === moved) return
@@ -179,7 +182,7 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
                      refSelect(capabilities, ref, poolFor(capabilities, shape.many_pool),
                                (value) => { current[slot] = value; changed() }),
                      drop)
-      reorderable(row, current, slot, { tag: "slot", along: "y" })
+      reorderable(row, current, slot, { list: "slot", along: "y" })
       rows.push(row)
     })
 
