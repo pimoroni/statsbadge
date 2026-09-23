@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 from . import (auth, commands, derive, extensions, geocode, identity, install, layout,
                library, push, pushed, recipes, state, themes, tooling)
+from . import version as package_version
 from .collect import Collector
 
 # Normalised and absolute, since `_static` compares a normalised target against this.
@@ -228,6 +229,7 @@ class Service:
         caps["accent_family"] = derive.DEFAULT_FAMILY
         caps["accent_b_rules"] = list(layout.ACCENT_B_RULES)
         caps["kinds"] = layout.KIND_SHAPE
+        caps["statsbadge_version"] = package_version()
         # Every discovered extension, so one that failed to import is reported rather
         # than showing up as a page that never draws.
         caps["extensions"] = extensions.describe()

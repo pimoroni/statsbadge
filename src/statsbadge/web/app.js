@@ -2535,6 +2535,7 @@ async function boot() {
       textContent: `Cannot reach the server: ${error.message}` }))
     return
   }
+  if (caps.statsbadge_version !== "unknown") $("version").textContent = `v${caps.statsbadge_version}`
   renderKindPicker()
   offerExtensionPages()
   offerRecipes()

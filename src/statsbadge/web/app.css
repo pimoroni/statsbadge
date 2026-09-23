@@ -68,6 +68,11 @@ h1 {
   color: transparent;
 
   svg { width: 0.8em; aspect-ratio: 1; flex: none; margin-top: 0.2em; }
+
+  sup {
+    align-self: flex-start; margin-top: 0.8em;
+    font-size: var(--text-sm); font-weight: 400; letter-spacing: 0; color: var(--dim);
+  }
 }
 
 h2, h3 {
