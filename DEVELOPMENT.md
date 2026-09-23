@@ -286,8 +286,8 @@ filename that runs.
 What a publish workflow does beyond `uv publish` is
 [`extension-build.yml`](.github/workflows/extension-build.yml), and every extension's checks
 are [`extension.yml`](.github/workflows/extension.yml), both reusable and both used by the
-extensions in repositories of their own as well. CI here runs `extension.yml` over every
-extension, those repositories included, against the commit under test.
+extensions in repositories of their own as well, which check against statsbadge's `main`.
+CI here runs `extension.yml` over the three extensions in this repository.
 
 ### The desktop apps
 
