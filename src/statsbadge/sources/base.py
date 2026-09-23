@@ -5,7 +5,7 @@ import threading
 import urllib.error
 import urllib.parse
 
-from .. import geocode, state
+from .. import geocode, layout, state
 
 
 class SourceError(Exception):
@@ -85,7 +85,9 @@ class Source:
     home = {}
 
     def __init__(self, config):
-        self.config = config
+        # Typed and defaulted where declared. Left as the same dict where not: the
+        # built-in sources read the collector's own, which changes under them.
+        self.config = layout.settle_settings(config, self.settings) if self.settings else config
         self.faults = 0
         # What stands in the way of each part of this source's work, oldest first.
         self._standing = {}
@@ -109,7 +111,7 @@ class Source:
 
     def configure(self, settings):
         """Take settings while running, on every save and not only on a change."""
-        self.config.update(settings)
+        self.config.update(layout.settle_settings(settings, self.settings, defaults=False))
 
     def series(self):
         """Return the rings this source keeps itself, keyed "group.field".

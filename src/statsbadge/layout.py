@@ -506,6 +506,24 @@ def coerce_settings(block, declared):
             for key, entry in entries.items() if key in block}
 
 
+def settle_settings(block, declared, defaults=True):
+    """Return what a source is handed: every declared setting in its type, a default where
+    nothing answers if `defaults`, and anything undeclared as it came."""
+    settled = dict(block or {})
+    for entry in declared or ():
+        key = entry.get("key")
+        if not key or (key not in settled and not defaults):
+            continue
+        value = _coerce_setting(settled[key], entry) if key in settled else None
+        if value is None:
+            value = entry.get("default")
+        if value is None:
+            settled.pop(key, None)
+        else:
+            settled[key] = value
+    return settled
+
+
 def _coerce_setting(value, entry):
     """Return one setting in the declared type, or None where it is not answerable."""
     kind = entry.get("type", "text")
