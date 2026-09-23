@@ -382,8 +382,11 @@ def test_an_extension_asked_for_but_absent_is_offered_as_such():
     assert offered["weather"]["installed"] and offered["weather"]["page"]
 
 
-def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h):
+def test_the_config_api_offers_the_catalogue_and_guards_what_it_installs(h, monkeypatch):
     """An install naming nothing, or a package no index has, is refused before any write."""
+    from statsbadge import tooling
+
+    monkeypatch.setattr(tooling, "on_index", lambda _requirement, **_options: False)
     status, body = h.raw("GET", "/api/extensions")
     assert status == 200, (status, body)
     assert body["offered"] and "manageable" in body, body
