@@ -506,18 +506,37 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
   > footer .add { margin-left: auto; }
 }
 
-/* -- the accent picker --------------------------------------------------- */
+/* -- the theme picker ---------------------------------------------------- */
+
+.themes {
+  .tabs { display: flex; gap: 2px; margin-bottom: 10px; border-bottom: 4px solid var(--accent); }
+
+  .tabs button {
+    background: none; color: var(--dim); padding: 8px 12px;
+    font-size: var(--text-md);
+  }
+
+  .tabs button:hover:not(:disabled) { background: var(--panel2); }
+  .tabs button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  .tabs button[aria-pressed="true"]:hover { background: var(--accent-lit); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+           gap: 12px 10px; }
+
+  .cards button { display: grid; gap: 6px; padding: 0; background: none; color: var(--dim);
+                  white-space: normal; }
+
+  .cards canvas { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 4px;
+                  outline: 3px solid transparent; outline-offset: 2px; }
+
+  .cards button:hover canvas { outline-color: var(--line); }
+  .cards button[aria-pressed="true"] { color: var(--accent); }
+  .cards button[aria-pressed="true"] canvas { outline-color: var(--accent); }
+}
 
 .accents {
-  .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
-
-  .tabs button { flex: 1; padding: 0.4rem 0.5rem; font-size: var(--text-md);
-                 color: var(--dim); background: var(--panel2);
-                 border-bottom: 2px solid transparent; }
-
-  .tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--accent); }
   .swatches { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
-  .swatches button { aspect-ratio: 1; padding: 0; border: 2px solid transparent; }
+  .swatches button { aspect-ratio: 2 / 1; padding: 0; border: 2px solid transparent; }
 
   .swatches button[aria-pressed="true"] { border-color: var(--ink); }
 }
@@ -553,6 +572,7 @@ main > section[aria-label="Settings"] {
 
   @media (width >= 56rem) {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-rows: auto auto repeat(5, auto) 1fr;
 
     > section[aria-label="Theme"] { grid-column: 1; grid-row: span 6; }
 
@@ -585,7 +605,7 @@ main > section section[aria-label="Theme"] {
   align-content: start;
   column-gap: 8px;
 
-  > :is(h3, .screens, .fields, .accents) { grid-column: 1 / -1; }
+  > :is(h3, .screens, .themes, .fields, .accents) { grid-column: 1 / -1; }
 
   .fields {
     display: grid;
@@ -598,6 +618,8 @@ main > section section[aria-label="Theme"] {
     > :is(select, span) { grid-column: 2; }
     > select { justify-self: stretch; max-width: 100%; }
     > [hidden] { display: none; }
+
+    &[hidden] { display: none; }
   }
 
   /* No rows named. The headings and the previews run the full width; the fields take the
@@ -606,7 +628,6 @@ main > section section[aria-label="Theme"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
     > .fields { grid-column: 1; }
-    > .accents { grid-column: 2; align-self: start; }
   }
 }
 

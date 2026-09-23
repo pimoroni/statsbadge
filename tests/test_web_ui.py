@@ -53,6 +53,9 @@ def test_the_theme_box_spans_the_panels_beside_it(ui):
                         sheet)
     assert spanned, "the theme box no longer spans the panels"
     assert int(spanned.group(1)) == beside, (spanned.group(1), beside)
+    rows = re.search(r"grid-template-rows: auto auto repeat\((\d+), auto\) 1fr;", sheet)
+    assert rows, "the panels beside the theme box share its height out between them"
+    assert int(rows.group(1)) == beside - 1, (rows.group(1), beside)
 
     # Past this a preview stops being a picture of a 320x240 screen and becomes a poster.
     assert "--page: 1280px" in sheet

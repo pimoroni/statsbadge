@@ -486,9 +486,24 @@ def test_the_themes_are_offered_light_and_dark(h, ui):
     _status, caps = h.raw("GET", "/api/capabilities")
     assert {record["name"] for record in caps["themes"]} == set(layout.THEMES)
     script = ui.script
-    assert "optgroup" in script, "the picker is still one flat list"
+    assert '["tinted", "Tinted"]' in script, "the picker has no tab for the tinted themes"
     assert "record.label" in script
     assert "titleCase(record.name)" not in script, "the UI still titles a theme itself"
+
+
+def test_every_theme_is_drawn_under_one_accent(h, ui):
+    """The picker's cards come from one request, derived where the preview derives them."""
+    from statsbadge import derive
+    picked = ",".join(str(part) for part in derive.accents("saturated")[2])
+    status, shown = h.raw("GET", f"/api/themes?accent={picked}&second=triadic")
+    assert status == 200, (status, shown)
+    assert set(shown["palettes"]) == set(layout.THEMES)
+    for name in ("mono", "tinted-bold-light"):
+        _status, one = h.raw("GET", f"/api/theme?theme={name}&accent={picked}&second=triadic")
+        assert shown["palettes"][name] == one["palette"], name
+    status, _bad = h.raw("GET", "/api/themes?accent=red")
+    assert status == 400, status
+    assert "/api/themes?" in ui.script, "the picker does not ask for the palettes"
 
 
 def themes_bg(name):

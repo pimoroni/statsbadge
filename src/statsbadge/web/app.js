@@ -976,15 +976,8 @@ function settingRow(stored, setting, options) {
 // -- look and buttons ------------------------------------------------------
 
 function renderLook() {
-  const theme = $("theme")
-  // Grouped by mode: a flat list of twenty-two had the pairs scattered through it.
-  theme.replaceChildren(...[["dark", "Dark"], ["light", "Light"]].map(([mode, heading]) =>
-    el("optgroup", { label: heading }, caps.themes
-      .filter((entry) => entry.mode === mode)
-      .map((record) => el("option", { value: record.name, selected: record.name === config.theme,
-                                      textContent: record.label })))))
-  theme.onchange = () => { config.theme = theme.value; markDirty(); renderTint() }
-  renderTint()
+  renderThemes()
+  fetchPalettes()
 
   bindRange("interval", "interval_ms", (value) => `${value} ms`)
   bindRange("brightness", "brightness", (value) => `${value}%`, 100)
@@ -1004,6 +997,7 @@ function renderLook() {
   bindSelect("gaugefill", () => config.gauge_fill || "solid", (value) => {
     config.gauge_fill = value
     preview()                          // the preview draws the gauge the way the badge will
+    paintThumbs()
   })
 
   bindCheck("animate", "animate")
@@ -1124,62 +1118,109 @@ function renderButtons() {
 // click.
 let previewWanted = 0
 
-/** Which family of accents the picker is showing. Follows the stored one when the panel
- * opens, so what is on screen is the row the chosen colour came from. */
-let family = null
+/** Which tab of the picker is showing. Opens on the chosen theme's. */
+let themeTab = null
 
-function familyOf(accent) {
-  const stored = String(accent)
-  for (const [name, list] of Object.entries(caps.accents || {})) {
-    if (list.some((offer) => String(offer) === stored)) return name
+/** Every theme's palette under the chosen accent, for the picker's cards. */
+let palettes = {}
+let palettesWanted = 0
+
+const THEME_TABS = [["dark", "Dark"], ["light", "Light"], ["tinted", "Tinted"]]
+const THUMB_W = 160
+const THUMB_H = 120
+const THUMB_READING = 0.63
+
+const tabOf = (record) => (!record ? "dark" : record.derived ? "tinted" : record.mode)
+
+function cardLabel(record) {
+  if (record.derived) return record.label
+  const suffix = ` ${titleCase(record.mode)}`
+  return record.label.endsWith(suffix) ? record.label.slice(0, -suffix.length) : record.label
+}
+
+function renderThemes() {
+  if (!themeTab) themeTab = tabOf((caps.themes || []).find((entry) => entry.name === config.theme))
+  const tabs = el("div", { className: "tabs" }, THEME_TABS.map(([name, text]) => {
+    const tab = el("button", { type: "button", textContent: text,
+                               "aria-pressed": String(name === themeTab) })
+    tab.onclick = () => { themeTab = name; renderThemes() }
+    return tab
+  }))
+  const shown = (caps.themes || []).filter((record) => tabOf(record) === themeTab)
+  if (themeTab === "tinted") shown.sort((a, b) => (a.mode === b.mode ? 0 : a.mode === "dark" ? -1 : 1))
+  const cards = el("div", { className: "cards" }, shown.map((record) => {
+    const card = el("button", { type: "button", "data-theme": record.name,
+                                "aria-pressed": String(record.name === config.theme) },
+                    el("canvas", { width: THUMB_W * 2, height: THUMB_H * 2 }),
+                    el("span", { textContent: cardLabel(record) }))
+    card.onclick = () => { config.theme = record.name; markDirty(); renderThemes() }
+    return card
+  }))
+  $("theme").replaceChildren(tabs, cards)
+  for (const node of all("[data-tint]")) node.hidden = themeTab !== "tinted"
+  paintThumbs()
+  renderTint()
+}
+
+async function fetchPalettes() {
+  const query = new URLSearchParams({ accent: (config.tint || []).join(","),
+                                      second: config.accent_b || "same" })
+  const mine = ++palettesWanted
+  let answer
+  try {
+    answer = await api(`/api/themes?${query}`)
+  } catch (error) {
+    return
   }
-  return caps.accent_family || "normal"
+  if (mine !== palettesWanted) return
+  palettes = answer.palettes
+  paintThumbs()
+}
+
+function paintThumbs() {
+  for (const card of all("#theme .cards button")) {
+    const palette = palettes[card.dataset.theme]
+    if (!palette) continue
+    const ctx = card.querySelector("canvas").getContext("2d")
+    ctx.setTransform(2, 0, 0, 2, 0, 0)
+    drawThumb(ctx, palette)
+  }
 }
 
 function renderTint() {
-  // Whether a theme takes an accent comes from the host, so no list is held here.
-  const record = (caps.themes || []).find((entry) => entry.name === config.theme)
-  const derived = Boolean(record && record.derived)
-  for (const node of all("[data-tint]")) node.hidden = !derived
-
   const second = $("accentb")
   if (!second.options.length) {
     second.replaceChildren(...(caps.accent_b_rules || []).map((rule) =>
       el("option", { value: rule, textContent: titleCase(rule) })))
   }
   second.value = config.accent_b || "same"
-  second.onchange = () => { config.accent_b = second.value; markDirty(); renderTint() }
-
-  const accents = pick("div[data-tint]")
-  accents.replaceChildren()
-  if (derived) {
-    if (!family) family = familyOf(config.tint)
-    accents.append(familyTabs(), swatches())
+  second.onchange = () => {
+    config.accent_b = second.value
+    markDirty()
+    fetchPalettes()
+    renderTint()
   }
-  preview()
-}
 
-/** Which family of accents the picker is showing: four rows of twelve, one at a time. */
-function familyTabs() {
-  return el("div", { className: "tabs" }, Object.keys(caps.accents || {}).map((name) => {
-    const tab = el("button", { type: "button", textContent: titleCase(name),
-                               "aria-pressed": String(name === family) })
-    tab.onclick = () => { family = name; renderTint() }   // a look, not yet a change
-    return tab
-  }))
+  pick("div.accents").replaceChildren(swatches())
+  preview()
 }
 
 /** A swatch is the colour that will be used, not a stand-in for it. */
 function swatches() {
-  return el("div", { className: "swatches" }, ((caps.accents || {})[family] || []).map(
-    (accent) => {
-      const shown = `rgb(${accent.join(", ")})`
-      const chip = el("button", { type: "button", title: shown,
-                                  "aria-pressed": String(String(config.tint) === String(accent)) })
-      chip.style.background = shown
-      chip.onclick = () => { config.tint = accent.slice(); markDirty(); renderTint() }
-      return chip
-    }))
+  const offered = Object.values(caps.accents || {}).flat()
+  return el("div", { className: "swatches" }, offered.map((accent) => {
+    const shown = `rgb(${accent.join(", ")})`
+    const chip = el("button", { type: "button", title: shown,
+                                "aria-pressed": String(String(config.tint) === String(accent)) })
+    chip.style.background = shown
+    chip.onclick = () => {
+      config.tint = accent.slice()
+      markDirty()
+      fetchPalettes()
+      renderTint()
+    }
+    return chip
+  }))
 }
 
 // -- the preview -----------------------------------------------------------
@@ -1397,18 +1438,14 @@ function pips(ctx, palette, chromePen, current, total = 8) {
   }
 }
 
-function drawDial(ctx, palette, _series, frame) {
-  chrome(ctx, palette, "CPU", 0)
-
-  const value = readingOf(frame, DIAL.field)
-  const reading = fractionOf(DIAL.field, value, frame) ?? 0.635
-  const [cx, cy] = DIAL_C
-  const middle = (DIAL_OUTER + DIAL_INNER) / 2
+function gauge(ctx, palette, [cx, cy], outer, inner, reading) {
+  const middle = (outer + inner) / 2
+  const over = (outer - inner) * 0.15
   // shape.arc angles start at the top and run clockwise; canvas starts at three o'clock.
   const at = (degrees) => ((degrees - 90) * Math.PI) / 180
 
   ctx.lineCap = "butt"
-  ctx.lineWidth = DIAL_OUTER - DIAL_INNER
+  ctx.lineWidth = outer - inner
   const sweep = DIAL_FROM + (DIAL_TO - DIAL_FROM) * reading
 
   ctx.beginPath()
@@ -1435,12 +1472,39 @@ function drawDial(ctx, palette, _series, frame) {
   // The tick draw.gauge puts over the join.
   if (reading > 0.001) {
     ctx.beginPath()
-    ctx.lineWidth = DIAL_OUTER + 3 - (DIAL_INNER - 3)
-    ctx.arc(cx, cy, (DIAL_OUTER + 3 + DIAL_INNER - 3) / 2, at(sweep - 1.4), at(sweep + 1.4))
+    ctx.lineWidth = outer - inner + 2 * over
+    ctx.arc(cx, cy, middle, at(sweep - 1.4), at(sweep + 1.4))
     ctx.strokeStyle = rgb(palette.ink)
     ctx.stroke()
-    ctx.lineWidth = DIAL_OUTER - DIAL_INNER
+    ctx.lineWidth = outer - inner
   }
+}
+
+function drawThumb(ctx, palette) {
+  ctx.fillStyle = rgb(palette.bg)
+  ctx.fillRect(0, 0, THUMB_W, THUMB_H)
+  ctx.fillStyle = rgb(palette.accent)
+  ctx.fillRect(0, THUMB_H - 8, THUMB_W, 8)
+  gauge(ctx, palette, [46, 54], 30, 20, THUMB_READING)
+
+  const text = String(Math.round(THUMB_READING * 100))
+  ctx.textBaseline = "alphabetic"
+  ctx.font = face(400, 30)
+  const textW = ctx.measureText(text).width
+  ctx.fillStyle = rgb(palette.ink)
+  ctx.fillText(text, 86, 65)
+  ctx.font = face(400, 14)
+  ctx.fillStyle = rgb(palette.dim)
+  ctx.fillText("%", 86 + textW + 1, 65)
+}
+
+function drawDial(ctx, palette, _series, frame) {
+  chrome(ctx, palette, "CPU", 0)
+
+  const value = readingOf(frame, DIAL.field)
+  const reading = fractionOf(DIAL.field, value, frame) ?? 0.635
+  const [cx, cy] = DIAL_C
+  gauge(ctx, palette, DIAL_C, DIAL_OUTER, DIAL_INNER, reading)
 
   // The reading and its unit share a baseline inside the ring, centred as a pair.
   const text = fmt(value, "pct")
