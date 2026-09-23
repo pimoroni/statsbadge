@@ -600,3 +600,22 @@ def test_powermetrics_is_tried_and_says_nothing_when_refused():
             handle.write(line + "\n")
         done = subprocess.run(["visudo", "-c", "-f", rule], capture_output=True, text=True)
         assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_one_part_of_a_source_working_leaves_another_s_fault_standing():
+    from statsbadge.sources.base import Source, SourceError
+
+    source = Source({})
+    source.note_waiting("add an account")
+    assert (source.last_fault, source.faults) == ("add an account", 0)
+    source.note_ok()
+
+    source.note_fault(SourceError("HTTP 401: the token was revoked"), key="crew")
+    source.note_fault(ValueError("no position"), key="where")
+    assert source.last_fault == "HTTP 401: the token was revoked", "a message was reworded"
+    source.note_fault(SourceError("HTTP 401: still revoked"), key="crew")
+    assert source.last_fault == "HTTP 401: still revoked", "a fault lost its place"
+    source.note_ok("crew")
+    assert source.last_fault == "ValueError: no position"
+    source.note_ok("where")
+    assert (source.last_fault, source.faults) == (None, 3)
