@@ -22,10 +22,6 @@ jobs:
     permissions:
       id-token: write # for trusted publishing
 
-    env:
-      TUFTY_REPO: pimoroni/tufty2350
-      TUFTY_REF: feature/align-v3
-
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,10 +32,13 @@ jobs:
         with:
           version: "0.12.18"
 
+      - name: Read the pinned board
+        run: cat ci/board.env >> "$GITHUB_ENV"
+
       - name: Read the pinned MicroPython
         shell: bash
         run: |
-          curl -fsSL "https://raw.githubusercontent.com/$TUFTY_REPO/$TUFTY_REF/ci/micropython.sh" \
+          curl -fsSL "https://raw.githubusercontent.com/$BOARD_REPO/$BOARD_REF/ci/micropython.sh" \
             | grep -E '^MICROPYTHON_(FLAVOUR|VERSION)=' | tr -d '"' | tee -a "$GITHUB_ENV"
 
       - name: Cache mpy-cross
