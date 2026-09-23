@@ -477,7 +477,10 @@ def test_an_update_check_reports_what_the_installer_said(tmp_path, monkeypatch):
     behind, why = library.outdated(str(tmp_path), timeout=60)
     assert (behind, "60 seconds" in why) == ([], True), why
 
-    def answered(*_args, **_kwargs):
+    asked = []
+
+    def answered(argv, **_kwargs):
+        asked.append(argv)
         return subprocess.CompletedProcess([], 0, stdout=json.dumps(
             [{"name": "statsbadge-iss", "version": "1.0.0", "latest_version": "1.0.1"}]))
 
@@ -485,6 +488,11 @@ def test_an_update_check_reports_what_the_installer_said(tmp_path, monkeypatch):
     behind, why = library.outdated(str(tmp_path))
     assert why is None
     assert behind == [{"name": "statsbadge-iss", "version": "1.0.0", "latest": "1.0.1"}]
+    # A release made in the last few minutes is still on a cached index page.
+    assert "--no-cache" in asked[-1], asked[-1]
+    monkeypatch.setattr(library, "tool", lambda: ("pip", ["python", "-m", "pip"]))
+    library.outdated(str(tmp_path))
+    assert "--no-cache-dir" in asked[-1], asked[-1]
 
 
 def test_a_packaged_app_spawns_itself_as_pip():
