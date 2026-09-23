@@ -1,7 +1,7 @@
 import { $, all, el, pick, toast } from "./js/dom.js"
 import { api, configPath } from "./js/api.js"
-import { nextId } from "./js/forms.js"
 import { createScreens } from "./js/screens.js"
+import { badgeName, createBadges } from "./js/badges.js"
 import { createExtensions } from "./js/extensions.js"
 import { createLook } from "./js/look.js"
 import { createPages } from "./js/pages.js"
@@ -50,6 +50,18 @@ const extensions = createExtensions({
   changed: markDirty,
   onChanged: () => refreshCaps(),
 })
+const badgeView = createBadges({
+  picker: pick("header label select"),
+  note: pick("header > small"),
+  holder: $("badges"),
+  stale: $("stale"),
+  pairButton: $("pair"),
+  pairingPanel: $("pairing"),
+  onSwitch: (id) => switchTo(id),
+  onForgotten: forgotten,
+  onPaired: paired,
+  onUpdate: () => openInstaller(),
+})
 
 function markDirty() {
   dirty = true
@@ -90,10 +102,6 @@ function renderLook() {
 
 const REMEMBERED = "statsbadge.whose"
 
-function badgeName(id) {
-  return (badges[id] && badges[id].name) || id
-}
-
 function pickBadge() {
   let last = null
   try {
@@ -110,27 +118,9 @@ function remember(id) {
   } catch {}
 }
 
-function renderWhose() {
-  const ids = Object.keys(badges)
-  const select = pick("header label select")
-  select.replaceChildren(
-    ...ids.map((id) => el("option", { value: id, textContent: badgeName(id) })),
-    el("option", { value: "",
-                   textContent: ids.length
-                     ? "Default, for any other badge"
-                     : "No badge paired yet" }))
-  select.value = whose || ""
-  select.onchange = () => switchTo(select.value).catch((error) => toast(error.message, true))
-
-  const own = whose && badges[whose] && badges[whose].configured
-  pick("header > small").textContent = whose && !own
-    ? "on the default layout, until you save"
-    : (!whose && ids.length ? "defaults for a newly paired badge" : "")
-}
-
 async function switchTo(id) {
   if (dirty && !window.confirm("Discard the unsaved changes to this badge?")) {
-    renderWhose()
+    badgeView.renderPicker(badges, whose)
     return
   }
   whose = id || null
@@ -138,20 +128,27 @@ async function switchTo(id) {
   config = await api(configPath(whose))
   dirty = false
   $("save").disabled = true
-  renderWhose()
+  badgeView.renderPicker(badges, whose)
   pages.render(config, caps)
   extensions.render(config, caps)
   renderLook()
-  renderBadges()
+  badgeView.render(badges, whose, caps)
 }
 
-async function forgetBadge(id) {
-  if (!window.confirm(`Forget ${badgeName(id)}? Its layout goes with it.`)) return
-  await api(`/api/badges/${id}`, { method: "DELETE" })
+async function forgotten() {
   badges = await api("/api/badges")
   dirty = false
   await switchTo(Object.keys(badges)[0] || "")
-  toast("Forgotten")
+}
+
+async function paired(approved) {
+  badges = await api("/api/badges")
+  if (approved && !dirty) {
+    await switchTo(approved)
+  } else {
+    badgeView.renderPicker(badges, whose)
+    badgeView.render(badges, whose, caps)
+  }
 }
 
 function ownIds(pages, badgeId) {
@@ -200,190 +197,6 @@ async function renderGeneral() {
        el("label", { htmlFor: "hostlon", textContent: "Longitude" }), longitude,
        el("menu", null, save),
        el("p", { textContent: "Coordinates win over the name, for a spot no name lands on. Clear all three to set nowhere." })))
-}
-
-function renderBadges() {
-  const ids = Object.keys(badges)
-  const node = $("badges")
-  if (ids.length) {
-    node.replaceChildren(node.querySelector("h2"), ...ids.map(badgeBox))
-  } else {
-    node.replaceChildren(node.querySelector("h2"), el("section", null, el("p", {
-      textContent: "None paired. Use the USB installer, or pair over the network." })))
-  }
-  renderStale()
-}
-
-function badgeBox(id) {
-  const named = badges[id].name && badges[id].name !== id ? badges[id].name : ""
-  const nameId = nextId("badge")
-  const name = el("input", { type: "text", id: nameId, value: named,
-                             placeholder: "Give it a name" })
-  const heading = el("h3", { textContent: named || "Unnamed badge" })
-
-  let pending = null
-  const store = (announce) => {
-    window.clearTimeout(pending)
-    pending = null
-    rename(id, name.value)
-      .then((shown) => {
-        heading.textContent = shown
-        if (announce) toast("Renamed")
-      })
-      .catch((error) => toast(error.message, true))
-  }
-  name.oninput = () => {
-    window.clearTimeout(pending)
-    pending = window.setTimeout(() => store(false), 400)
-  }
-  name.onchange = () => store(true)
-
-  const forget = el("button", { type: "button", className: "small danger",
-                                textContent: "Forget" })
-  forget.onclick = () => forgetBadge(id).catch((error) => toast(error.message, true))
-
-  const box = el("section", { "aria-current": id === whose ? "true" : null },
-                 heading,
-                 el("label", { htmlFor: nameId, textContent: "Name" }),
-                 name,
-                 facts(id))
-
-  const footer = el("footer", null, forget)
-  if (id !== whose) {
-    const configure = el("button", { type: "button", className: "small add",
-                                     textContent: "Configure" })
-    configure.onclick = () => switchTo(id).catch((error) => toast(error.message, true))
-    footer.append(configure)
-  }
-  box.append(footer)
-  return box
-}
-
-function facts(id) {
-  const record = badges[id]
-  const rows = [
-    ["UID", el("code", { textContent: id })],
-    ["Layout", record.configured ? "Its own" : "The default"],
-    ["Pages", `${record.pages}`],
-    ["Theme", themeLabel(record.theme)],
-    ["Refresh", `${record.interval_ms} ms`],
-    ["App", appLabel(record.app)],
-  ]
-  return el("dl", null, ...rows.flatMap(([term, said]) =>
-    [el("dt", { textContent: term }), el("dd", null, said)]))
-}
-
-function appLabel(state) {
-  if (!state) return "Not installed from here"
-  const changes = state.added.length + state.changed.length + state.removed.length
-  if (!changes) return "Up to date"
-  return `${changes} file${changes === 1 ? "" : "s"} behind`
-}
-
-function themeLabel(name) {
-  const record = (caps.themes || []).find((entry) => entry.name === name)
-  return (record && record.label) || name || "unset"
-}
-
-async function rename(id, wanted) {
-  const result = await api(`/api/badges/${id}`, {
-    method: "PUT",
-    body: JSON.stringify({ name: wanted }),
-  })
-  badges[id].name = result.name
-  renderWhose()
-  return result.name === id ? "Unnamed badge" : result.name
-}
-
-let pairingPoll = null
-
-async function startPairing() {
-  await api("/api/pair", { method: "POST" })
-  await watchPairing(true)
-}
-
-async function stopPairing() {
-  await api("/api/pair", { method: "DELETE" })
-  await watchPairing()
-  toast("Pairing closed")
-}
-
-async function answer(requestId, approve) {
-  const result = await api(`/api/enrol/${requestId}/${approve ? "approve" : "deny"}`,
-                           { method: "POST" })
-  toast(approve ? "Badge paired" : "Denied")
-  badges = await api("/api/badges")
-  if (approve && result.approved && !dirty) {
-    await switchTo(result.approved)
-  } else {
-    renderWhose()
-    renderBadges()
-  }
-  watchPairing()
-}
-
-function pendingList(pending) {
-  return el("ul", null, pending.map((request) => {
-    const buttons = [["Approve", true, "primary small"], ["Deny", false, "small danger"]]
-      .map(([label, approve, className]) => {
-        const button = el("button", { type: "button", className, textContent: label })
-        button.onclick = () => answer(request.request_id, approve)
-          .catch((error) => toast(error.message, true))
-        return button
-      })
-    return el("li", null,
-              el("span", { textContent: request.name }),
-              el("samp", { textContent: request.code }),
-              el("code", { textContent: request.badge_id }),
-              el("div", null, buttons))
-  }))
-}
-
-async function watchPairing(announce) {
-  if (pairingPoll) {
-    clearInterval(pairingPoll)
-    pairingPoll = null
-  }
-  const panel = $("pairing")
-  const button = $("pair")
-
-  const paint = (state, pending) => {
-    if (!state.active) {
-      panel.close()
-      button.textContent = "Pair a badge…"
-      button.onclick = () => startPairing().catch((error) => toast(error.message, true))
-      return false
-    }
-    button.textContent = "Stop pairing"
-    button.onclick = () => stopPairing().catch((error) => toast(error.message, true))
-    panel.replaceChildren(...[
-      el("p", { textContent: `On the badge: launch Stats, press B to set up, and pick ${(state.hosts || []).join(" / ")}:${state.port}` }),
-      el("p", { textContent: `closes in ${state.expires_in}s` }),
-      pending.length ? el("p", { textContent: "Approve the one whose code matches." }) : null,
-      pending.length ? pendingList(pending) : null,
-    ].filter(Boolean))
-    if (!panel.open) panel.show()
-    return true
-  }
-
-  let state = await api("/api/pair")
-  let pending = (await api("/api/enrol")).pending
-  if (!paint(state, pending)) return
-  if (announce) toast(`Pairing open for ${state.expires_in}s`)
-
-  pairingPoll = setInterval(async () => {
-    try {
-      state = await api("/api/pair")
-      pending = (await api("/api/enrol")).pending
-      if (!paint(state, pending)) {
-        clearInterval(pairingPoll)
-        pairingPoll = null
-      }
-    } catch (error) {
-      clearInterval(pairingPoll)
-      pairingPoll = null
-    }
-  }, 1000)
 }
 
 let installPoll = null
@@ -499,8 +312,8 @@ async function finishedInstall(result) {
   else if (result.cancelled) toast("Nothing was changed")
   else toast(installSummary(result))
   badges = await api("/api/badges").catch(() => badges)
-  renderWhose()
-  renderBadges()
+  badgeView.renderPicker(badges, whose)
+  badgeView.render(badges, whose, caps)
 }
 
 function installSummary(result) {
@@ -511,22 +324,6 @@ function installSummary(result) {
   if (result.wifi === "set") parts.push("WiFi set")
   if (result.credentials) parts.push("paired")
   return parts.join(", ")
-}
-
-function renderStale() {
-  const names = Object.keys(badges)
-    .filter((id) => badges[id].app && badges[id].app.behind)
-    .map(badgeName)
-  const node = $("stale")
-  node.hidden = !names.length
-  if (!names.length) return
-  const one = names.length === 1
-  const button = el("button", { type: "button", className: "small",
-                                textContent: "Update…" })
-  button.onclick = openInstaller
-  node.replaceChildren(
-    `${names.join(", ")} ${one ? "was" : "were"} last seen running an older app. Connect ${one ? "it" : "them"} by USB to update.`,
-    button)
 }
 
 async function renderHelp() {
@@ -755,12 +552,12 @@ async function save() {
       dirty = false
       $("save").disabled = true
     }
-    toast(`Saved. ${whose ? badgeName(whose) : "Badges using the default layout"} will update shortly.`)
+    toast(`Saved. ${whose ? badgeName(badges, whose) : "Badges using the default layout"} will update shortly.`)
     refreshCapsSoon().catch(() => {})
     badges = await api("/api/badges").catch(() => badges)
-    renderWhose()
+    badgeView.renderPicker(badges, whose)
     pages.render(config, caps)
-    renderBadges()
+    badgeView.render(badges, whose, caps)
   } catch (error) {
     toast(error.message, true)
   }
@@ -780,12 +577,12 @@ async function boot() {
   if (caps.statsbadge_version !== "unknown") $("version").textContent = `v${caps.statsbadge_version}`
   pages.renderKinds(caps)
   pages.offer(caps)
-  renderWhose()
+  badgeView.renderPicker(badges, whose)
   pages.render(config, caps)
   extensions.render(config, caps)
   renderLook()
   renderSources()
-  renderBadges()
+  badgeView.render(badges, whose, caps)
   renderGeneral().catch(() => {})
   renderLive()
   extensions.refreshCatalogue().then(extensions.refreshOutdated).catch(() => {})
@@ -798,7 +595,7 @@ async function boot() {
     pages.add($("kind").value)
   }
   $("quickadd").onclick = () => pages.quickAdd($("recipe").value)
-  watchPairing().catch(() => {})
+  badgeView.watchPairing().catch(() => {})
 
   setInterval(renderLive, 1000)
   window.onbeforeunload = () => (dirty ? "You have unsaved changes." : undefined)
