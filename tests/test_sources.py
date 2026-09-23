@@ -698,3 +698,20 @@ def test_a_web_api_s_error_reads_as_what_it_said(monkeypatch):
     with pytest.raises(SourceError, match=r"^the key was refused$"):
         web.fetch_json("https://example.invalid/refused",
                        explain=lambda _exc, _body: "the key was refused")
+
+
+def test_an_extension_that_sets_its_fault_itself_still_can():
+    from statsbadge.sources.base import Source
+
+    class Older(Source):
+        def __init__(self, config):
+            super().__init__(config)
+            self._standing = {"electricity": 59.31}
+
+    source = Older({})
+    assert source.last_fault is None, "a plugin's own attribute was read as a fault"
+    source.last_fault = "add an account"
+    assert source.last_fault == "add an account"
+    source.note_fault(ValueError("x"), key="rates")
+    source.last_fault = None
+    assert source.last_fault is None
