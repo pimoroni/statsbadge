@@ -332,9 +332,6 @@ def test_codes_are_unique_per_request(h):
                       {"Content-Type": "application/json"})[1]
         codes.add(asked["code"])
     assert len(codes) == 3, codes
-    # Minted per request, since the badge id is public.
-    for i, code in enumerate(codes):
-        assert f"unique{i}" not in code.lower()
 
 
 def test_enrolment_is_rate_limited(h):

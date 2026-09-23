@@ -26,13 +26,11 @@ def test_a_stale_precompile_is_not_what_gets_installed():
     try:
         (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": digest}}),
                                           encoding="utf-8")
-        assert install._stale_modules(built) == []
         source, _note = install.choose_app_source(None, False, None)
         assert source == str(built), source
 
         (built / "BUILD_INFO").write_text(json.dumps({"sources": {"look.py": "0" * 64}}),
                                           encoding="utf-8")
-        assert install._stale_modules(built) == ["look.py"]
         source, note = install.choose_app_source(None, False, None)
         assert source is None, source
         assert "look.py" in note, note

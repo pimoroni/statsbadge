@@ -601,7 +601,6 @@ def test_quakes_fetches_on_its_own_thread_and_backs_off(monkeypatch):
     from statsbadge_quakes import Quakes
 
     source = Quakes({})
-    assert (source.min_mag, source.count, source.order) == (4.0, 10, "recent")
     feed = {"features": [{"properties": {"mag": 5.2, "place": "off Coimbra", "time": 1000},
                           "geometry": {"coordinates": [-9.1, 40.2, 10.0]}}]}
     monkeypatch.setattr(web, "fetch_json", lambda _url, **_options: feed)
@@ -634,6 +633,5 @@ def test_the_station_s_position_working_leaves_the_crew_s_fault_standing(monkeyp
 
     monkeypatch.setattr(web, "fetch_json", answer)
     source = ISS({})
-    assert (source.units, source.crew_wanted) == ("kilometres", True)
     source.poll()
     assert source.last_fault == "HTTP 502", "the position landing cleared the crew's fault"

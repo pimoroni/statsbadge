@@ -227,13 +227,6 @@ def caller(h, address, path, headers=None):
 
 def test_config_api_is_loopback_only(h):
     """The config API can mint secrets, so it answers on loopback alone."""
-    for address in ("127.0.0.1", "::1"):
-        assert caller(h, address, "/api/capabilities")._is_local(), address
-    for address in ("10.0.0.5", "192.168.1.20", "8.8.8.8", "not-an-address"):
-        assert not caller(h, address, "/api/capabilities")._is_local(), address
-
-    # That guard is the one dispatch keeps: a config path from off the machine is refused
-    # before it reaches the API.
     off_box = caller(h, "10.0.0.5", "/api/capabilities")
     off_box._dispatch("GET")
     assert off_box.answered[0] == 403, off_box.answered

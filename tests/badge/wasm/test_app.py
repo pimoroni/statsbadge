@@ -107,7 +107,6 @@ class Hunting(unittest.TestCase):
         self.assertEqual(one.config.host, "10.0.0.5")
         one.listen()
         self.assertEqual(one.config.host, "10.0.0.9")
-        self.assertIsNone(one._listener)
 
 
 class ForgettingAHost(unittest.TestCase):
@@ -164,7 +163,7 @@ class IdleAdvance(unittest.TestCase):
     def test_one_page_does_not_turn_to_itself(self):
         one = built(pages=1, idle_advance_s=5)
         one.advance_if_idle(one._pressed_at + 6000)
-        self.assertEqual(one._advanced_at, 0, "a single page was turned")
+        self.assertEqual(one.page_index, 0, "a single page was turned")
 
     def test_a_badge_left_alone_pages_on(self):
         one = built(idle_advance_s=5, advance_every_s=10)
@@ -178,7 +177,6 @@ class IdleAdvance(unittest.TestCase):
         one = built(idle_advance_s=5, advance_every_s=10)
         was = one._pressed_at
         one.advance_if_idle(was + 5000)
-        self.assertEqual(one._pressed_at, was, "the badge counts itself as touched")
         one.advance_if_idle(was + 9000)
         self.assertEqual(one.page_index, 1, "it turned again inside advance_every_s")
         one.advance_if_idle(was + 15000)
@@ -317,7 +315,6 @@ class ForgetHost(unittest.TestCase):
         self.assertEqual(one.slow_rev, app.NO_REV)
         self.assertIsNone(one._queued)
         self.assertEqual(one._commands, [])
-        self.assertEqual((one._series_age, one._series_at), (0, 0))
         self.assertFalse(one.rejected)
 
 

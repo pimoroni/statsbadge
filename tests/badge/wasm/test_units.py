@@ -36,10 +36,10 @@ class Units(unittest.TestCase):
         self.assertEqual(draw.short_unit("energy.nonesuch"), "")
 
     def test_a_new_table_drops_the_readings_baked_under_the_old_one(self):
-        draw.reading(0.25, "energy.kwh")
-        self.assertTrue(draw._readings, "nothing was baked to drop")
+        self.assertTrue(draw.reading(0.25, "energy.kwh").endswith("kWh"))
         draw.use_units({"energy.kwh": "kW"})
-        self.assertEqual(draw._readings, {}, "a reading kept the unit it was baked with")
+        self.assertTrue(draw.reading(0.25, "energy.kwh").endswith("kW"),
+                        "a reading kept the unit it was baked with")
 
     def test_a_layout_hands_them_over(self):
         """The app takes them where it takes the group names."""

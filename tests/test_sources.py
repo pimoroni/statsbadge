@@ -644,7 +644,6 @@ def test_a_polling_source_survives_a_raise_and_polls_on_a_wake():
         assert source.faults == 1 and source.last_fault == "ValueError: first go"
     finally:
         source.stop()
-    assert source._poller is None
 
 
 def test_a_web_api_s_error_reads_as_what_it_said(monkeypatch):

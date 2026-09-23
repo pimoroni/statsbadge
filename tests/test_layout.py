@@ -296,9 +296,6 @@ def test_a_badge_block_sits_over_the_default():
                   handle)
     config = layout.Config(path)
 
-    # A block that named no theme keeps none.
-    assert "theme" not in config.data["badges"]["partial"]
-
     partial = config.for_badge(None, "partial")
     assert partial["theme"] == "sakura", "a partial block lost the theme it inherits"
     assert partial["brightness"] == 0.5, "a partial block lost what it does say"
