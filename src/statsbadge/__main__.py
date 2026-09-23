@@ -694,7 +694,7 @@ def shared_options(nested=False):
                          **default(None),
                          help="macOS: report the sudoers rule if powermetrics is refused")
     options.add_argument("--no-powermetrics", dest="powermetrics", action="store_false",
-                         help="macOS: leave powermetrics alone, temperatures and all")
+                         help="macOS: leave powermetrics alone, and its power readings")
     options.add_argument("--lhm-url", help="Windows: LibreHardwareMonitor data.json URL")
     options.add_argument("--iface", help="network interface to report (default: busiest)")
     options.add_argument("--disk-path",
