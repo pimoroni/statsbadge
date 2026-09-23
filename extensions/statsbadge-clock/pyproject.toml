@@ -8,7 +8,7 @@ authors = [
 ]
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["statsbadge"]
+dependencies = ["statsbadge>=3.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/pimoroni/statsbadge/tree/main/extensions/statsbadge-clock"
