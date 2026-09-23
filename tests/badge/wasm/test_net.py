@@ -97,6 +97,16 @@ class Requests(unittest.TestCase):
         self.assertTrue(b"not bound" in self.client.body, self.client.body)
 
 
+class CounterOnFlash(unittest.TestCase):
+    def test_a_short_session_never_repeats_a_counter_after_a_reboot(self):
+        with open(net.STATE_FILE, "w") as handle:
+            json.dump({"badge_id": "flash", "active": "x", "hosts": {"x": {
+                "host": "127.0.0.1", "port": 1, "secret": "s" * 64, "seq": 5000}}},
+                handle)
+        used = net.Config().next_seq()
+        self.assertTrue(net.Config().next_seq() > used)
+
+
 class NoHostThere(unittest.TestCase):
     """A port nothing is listening on, which is a PC that went to sleep."""
 
