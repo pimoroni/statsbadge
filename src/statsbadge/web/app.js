@@ -1333,8 +1333,8 @@ const NAMES = {
   "net.up_bps": "UP", "net.down_bps": "DOWN", "net.up_total_mb": "SENT",
   "net.down_total_mb": "RECV",
   "disk.pct": "FULL", "disk.read_bps": "READ", "disk.write_bps": "WRITE",
-  "disk.used_mb": "USED", "disk.total_mb": "TOTAL",
-  "power.battery_pct": "BATTERY", "power.package_w": "PACKAGE",
+  "disk.used_mb": "USED", "disk.total_mb": "TOTAL", "disk.temp": "SSD",
+  "power.battery_pct": "BATTERY", "power.package_w": "PACKAGE", "power.temp": "BATT",
   "sys.host": "HOST", "sys.os": "OS", "sys.cpu_name": "CPU", "sys.uptime_s": "UPTIME",
 }
 const UNIT_SUFFIXES = ["_bps", "_mb", "_pct"]

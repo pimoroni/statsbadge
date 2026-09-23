@@ -537,6 +537,20 @@ def test_powermetrics_is_read_in_the_units_it_reports():
     assert "temp" not in frame["cpu"], frame["cpu"]
 
 
+def test_the_hottest_of_each_kind_of_sensor_is_the_reading():
+    from statsbadge.sources import macos
+
+    # Named as a Mac17,4 names them.
+    readings = {"PMU tdie1": 34.5, "PMU tdie8": 35.4, "PMU2 tdie3": 30.6,
+                "PMU tdev1": -22.0, "PMU tcal": 51.8, "NAND CH0 temp": 32.0,
+                "gas gauge battery": 29.0}
+    kept = {name: value for name, value in readings.items() if macos.kind_of(name)}
+    assert set(kept) == {"PMU tdie1", "PMU tdie8", "PMU2 tdie3", "NAND CH0 temp",
+                         "gas gauge battery"}
+    assert macos.hottest(readings) == {"die": 35.4, "drive": 32.0, "battery": 29.0}
+    assert macos.hottest({"PMU tdie1": -22.0}) == {}
+
+
 def test_powermetrics_is_tried_and_says_nothing_when_refused():
     """powermetrics is tried under `sudo -n`, so a Mac without the rule declines silently."""
     from statsbadge.sources import macos
