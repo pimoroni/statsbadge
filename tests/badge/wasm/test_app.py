@@ -38,6 +38,78 @@ class Entry(unittest.TestCase):
         self.assertIsNone(app._app, "main() ran at import")
 
 
+class Hunting(unittest.TestCase):
+    """The poll loop listening for a host that went quiet, frame by frame."""
+
+    def setUp(self):
+        import json
+
+        import net
+
+        packet = json.dumps({"statsbadge": 1, "id": "host1", "port": 8420,
+                             "host": "desk"}).encode()
+
+        class Datagrams:
+            waiting = [(packet, ("10.0.0.9", 8421))]
+
+            def setsockopt(self, *_args):
+                pass
+
+            def setblocking(self, _blocking):
+                pass
+
+            def bind(self, _address):
+                pass
+
+            def recvfrom(self, _size):
+                if not self.waiting:
+                    raise OSError(11)
+                return self.waiting.pop()
+
+            def close(self):
+                pass
+
+        class Sockets:
+            AF_INET = SOCK_DGRAM = SOL_SOCKET = SO_REUSEADDR = 0
+
+            def socket(self, *_args):
+                return Datagrams()
+
+        self.net = net
+        self.was = net.socket
+        net.socket = Sockets()
+        try:
+            with open(net.STATE_FILE) as handle:
+                self.state = handle.read()
+        except OSError:
+            self.state = None
+
+    def tearDown(self):
+        import os
+
+        self.net.socket = self.was
+        if self.state is None:
+            try:
+                os.remove(self.net.STATE_FILE)
+            except OSError:
+                pass
+        else:
+            with open(self.net.STATE_FILE, "w") as handle:
+                handle.write(self.state)
+
+    def test_a_hunt_waits_on_nothing_and_follows_the_host(self):
+        import time
+
+        one = paired()
+        started = time.ticks_ms()
+        one.hunt()
+        self.assertTrue(time.ticks_diff(time.ticks_ms(), started) < 100)
+        self.assertEqual(one.config.host, "10.0.0.5")
+        one.listen()
+        self.assertEqual(one.config.host, "10.0.0.9")
+        self.assertIsNone(one._listener)
+
+
 class Paging(unittest.TestCase):
     def test_a_badge_with_no_layout_has_no_page_to_turn_to(self):
         one = app.App()

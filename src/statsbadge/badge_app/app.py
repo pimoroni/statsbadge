@@ -190,6 +190,8 @@ class App:
         self._last_ok = 0
         self._was_stale = False
         self._next_hunt = 0
+        self._listener = None
+        self._listen_until = 0
         self.rejected = False
 
         self.page_index = self.config.page
@@ -283,6 +285,8 @@ class App:
         if not self.config.paired:
             return
 
+        self.listen()
+
         if self._pending is not None:
             if not self.client.step():
                 return
@@ -345,32 +349,50 @@ class App:
     def hunt(self):
         """Look for a paired host on the network after the current one went quiet."""
         now = time.ticks_ms()
-        if time.ticks_diff(now, self._next_hunt) < 0:
+        if self._listener is not None or time.ticks_diff(now, self._next_hunt) < 0:
             return
         self._next_hunt = time.ticks_add(now, 20000)
+        self._listener = net.Listener()
+        self._listen_until = time.ticks_add(now, net.DISCOVER_MS)
 
-        for beacon in net.discover(wanted=self.config.hosts):
-            server_id = beacon.get("id")
-            if not server_id:
-                continue
-            if server_id == self.config.active:
-                if self.config.note_address(server_id, beacon["host"], beacon["port"],
-                                            beacon.get("name")):
-                    self.client.close()
-                    self.note(f"moved to {beacon['host']}")
-                    self.dirty = True
+    def listen(self):
+        """Act on any beacon heard since the last frame, while a hunt is on."""
+        if self._listener is None:
+            return
+        for beacon in self._listener.step():
+            if self._follow(beacon):
+                self.stop_listening()
                 return
-            if server_id in self.config.hosts:
-                self.config.note_address(server_id, beacon["host"], beacon["port"],
-                                         beacon.get("name"))
-                if self.config.switch(server_id):
-                    self.forget_host()
-                    self.note(self.config.name or "switched host")
-                    self.dirty = True
-                return
-            # An unpaired host we can see but cannot talk to.
-            if self.config.adopt_id(server_id, beacon.get("name")):
-                return
+        if time.ticks_diff(time.ticks_ms(), self._listen_until) >= 0:
+            self.stop_listening()
+
+    def stop_listening(self):
+        if self._listener is not None:
+            self._listener.close()
+            self._listener = None
+
+    def _follow(self, beacon):
+        """Take up a beacon from a host this badge knows. True once the hunt is over."""
+        server_id = beacon.get("id")
+        if not server_id:
+            return False
+        if server_id == self.config.active:
+            if self.config.note_address(server_id, beacon["host"], beacon["port"],
+                                        beacon.get("name")):
+                self.client.close()
+                self.note(f"moved to {beacon['host']}")
+                self.dirty = True
+            return True
+        if server_id in self.config.hosts:
+            self.config.note_address(server_id, beacon["host"], beacon["port"],
+                                     beacon.get("name"))
+            if self.config.switch(server_id):
+                self.forget_host()
+                self.note(self.config.name or "switched host")
+                self.dirty = True
+            return True
+        # An unpaired host we can see but cannot talk to.
+        return self.config.adopt_id(server_id, beacon.get("name"))
 
     def take_slow(self, frame):
         """Keep the slow half of a frame, and graft it onto every frame after it."""
@@ -833,6 +855,7 @@ def main(app_dir):
         app.buttons()
         # B reaches setup whenever the connection is unusable, not only when unpaired.
         if app.needs_setup() and badge.pressed(BUTTON_B):
+            app.stop_listening()
             if not pairing_ui().run(app):
                 return
             app.forget_host()
@@ -854,4 +877,5 @@ _app = None
 def on_exit():
     """Run on the way out, when HOME quits the app or it returns normally."""
     if _app is not None:
+        _app.stop_listening()
         _app.save_page()
