@@ -515,32 +515,61 @@ def test_forgetting_an_extension_drops_the_package_and_what_is_under_it():
             sys.modules.pop(name, None)
 
 
+# Every badge module the tests can reach: the ones in this repo, and a sibling checkout's.
+BADGE_MODULES = (
+    *sorted(pathlib.Path("extensions").glob("*/src/*/badge/*.py")),
+    *sorted(pathlib.Path("..").glob("statsbadge-*/src/*/badge/*.py")),
+)
+
+
 def test_the_app_keeps_what_extensions_reach_into_it_for():
-    """Every attribute a badge module uses from draw, look, worldmap or pages is there."""
+    """Every name in badge_api is in the app, and no badge module reaches past the list."""
     # Those resolve on the badge alone, so a helper whose only callers are extensions
     # reads as unused here and taking it out is a crash dialog after launch.
     import ast
 
+    from statsbadge import badge_api
+
     app_dir = pathlib.Path(install.app_source_dir())
-    defined = {}
-    for module in ("draw", "look", "worldmap", "pages"):
+    for module, names in badge_api.NAMES.items():
         tree = ast.parse((app_dir / f"{module}.py").read_text(encoding="utf-8"))
-        names = set()
+        defined = set()
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                names.add(node.name)
+                defined.add(node.name)
             elif isinstance(node, ast.Assign):
-                names.update(t.id for t in node.targets if isinstance(t, ast.Name))
-        defined[module] = names
+                defined.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        assert names <= defined, f"{module} lacks {sorted(names - defined)}"
 
-    reached = set()
-    for extension, module in (("statsbadge-quakes", "quakemap"), ("statsbadge-iss", "issmap")):
-        path = (pathlib.Path("extensions") / extension / "src"
-                / extension.replace("-", "_") / "badge" / f"{module}.py")
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                    and node.value.id in defined):
-                reached.add((node.value.id, node.attr))
-                assert node.attr in defined[node.value.id], (
-                    f"{path}: {node.value.id}.{node.attr} is not in the app")
-    assert ("draw", "readable") in reached, "no extension reaches for draw.readable"
+    theme = next(node for node in ast.walk(ast.parse((app_dir / "look.py").read_text(
+        encoding="utf-8"))) if isinstance(node, ast.ClassDef) and node.name == "Theme")
+    held = {node.name for node in theme.body if isinstance(node, ast.FunctionDef)}
+    held |= {node.attr for node in ast.walk(theme) if isinstance(node, ast.Attribute)
+             and isinstance(node.value, ast.Name) and node.value.id == "self"}
+    assert badge_api.THEME <= held, f"Theme lacks {sorted(badge_api.THEME - held)}"
+
+    assert len(BADGE_MODULES) >= 3, BADGE_MODULES
+    for path in BADGE_MODULES:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)):
+                continue
+            if node.value.id in badge_api.NAMES:
+                assert node.attr in badge_api.NAMES[node.value.id], (
+                    f"{path}: {node.value.id}.{node.attr} is not in badge_api")
+            elif node.value.id == "theme":
+                assert node.attr in badge_api.THEME, f"{path}: theme.{node.attr}"
+
+
+def test_the_badge_api_version_is_the_app_s():
+    import sys
+
+    from statsbadge import badge_api
+
+    sys.path.insert(0, install.app_source_dir())
+    import pages
+
+    assert pages.API == badge_api.VERSION
+    for path in BADGE_MODULES:
+        source = path.read_text(encoding="utf-8")
+        assert f"api={badge_api.VERSION}" in source, f"{path} registers no page at this API"

@@ -191,7 +191,13 @@ The light sensor is a phototransistor a hand can shadow, read through the 12-bit
 A package advertising a `statsbadge.sources` entry point gets a group in the frame, which the
 built-in page kinds can draw with no badge-side code at all. Set `badge_module` to a `.py` and
 `statsbadge install` copies it into the app's `ext/` directory, where the app imports it at
-startup and it registers itself in `pages.EXTRA`.
+startup and it calls `pages.register(kind, render, api=N)`.
+
+**The badge API is a list.** [`badge_api.py`](src/statsbadge/badge_api.py) names everything a
+badge module may use from `draw`, `look`, `pages` and `worldmap`, and what it may read off a
+theme. A test holds the app and every badge module it can find to it, a sibling checkout's
+included. A change that is not an addition moves `badge_api.VERSION` and `pages.API`
+together, and a module registered against another version draws which side to update.
 
 [`extensions/statsbadge-clock`](extensions/statsbadge-clock) is the worked example of all
 three parts: a group the built-in kinds draw unaided, badge-side Python for a page they

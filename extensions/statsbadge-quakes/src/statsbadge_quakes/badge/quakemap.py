@@ -193,6 +193,4 @@ def render(page, frame, _history, theme):
     _band(theme, active, state["index"], len(events))
 
 
-pages.EXTRA["quakemap"] = render
-# Register as an animated page: the rings grow and the camera travels between readings.
-pages.ANIMATED.add("quakemap")
+pages.register("quakemap", render, api=1, animated=True)
