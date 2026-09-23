@@ -1,13 +1,12 @@
 """Recent earthquakes, for the badge to draw on a world map."""
 
-import json
 import os
 import threading
 import time
 import urllib.parse
-import urllib.request
 
-from statsbadge.sources.base import Source
+from statsbadge.sources import web
+from statsbadge.sources.base import PollingSource
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -16,7 +15,6 @@ FEED = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 # USGS publishes about once a minute and asks callers to be reasonable.
 INTERVAL = 300.0
 RETRY_AFTER = 60.0
-FETCH_POLL = 1.0
 # A badge switched on before the network is up still has events to draw.
 EVENTS = "events"
 # USGS place strings run past eighty characters; the band they are drawn in holds about forty.
@@ -26,7 +24,7 @@ PLACE_MAX = 48
 ORDERS = {"recent": "time", "biggest": "magnitude"}
 
 
-class Quakes(Source):
+class Quakes(PollingSource):
     name = "quakes"
     label = "Earthquakes"
     provides = ("quakes",)
@@ -48,7 +46,7 @@ class Quakes(Source):
          "hint": "Below about 4 the feed fills up with events nobody felt: there are "
                  "several thousand a month"},
         {"key": "count", "label": "How many", "type": "number", "default": 10, "min": 1,
-         "hint": "How many events the map cycles through, newest first"},
+         "max": 20, "hint": "How many events the map cycles through, newest first"},
         {"key": "order", "label": "Show the", "type": "choice",
          "options": ["recent", "biggest"], "default": "recent",
          "hint": "Recent is the last few hours, biggest is the largest of the past month"},
@@ -77,57 +75,24 @@ class Quakes(Source):
         self._records = []
         self._lock = threading.Lock()
         self._next = 0.0
-        self._fetcher = None
-        self._wake = threading.Event()
-        self._stop = threading.Event()
         self._read_settings()
 
     def start(self):
         """Restore the stored events, then fetch USGS on a thread."""
         self._records = self.store.get(EVENTS) or []
-        if self._fetcher is None:
-            self._stop.clear()
-            self._fetcher = threading.Thread(target=self._fetch_loop, daemon=True,
-                                             name="statsbadge-quakes")
-            self._fetcher.start()
-
-    def stop(self):
-        self._stop.set()
-        self._wake.set()
-        if self._fetcher is not None:
-            self._fetcher.join(timeout=2.0)
-            self._fetcher = None
-
-    def _fetch_loop(self):
-        while not self._stop.is_set():
-            try:
-                self._refresh()
-            except Exception as exc:
-                # The fetcher must not die: the map would go on drawing the same set.
-                self.note_fault(exc)
-            self._wake.wait(FETCH_POLL)
-            self._wake.clear()
+        super().start()
 
     def _read_settings(self):
-        try:
-            self.min_mag = float(self.config.get("min_mag") or 4.0)
-        except (TypeError, ValueError):
-            self.min_mag = 4.0
-        try:
-            self.count = int(self.config.get("count") or 10)
-        except (TypeError, ValueError):
-            self.count = 10
-        self.count = max(1, min(20, self.count))
-        self.order = self.config.get("order") or "recent"
-        if self.order not in ORDERS:
-            self.order = "recent"
+        self.min_mag = float(self.config["min_mag"])
+        self.count = int(self.config["count"])
+        self.order = self.config["order"]
 
     def configure(self, settings):
         """Take settings while running, refetching since a magnitude changes the set."""
         super().configure(settings)
         self._read_settings()
         self._next = 0.0
-        self._wake.set()
+        self.wake()
 
     def sample(self, frame, dt):
         """Return the events last stored by the fetcher, aged and sorted."""
@@ -148,7 +113,7 @@ class Quakes(Source):
             "latest": events[0]["mag"] if events else None,
         }
 
-    def _refresh(self):
+    def poll(self):
         if time.monotonic() < self._next:
             return
         try:
@@ -170,8 +135,7 @@ class Quakes(Source):
             "orderby": ORDERS[self.order],
             "minmagnitude": self.min_mag,
         })
-        with urllib.request.urlopen(f"{FEED}?{query}", timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        payload = web.fetch_json(f"{FEED}?{query}", timeout=8)
         records = []
         for feature in payload.get("features") or ():
             record = _event(feature)
