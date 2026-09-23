@@ -651,3 +651,37 @@ def test_a_polling_source_survives_a_raise_and_polls_on_a_wake():
     finally:
         source.stop()
     assert source._poller is None
+
+
+def test_a_web_api_s_error_reads_as_what_it_said(monkeypatch):
+    import io
+    import json
+    import urllib.error
+
+    from statsbadge.sources import web
+    from statsbadge.sources.base import SourceError
+
+    asked = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    def urlopen(request, timeout):
+        asked.append((request.get_header("User-agent"), request.data, timeout))
+        if "refused" in request.full_url:
+            raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {},
+                                         io.BytesIO(b'{"error": "The token was revoked"}'))
+        return Reply(json.dumps({"ok": True}).encode())
+
+    monkeypatch.setattr(web.urllib.request, "urlopen", urlopen)
+    assert web.fetch_json("https://example.invalid/fine", data=b"{}") == {"ok": True}
+    assert asked[0][0].startswith("statsbadge/") and asked[0][1] == b"{}", asked
+    with pytest.raises(SourceError, match=r"^HTTP 401: The token was revoked$"):
+        web.fetch_json("https://example.invalid/refused")
+    with pytest.raises(SourceError, match=r"^the key was refused$"):
+        web.fetch_json("https://example.invalid/refused",
+                       explain=lambda _exc, _body: "the key was refused")
