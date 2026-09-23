@@ -207,12 +207,12 @@ jobs:
           uv venv /tmp/check
           uv pip install --python /tmp/check/bin/python dist/statsbadge-*.whl
           /tmp/check/bin/python - <<'PY'
-          import os
+          import os, sys
+          sys.path.insert(0, "tools")
+          from check_app import WANTED
           from statsbadge import install, server
           app = install.app_source_dir()
-          files = set(os.listdir(app))
-          missing = {"__init__.py", "icon.png", "draw.py", "look.py", "net.py",
-                     "pages.py", "setup.py"} - files
+          missing = set(WANTED) - set(os.listdir(app))
           assert not missing, f"missing from the wheel: {missing}"
           for asset in ("index.html", "app.css", "app.js", "icon.svg", "icon.png"):
               assert os.path.isfile(os.path.join(server.STATIC_DIR, asset)), asset
