@@ -515,3 +515,42 @@ def test_a_setting_that_is_not_a_number_is_refused():
         except (TypeError, ValueError):
             continue
         raise AssertionError(f"accepted interval_ms={bad!r}")
+
+
+def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
+    """Every binding in the script names a control in the page and a setting `validate` keeps."""
+    # Three files that have to agree and none imports another.
+    assert ui.bindings, "no bindings were read out of app.js"
+    for control, setting in ui.bindings.items():
+        assert control in ui.ids, f"{control} is bound but not in the page"
+        assert ui.ids[control] in ("input", "select"), (control, ui.ids[control])
+        assert setting in layout.DEFAULT_CONFIG, f"{control} is bound to {setting}, not a setting"
+
+    # A default round-trips through validate unchanged.
+    kept = layout.validate({**layout.DEFAULT_CONFIG, "pages": layout.DEFAULT_PAGES})
+    for control, setting in ui.bindings.items():
+        assert setting in kept, f"validate drops {setting}, which {control} sets"
+
+
+def test_every_slider_stays_inside_what_the_server_takes(ui):
+    import html.parser
+
+    class Ranges(html.parser.HTMLParser):
+        found = {}
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "input" and attrs.get("type") == "range":
+                self.found[attrs["id"]] = (float(attrs["min"]), float(attrs["max"]))
+
+    parser = Ranges()
+    parser.feed(ui.markup)
+    bounds = {"interval_ms": (layout.INTERVAL_MS, 1), "graph_points": (layout.GRAPH_POINTS, 1),
+              "idle_advance_s": (layout.IDLE_ADVANCE_S, 1),
+              "advance_every_s": (layout.ADVANCE_EVERY_S, 1),
+              "brightness": (layout.BRIGHTNESS, 100)}
+    assert set(parser.found) == {c for c, s in ui.bindings.items() if s in bounds}
+    for control, (low, high) in parser.found.items():
+        (floor, ceiling), scale = bounds[ui.bindings[control]]
+        assert floor * scale <= low and high <= ceiling * scale, (control, low, high)
+
