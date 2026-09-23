@@ -1,0 +1,108 @@
+name: Extension
+
+# Lints, builds and tests one extension against statsbadge from source, for the extensions
+# in this repository and those in repositories of their own alike. What to check is read
+# off the package: every statsbadge.sources entry point in the wheel, every badge module
+# under src/*/badge, every tests/test_*.py.
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: The extension's repository, where it is not the caller's
+        type: string
+        default: ""
+      directory:
+        description: Where the extension sits in its repository
+        type: string
+        default: "."
+      statsbadge-ref:
+        description: The statsbadge to lint by and test against
+        type: string
+        default: main
+      artifact:
+        description: What to upload the wheel as, or nothing to upload none
+        type: string
+        default: dist
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.12.18"
+  RUFF_VERSION: "0.16.1"
+
+jobs:
+  check:
+    name: Lint, build and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension/${{ inputs.directory }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          path: extension
+
+      - uses: actions/checkout@v7
+        with:
+          repository: pimoroni/statsbadge
+          ref: ${{ inputs.statsbadge-ref }}
+          path: statsbadge
+
+      # setup-uv publishes exact versions only, no major tag
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Lint
+        run: |
+          uvx --from "ruff==$RUFF_VERSION" ruff check \
+            --config "$GITHUB_WORKSPACE/statsbadge/ci/ruff.toml" src $(test -d tests && echo tests)
+
+      - run: uv build --out-dir dist
+
+      # statsbadge first and from source: the extension's floor can be a release not made yet.
+      - name: Install beside statsbadge
+        run: |
+          uv venv /tmp/extension
+          uv pip install --python /tmp/extension/bin/python "$GITHUB_WORKSPACE/statsbadge"
+          uv pip install --python /tmp/extension/bin/python --no-deps dist/*.whl
+
+      - name: Check every entry point loads a source
+        run: |
+          /tmp/extension/bin/python - <<'PY'
+          from importlib.metadata import entry_points
+          from statsbadge.sources.base import Source
+          found = list(entry_points(group="statsbadge.sources"))
+          assert found, "the wheel registers no statsbadge.sources entry point"
+          for entry in found:
+              loaded = entry.load()
+              assert isinstance(loaded, type) and issubclass(loaded, Source), entry
+              print("entry point:", entry.name, "=", entry.value)
+          PY
+
+      - name: Check every badge module compiles and ships
+        run: |
+          /tmp/extension/bin/python - <<'PY'
+          import glob, py_compile, zipfile
+          shipped = set(zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist())
+          for path in sorted(glob.glob("src/*/badge/*.py")):
+              py_compile.compile(path, doraise=True)
+              assert path.removeprefix("src/") in shipped, f"{path} is not in the wheel"
+              print("badge module:", path)
+          PY
+
+      - name: Test
+        run: |
+          for test in tests/test_*.py; do
+            [ -e "$test" ] || continue
+            /tmp/extension/bin/python "$test"
+          done
+
+      - if: inputs.artifact != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact }}
+          path: extension/${{ inputs.directory }}/dist/*

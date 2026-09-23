@@ -11,48 +11,33 @@ on:
 permissions:
   contents: read
 
-env:
-  PACKAGE: statsbadge-clock
-  DIRECTORY: extensions/statsbadge-clock
-  TAG_PREFIX: clock-v
-
 jobs:
-  publish:
-    name: Build and publish to PyPI
+  build:
     if: >
       github.event_name == 'workflow_dispatch'
       || startsWith(github.event.release.tag_name, 'clock-v')
+    uses: ./.github/workflows/extension-build.yml
+    with:
+      directory: extensions/statsbadge-clock
+      tag-prefix: clock-v
+
+  publish:
+    name: Publish to PyPI
+    needs: build
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write # for trusted publishing
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
-          fetch-depth: 0
+          name: dist
+          path: dist
 
       # setup-uv publishes exact versions only, no major tag
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           version: "0.12.18"
 
-      - name: Build
-        working-directory: ${{ env.DIRECTORY }}
-        run: uv build
-
-      - name: Check the built version is the tag
-        working-directory: ${{ env.DIRECTORY }}
-        run: |
-          TAG="${GITHUB_REF_NAME#$TAG_PREFIX}"
-          BUILT="$(ls dist/*.whl | head -1 | cut -d- -f2)"
-          echo "tag=$TAG built=$BUILT"
-          if [ "$GITHUB_REF_NAME" != "$TAG" ] && [ "$TAG" != "$BUILT" ]; then
-            echo "::error::built $BUILT from tag $TAG - check pattern-prefix, or whether the"
-            echo "::error::checkout could see the tag at all"
-            exit 1
-          fi
-
-      - name: Publish
-        working-directory: ${{ env.DIRECTORY }}
-        run: uv publish --trusted-publishing always
+      - run: uv publish --trusted-publishing always dist/*

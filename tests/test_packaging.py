@@ -63,7 +63,7 @@ def test_the_version_is_written_down_once():
         # The prefix the workflow fires on is the prefix the build strips.
         workflow = yaml.safe_load(
             (workflows / f"publish-{short}.yml").read_text(encoding="utf-8"))
-        assert workflow["env"]["TAG_PREFIX"] == f"{prefix}v", (short, prefix)
+        assert workflow["jobs"]["build"]["with"]["tag-prefix"] == f"{prefix}v", (short, prefix)
         for module in (directory / "src").rglob("__init__.py"):
             assert not re.search(r"^__version__\s*=", module.read_text(encoding="utf-8"), re.M), module
 
@@ -89,23 +89,16 @@ def test_every_package_here_can_be_published():
         path = workflows / f"publish-{short}.yml"
         assert path.is_file(), f"{name} has no publish workflow"
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
-        settings = workflow["env"]
-        assert settings["PACKAGE"] == name, (path.name, settings)
-        assert settings["DIRECTORY"] == f"extensions/{name}", (path.name, settings)
-        # Twice in each workflow: the guard that gates the run and the strip that checks
-        # the version.
-        assert settings["TAG_PREFIX"] == f"{short}-v", (path.name, settings)
-        job = workflow["jobs"]["publish"]
-        assert f"startsWith(github.event.release.tag_name, '{short}-v')" in job["if"], path.name
+        build = workflow["jobs"]["build"]
+        assert build["uses"] == "./.github/workflows/extension-build.yml", path.name
+        assert build["with"] == {"directory": f"extensions/{name}",
+                                 "tag-prefix": f"{short}-v"}, (path.name, build["with"])
+        assert f"startsWith(github.event.release.tag_name, '{short}-v')" in build["if"], path.name
 
-        # Every step runs in the extension's directory, not the repository root.
-        running = [step for step in job["steps"] if "run" in step]
-        assert running, path.name
-        for step in running:
-            assert step.get("working-directory") == "${{ env.DIRECTORY }}", (
-                path.name, step.get("name"))
-        assert any("uv publish --trusted-publishing always" in step["run"]
-                   for step in running), path.name
+        publish = workflow["jobs"]["publish"]
+        assert publish["needs"] == "build", path.name
+        assert any("uv publish --trusted-publishing always" in step.get("run", "")
+                   for step in publish["steps"]), path.name
 
     assert len(found) >= 3, found
     # Every workflow names a package that is here; a stale one publishes whatever it finds.

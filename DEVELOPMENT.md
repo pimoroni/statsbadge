@@ -283,6 +283,12 @@ Every release fires every publish workflow, so each tests its tag prefix before 
 work. Each package needs a workflow file to itself, because PyPI matches a publisher on the
 filename that runs.
 
+What a publish workflow does beyond `uv publish` is
+[`extension-build.yml`](.github/workflows/extension-build.yml), and every extension's checks
+are [`extension.yml`](.github/workflows/extension.yml), both reusable and both used by the
+extensions in repositories of their own as well. CI here runs `extension.yml` over every
+extension, those repositories included, against the commit under test.
+
 ### The desktop apps
 
 Briefcase builds the `.dmg` and the `.msi`, from `[tool.briefcase]` in `pyproject.toml`.
