@@ -132,7 +132,7 @@ class ConfigUI:
     def __init__(self, web):
         self.markup = (web / "index.html").read_text(encoding="utf-8")
         self.script = "\n".join(path.read_text(encoding="utf-8")
-                                for path in sorted(web.rglob("*.js")))
+                                for path in sorted((web / "js").glob("*.js")))
         self.css = (web / "app.css").read_text(encoding="utf-8")
         parser = Markup()
         parser.feed(self.markup)

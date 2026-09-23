@@ -1,15 +1,15 @@
-import { $, all, el, pick, toast } from "./js/dom.js"
-import { api, configPath } from "./js/api.js"
-import { createScreens } from "./js/screens.js"
-import { badgeName, createBadges } from "./js/badges.js"
-import { createExtensions } from "./js/extensions.js"
-import { createGeneral } from "./js/general.js"
-import { createHelp } from "./js/help.js"
-import { createInstaller } from "./js/installer.js"
-import { createLive, frameShape } from "./js/live.js"
-import { createLook } from "./js/look.js"
-import { createPages } from "./js/pages.js"
-import { createThemes } from "./js/themes.js"
+import { api, configPath } from "./api.js"
+import { badgeName, createBadges } from "./badges.js"
+import { $, all, el, pick, toast } from "./dom.js"
+import { createExtensions } from "./extensions.js"
+import { createGeneral } from "./general.js"
+import { createHelp } from "./help.js"
+import { createInstaller } from "./installer.js"
+import { createLive, frameShape } from "./live.js"
+import { createLook } from "./look.js"
+import { createPages } from "./pages.js"
+import { createScreens } from "./screens.js"
+import { createThemes } from "./themes.js"
 
 let config = null
 let caps = null
@@ -172,9 +172,9 @@ async function paired(approved) {
   }
 }
 
-function ownIds(pages, badgeId) {
+function ownIds(layoutPages, badgeId) {
   const tag = badgeId.slice(0, 4)
-  return pages.map((page) => (String(page.id).endsWith(`-${tag}`)
+  return layoutPages.map((page) => (String(page.id).endsWith(`-${tag}`)
     ? page : { ...page, id: `${page.id}-${tag}` }))
 }
 

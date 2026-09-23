@@ -390,10 +390,10 @@ uv run python tools/shots.py build/shots --publish         # PNGs, then the READ
 `fetch_test.py` wants its other half running first: `python3 tools/fetch_test.py` serves the
 faults from this machine and writes the address the badge half reads.
 
-The config UI in [`src/statsbadge/web`](src/statsbadge/web) is three files the server hands
-over as they are, linted separately by `npm run lint`. html-validate rejects an inline
-`style`, and stylelint rejects an id selector, so colours and widths are set from `app.js` and
-`app.css` reaches everything by element or by class.
+The config UI in [`src/statsbadge/web`](src/statsbadge/web) is a page, a stylesheet and the ES
+modules in `js/`, which the server hands over as they are, linted separately by `npm run lint`.
+html-validate rejects an inline `style`, and stylelint rejects an id selector, so colours and
+widths are set from `js/` and `app.css` reaches everything by element or by class.
 
 [`tools/probe.py`](tools/probe.py) draws every page kind and theme against a canned frame and
 needs no server, including a sparse frame, since "unknown" rendering as `0` is the easiest

@@ -241,7 +241,7 @@ def test_a_rate_is_scaled_by_what_it_has_reached():
 
 def test_everything_that_walks_a_frame_steps_over_the_same_scalars(h, ui):
     """A frame carries scalars beside the readings, and every walker skips the same list."""
-    # app.js keeps a copy, JavaScript being unable to import this one.
+    # web/js/live.js keeps a copy, JavaScript being unable to import this one.
     from statsbadge import collect
 
     _status, frame = h.raw("GET", "/api/stats")

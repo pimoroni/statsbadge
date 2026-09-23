@@ -431,7 +431,7 @@ def test_a_setting_that_is_not_a_number_is_refused():
 def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
     """Every binding in the script names a control in the page and a setting `validate` keeps."""
     # Three files that have to agree and none imports another.
-    assert ui.bindings, "no bindings were read out of app.js"
+    assert ui.bindings, "no bindings were read out of the scripts"
     for control, setting in ui.bindings.items():
         assert control in ui.ids, f"{control} is bound but not in the page"
         assert ui.ids[control] in ("input", "select"), (control, ui.ids[control])
