@@ -4,7 +4,7 @@ import json
 import os
 import time
 
-from . import install
+from . import install, state
 
 PUSHED = "pushed.json"
 
@@ -47,12 +47,7 @@ def forget(config_dir, badge_id):
 
 
 def _write(config_dir, found):
-    os.makedirs(config_dir, exist_ok=True)
-    where = path(config_dir)
-    tmp = where + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(found, handle, indent=2, sort_keys=True)
-    os.replace(tmp, where)
+    state.write(path(config_dir), json.dumps(found, indent=2, sort_keys=True))
 
 
 def flavour(source):

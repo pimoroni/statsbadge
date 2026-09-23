@@ -2,11 +2,10 @@
 
 import copy
 import json
-import os
 import threading
 import time
 
-from . import derive, themes
+from . import derive, state, themes
 
 # Every page the badge can draw, and what each needs.
 KINDS = {
@@ -148,15 +147,8 @@ class Config:
             self.data = merged
 
     def save(self):
-        directory = os.path.dirname(self.path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        tmp = self.path + ".tmp"
         with self._lock:
-            payload = json.dumps(self.data, indent=2)
-        with open(tmp, "w", encoding="utf-8") as handle:
-            handle.write(payload)
-        os.replace(tmp, self.path)
+            state.write(self.path, json.dumps(self.data, indent=2))
 
     def set_settings(self, name, block):
         """Store one block of settings, leaving every layout alone."""

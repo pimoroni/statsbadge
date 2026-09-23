@@ -5,6 +5,8 @@ import os
 import secrets
 import socket
 
+from . import state
+
 
 def load(config_dir):
     """This server's identity, minting and saving one if there is not one yet."""
@@ -28,13 +30,7 @@ def load(config_dir):
 
 
 def _write(path, data):
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2)
-    os.replace(tmp, path)
+    state.write(path, json.dumps(data, indent=2))
 
 
 def _hostname():

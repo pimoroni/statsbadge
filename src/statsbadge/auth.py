@@ -9,6 +9,8 @@ import secrets
 import threading
 import time
 
+from . import state
+
 # A badge asks to be let in and shows a short code; a human approves it at the host.
 # Minted per request, returned for the badge to display, and compared and not entered.
 ENROL_CODE_HEX = 6
@@ -102,17 +104,7 @@ class Store:
             raise PermissionError(
                 f"{self.path} cannot be read ({self.unreadable}), so it will not be "
                 "written over. Fix its ownership, or pass --config-dir.")
-        directory = os.path.dirname(self.path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        tmp = self.path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump({"badges": self.badges}, handle, indent=2)
-        os.replace(tmp, self.path)
-        try:
-            os.chmod(self.path, 0o600)
-        except OSError:
-            pass
+        state.write(self.path, json.dumps({"badges": self.badges}, indent=2), mode=0o600)
         self._persisted = {
             bid: record.get("seq", 0) for bid, record in self.badges.items()
         }
