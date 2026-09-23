@@ -14,7 +14,6 @@ import os
 import sys
 import time
 
-# Named `ext`, not `pages`: a `pages` directory on sys.path shadows the app's pages.py.
 EXT_DIR = "ext"
 
 import look  # noqa: E402
@@ -41,23 +40,30 @@ def pairing_ui():
 
 
 def load_extensions(app_dir):
-    """Import any badge-side modules an extension had pushed into EXT_DIR."""
+    """Import the badge-side modules each extension pushed into its own EXT_DIR directory."""
     directory = f"{app_dir}/{EXT_DIR}"
     try:
-        names = os.listdir(directory)
+        extensions = sorted(os.listdir(directory))
     except OSError:
         return []
-    if directory not in sys.path:
-        sys.path.insert(0, directory)
     loaded = []
-    for name in sorted(names):
-        if not name.endswith(".py") or name.startswith("_"):
-            continue
+    for extension in extensions:
+        where = f"{directory}/{extension}"
         try:
-            __import__(name[:-3])
-            loaded.append(name[:-3])
-        except Exception as exc:  # noqa: BLE001
-            print(f"extension {name} failed: {exc}")
+            names = sorted(os.listdir(where))
+        except OSError:
+            continue
+        # Behind the app's own directory, so no extension module can stand in for one.
+        if where not in sys.path:
+            sys.path.append(where)
+        for name in names:
+            if not name.endswith(".py") or name.startswith("_"):
+                continue
+            try:
+                __import__(name[:-3])
+                loaded.append(name[:-3])
+            except Exception as exc:  # noqa: BLE001
+                print(f"extension {extension}/{name} failed: {exc}")
     return loaded
 
 # HOME opens the hosts menu, so the launcher's exit irq is dropped and HOME is polled.
@@ -814,6 +820,7 @@ def no_network(theme):
 
 def main(app_dir):
     global _app
+    look.APP_DIR = app_dir
     gc.threshold(GC_THRESHOLD)
     draw.prepare()
     load_extensions(app_dir)

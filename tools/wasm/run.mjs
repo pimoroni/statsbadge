@@ -126,13 +126,13 @@ stage(join(ROOT, "src", "statsbadge", "badge_app"), APP_DIR, (name) =>
   name !== "mpy" && name !== "__pycache__")
 // From the installed extensions, not from extensions/ in the checkout. Printed, or a page
 // edited there and not reinstalled is silently the old one.
-mkdirp(`${APP_DIR}/ext`)
 const staged = extensionModules()
-for (const module of staged) {
-  copy(module, `${APP_DIR}/ext/${module.split("/").pop()}`)
+for (const [extension, module] of staged) {
+  mkdirp(`${APP_DIR}/ext/${extension}`)
+  copy(module, `${APP_DIR}/ext/${extension}/${module.split("/").pop()}`)
 }
 if (staged.length) {
-  console.log(`ext: ${staged.length} file(s) from ${dirname(dirname(staged[0]))}`)
+  console.log(`ext: ${staged.length} file(s) from ${dirname(dirname(staged[0][1]))}`)
 }
 stage(join(ROOT, "tests", "badge", "wasm"), TEST_DIR, (name) => name !== "__pycache__")
 stage(join(ROOT, "tools", "wasm", "shims"), SHIM_DIR, (name) => name !== "__pycache__")
@@ -159,11 +159,13 @@ try {
 import sys
 sys.path.insert(0, "${TEST_DIR}")
 sys.path.insert(0, "${APP_DIR}")
-sys.path.insert(0, "${APP_DIR}/ext")
 sys.path.append("${SHIM_DIR}")
 
 import badgeware                     # badge, screen, image, tween, the buttons
 import os
+# Each extension's directory, behind the app's, as app.load_extensions leaves them.
+for extension in (os.listdir("${APP_DIR}/ext") if "ext" in os.listdir("${APP_DIR}") else ()):
+    sys.path.append("${APP_DIR}/ext/" + extension)
 os.chdir("${APP_DIR}")
 
 # Where the real server is, for the tests that talk to one. None if it would not start.
@@ -276,7 +278,7 @@ function mkdirp(path) {
 function extensionModules() {
   const asked = "import json,sys;sys.path.insert(0,'src');"
     + "from statsbadge import extensions;"
-    + "print(json.dumps([p for _n,p in extensions.badge_modules(extensions.load())]))"
+    + "print(json.dumps(extensions.badge_modules(extensions.load())))"
   try {
     return JSON.parse(execFileSync("uv", ["run", "--no-sync", "python", "-c", asked],
                                    { cwd: ROOT, encoding: "utf8" }).trim())

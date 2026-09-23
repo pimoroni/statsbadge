@@ -12,14 +12,14 @@ import pages as pages_module
 import look
 import wifi
 
-# The badge modules an extension had pushed, imported the way the app imports them. From
-# the badge's own ext directory, since that is where an asset beside a module was installed.
+# The badge modules each extension had pushed, imported the way the app imports them.
 EXT_DIR = look.APP_DIR + "/ext"
 try:
-    sys.path.insert(0, EXT_DIR)
-    for name in sorted(os.listdir(EXT_DIR)):
-        if name.endswith(".py") and not name.startswith("_"):
-            __import__(name[:-3])
+    for extension in sorted(os.listdir(EXT_DIR)):
+        sys.path.append(f"{EXT_DIR}/{extension}")
+        for name in sorted(os.listdir(f"{EXT_DIR}/{extension}")):
+            if name.endswith(".py") and not name.startswith("_"):
+                __import__(name[:-3])
 except OSError:
     pass
 

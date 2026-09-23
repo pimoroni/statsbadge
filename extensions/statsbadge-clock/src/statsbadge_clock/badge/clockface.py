@@ -305,11 +305,14 @@ def _angles(hour, minute, second, sweep):
     return hours, minutes, (taken + _step(steps - taken)) * 6.0
 
 
-def _register_font():
-    """Return the installed copy first, then this module's directory for a checkout."""
+def _beside(name):
+    """Return a file shipped alongside this module, where the installer put both."""
     here = globals().get("__file__") or ""
-    beside = here.rsplit("/", 1)[0] + "/icons.af" if "/" in here else "icons.af"
-    draw.add_font(WEATHER_FONT, look.APP_DIR + "/ext/icons.af", beside)
+    return here.rsplit("/", 1)[0] + "/" + name if "/" in here else name
+
+
+def _register_font():
+    draw.add_font(WEATHER_FONT, _beside("icons.af"))
 
 
 WIDEST_TIME = "44:44"
@@ -335,10 +338,7 @@ def _digits_font(spec):
     """Return the font name for a digital face, loading it on first use."""
     wanted = spec["font"]
     if not draw.has_font(wanted):
-        here = globals().get("__file__") or ""
-        beside = (here.rsplit("/", 1)[0] + "/" + spec["file"] if "/" in here
-                  else spec["file"])
-        draw.add_font(wanted, look.APP_DIR + "/ext/" + spec["file"], beside)
+        draw.add_font(wanted, _beside(spec["file"]))
     return wanted if draw.has_font(wanted) else draw.TEXT
 
 
