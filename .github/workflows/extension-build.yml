@@ -37,7 +37,8 @@ jobs:
         with:
           version: "0.12.18"
 
-      - run: uv build --out-dir dist
+      # Outside the extension's directory: an artifact path may not hold a "." or "..".
+      - run: uv build --out-dir "$GITHUB_WORKSPACE/dist"
 
       # A build that cannot see the tag produces 0.0.0.postN.devN+hash rather than failing.
       # Skipped for a dispatch from a branch, where the ref is not a version at all.
@@ -46,7 +47,7 @@ jobs:
           TAG_PREFIX: ${{ inputs.tag-prefix }}
         run: |
           TAG="${GITHUB_REF_NAME#$TAG_PREFIX}"
-          BUILT="$(ls dist/*.whl | head -1 | cut -d- -f2)"
+          BUILT="$(ls "$GITHUB_WORKSPACE"/dist/*.whl | head -1 | xargs basename | cut -d- -f2)"
           echo "tag=$TAG built=$BUILT"
           if [ "$GITHUB_REF_NAME" != "$TAG" ] && [ "$TAG" != "$BUILT" ]; then
             echo "::error::built $BUILT from tag $TAG - check the tag prefix, or whether the"
@@ -57,4 +58,4 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: dist
-          path: ${{ inputs.directory }}/dist/*
+          path: dist/*
