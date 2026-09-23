@@ -268,10 +268,10 @@ class MacIOKit(Source):
 
 
 class MacPowermetrics(Source):
-    """Package power, GPU power and GPU clock, via a root powermetrics."""
+    """Package power, CPU and GPU clocks and GPU power, via a root powermetrics."""
 
     name = "macos-powermetrics"
-    provides = ("gpu", "power")
+    provides = ("cpu", "gpu", "power")
 
     @classmethod
     def available(cls, _config=None):
@@ -383,6 +383,10 @@ class MacPowermetrics(Source):
         package_mw = processor.get("combined_power")
         if package_mw is not None:
             frame["power"]["package_w"] = round(float(package_mw) / 1000, 1)
+        cluster_hz = [cluster.get("freq_hz") for cluster in processor.get("clusters") or ()]
+        cluster_hz = [float(hz) for hz in cluster_hz if hz]
+        if cluster_hz:
+            frame["cpu"]["freq"] = round(max(cluster_hz) / 1e6)
         # MHz, whatever the name says. A CPU cluster's freq_hz is in hertz.
         gpu_mhz = (latest.get("gpu") or {}).get("freq_hz")
         gpu_mw = processor.get("gpu_power")

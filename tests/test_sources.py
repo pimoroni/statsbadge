@@ -517,6 +517,20 @@ def test_a_location_typed_in_the_browser_reaches_every_source():
             service.stop()
 
 
+def test_a_clock_psutil_cannot_know_is_left_out(monkeypatch):
+    import collections
+
+    from statsbadge.sources import portable
+
+    reply = collections.namedtuple("scpufreq", "current min max")
+    source = portable.Portable({})
+    for current, shown in ((4, None), (3504.0, 3504)):
+        monkeypatch.setattr(portable.psutil, "cpu_freq", lambda current=current: reply(current, 0, current))
+        frame = model.empty_frame()
+        source.sample(frame, 1.0)
+        assert frame["cpu"].get("freq") == shown, (current, frame["cpu"])
+
+
 def test_powermetrics_is_read_in_the_units_it_reports():
     from statsbadge.sources import macos
 
@@ -524,7 +538,9 @@ def test_powermetrics_is_read_in_the_units_it_reports():
     captured = {
         "gpu": {"freq_hz": 338.0, "gpu_energy": 12, "idle_ratio": 0.966144},
         "processor": {"ane_power": 0.0, "combined_power": 495.407, "cpu_energy": 488,
-                      "cpu_power": 483.517, "gpu_energy": 12, "gpu_power": 11.8898},
+                      "cpu_power": 483.517, "gpu_energy": 12, "gpu_power": 11.8898,
+                      "clusters": [{"name": "E-Cluster", "freq_hz": 1733920000.0},
+                                   {"name": "S-Cluster", "freq_hz": 1874830000.0}]},
         "thermal_pressure": "Nominal",
     }
     source = macos.MacPowermetrics({})
@@ -535,6 +551,7 @@ def test_powermetrics_is_read_in_the_units_it_reports():
     assert frame["power"]["package_w"] == 0.5, frame["power"]
     assert frame["gpu"] == [{"name": "Apple M5", "clock": 338, "power": 0.0}], frame["gpu"]
     assert "temp" not in frame["cpu"], frame["cpu"]
+    assert frame["cpu"]["freq"] == 1875, frame["cpu"]
 
 
 def test_the_hottest_of_each_kind_of_sensor_is_the_reading():
