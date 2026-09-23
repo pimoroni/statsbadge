@@ -11,10 +11,10 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ["src/statsbadge/web/*.js"],
+    files: ["src/statsbadge/web/**/*.js"],
     languageOptions: {
       ecmaVersion: "latest",
-      sourceType: "script",
+      sourceType: "module",
       globals: globals.browser,
     },
     rules: {
