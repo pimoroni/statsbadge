@@ -1,12 +1,11 @@
 """Where the space station is, for the badge to draw on a world map."""
 
-import json
 import os
 import threading
 import time
-import urllib.request
 
-from statsbadge.sources.base import Source
+from statsbadge.sources import web
+from statsbadge.sources.base import PollingSource
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,7 +18,6 @@ POSITION_EVERY = 300.0
 TRACK_EVERY = 600.0
 CREW_EVERY = 3600.0
 RETRY_AFTER = 30.0
-FETCH_POLL = 1.0
 
 # The endpoint takes ten timestamps a request, so twenty points is two requests.
 # Ninety-five minutes is about one orbit.
@@ -30,7 +28,7 @@ TRACK_AHEAD = 10
 LAST = "last"
 
 
-class ISS(Source):
+class ISS(PollingSource):
     name = "iss"
     provides = ("iss",)
 
@@ -73,53 +71,33 @@ class ISS(Source):
         self._next_where = 0.0
         self._next_track = 0.0
         self._next_crew = 0.0
-        self._fetcher = None
-        self._wake = threading.Event()
-        self._stop = threading.Event()
         self._read_settings()
 
     def start(self):
         """Restore the last position, then fetch the track and crew on a thread."""
         self._where = self.store.get(LAST) or {}
-        if self._fetcher is None:
-            self._stop.clear()
-            self._fetcher = threading.Thread(target=self._fetch_loop, daemon=True,
-                                             name="statsbadge-iss")
-            self._fetcher.start()
+        super().start()
 
-    def stop(self):
-        self._stop.set()
-        self._wake.set()
-        if self._fetcher is not None:
-            self._fetcher.join(timeout=2.0)
-            self._fetcher = None
-
-    def _fetch_loop(self):
-        while not self._stop.is_set():
-            for what in (self._refresh_where, self._refresh_track, self._refresh_crew):
-                if self._stop.is_set():
-                    break
-                try:
-                    what()
-                except Exception as exc:
-                    # The fetcher must not die: the page would go on drawing the last
-                    # position.
-                    self.note_fault(exc)
-            self._wake.wait(FETCH_POLL)
-            self._wake.clear()
+    def poll(self):
+        for key, what in (("where", self._refresh_where), ("track", self._refresh_track),
+                          ("crew", self._refresh_crew)):
+            if self.stopping:
+                break
+            try:
+                what()
+            except Exception as exc:  # noqa: BLE001
+                self.note_fault(exc, key=key)
 
     def _read_settings(self):
-        self.units = self.config.get("units") or "kilometres"
-        if self.units not in ("kilometres", "miles"):
-            self.units = "kilometres"
-        self.crew_wanted = self.config.get("crew", True) is not False
+        self.units = self.config["units"]
+        self.crew_wanted = self.config["crew"]
 
     def configure(self, settings):
         super().configure(settings)
         self._read_settings()
         self._next_where = 0.0
         self._next_track = 0.0
-        self._wake.set()
+        self.wake()
 
     def sample(self, frame, dt):
         """Return the position, ground track and crew last stored by the fetcher."""
@@ -148,7 +126,7 @@ class ISS(Source):
         if time.monotonic() < self._next_where:
             return
         try:
-            payload = _get(WHERE)
+            payload = web.fetch_json(WHERE, timeout=8)
         except Exception:
             self._next_where = time.monotonic() + RETRY_AFTER
             raise
@@ -167,7 +145,7 @@ class ISS(Source):
             self._where = where
         self.store.set(LAST, where)
         self._next_where = time.monotonic() + POSITION_EVERY
-        self.note_ok()
+        self.note_ok("where")
 
     def _refresh_track(self):
         if time.monotonic() < self._next_track:
@@ -180,7 +158,8 @@ class ISS(Source):
             for start in range(0, len(wanted), 10):
                 chunk = wanted[start:start + 10]
                 stamps = ",".join(str(when) for when in chunk)
-                for entry in _get(f"{WHERE}/positions?timestamps={stamps}") or ():
+                for entry in web.fetch_json(f"{WHERE}/positions?timestamps={stamps}",
+                                            timeout=8) or ():
                     points.append((round(float(entry["longitude"]), 2),
                                    round(float(entry["latitude"]), 2),
                                    0 if entry.get("visibility") == "eclipsed" else 1))
@@ -191,13 +170,13 @@ class ISS(Source):
             self._track = points
             self._track_from = wanted[0]
         self._next_track = time.monotonic() + TRACK_EVERY
-        self.note_ok()
+        self.note_ok("track")
 
     def _refresh_crew(self):
         if not self.crew_wanted or time.monotonic() < self._next_crew:
             return
         try:
-            payload = _get(CREW)
+            payload = web.fetch_json(CREW, timeout=8)
         except Exception:
             self._next_crew = time.monotonic() + RETRY_AFTER
             raise
@@ -206,12 +185,7 @@ class ISS(Source):
         with self._lock:
             self._crew = [name for name in aboard if name]
         self._next_crew = time.monotonic() + CREW_EVERY
-        self.note_ok()
-
-
-def _get(url):
-    with urllib.request.urlopen(url, timeout=8) as response:
-        return json.loads(response.read().decode("utf-8"))
+        self.note_ok("crew")
 
 
 def _distance(value, units):
