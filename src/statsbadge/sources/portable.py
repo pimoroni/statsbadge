@@ -13,6 +13,9 @@ from .base import Source
 MB = 1024 * 1024
 
 
+PLAUSIBLE_MHZ = 100
+
+
 class Portable(Source):
     name = "psutil"
     provides = ("cpu", "mem", "disk", "net", "power", "sys")
@@ -39,7 +42,8 @@ class Portable(Source):
         cpu["cores"] = [round(v, 1) for v in psutil.cpu_percent(interval=None, percpu=True)]
         try:
             freq = psutil.cpu_freq()
-            if freq and freq.current:
+            # Apple Silicon has no frequency sysctl, and psutil answers 4.
+            if freq and freq.current and freq.current >= PLAUSIBLE_MHZ:
                 cpu["freq"] = round(freq.current)
         except Exception:
             pass
