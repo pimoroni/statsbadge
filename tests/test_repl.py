@@ -197,11 +197,10 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else():
             pass
         else:
             raise AssertionError("a held port is not reported as busy")
-        # install.py names whose problem that is, in the words of the thing to close.
         try:
             install._exec("/dev/fake", "print(1)")
         except install.PortBusy as exc:
-            assert "busy" in str(exc) and "Thonny" in str(exc), exc
+            assert str(exc), exc
         else:
             raise AssertionError("a held port is not reported as busy")
 

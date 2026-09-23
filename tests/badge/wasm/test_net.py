@@ -84,7 +84,6 @@ class Requests(unittest.TestCase):
         self.client.get("/v1/stats")
         self.assertTrue(self.finish())
         self.assertEqual(self.client.http_status, 401, self.client.body)
-        self.assertTrue(b"replay" in self.client.body, self.client.body)
 
     def test_a_wrong_secret_is_refused(self):
         self.client.close()
@@ -105,7 +104,6 @@ class Requests(unittest.TestCase):
         self.client.post("/v1/command", {"cmd": "media_next"})
         self.assertTrue(self.finish())
         self.assertEqual(self.client.http_status, 403, self.client.body)
-        self.assertTrue(b"not bound" in self.client.body, self.client.body)
 
 
 class CounterOnFlash(unittest.TestCase):

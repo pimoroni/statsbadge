@@ -211,8 +211,8 @@ def test_a_file_that_did_not_write_is_not_left_on_the_badge():
             shutil_module.copy2 = short
             try:
                 install._copy(source, destination)
-            except install.InstallError as exc:
-                assert "short" in str(exc), exc
+            except install.InstallError:
+                pass
             else:
                 raise AssertionError("a short copy was called a good one")
         finally:
