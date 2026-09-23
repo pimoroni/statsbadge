@@ -110,6 +110,33 @@ def test_one_counter_is_accepted_once_under_concurrency(monkeypatch):
         assert sorted(outcomes) == ["accepted", "replayed request"], outcomes
 
 
+def test_a_badge_forgotten_elsewhere_stays_forgotten(h):
+    who = "forgotten0001"
+    other = auth.Store(os.path.join(h.dir, "badges.json"))
+    secret = other.provision(who, "to forget")
+    assert h.raw("GET", "/v1/stats", None, _headers(who, 10, secret))[0] == 200
+
+    time.sleep(0.01)
+    assert auth.Store(os.path.join(h.dir, "badges.json")).forget(who)
+    status, _ = h.raw("GET", "/v1/stats", None, _headers(who, 11, secret))
+    assert status == 403, status
+
+    h.service.badges.provision("forgotsaver01", "a save after the forget")
+    assert who not in auth.Store(os.path.join(h.dir, "badges.json")).badges
+
+
+def test_a_change_here_keeps_a_secret_rotated_elsewhere(h):
+    who = "rotatedaway01"
+    other = auth.Store(os.path.join(h.dir, "badges.json"))
+    other.provision(who, "first")
+    h.service.badges.list_badges()
+
+    time.sleep(0.01)
+    rotated = auth.Store(os.path.join(h.dir, "badges.json")).provision(who, "second")
+    assert h.service.badges.rename(who, "renamed by the server")
+    assert auth.Store(os.path.join(h.dir, "badges.json")).secret_for(who) == rotated
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
 def test_secrets_are_never_on_disk_readable_by_others(monkeypatch):
     replace = os.replace

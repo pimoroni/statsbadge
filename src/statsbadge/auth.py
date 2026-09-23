@@ -91,13 +91,13 @@ class Store:
             return
         self._mtime = mtime
         incoming = data.get("badges", {})
-        # The higher counter wins: ours may have advanced past the file, and going
-        # backwards lets a replay through.
+        # The file decides which badges exist. The higher counter wins: ours may have
+        # advanced past the file, and going backwards lets a replay through.
         for badge_id, record in incoming.items():
             existing = self.badges.get(badge_id)
             if existing and existing.get("secret") == record.get("secret"):
                 record["seq"] = max(record.get("seq", 0), existing.get("seq", 0))
-            self.badges[badge_id] = record
+        self.badges = incoming
 
     def save(self):
         if self.unreadable:
@@ -216,6 +216,7 @@ class Store:
     def approve_enrolment(self, request_id, name=None):
         """Let a badge in, minting its secret."""
         with self._lock:
+            self._reload_if_changed()
             self._expire_enrolments(time.monotonic())
             entry = self.enrolments.get(request_id)
             if entry is None or entry["status"] != "pending":
@@ -256,6 +257,7 @@ class Store:
     def provision(self, badge_id, name=None, start_seq=0):
         """Mint a secret directly, for the USB installer."""
         with self._lock:
+            self._reload_if_changed()
             secret = secrets.token_hex(32)
             self.badges[badge_id] = {
                 "secret": secret,
@@ -269,6 +271,7 @@ class Store:
     def rename(self, badge_id, name):
         """Return the name set for a badge, or its id back when that name is cleared."""
         with self._lock:
+            self._reload_if_changed()
             record = self.badges.get(badge_id)
             if record is None:
                 return False
@@ -278,6 +281,7 @@ class Store:
 
     def forget(self, badge_id):
         with self._lock:
+            self._reload_if_changed()
             if self.badges.pop(badge_id, None) is None:
                 return False
             self.save()
@@ -285,6 +289,7 @@ class Store:
 
     def list_badges(self):
         with self._lock:
+            self._reload_if_changed()
             return {
                 bid: {k: v for k, v in record.items() if k != "secret"}
                 for bid, record in self.badges.items()
@@ -333,6 +338,7 @@ class Store:
 
     def secret_for(self, badge_id):
         with self._lock:
+            self._reload_if_changed()
             record = self.badges.get(badge_id)
             return record["secret"] if record else None
 
