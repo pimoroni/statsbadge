@@ -465,6 +465,30 @@ def test_a_source_is_named_by_its_entry_point():
     assert [(source.name, source.given) for source in loaded] == [("meter", {"key": "k"})]
 
 
+def test_an_extension_is_handed_its_settings_typed_and_defaulted():
+    from statsbadge import layout
+
+    declared = ({"key": "count", "type": "number", "default": 10, "min": 1, "max": 50},
+                {"key": "units", "type": "choice", "options": ["km", "miles"],
+                 "default": "km"},
+                {"key": "place", "type": "text"})
+    assert layout.settle_settings({"count": "99", "units": "furlongs", "debug": "1"},
+                                  declared) == {"count": 50.0, "units": "km", "debug": "1"}
+    assert layout.settle_settings({}, declared) == {"count": 10, "units": "km"}
+    assert layout.settle_settings({"units": "miles"}, declared, defaults=False) == {
+        "units": "miles"}
+
+    from statsbadge.sources.base import Source
+
+    class Counting(Source):
+        settings = declared
+
+    source = Counting({"count": "3"})
+    assert source.config == {"count": 3.0, "units": "km"}, source.config
+    source.configure({"units": "miles", "count": "nonsense"})
+    assert source.config == {"count": 10, "units": "miles"}, source.config
+
+
 def test_an_upgrade_whose_modules_will_not_drop_still_asks_for_a_restart():
     """`forget` can only clear what an entry point names. One it cannot is reported."""
     from statsbadge import extensions as ext
