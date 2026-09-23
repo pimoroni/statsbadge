@@ -386,7 +386,7 @@ class Settings(unittest.TestCase):
 
     def test_a_page_turn_drops_the_positions_everything_was_drawn_at(self):
         """A turn is not a change in the machine, so the needles start where they land."""
-        one = built(animate=True)
+        one = built(animate=True, percent=["cpu.pct"])
         one.apply_layout()
         pages.fraction_of("cpu.pct", 0.4)
         self.assertTrue(pages._sweeps, "nothing was sweeping to begin with")
@@ -514,7 +514,8 @@ class CaseLights(unittest.TestCase):
         self.assertAlmostEqual(self.asked[-1], one.wanted_brightness())
 
     def test_a_reading_moves_them_between_the_floor_and_that(self):
-        one = built(caselights="cpu.pct", brightness=1.0)
+        one = built(caselights="cpu.pct", brightness=1.0, percent=["cpu.pct"])
+        one.apply_layout()
         one.frame = {"cpu": {"pct": 100.0}}
         one.apply_caselights()
         self.assertAlmostEqual(self.asked[-1], 1.0)

@@ -376,6 +376,11 @@ class Collector:
 
 def _merge_declared(described, declared):
     """Fold the extensions' groups into the contract the config UI reads."""
+    described["declared_fields"] = {
+        group: {name: {key: field[key] for key in ("unit", "full_scale", "percent")
+                       if field.get(key)}
+                for name, field in (entry.get("fields") or {}).items()}
+        for group, entry in declared.items()}
     for group, entry in declared.items():
         fields = entry.get("fields") or {}
         described["groups"][group] = sorted(fields)

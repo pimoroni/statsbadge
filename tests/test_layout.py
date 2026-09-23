@@ -136,26 +136,32 @@ def test_a_reading_prints_as_one_string_with_its_unit():
     sys.path.insert(0, install.app_source_dir())
     import draw
 
-    assert draw.reading(9.2, "pct") == "9.2%"
-    assert draw.reading(85.7, "pct") == "85.7%"
-    assert draw.reading(71.0, "temp") == "71.0\u00b0C"
-    assert draw.reading(None, "pct") == "--"
-    assert draw.reading("workshop-pc", "host") == "workshop-pc"
+    refs = ["cpu.pct", "cpu.temp", "sys.host", "disk.read_bps", "mem.used_mb",
+            "mem.total_mb", "cpu.load", "cpu.cores"]
+    draw.use_units(layout.field_facts([{"fields": refs}], {})["units"])
+    try:
+        assert draw.reading(9.2, "cpu.pct") == "9.2%"
+        assert draw.reading(85.7, "cpu.pct") == "85.7%"
+        assert draw.reading(71.0, "cpu.temp") == "71.0\u00b0C"
+        assert draw.reading(None, "cpu.pct") == "--"
+        assert draw.reading("workshop-pc", "sys.host") == "workshop-pc"
 
-    # A byte figure carries its prefix on the number and its base in the unit.
-    assert draw.reading(800, "read_bps") == "800B/s"
-    assert draw.reading(819200, "read_bps") == "800KB/s"
-    assert draw.reading(52428800, "read_bps") == "50.0MB/s"
-    assert draw.reading(3 * 1024 ** 3, "read_bps") == "3.0GB/s"
-    assert draw.reading(512, "used_mb") == "512MB"
-    assert draw.reading(12600, "used_mb") == "12.3GB"
-    assert draw.reading(3 * 1024 ** 2, "total_mb") == "3.0TB"
+        # A byte figure carries its prefix on the number and its base in the unit.
+        assert draw.reading(800, "disk.read_bps") == "800B/s"
+        assert draw.reading(819200, "disk.read_bps") == "800KB/s"
+        assert draw.reading(52428800, "disk.read_bps") == "50.0MB/s"
+        assert draw.reading(3 * 1024 ** 3, "disk.read_bps") == "3.0GB/s"
+        assert draw.reading(512, "mem.used_mb") == "512MB"
+        assert draw.reading(12600, "mem.used_mb") == "12.3GB"
+        assert draw.reading(3 * 1024 ** 2, "mem.total_mb") == "3.0TB"
 
-    # A field can arrive as a list, which has no hash and cannot reach a table keyed on value.
-    assert draw.reading([1.52, 1.18, 0.94], "load") == "1.5 1.2 0.9"
-    # Sixteen per-core loads overflow a slot, and three of the sixteen misreport it.
-    assert draw.reading([31.0] * 16, "cores") == "16 values"
-    assert draw.reading([], "load") == "--"
+        # A list has no hash and cannot reach a table keyed on value.
+        assert draw.reading([1.52, 1.18, 0.94], "cpu.load") == "1.5 1.2 0.9"
+        # Sixteen per-core loads overflow a slot, and three of the sixteen misreport it.
+        assert draw.reading([31.0] * 16, "cpu.cores") == "16 values"
+        assert draw.reading([], "cpu.load") == "--"
+    finally:
+        draw.use_units({})
 
     import pages
 
@@ -345,11 +351,13 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout():
         name = "meter"
         provides = ("energy",)
         groups = {"energy": {"label": "Energy", "fields": {
-            "kwh": {"label": "Newest half hour", "unit": "kWh"},
-            "spend_p": {"label": "Cost", "unit": "p"}}}}
+            "kwh": {"label": "Newest half hour", "unit": "kWh", "full_scale": 2.5},
+            "spend_p": {"label": "Cost", "unit": "p"},
+            "temp": {"label": "Tank", "unit": "K", "full_scale": 400},
+            "share": {"label": "Share", "percent": True}}}}
 
         def sample(self, frame, _dt):
-            frame["energy"] = {"kwh": 0.25, "spend_p": 316.8}
+            frame["energy"] = {"kwh": 0.25, "spend_p": 316.8, "temp": 330.0, "share": 40}
 
     source = Meter({})
     # A collector of this test's own, so the frame it samples is the frame it reads.
@@ -357,16 +365,28 @@ def test_a_unit_the_badge_cannot_guess_travels_with_the_layout():
     collector.extensions.append(source)
     collector.sample_once()
     caps = collector.capabilities()
-    pages = [{"id": "e", "kind": "graph", "title": "Energy",
-              "fields": ["energy.kwh"]},
+    pages = [{"id": "e", "kind": "grid", "title": "Energy",
+              "fields": ["energy.kwh", "energy.temp", "energy.share"]},
              {"id": "m", "kind": "grid", "title": "Mem",
-              "fields": ["mem.used_mb", "sys.uptime_s", "fans.rpm"]}]
-    units = layout.field_units(pages, caps)
-    assert units.get("kwh") == "kWh", units
+              "fields": ["mem.used_mb", "sys.uptime_s", "fans.rpm", "cpu.temp", "cpu.pct"]}]
+    facts = layout.field_facts(pages, caps)
+    units, scales = facts["units"], facts["scales"]
+    assert units["energy.kwh"] == "kWh" and scales["energy.kwh"] == 2.5, facts
     # The model's fields travel the same way.
-    assert units.get("rpm") == "rpm", units
+    assert units["fans.rpm"] == "rpm", units
     # A field no page draws is not sent.
-    assert "spend_p" not in units, units
+    assert "energy.spend_p" not in units, units
+    # An extension's `temp` is its own, and leaves the processor's alone.
+    assert (units["energy.temp"], scales["energy.temp"]) == ("K", 400.0), facts
+    assert (units["cpu.temp"], scales["cpu.temp"]) == ("°C", 100.0), facts
+    assert set(facts["percent"]) == {"energy.share", "cpu.pct"}, facts["percent"]
+
+    # The case lights can follow a reading no page draws.
+    config = layout.Config(os.path.join(tempfile.mkdtemp(), "layout.json"))
+    config.replace({**layout.DEFAULT_CONFIG, "caselights": "mem.pct",
+                    "pages": [{"id": "t", "kind": "text", "fields": ["sys.host"]}]})
+    sent = config.for_badge({"available": {"sys": ["host"], "mem": ["pct"]}})
+    assert sent["percent"] == ["mem.pct"], sent["percent"]
 
 
 def test_a_row_of_a_name_and_a_figure_takes_the_unit_in_the_figure():

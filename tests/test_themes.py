@@ -383,7 +383,7 @@ def test_a_graph_s_two_series_read_apart():
 
 
 def test_the_preview_reads_a_number_as_the_badge_does(ui):
-    """The preview's number tables and layout sizes are pages.py's and look.py's."""
+    """The preview's names and layout sizes are pages.py's and look.py's."""
     # Parsed out of the script rather than run: this job has no node to run it with.
     import sys
 
@@ -404,14 +404,8 @@ def test_the_preview_reads_a_number_as_the_badge_does(ui):
         assert pages_module.NAMES[ref] == name, (ref, name, pages_module.NAMES.get(ref))
     for group in ("cpu.pct", "cpu.temp", "net.down_bps", "disk.pct", "disk.used_mb"):
         assert group in shown, group
-    assert set(re.findall(r'"([\w.]+)"', script.split("const PERCENT_FIELDS = [")[1]
-                          .split("]")[0])) == set(pages_module.PERCENT)
     assert set(re.findall(r'"(_\w+)"', script.split("const UNIT_SUFFIXES = [")[1]
                           .split("]")[0])) == set(pages_module.UNIT_SUFFIXES)
-
-    scale = {key: float(value.replace("e6", "e6"))
-             for key, value in table("SCALE").items()}
-    assert scale == pages_module.SCALE
 
     # The sizes a page is laid out to are look.py's too.
     import look

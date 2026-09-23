@@ -1206,17 +1206,7 @@ const ICONS = {
 // answer for them: pages.py imports draw, and draw expects the firmware's globals. A
 // check compares these against the badge's for a table of readings.
 
-const SCALE = {
-  temp: 100, power: 250, package_w: 150, rpm: 6000,
-  freq: 6000, clock: 3000,
-  up_bps: 12.5e6, down_bps: 12.5e6, read_bps: 500e6, write_bps: 500e6,
-  volts: 1.6,
-}
-// pages.PERCENT. Longer than the live view's list further down: `cores` is a list of
-// percentages, and a gauge needs to know that where a printed reading does not.
-const PERCENT_FIELDS = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores"]
-
-const isPercent = (field) => PERCENT_FIELDS.includes(field) || field.endsWith("_pct")
+const isPercent = (field) => caps.percent_fields.includes(field) || field.endsWith("_pct")
 
 function rate(bps) {
   if (bps >= 1024 ** 3) return `${(bps / 1024 ** 3).toFixed(1)}G`
@@ -1255,11 +1245,9 @@ function fmt(value, field) {
 function shortUnit(field) {
   if (field.endsWith("_bps")) return "B/s"
   if (field === "cores" || field === "pct" || field.endsWith("_pct")) return "%"
-  if (field === "temp") return "\u00b0C"
-  if (field === "power" || field === "package_w") return "W"
-  if (field === "freq" || field === "clock") return "MHz"
   if (field.endsWith("_mb")) return "B"
-  return ""
+  if (field === "uptime_s" || field === "secs_left") return ""
+  return caps.units[field] || ""
 }
 
 /** Where a value sits on 0-1, for a gauge. A rate is scaled by the busiest the host has
@@ -1270,7 +1258,7 @@ function fractionOf(ref, value, frame) {
   const field = ref.split(".").pop()
   let top
   if (isPercent(field)) top = 100
-  else top = Number((frame?.peaks || {})[ref]) || SCALE[field]
+  else top = Number((frame?.peaks || {})[ref]) || caps.full_scale[field]
   if (!top) return null
   return Math.max(0, Math.min(1, value / top))
 }
@@ -2347,8 +2335,6 @@ function windowsHelp(state) {
 
 // -- live ------------------------------------------------------------------
 
-const PERCENT = ["pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct"]
-
 // Everything on a frame beside the groups of readings: collect.FRAME_SCALARS, held to it
 // by a test. `peaks` is kept out of the signature below: it is scale, not a reading.
 const FRAME_SCALARS = ["v", "t", "seq", "slow_rev"]
@@ -2449,7 +2435,7 @@ function readingList(item) {
     const shown = el("dd", { textContent: reading(value) })
     // What did not fit, for anyone who wants to see what a source is actually sending.
     if (value && typeof value === "object") shown.title = JSON.stringify(value)
-    if (PERCENT.includes(key) && typeof value === "number") {
+    if (caps.percent_fields.includes(key) && typeof value === "number") {
       shown.style.setProperty("--at", `${Math.max(0, Math.min(100, value))}%`)
     }
     rows.push(el("dt", { textContent: key }), shown)

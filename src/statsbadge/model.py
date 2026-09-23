@@ -57,9 +57,10 @@ def label(group, field):
     return FIELD_LABELS.get(group, {}).get(field, field.replace("_", " ").capitalize())
 
 
-# Fields whose natural range is 0-100, so a gauge needs no scale hint.
+# Fields whose natural range is 0-100, so a gauge needs no scale hint. `cores` is a list
+# of them.
 PERCENT_FIELDS = frozenset(
-    ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct")
+    ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores")
 )
 
 # Fields whose value is a list, which only the kinds that draw a lane or a bar each can use.

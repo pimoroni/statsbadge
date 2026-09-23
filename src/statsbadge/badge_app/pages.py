@@ -120,21 +120,20 @@ NAMES = {
     "sys.uptime_s": "UPTIME", "sys.arch": "ARCH",
 }
 
-# Full-scale for a field that is not a percentage, which is where a bar ends.
-SCALE = {
-    "temp": 100.0, "power": 250.0, "package_w": 150.0, "rpm": 6000.0,
-    "freq": 6000.0, "clock": 3000.0,
-    "up_bps": 12.5e6, "down_bps": 12.5e6, "read_bps": 500e6, "write_bps": 500e6,
-    "volts": 1.6,       # a core rail, which sits near 1.1
-}
-
-# `cores` is a list of percentages, which the name does not say.
-PERCENT = ("pct", "swap_pct", "mem_pct", "fan_pct", "battery_pct", "cores")
+# Where each ref's gauge ends, and which refs are already 0-100, off the layout.
+SCALES = {}
+PERCENTS = ()
 
 
-def is_percent(field):
-    """Return whether a reading is already 0-100, by suffix as well as by name."""
-    return field in PERCENT or field.endswith("_pct")
+def use_facts(scales, percent):
+    """Take the full scales and percentages the layout carried."""
+    global SCALES, PERCENTS
+    SCALES = scales or {}
+    PERCENTS = frozenset(percent or ())
+
+
+def is_percent(ref):
+    return ref in PERCENTS
 
 # Fields where a high reading is the good one, so the ramp is walked backwards.
 GOOD_HIGH = ("battery_pct",)
@@ -199,14 +198,13 @@ def fraction_of(ref, value, page=None, frame=None):
     """Return where a value sits on 0-1, for a gauge."""
     if value is None or isinstance(value, (str, bool)):
         return None
-    field = field_of(ref)
     if page and page.get("max"):
         top = float(page["max"])
-    elif is_percent(field):
+    elif is_percent(ref):
         top = 100.0
     else:
         # The host's peak where it sent one: it tracks throughput.
-        top = peak_of(ref, frame) or SCALE.get(field)
+        top = peak_of(ref, frame) or SCALES.get(ref)
         if top is None:
             return None
     try:
@@ -228,7 +226,7 @@ def scale_note(ref, frame):
     peak = peak_of(ref, frame)
     if peak is None:
         return None
-    return "peak " + draw.reading(peak, field_of(ref))
+    return "peak " + draw.reading(peak, ref)
 
 
 def render(page, frame, history, theme, index, total, subtitle=None):
@@ -252,16 +250,15 @@ def _dial(page, frame, _history, theme):
     value = value_of(frame, ref)
     fraction = fraction_of(ref, value, page, frame)
     field = field_of(ref)
-    under = scale_note(ref, frame) or draw.short_unit(field)
+    under = scale_note(ref, frame) or draw.short_unit(ref)
     draw.dial(theme, fraction, draw.fmt(value, field), under, cold=value is None,
               hot=severity_of(ref, fraction), backwards=field in GOOD_HIGH)
     readouts = page.get("readouts", [])[:3]
     for readout_ref, y in zip(readouts, look.readout_rows(len(readouts))):
         readout_value = value_of(frame, readout_ref)
-        readout_field = field_of(readout_ref)
         readout_fraction = fraction_of(readout_ref, readout_value, None, frame)
         draw.readout(theme, y, name_for(readout_ref),
-                     draw.reading(readout_value, readout_field), readout_fraction,
+                     draw.reading(readout_value, readout_ref), readout_fraction,
                      hot=severity_of(readout_ref, readout_fraction))
 
 
@@ -271,10 +268,10 @@ def _bars(page, frame, _history, theme):
     if not isinstance(values, list):
         values = [] if values is None else [values]
     # The scale the page sets, else the full scale the host sent for it, else a percentage.
-    maximum = float(page.get("max") or peak_of(ref, frame) or SCALE.get(field_of(ref))
+    maximum = float(page.get("max") or peak_of(ref, frame) or SCALES.get(ref)
                     or 100.0)
     names = value_of(frame, ref + LANE_NAMES)
-    draw.bars(theme, values, maximum, field_of(ref),
+    draw.bars(theme, values, maximum, ref,
               _swept_lanes(ref, values, maximum),
               names if isinstance(names, list) else None)
 
@@ -312,10 +309,9 @@ def _graph(page, frame, history, theme):
             if value is not None:
                 series[i] = [value, value]
     # names_for, not name_for: two domains' requests are both REQUESTS by field name.
-    labels = list(zip(names_for(refs), [field_of(ref) for ref in refs]))
-    field = field_of(refs[0]) if refs else "pct"
+    labels = list(zip(names_for(refs), refs))
     maximum = float(page["max"]) if page.get("max") else (
-        100.0 if is_percent(field) else None)
+        100.0 if refs and is_percent(refs[0]) else None)
     draw.graph(theme, series, labels, maximum, shift=_walk(refs))
 
 
@@ -326,9 +322,8 @@ def _grid(page, frame, _history, theme):
     entries = []
     for ref in refs:
         value = value_of(frame, ref)
-        field = field_of(ref)
         fraction = fraction_of(ref, value, None, frame)
-        entries.append((name_for(ref), draw.reading(value, field), fraction,
+        entries.append((name_for(ref), draw.reading(value, ref), fraction,
                         icon_for(ref, by_group), severity_of(ref, fraction)))
     draw.grid(theme, entries)
 
@@ -367,7 +362,7 @@ def _dials(page, frame, _history, theme):
         entries.append((group.upper() if by_group else name_for(ref),
                         draw.fmt(value, field), fraction,
                         icon_for(ref, by_group),
-                        draw.short_unit(field),
+                        draw.short_unit(ref),
                         severity_of(ref, fraction)))
     draw.dials(theme, entries)
 
@@ -377,7 +372,7 @@ def _text(page, frame, _history, theme):
     entries = []
     for ref in page.get("fields", [])[:7]:
         value = value_of(frame, ref)
-        entries.append((name_for(ref), draw.reading(value, field_of(ref))))
+        entries.append((name_for(ref), draw.reading(value, ref)))
     draw.lines(theme, entries)
 
 
@@ -390,7 +385,7 @@ def _notify(page, frame, _history, theme):
             items.append(value)
         elif value is not None or not items:
             # An empty counter still gets its label, naming what a page of them is for.
-            counters.append((name_for(ref), draw.reading(value, field_of(ref))))
+            counters.append((name_for(ref), draw.reading(value, ref)))
     draw.notification(theme, items[:3], counters)
 
 
@@ -537,7 +532,7 @@ def _series_for(ref, frame, history, page=None):
     peak = None
     if page and page.get("max"):
         peak = float(page["max"])
-    elif is_percent(field_of(ref)):
+    elif is_percent(ref):
         peak = 100.0
     if peak is None:
         peak = max((p for p in points if p is not None), default=1.0)
@@ -550,12 +545,11 @@ def _rings(page, frame, _history, theme):
     labels = names_for(refs)
     for index, ref in enumerate(refs):
         value = value_of(frame, ref)
-        field = field_of(ref)
         fraction = fraction_of(ref, value, page, frame)
         # Coloured by its reading, not its position, or the outermost ring always looks calm.
         pen = (theme.at(severity_of(ref, fraction)) if fraction is not None
                else theme.grid)
-        entries.append((labels[index], draw.reading(value, field), fraction, pen,
+        entries.append((labels[index], draw.reading(value, ref), fraction, pen,
                         scale_note(ref, frame)))
     draw.rings(theme, entries)
 
@@ -567,7 +561,7 @@ def _spark(page, frame, history, theme):
     for index, ref in enumerate(refs):
         points, peak = _series_for(ref, frame, history, page)
         value = value_of(frame, ref)
-        entries.append((labels[index], draw.reading(value, field_of(ref)),
+        entries.append((labels[index], draw.reading(value, ref),
                         points, peak))
     draw.sparklines(theme, entries)
 
@@ -578,7 +572,7 @@ def _radar(page, frame, _history, theme):
     entries = []
     for index, ref in enumerate(refs):
         value = value_of(frame, ref)
-        entries.append((labels[index], draw.reading(value, field_of(ref)),
+        entries.append((labels[index], draw.reading(value, ref),
                         fraction_of(ref, value, page, frame), theme.accent))
     draw.radar(theme, entries)
 
@@ -595,7 +589,7 @@ def _trend(page, frame, history, theme):
         if was is not None:
             delta = float(value) - float(was)
     fraction = fraction_of(ref, value, page, frame)
-    draw.trend(theme, draw.fmt(value, field), draw.short_unit(field), name_for(ref),
+    draw.trend(theme, draw.fmt(value, field), draw.short_unit(ref), name_for(ref),
                delta, points, peak, fraction, hot=severity_of(ref, fraction),
                shift=_walk((ref,)), field=field)
 
@@ -616,7 +610,7 @@ def _waterfall(page, frame, history, theme):
     ref = page.get("field", "cpu.cores")
     values = value_of_list(frame, ref)
     # The scale the page sets, else the full scale the host sent for it, else a percentage.
-    maximum = float(page.get("max") or peak_of(ref, frame) or SCALE.get(field_of(ref))
+    maximum = float(page.get("max") or peak_of(ref, frame) or SCALES.get(ref)
                     or 100.0)
 
     if values and frame.get("seq") != _wf_seq:

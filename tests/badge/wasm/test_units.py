@@ -7,7 +7,8 @@ import draw
 import look
 import pages
 
-SENT = {"used_mb": "MB", "uptime_s": "s", "rpm": "rpm", "kwh": "kWh"}
+SENT = {"mem.used_mb": "MB", "sys.uptime_s": "s", "fans.rpm": "rpm", "energy.kwh": "kWh",
+        "cpu.temp": "°C"}
 
 
 class Units(unittest.TestCase):
@@ -19,30 +20,38 @@ class Units(unittest.TestCase):
         draw.use_units(self.was)
 
     def test_a_rescaled_family_takes_the_unit_the_figure_landed_in(self):
-        shown = {field: draw.fmt(value, field) + draw.short_unit(field)
-                 for field, value in (("used_mb", 11400.0), ("uptime_s", 273600),
-                                      ("rpm", 2200.0), ("kwh", 0.25))}
+        shown = {ref: draw.reading(value, ref)
+                 for ref, value in (("mem.used_mb", 11400.0), ("sys.uptime_s", 273600),
+                                    ("fans.rpm", 2200.0), ("energy.kwh", 0.25))}
         # 0.25 shows as 0.3: MicroPython rounds a half away from zero where CPython
         # rounds it to even. The badge is what these strings have to match.
-        self.assertEqual(shown, {"used_mb": "11.1GB", "uptime_s": "3d4h",
-                                 "rpm": "2200rpm", "kwh": "0.3kWh"})
+        self.assertEqual(shown, {"mem.used_mb": "11.1GB", "sys.uptime_s": "3d4h",
+                                 "fans.rpm": "2200rpm", "energy.kwh": "0.3kWh"})
+
+    def test_a_field_named_like_another_takes_its_own_unit(self):
+        self.assertEqual(draw.short_unit("cpu.temp"), "°C")
+        self.assertEqual(draw.short_unit("energy.temp"), "")
 
     def test_a_field_the_host_said_nothing_about_takes_nothing(self):
-        self.assertEqual(draw.short_unit("nonesuch"), "")
+        self.assertEqual(draw.short_unit("energy.nonesuch"), "")
 
     def test_a_new_table_drops_the_readings_baked_under_the_old_one(self):
-        draw.reading(0.25, "kwh")
+        draw.reading(0.25, "energy.kwh")
         self.assertTrue(draw._readings, "nothing was baked to drop")
-        draw.use_units({"kwh": "kW"})
+        draw.use_units({"energy.kwh": "kW"})
         self.assertEqual(draw._readings, {}, "a reading kept the unit it was baked with")
 
     def test_a_layout_hands_them_over(self):
         """The app takes them where it takes the group names."""
         draw.use_units({})
         one = app.App()
-        one.layout = {"pages": [], "units": SENT}
+        one.layout = {"pages": [], "units": SENT, "scales": {"energy.kwh": 2.5},
+                      "percent": ["energy.share"]}
         one.apply_layout()
-        self.assertEqual(draw.short_unit("kwh"), "kWh", draw.UNITS)
+        self.assertEqual(draw.short_unit("energy.kwh"), "kWh", draw.UNITS)
+        self.assertEqual(pages.fraction_of("energy.kwh", 1.25), 0.5)
+        self.assertEqual(pages.fraction_of("energy.share", 40.0), 0.4)
+        pages.use_facts({}, ())
 
 
 class EveryFigureCarriesAUnit(unittest.TestCase):
