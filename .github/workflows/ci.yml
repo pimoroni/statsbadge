@@ -165,11 +165,11 @@ jobs:
           - directory: extensions/statsbadge-clock
           - directory: extensions/statsbadge-iss
           - directory: extensions/statsbadge-quakes
-          - repository: pimoroni/statsbadge-bluesky
-          - repository: pimoroni/statsbadge-cloudflare
-          - repository: pimoroni/statsbadge-mastodon
-          - repository: pimoroni/statsbadge-octopus
-          - repository: pimoroni/statsbadge-wildfires
+          - repository: Gadgetoid/statsbadge-bluesky
+          - repository: Gadgetoid/statsbadge-cloudflare
+          - repository: Gadgetoid/statsbadge-mastodon
+          - repository: Gadgetoid/statsbadge-octopus
+          - repository: Gadgetoid/statsbadge-wildfires
     uses: ./.github/workflows/extension.yml
     with:
       repository: ${{ matrix.repository || '' }}
