@@ -538,7 +538,7 @@ def rules_of(css):
             buffer = ""
         elif char == "}":
             declarations[-1] += buffer
-            found.append((" ".join(chain), declarations[-1]))
+            found.append((" ".join(chain).replace(" &", ""), declarations[-1]))
             chain.pop()
             declarations.pop()
             buffer = ""
@@ -576,9 +576,14 @@ def test_a_hidden_row_is_actually_hidden(web_dir):
     assert len({depth for _tag, depth, _named in parser.found}) > 1, parser.found
 
     # The two selectors are otherwise close enough for source order to settle which wins.
-    for selector, declarations in rules_of(css):
+    rules = rules_of(css)
+    hiding = {selector for selector, declarations in rules
+              if selector.endswith("[hidden]") and "display: none" in declarations}
+    for selector, declarations in rules:
         last = re.split(r"[\s>+~]+", selector)[-1]
         if "display:" not in declarations or "[hidden]" in selector:
+            continue
+        if f"{selector}[hidden]" in hiding:
             continue
         if not (selector.startswith("main") or selector == last):
             continue            # it cannot reach inside a sheet

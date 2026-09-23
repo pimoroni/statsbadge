@@ -1,8 +1,3 @@
-/* -- the faces the badge draws with -------------------------------------- */
-
-/* The preview canvases and the wordmark; the rest of the UI keeps the system stack.
-   The symbols are subset from Material Symbols against ci/badge-icons.txt, the corpus
-   badge_app/icons.af is built from, so the two cannot show different pictures. */
 @font-face {
   font-family: Lexend;
   src: url("/lexend-var.ttf") format("truetype-variations");
@@ -16,11 +11,6 @@
   font-display: block;
 }
 
-/* -- palette and scale --------------------------------------------------- */
-
-/* The accent and the ramp are the dark theme's, served generated as /tokens.css so they
-   cannot drift from themes.toml. The greys below belong to the UI. */
-
 :root {
   font-size: 100%;
 
@@ -29,8 +19,6 @@
   --text-md: 0.875rem;
   --text-sm: 0.75rem;
   --gap: 20px;
-
-  /* Where the page stops widening. */
   --page: 1280px;
   --pad: 16px;
   --bg: #0e0e11;
@@ -45,8 +33,6 @@
   --on-accent: #0a1614;
 }
 
-/* -- page furniture ------------------------------------------------------ */
-
 main { max-width: var(--page); margin-inline: auto; }
 
 * { box-sizing: border-box; }
@@ -58,7 +44,6 @@ body {
   font: var(--text-md)/1.5 Lexend, ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
-/* The title as the site sets it: lowercase, tight, over the same ramp. */
 h1 {
   display: flex; align-items: center; gap: 0.25em; width: fit-content;
   font-size: 3rem; font-weight: 600; margin: 0; letter-spacing: -0.03em;
@@ -84,8 +69,6 @@ p { margin: 0 0 8px; color: var(--dim); font-size: var(--text-sm); }
 
 small { color: var(--dim); font-size: var(--text-sm); }
 code, samp { font-family: ui-monospace, monospace; font-size: var(--text-sm); }
-
-/* -- header -------------------------------------------------------------- */
 
 body > header {
   display: flex;
@@ -120,14 +103,9 @@ body > header {
   nav button[aria-current]:hover { background: var(--accent-lit); }
 }
 
-/* -- pairing ------------------------------------------------------------- */
-
 dialog {
   position: absolute; inset: 100% var(--gap) auto auto; width: 340px;
   margin: 0; padding: 12px; border: 0;
-
-  /* Panel, so the fields and rows inside are drawn in panel2. No shadow: it hangs off
-     the bottom of a sticky header and paints up over it. */
   background: var(--panel); border-left: 3px solid var(--accent); color: var(--ink);
   outline: none;
 
@@ -147,8 +125,6 @@ dialog {
 
   li div { grid-column: 1 / -1; display: flex; gap: 6px; }
 }
-
-/* -- updating a badge over USB ------------------------------------------- */
 
 dialog.installer {
   width: 400px;
@@ -176,7 +152,6 @@ dialog.installer {
   }
 }
 
-/* Above whichever tab is open, and laid out like the notice a pruned page gets. */
 main > p.stale {
   display: flex; align-items: center; gap: 10px;
   margin: var(--gap) var(--gap) calc(var(--gap) - 10px);
@@ -186,8 +161,6 @@ main > p.stale {
 }
 
 main > p.stale[hidden] { display: none; }
-
-/* -- the sheet a tab shows ----------------------------------------------- */
 
 main > section {
   display: grid;
@@ -226,8 +199,6 @@ main > section section:not(:has(> section)) {
 
 main > section section[hidden] { display: none; }
 
-/* A row of controls belonging to the field above it. Sits under the field's own column,
-   not the label's, so it reads as part of that setting. */
 main section > span:is([data-tint], .refs):not([hidden]) {
   grid-column: 2 / -1;
   display: flex; align-items: center; gap: 8px; min-width: 0;
@@ -237,8 +208,6 @@ main section > span:is([data-tint], .refs):not([hidden]) {
 }
 
 main section > span.refs > select { flex: 1; min-width: 0; }
-
-/* -- controls ------------------------------------------------------------ */
 
 button {
   background: var(--panel2); color: var(--ink); border: 0;
@@ -264,8 +233,6 @@ output {
   min-width: 62px; text-align: right;
 }
 
-/* -- readings ------------------------------------------------------------ */
-
 dl {
   display: grid; grid-template-columns: 1fr minmax(90px, auto); gap: 1px 8px;
   margin: 0; font-size: var(--text-sm);
@@ -280,12 +247,8 @@ dl {
   }
 }
 
-/* -- pages --------------------------------------------------------------- */
-
 main form { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* The second pair on the row, so Quick add does not read as a second button for the
-   picker beside it. */
 main form > select:nth-of-type(2) { margin-left: 12px; }
 
 main p[role="status"] {
@@ -309,8 +272,6 @@ main > section > ol {
 
   li[data-dragging] { opacity: 0.4; }
 
-  /* Where it will land: down the edge a card would go beside, across the edge a row
-     would go above or below. */
   > li[data-over="before"] { box-shadow: inset 3px 0 0 var(--accent); }
   > li[data-over="after"] { box-shadow: inset -3px 0 0 var(--accent); }
   ol li[data-over="before"] { box-shadow: inset 0 3px 0 var(--accent); }
@@ -330,16 +291,11 @@ main > section > ol {
 
   header h3 .kind { flex: none; }
 
-  /* The name somebody gave the page, beside the kind of page it is. The kind is in the
-     accent, this is what was typed. A long one gives way rather than pushing the buttons
-     off the end of the row. */
   header h3 .given {
     color: var(--ink); min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
-  /* A page still called after its own kind has nothing to add, and an empty span would
-     still take the gap between the two. */
   header h3 .given:empty { display: none; }
 
   header h3::before {
@@ -347,7 +303,6 @@ main > section > ol {
     color: var(--dim); font-variant-numeric: tabular-nums; flex: none;
   }
 
-  /* The same box as the button at the other end of the row. */
   ol .grip {
     background: var(--panel2); color: var(--ink);
     padding: 3px 7px; font-size: var(--text-sm);
@@ -366,15 +321,10 @@ main > section > ol {
                                font-size: var(--text-sm); }
 }
 
-/* -- extensions ---------------------------------------------------------- */
-
 p.bad { color: var(--bad); }
 p.good { color: var(--good); }
 
-/* -- help ---------------------------------------------------------------- */
-
 .help {
-  /* A sudoers line is one long line, and the boxes here are prose rather than fields. */
   grid-template-columns: repeat(auto-fill, minmax(26rem, 1fr));
 
   pre {
@@ -398,16 +348,12 @@ p.good { color: var(--good); }
   label { grid-column: 1; }
   input[type="text"] { grid-column: 2; }
 
-  /* Across both. Left in column one it sets the width of a max-content track, and a hint
-     of any length puts the field off the card. */
   p { grid-column: 1 / -1; margin: 0; color: var(--dim); font-size: var(--text-sm); }
   button { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
   dl { grid-column: 1 / -1; }
   dd { font-family: ui-monospace, monospace; color: var(--dim); }
   dd:empty::before { content: "not set"; font-style: italic; }
 }
-
-/* -- this host and live readings ----------------------------------------- */
 
 main ul {
   list-style: none; margin: 0; padding: 0;
@@ -418,8 +364,6 @@ main ul {
   li small { display: block; color: inherit; }
 }
 
-/* What is installed fills the left, what could be installed sits down the right. Narrow
-   enough and they stack instead. */
 .configured, .offer { grid-column: 1 / -1; }
 
 .configured {
@@ -436,16 +380,12 @@ main ul {
                                   min-width: 0; }
 .configured section > header button[aria-expanded] { padding: 2px 6px; min-width: 24px; }
 
-/* The package, beside the name somebody reads. The heading is in the accent, this is in
-   the ink. */
 .given {
   color: var(--ink);
   font-size: var(--text-sm); min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* What an extension has to be told, beside the name: a note against a heading, so it is
-   in the dim and not in the accent. */
 .wants {
   color: var(--dim); font-weight: 400;
   font-size: var(--text-sm); white-space: nowrap;
@@ -457,8 +397,6 @@ main ul {
   .extensions > .offer { grid-column: 3; }
 }
 
-/* The card is a three column grid, and it places no form, so one would sit in the narrow
-   first column. */
 .offer > form { grid-column: 1 / -1; margin-top: 4px; }
 .offer > form input { flex: 1; min-width: 0; }
 
@@ -486,13 +424,9 @@ main section:has(> section) {
   }
 }
 
-/* -- badges -------------------------------------------------------------- */
-
 main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
 
 .badges section {
-  /* What the badge is drawing, laid out on the box's own columns so each term sits under
-     the Name label and each answer under the field. */
   > dl {
     grid-template-columns: subgrid; gap: 2px 10px;
 
@@ -501,12 +435,9 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
     dd code { color: var(--dim); }
   }
 
-  /* Forget away from Configure, one at each end, since one of them is destructive. */
   > footer { display: flex; gap: 6px; }
   > footer .add { margin-left: auto; }
 }
-
-/* -- the theme picker ---------------------------------------------------- */
 
 .themes {
   .tabs { display: flex; gap: 2px; margin-bottom: 10px; border-bottom: 4px solid var(--accent); }
@@ -541,9 +472,6 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
   .swatches button[aria-pressed="true"] { border-color: var(--ink); }
 }
 
-/* -- the theme preview --------------------------------------------------- */
-
-/* Four pages at the badge's 320x240, drawn on canvas. The colours come from /api/theme. */
 .screens {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -557,9 +485,6 @@ main section[aria-current] { box-shadow: inset 3px 0 0 var(--accent); }
   }
 }
 
-/* The settings page. The theme box takes two thirds and everything else stacks in the
-   remaining third; under 56rem they go one above the other. Laid out for a desktop: the
-   server binds to loopback. */
 main > section[aria-label="Settings"] {
   > section[aria-label="Theme"] { grid-column: 1 / -1; }
 
@@ -569,20 +494,16 @@ main > section[aria-label="Settings"] {
     color: var(--ink); font-size: var(--text-lg);
   }
 
-
   @media (width >= 56rem) {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     grid-template-rows: auto auto repeat(5, auto) 1fr;
 
     > section[aria-label="Theme"] { grid-column: 1; grid-row: span 6; }
 
-    /* The six panels beside it, and not the badge list, which runs the full width
-       underneath. */
     > section:not([aria-label="Theme"], :has(> section)) { grid-column: 2; }
   }
 }
 
-/* Three across, as they are on the badge, each under the letter printed beside it. */
 main > section section.buttons {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 10px;
@@ -598,9 +519,6 @@ main > section section.buttons {
   > select { grid-row: 3; grid-column: auto; justify-self: stretch; max-width: 100%; }
 }
 
-/* Narrow, everything in the theme box is full width and stacked. Wide, it becomes two
-   columns the width of a preview each. The fields keep their label beside them by being a
-   grid of their own inside the left column. */
 main > section section[aria-label="Theme"] {
   align-content: start;
   column-gap: 8px;
@@ -622,16 +540,12 @@ main > section section[aria-label="Theme"] {
     &[hidden] { display: none; }
   }
 
-  /* No rows named. The headings and the previews run the full width; the fields take the
-     first column, which leaves the picker the second of the same row. */
   @media (width >= 80rem) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
     > .fields { grid-column: 1; }
   }
 }
-
-/* -- toast --------------------------------------------------------------- */
 
 .toast {
   position: fixed; bottom: var(--gap); left: 50%;
