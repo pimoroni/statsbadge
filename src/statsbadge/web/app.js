@@ -2,8 +2,8 @@ import { $, all, el, pick, titleCase, toast } from "./js/dom.js"
 import { api, configPath } from "./js/api.js"
 import { nextId, settingRow } from "./js/forms.js"
 import { fieldLabel, numericRefs, poolFor, refSelect } from "./js/refs.js"
-import { drawThumb, THUMB_H, THUMB_W } from "./js/preview.js"
 import { createScreens } from "./js/screens.js"
+import { createThemes } from "./js/themes.js"
 
 let config = null
 let caps = null
@@ -13,6 +13,14 @@ let whose = null
 let badges = {}
 
 const screens = createScreens({ holder: $("screens"), chip: $("accentbchip") })
+const themes = createThemes({
+  picker: $("theme"),
+  tintNodes: all("[data-tint]"),
+  accents: pick("div.accents"),
+  second: $("accentb"),
+  changed: markDirty,
+  repaint: () => screens.show(config, caps),
+})
 
 function markDirty() {
   dirty = true
@@ -619,10 +627,7 @@ function secretsBlock(name, stored, secrets) {
 }
 
 function renderLook() {
-  themeTab = null
-  renderThemes()
-  renderTint()
-  fetchPalettes()
+  themes.render(config, caps)
 
   bindRange("interval", "interval_ms", (value) => `${value} ms`)
   bindRange("brightness", "brightness", (value) => `${value}%`, 100)
@@ -639,7 +644,7 @@ function renderLook() {
   bindSelect("gaugefill", () => config.gauge_fill || "solid", (value) => {
     config.gauge_fill = value
     screens.show(config, caps)
-    paintThumbs()
+    themes.paintThumbs()
   })
 
   bindCheck("animate", "animate")
@@ -736,109 +741,6 @@ function renderButtons() {
       markDirty()
     }
   }
-}
-
-let themeTab = null
-
-let palettes = {}
-let palettesWanted = 0
-
-const THEME_TABS = [["dark", "Dark"], ["light", "Light"], ["tinted", "Tinted"]]
-
-const tabOf = (record) => (!record ? "dark" : record.derived ? "tinted" : record.mode)
-
-function cardLabel(record) {
-  if (record.derived) return record.label
-  const suffix = ` ${titleCase(record.mode)}`
-  return record.label.endsWith(suffix) ? record.label.slice(0, -suffix.length) : record.label
-}
-
-function renderThemes() {
-  if (!themeTab) themeTab = tabOf((caps.themes || []).find((entry) => entry.name === config.theme))
-  const tabs = el("div", { className: "tabs" }, THEME_TABS.map(([name, text]) => {
-    const tab = el("button", { type: "button", textContent: text,
-                               "aria-pressed": String(name === themeTab) })
-    tab.onclick = () => { themeTab = name; renderThemes() }
-    return tab
-  }))
-  const shown = (caps.themes || []).filter((record) => tabOf(record) === themeTab)
-  if (themeTab === "tinted") shown.sort((a, b) => (a.mode === b.mode ? 0 : a.mode === "dark" ? -1 : 1))
-  const cards = el("div", { className: "cards" }, shown.map((record) => {
-    const card = el("button", { type: "button", "data-theme": record.name,
-                                "aria-pressed": String(record.name === config.theme) },
-                    el("canvas", { width: THUMB_W * 2, height: THUMB_H * 2 }),
-                    el("span", { textContent: cardLabel(record) }))
-    card.onclick = () => {
-      config.theme = record.name
-      markDirty()
-      renderThemes()
-      screens.show(config, caps)
-    }
-    return card
-  }))
-  $("theme").replaceChildren(tabs, cards)
-  for (const node of all("[data-tint]")) node.hidden = themeTab !== "tinted"
-  paintThumbs()
-}
-
-async function fetchPalettes() {
-  const query = new URLSearchParams({ accent: (config.tint || []).join(","),
-                                      second: config.accent_b || "same" })
-  const mine = ++palettesWanted
-  let answer
-  try {
-    answer = await api(`/api/themes?${query}`)
-  } catch (error) {
-    return
-  }
-  if (mine !== palettesWanted) return
-  palettes = answer.palettes
-  paintThumbs()
-}
-
-function paintThumbs() {
-  for (const card of all("#theme .cards button")) {
-    const palette = palettes[card.dataset.theme]
-    if (!palette) continue
-    const ctx = card.querySelector("canvas").getContext("2d")
-    ctx.setTransform(2, 0, 0, 2, 0, 0)
-    drawThumb(ctx, palette, config.gauge_fill)
-  }
-}
-
-function renderTint() {
-  const second = $("accentb")
-  if (!second.options.length) {
-    second.replaceChildren(...(caps.accent_b_rules || []).map((rule) =>
-      el("option", { value: rule, textContent: titleCase(rule) })))
-  }
-  second.value = config.accent_b || "same"
-  second.onchange = () => {
-    config.accent_b = second.value
-    markDirty()
-    fetchPalettes()
-    renderTint()
-  }
-
-  pick("div.accents").replaceChildren(swatches())
-  screens.show(config, caps)
-}
-
-function swatches() {
-  const offered = Object.values(caps.accents || {}).flat()
-  return el("div", { className: "swatches" }, offered.map((accent) => {
-    const shown = `rgb(${accent.join(", ")})`
-    const chip = el("button", { type: "button", title: shown,
-                                "aria-pressed": String(String(config.tint) === String(accent)) })
-    chip.style.background = shown
-    chip.onclick = () => {
-      config.tint = accent.slice()
-      markDirty()
-      fetchPalettes()
-      renderTint()
-    }
-    return chip
-  }))
 }
 
 const REMEMBERED = "statsbadge.whose"
@@ -1483,7 +1385,7 @@ async function refreshCaps() {
   renderSources()
   renderButtons()
   renderCaseLights()
-  renderThemes()
+  themes.refresh(config, caps)
   return true
 }
 
