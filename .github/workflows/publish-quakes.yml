@@ -1,8 +1,8 @@
 name: Publish quakes
 
-# Publishes statsbadge-quakes to PyPI from a quakes-vN.N.N release tag. The release scheme,
-# the trusted-publishing setup and why each package has a workflow file to itself are under
-# Packaging in DEVELOPMENT.md.
+# Publishes statsbadge-quakes to PyPI from a vN.N.N release tag, alongside statsbadge. The
+# release scheme, the trusted-publishing setup and why each package has a workflow file to
+# itself are under Packaging in DEVELOPMENT.md.
 on:
   release:
     types: [published]
@@ -15,11 +15,10 @@ jobs:
   build:
     if: >
       github.event_name == 'workflow_dispatch'
-      || startsWith(github.event.release.tag_name, 'quakes-v')
+      || startsWith(github.event.release.tag_name, 'v')
     uses: ./.github/workflows/extension-build.yml
     with:
       directory: extensions/statsbadge-quakes
-      tag-prefix: quakes-v
 
   publish:
     name: Publish to PyPI

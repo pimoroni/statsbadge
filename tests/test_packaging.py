@@ -57,23 +57,20 @@ def test_the_version_is_written_down_once():
         short = name.removeprefix("statsbadge-")
         assert plugin["project"].get("version") is None, name
         assert "version" in plugin["project"]["dynamic"], name
-        # Its tags and nobody else's, or a release of one extension versions them all.
-        prefix = plugin["tool"]["uv-dynamic-versioning"]["pattern-prefix"]
-        assert prefix == f"{short}-", (name, prefix)
-        # The prefix the workflow fires on is the prefix the build strips.
+        # statsbadge's tags, so one vN.N.N releases every package here at N.N.N.
+        assert "uv-dynamic-versioning" not in plugin["tool"], (name, plugin["tool"])
         workflow = yaml.safe_load(
             (workflows / f"publish-{short}.yml").read_text(encoding="utf-8"))
-        assert workflow["jobs"]["build"]["with"]["tag-prefix"] == f"{prefix}v", (short, prefix)
+        assert "tag-prefix" not in workflow["jobs"]["build"]["with"], short
         for module in (directory / "src").rglob("__init__.py"):
             assert not re.search(r"^__version__\s*=", module.read_text(encoding="utf-8"), re.M), module
 
 
 def test_every_package_here_can_be_published():
-    """Every package here has a publish workflow, each firing on its tag prefix alone."""
-    # Trusted publishing matches on a workflow filename, and a release fires them all.
+    """Every package here has a publish workflow, and each fires on the one vN.N.N tag."""
+    # Trusted publishing matches on a workflow filename, so each package has its own.
     workflows = pathlib.Path(".github/workflows")
     main = (workflows / "publish.yml").read_text(encoding="utf-8")
-    # The top-level package takes the plain tags, and lets an extension's release alone.
     assert "startsWith(github.event.release.tag_name, 'v')" in main
 
     found = []
@@ -91,9 +88,8 @@ def test_every_package_here_can_be_published():
         workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
         build = workflow["jobs"]["build"]
         assert build["uses"] == "./.github/workflows/extension-build.yml", path.name
-        assert build["with"] == {"directory": f"extensions/{name}",
-                                 "tag-prefix": f"{short}-v"}, (path.name, build["with"])
-        assert f"startsWith(github.event.release.tag_name, '{short}-v')" in build["if"], path.name
+        assert build["with"] == {"directory": f"extensions/{name}"}, (path.name, build["with"])
+        assert "startsWith(github.event.release.tag_name, 'v')" in build["if"], path.name
 
         publish = workflow["jobs"]["publish"]
         assert publish["needs"] == "build", path.name

@@ -18,13 +18,10 @@ Issues = "https://github.com/pimoroni/statsbadge/issues"
 [project.entry-points."statsbadge.sources"]
 clock = "statsbadge_clock:Clock"
 
-# The tag is the version, and this package's tags carry its own prefix so a release of one
-# extension is not a release of the others: clock-v0.2.0 is this one at 0.2.0.
+# The tag is the version: one vN.N.N tag releases statsbadge and every extension in this
+# repository at N.N.N.
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
-
-[tool.uv-dynamic-versioning]
-pattern-prefix = "clock-"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/statsbadge_clock"]

@@ -272,16 +272,13 @@ extension follows: `statsbadge-clock` on PyPI, `statsbadge_clock` to import, `cl
 add`. Naming the distribution and the module differently needs uv_build's `module-name`,
 which older uv treats as a fatal parse error rather than a warning.
 
-The backend is `hatchling` with `uv-dynamic-versioning`. Each extension sets `pattern-prefix`
-so it reads the tags for its own package, which has to match the prefix its workflow fires on;
-a test holds the two together. The precompiled app is gitignored, so `artifacts` names it
-explicitly or the wheel quietly ships sources alone.
+The backend is `hatchling` with `uv-dynamic-versioning`. The precompiled app is gitignored,
+so `artifacts` names it explicitly or the wheel quietly ships sources alone.
 
-Several packages share this repository, and the release tag picks the one a release is for. A
-plain `vN.N.N` tag is statsbadge; a prefixed tag such as `clock-vN.N.N` is that extension.
-Every release fires every publish workflow, so each tests its tag prefix before doing any
-work. Each package needs a workflow file to itself, because PyPI matches a publisher on the
-filename that runs.
+Several packages share this repository and release in lockstep: a `vN.N.N` tag is statsbadge
+and every extension here at N.N.N, which is also what the desktop app, built from the tag,
+reports them as. Each package needs a workflow file to itself, because PyPI matches a
+publisher on the filename that runs. The `clock-vN.N.N` style tags are from before 3.1.0.
 
 What a publish workflow does beyond `uv publish` is
 [`extension-build.yml`](.github/workflows/extension-build.yml), and every extension's checks
