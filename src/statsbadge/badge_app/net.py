@@ -271,6 +271,16 @@ class Client:
                 pass
             self.sock = None
 
+    def reset(self):
+        """Drop the connection and whatever was in flight on it, as for a new host."""
+        self.close()
+        self._gen = None
+        self.status = IDLE
+        self.http_status = None
+        self.body = None
+        self.error = None
+        self.failures = 0
+
     def _connect(self):
         """Start the connection. `_connecting` is what waits for it."""
         info = socket.getaddrinfo(self.config.host, self.config.port,
