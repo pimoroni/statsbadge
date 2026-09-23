@@ -127,11 +127,12 @@ class Markup(html.parser.HTMLParser):
 
 
 class ConfigUI:
-    """The config UI as data: what index.html defines, and what app.js binds each id to."""
+    """The config UI as data: what index.html defines, and what the scripts bind each id to."""
 
     def __init__(self, web):
         self.markup = (web / "index.html").read_text(encoding="utf-8")
-        self.script = (web / "app.js").read_text(encoding="utf-8")
+        self.script = "\n".join(path.read_text(encoding="utf-8")
+                                for path in sorted(web.rglob("*.js")))
         self.css = (web / "app.css").read_text(encoding="utf-8")
         parser = Markup()
         parser.feed(self.markup)
