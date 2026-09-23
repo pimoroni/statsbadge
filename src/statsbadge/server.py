@@ -11,6 +11,7 @@ import platform
 import threading
 import time
 import traceback
+from urllib.parse import urlsplit
 
 from . import (auth, commands, derive, extensions, geocode, identity, install, layout,
                library, push, pushed, recipes, state, themes, tooling)
@@ -28,6 +29,8 @@ REASONS = {
 
 # Lines of install progress kept for the UI to poll.
 INSTALL_LOG = 400
+
+LOCAL_NAMES = ("127.0.0.1", "localhost", "::1")
 
 # Settings the host keeps for itself, under this name in layout.json's settings.
 # Declared in the shape an extension declares its settings.
@@ -366,6 +369,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return False
         return addr.is_loopback
 
+    def _from_local_page(self, method):
+        """Refuse what a browser could send on behalf of a page from somewhere else."""
+        if urlsplit(f"//{self.headers.get('Host', '')}").hostname not in LOCAL_NAMES:
+            return False
+        origin = self.headers.get("Origin")
+        if origin is not None and urlsplit(origin).hostname not in LOCAL_NAMES:
+            return False
+        if method in ("POST", "PUT"):
+            content_type = self.headers.get("Content-Type") or ""
+            if content_type.split(";", 1)[0].strip().lower() != "application/json":
+                return False
+        return True
+
     def _path(self):
         return self.path.split("?", 1)[0]
 
@@ -400,6 +416,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path.startswith("/api/"):
                 if not self._is_local():
                     return self._fail(403, "config API is loopback only")
+                if not self._from_local_page(method):
+                    return self._fail(403, "config API is for the config UI only")
                 return self._config_api(method, path, body)
             if method == "GET":
                 if path == "/tokens.css":

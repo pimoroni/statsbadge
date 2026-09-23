@@ -212,13 +212,13 @@ def test_nodelay_is_set():
     assert server.Handler.disable_nagle_algorithm is True
 
 
-def caller(h, address, path):
+def caller(h, address, path, headers=None):
     """A handler far enough along to be dispatched to, without a socket behind it."""
     class Caller(h.httpd.RequestHandlerClass):
         def __init__(self):
             self.client_address = (address, 51234)
             self.path = path
-            self.headers = {}
+            self.headers = {"Host": f"127.0.0.1:{h.port}", **(headers or {})}
             self.server = h.httpd
             self.answered = None
 
@@ -252,6 +252,27 @@ def test_config_api_is_loopback_only(h):
     badge = caller(h, "10.0.0.5", "/v1/hello")
     badge._dispatch("GET")
     assert badge.answered[0] == 200, badge.answered
+
+
+def test_config_api_refuses_what_another_page_could_send(h):
+    """Loopback is not enough: a browser sends for any page it has open."""
+    body = json.dumps({"add": []}).encode()
+    refused = (
+        ("POST", {"Content-Type": "text/plain"}),
+        ("POST", {"Content-Type": "application/x-www-form-urlencoded"}),
+        ("GET", {"Host": f"rebound.example:{h.port}"}),
+        ("POST", {"Origin": "https://elsewhere.example"}),
+        ("POST", {"Origin": "null"}),
+    )
+    for method, headers in refused:
+        status, answer = h.raw(method, "/api/extensions", body if method == "POST" else None,
+                               headers)
+        assert status == 403, (method, headers, status, answer)
+
+    for origin in (None, f"http://127.0.0.1:{h.port}", f"http://localhost:{h.port}"):
+        headers = {"Origin": origin} if origin else {}
+        status, answer = h.raw("GET", "/api/capabilities", None, headers)
+        assert status == 200, (origin, status, answer)
 
 
 def test_server_identity_is_stable(h):

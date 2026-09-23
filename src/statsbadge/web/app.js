@@ -44,8 +44,9 @@ const SHAPE = {
   badge: { one: null, many: null, max: 0, label: "" },
 }
 
-async function api(path, options) {
-  const response = await fetch(path, options)
+async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...options.headers }
+  const response = await fetch(path, { ...options, headers })
   const body = await response.json().catch(() => null)
   if (!response.ok) throw new Error((body && body.error) || response.statusText)
   return body
@@ -797,7 +798,6 @@ async function changeExtension(verb, name) {
   try {
     done = await api("/api/extensions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [verb]: [name] }),
     })
   } catch (error) {
@@ -1861,7 +1861,6 @@ async function renderGeneral() {
   const save = el("button", { type: "button", className: "primary", textContent: "Save" })
   save.onclick = () => api("/api/settings", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ place: place.value.trim(), latitude: latitude.value,
                            longitude: longitude.value }),
   }).then(() => {
@@ -1985,7 +1984,6 @@ function themeLabel(name) {
 async function rename(id, wanted) {
   const result = await api(`/api/badges/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: wanted }),
   })
   badges[id].name = result.name
@@ -2182,7 +2180,6 @@ async function startInstall() {
   }
   installer.go.disabled = true
   await api("/api/install", { method: "POST",
-                              headers: { "Content-Type": "application/json" },
                               body: JSON.stringify(asking) })
   watchInstall()
 }
@@ -2343,7 +2340,6 @@ function windowsHelp(state) {
   const save = el("button", { type: "button", className: "primary", textContent: "Save" })
   save.onclick = () => api("/api/settings", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ lhm_url: field.value.trim() || state.default }),
   }).then(() => {
     toast("Saved")
@@ -2534,7 +2530,6 @@ async function save() {
     }
     const result = await api(configPath(), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(config),
     })
     config.rev = result.rev

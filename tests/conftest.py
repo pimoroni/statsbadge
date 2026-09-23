@@ -52,7 +52,7 @@ class Harness:
 
     def raw(self, method, path, body=None, headers=None):
         request = urllib.request.Request(self.url(path), data=body, method=method)
-        for key, value in (headers or {}).items():
+        for key, value in {"Content-Type": "application/json", **(headers or {})}.items():
             request.add_header(key, value)
         try:
             with urllib.request.urlopen(request, timeout=5) as response:
