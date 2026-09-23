@@ -679,6 +679,37 @@ def be_pip(argv):
     return 0
 
 
+def shared_options(nested=False):
+    options = argparse.ArgumentParser(
+        add_help=False, argument_default=argparse.SUPPRESS if nested else None)
+
+    def default(value):
+        return {} if nested else {"default": value}
+
+    options.add_argument("--host", **default("0.0.0.0"))
+    options.add_argument("--port", type=int, **default(DEFAULT_PORT))
+    # Tried by default on macOS, and quiet where sudo is not permitted. Named here to
+    # make the attempt explicit, or to prevent it.
+    options.add_argument("--powermetrics", dest="powermetrics", action="store_true",
+                         **default(None),
+                         help="macOS: report the sudoers rule if powermetrics is refused")
+    options.add_argument("--no-powermetrics", dest="powermetrics", action="store_false",
+                         help="macOS: leave powermetrics alone, temperatures and all")
+    options.add_argument("--lhm-url", help="Windows: LibreHardwareMonitor data.json URL")
+    options.add_argument("--iface", help="network interface to report (default: busiest)")
+    options.add_argument("--disk-path",
+                         help="filesystem to report. Defaults to the volume "
+                              "holding your files, which on macOS is not /")
+    options.add_argument("--no-beacon", action="store_true",
+                         help="do not broadcast the discovery beacon")
+    options.add_argument("--extension", action="append", metavar="NAME.KEY=VALUE",
+                         help="configure an installed extension, repeatable "
+                              "(e.g. clock.latitude=52.4)")
+    options.add_argument("--without", action="append", metavar="NAME",
+                         help="disable an installed extension, repeatable")
+    return options
+
+
 def main(argv=None):
     asked = list(sys.argv[1:] if argv is None else argv)
     if asked and asked[0] == PIP_VERB:
@@ -692,28 +723,9 @@ def main(argv=None):
     parser.add_argument("--version", action="version",
                         version=f"statsbadge {package_version()}")
 
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--host", default="0.0.0.0")
-    common.add_argument("--port", type=int, default=DEFAULT_PORT)
-    # Tried by default on macOS, and quiet where sudo is not permitted. Named here to
-    # make the attempt explicit, or to prevent it.
-    common.add_argument("--powermetrics", dest="powermetrics", action="store_true",
-                        default=None,
-                        help="macOS: report the sudoers rule if powermetrics is refused")
-    common.add_argument("--no-powermetrics", dest="powermetrics", action="store_false",
-                        help="macOS: leave powermetrics alone, temperatures and all")
-    common.add_argument("--lhm-url", help="Windows: LibreHardwareMonitor data.json URL")
-    common.add_argument("--iface", help="network interface to report (default: busiest)")
-    common.add_argument("--disk-path",
-                        help="filesystem to report. Defaults to the volume "
-                             "holding your files, which on macOS is not /")
-    common.add_argument("--no-beacon", action="store_true",
-                        help="do not broadcast the discovery beacon")
-    common.add_argument("--extension", action="append", metavar="NAME.KEY=VALUE",
-                        help="configure an installed extension, repeatable "
-                             "(e.g. clock.latitude=52.4)")
-    common.add_argument("--without", action="append", metavar="NAME",
-                        help="disable an installed extension, repeatable")
+    common = shared_options()
+    # Defaults are left to the level above, or a verb would reset what came before it.
+    nested = shared_options(nested=True)
 
     subs = parser.add_subparsers(dest="command", required=True)
 
@@ -804,7 +816,7 @@ def main(argv=None):
                        ("upgrade", "take newer releases, of one extension or of all"),
                        ("outdated", "ask the index which of them have moved on"),
                        ("sync", "build the library again from whatever the list names")):
-        step = verbs.add_parser(verb, parents=[common], help=what)
+        step = verbs.add_parser(verb, parents=[nested], help=what)
         step.set_defaults(func=cmd_extensions, verb=verb, names=[])
         if verb in ("add", "remove", "disable", "enable"):
             step.add_argument("names", nargs="+", metavar="NAME",
@@ -823,7 +835,7 @@ def main(argv=None):
     auto_verbs = auto.add_subparsers(dest="verb", metavar="enable|disable")
     for verb, what in (("enable", "start the tray at login"),
                        ("disable", "stop starting the tray at login")):
-        step = auto_verbs.add_parser(verb, parents=[common], help=what)
+        step = auto_verbs.add_parser(verb, parents=[nested], help=what)
         step.set_defaults(func=cmd_autostart, verb=verb)
 
     args = parser.parse_args(argv)
