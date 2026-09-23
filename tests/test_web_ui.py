@@ -49,7 +49,7 @@ def test_the_theme_box_spans_the_panels_beside_it(ui):
     assert beside == 6, beside
 
     sheet = ui.css
-    spanned = re.search(r'section\[aria-label="Theme"\] \{ grid-column: 1; grid-row: span (\d+)',
+    spanned = re.search(r'section\[aria-label="Theme"\] \{\s*grid-column: 1;\s*grid-row: span (\d+)',
                         sheet)
     assert spanned, "the theme box no longer spans the panels"
     assert int(spanned.group(1)) == beside, (spanned.group(1), beside)
