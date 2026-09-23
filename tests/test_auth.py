@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import threading
 import time
 
 import pytest
@@ -69,6 +70,43 @@ def test_counter_refusal_offers_a_resync(h):
     status, body = h.raw("GET", "/v1/stats", None,
                          _headers(who, body["next_seq"], secret))
     assert status == 200, (status, body)
+
+
+def test_one_counter_is_accepted_once_under_concurrency(monkeypatch):
+    """Two requests carrying the same counter, verified at the same moment."""
+    with tempfile.TemporaryDirectory() as where:
+        store = auth.Store(os.path.join(where, "badges.json"))
+        secret = store.provision("racer0000001", "race")
+        signature = auth.sign(secret, "GET", "/v1/stats", 50, b"")
+        headers = {auth.SIGNED_HEADER_ID: "racer0000001", auth.SIGNED_HEADER_SEQ: "50",
+                   auth.SIGNED_HEADER_SIG: signature}
+
+        together = threading.Barrier(2, timeout=0.3)
+        sign = auth.sign
+
+        def meeting(*args):
+            try:
+                together.wait()
+            except threading.BrokenBarrierError:
+                pass
+            return sign(*args)
+
+        monkeypatch.setattr(auth, "sign", meeting)
+        outcomes = []
+
+        def attempt():
+            try:
+                store.verify("GET", "/v1/stats", headers, b"")
+                outcomes.append("accepted")
+            except auth.AuthError as exc:
+                outcomes.append(exc.reason)
+
+        threads = [threading.Thread(target=attempt) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert sorted(outcomes) == ["accepted", "replayed request"], outcomes
 
 
 def test_reload_never_lowers_a_counter(h):

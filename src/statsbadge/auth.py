@@ -306,6 +306,11 @@ class Store:
         if not (badge_id and seq_text and signature):
             raise AuthError("unsigned request")
 
+        try:
+            seq = int(seq_text)
+        except ValueError:
+            raise AuthError("bad sequence") from None
+
         with self._lock:
             # Every request, not only for an unknown badge: `install --new-secret`
             # replaces the secret of a known one, and the stale copy would reject it.
@@ -313,30 +318,23 @@ class Store:
             record = self.badges.get(badge_id)
             if record is None:
                 raise AuthError("unknown badge", 403)
-            secret = record["secret"]
             last_seq = record.get("seq", 0)
 
-        try:
-            seq = int(seq_text)
-        except ValueError:
-            raise AuthError("bad sequence") from None
+            expected = sign(record["secret"], method, path, seq, body)
+            if not hmac.compare_digest(signature.lower(), expected):
+                raise AuthError("bad signature")
 
-        expected = sign(secret, method, path, seq, body)
-        if not hmac.compare_digest(signature.lower(), expected):
-            raise AuthError("bad signature")
+            # Only a good signature may move the counter, or anyone could push it up and
+            # lock the badge out. Both refusals carry the counter to use next, which
+            # resyncs a rebooted badge in one request.
+            if seq <= last_seq:
+                raise AuthError("replayed request", detail={"next_seq": last_seq + 1})
+            if seq > last_seq + SEQ_WINDOW:
+                raise AuthError("sequence too far ahead",
+                                detail={"next_seq": last_seq + 1})
 
-        # Only a good signature may move the counter, or anyone could push it up and lock
-        # the badge out. Both refusals carry the counter to use next, which resyncs a
-        # rebooted badge in one request.
-        if seq <= last_seq:
-            raise AuthError("replayed request", detail={"next_seq": last_seq + 1})
-        if seq > last_seq + SEQ_WINDOW:
-            raise AuthError("sequence too far ahead",
-                            detail={"next_seq": last_seq + 1})
-
-        with self._lock:
-            self.badges[badge_id]["seq"] = seq
-            self.badges[badge_id]["last_seen"] = int(time.time())
+            record["seq"] = seq
+            record["last_seen"] = int(time.time())
             if seq - self._persisted.get(badge_id, 0) >= SEQ_PERSIST_EVERY:
                 self.save()
         return badge_id
