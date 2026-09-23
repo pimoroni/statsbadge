@@ -297,7 +297,7 @@ jobs:
           path: stage
 
       - name: Attach to the release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.NAME }}.zip
@@ -411,7 +411,7 @@ jobs:
           path: stage
 
       - name: Attach to the release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.NAME }}.zip

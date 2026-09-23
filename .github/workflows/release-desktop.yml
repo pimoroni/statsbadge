@@ -26,6 +26,9 @@ env:
 jobs:
   desktop:
     name: Pack ${{ matrix.platform }}
+    if: >
+      github.event_name == 'workflow_dispatch'
+      || startsWith(github.event.release.tag_name, 'v')
     # Where the macOS signing credentials live. Naming it is what makes the environment's
     # secrets and variables resolve at all; without it they are empty and the job quietly
     # ad-hoc signs instead. Its protection rules are also the only thing between
