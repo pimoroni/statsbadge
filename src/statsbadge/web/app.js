@@ -2330,30 +2330,28 @@ function helpFor(facts) {
 function macHelp(state) {
   const box = el("section", null,
                  el("h2", { textContent: "macOS" }),
-                 el("p", { textContent: "GPU load, VRAM and thermal pressure come from "
-                                        + "ioreg and pmset, which need no privileges and "
-                                        + "are on already." }))
+                 el("p", { textContent: "GPU load, VRAM, thermal pressure and, on Apple "
+                                        + "Silicon, temperatures need no setup." }))
   if (!state.there) {
-    box.append(el("p", { textContent: "This Mac has no powermetrics, so there are no "
-                                      + "temperatures, fan speeds or package power." }))
+    box.append(el("p", { textContent: "powermetrics is missing, so package power, CPU and "
+                                      + "GPU clocks and GPU power are unavailable." }))
     return box
   }
   if (state.permitted) {
     box.append(el("p", { className: "good",
-                         textContent: "Temperatures, fan speeds and package power are "
-                                      + "on: sudo runs powermetrics without a password." }))
+                         textContent: "Package power, CPU and GPU clocks and GPU power "
+                                      + "are on, via powermetrics." }))
     return box
   }
   box.append(
-    el("p", { textContent: "Package power, GPU power and GPU clock need powermetrics, "
-                           + "which needs root. statsbadge asks for it at every start and "
-                           + "carries on without it. To allow that one command and nothing "
-                           + "else:" }),
+    el("p", { textContent: "Package power, CPU and GPU clocks and GPU power need "
+                           + "powermetrics, which runs as root. To let sudo run it, and "
+                           + "only it, without a password, run:" }),
     el("pre", { textContent: `sudo visudo -f ${state.file}` }),
-    el("p", { textContent: "and put this line in it:" }),
+    el("p", { textContent: "and add:" }),
     el("pre", { textContent: state.sudoers }),
-    el("p", { textContent: "It takes effect at the next start. The server itself never "
-                           + "runs as root." }))
+    el("p", { textContent: "Restart statsbadge to apply. statsbadge itself does not run "
+                           + "as root." }))
   return box
 }
 
@@ -2362,17 +2360,15 @@ function macHelp(state) {
 function windowsHelp(state) {
   const box = el("section", null,
                  el("h2", { textContent: "Windows" }),
-                 el("p", { textContent: "Windows tells an ordinary program nothing about "
-                                        + "temperatures, fan speeds or package power "
-                                        + "without a driver. LibreHardwareMonitor ships "
-                                        + "one and publishes its readings, which is what "
-                                        + "this reads." }))
+                 el("p", { textContent: "Temperatures, fan speeds and package power need "
+                                        + "a kernel driver on Windows. statsbadge reads "
+                                        + "them from LibreHardwareMonitor's web server." }))
   box.append(state.reading
-    ? el("p", { className: "good", textContent: "Reading it now." })
-    : el("p", { textContent: "Not reading it: run LibreHardwareMonitor, then Options > "
-                             + "Remote Web Server > Run. Take it from the project's "
-                             + "releases on GitHub; the similarly named .com is not "
-                             + "theirs." }))
+    ? el("p", { className: "good", textContent: "Connected to LibreHardwareMonitor." })
+    : el("p", { textContent: "Not connected. Run LibreHardwareMonitor and turn on "
+                             + "Options > Remote Web Server > Run. Download it from the "
+                             + "project's GitHub releases; the similarly named .com site "
+                             + "is unofficial." }))
 
   const field = el("input", { type: "text", id: "lhmurl", value: state.url || "",
                               placeholder: state.default })
@@ -2385,10 +2381,9 @@ function windowsHelp(state) {
     return renderHelp()
   }).catch((error) => toast(error.message, true))
 
-  box.append(el("label", { htmlFor: "lhmurl", textContent: "Its address" }), field,
+  box.append(el("label", { htmlFor: "lhmurl", textContent: "Web server address" }), field,
              el("menu", null, save),
-             el("p", { textContent: "Only if it is not on the usual port. Saved here and "
-                                    + "read straight away." }))
+             el("p", { textContent: "Only needed if it is not on the default port." }))
   return box
 }
 
