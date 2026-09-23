@@ -36,10 +36,12 @@ def test_every_field_has_a_name_for_the_ui():
 
 def test_every_page_of_many_fields_is_held_to_its_cap():
     refs = [f"cpu.f{index}" for index in range(10)]
-    for kind, cap in layout._FIELD_MAX.items():
-        page = {"id": "p", "kind": kind, "fields": refs}
+    for kind, shape in layout.KIND_SHAPE.items():
+        if not shape.get("many"):
+            continue
+        page = {"id": "p", "kind": kind, "field": "cpu.pct", shape["many"]: refs}
         kept = layout.validate({**layout.DEFAULT_CONFIG, "pages": [page]})["pages"][0]
-        assert len(kept["fields"]) == cap, (kind, len(kept["fields"]))
+        assert len(kept[shape["many"]]) == shape["max"], (kind, kept)
 
 
 def test_a_dials_page_takes_up_to_four_fields():
@@ -67,23 +69,17 @@ def test_a_dials_page_takes_up_to_four_fields():
     assert layout.prune([page], caps)[0]["fields"] == ["cpu.pct", "mem.pct"]
 
 
-def test_every_kind_has_a_badge_layout_and_a_ui_shape(ui):
-    """A kind the server accepts has a renderer on the badge and a shape in the UI."""
+def test_every_kind_has_a_badge_layout():
     app = pathlib.Path(install.app_source_dir())
     pages_source = (app / "pages.py").read_text(encoding="utf-8")
-    ui_source = ui.script
-    markup = ui.markup
     for kind in layout.KINDS:
         assert f'"{kind}": _' in pages_source, f"{kind} has no renderer"
-        assert f"  {kind}: {{" in ui_source, f"{kind} has no shape in the UI"
-        assert f'value="{kind}"' in markup, f"{kind} is not in the kind picker"
 
 
-def test_a_full_scale_is_offered_where_it_is_read(ui):
-    """The UI offers a full scale for exactly the kinds whose renderer reads one."""
+def test_a_full_scale_is_offered_where_it_is_read():
+    """A kind is marked scaled exactly where its renderer reads a full scale."""
     app = pathlib.Path(install.app_source_dir())
     pages_source = (app / "pages.py").read_text(encoding="utf-8")
-    ui_source = ui.script
 
     # fraction_of reads the page's max for its caller, so those kinds count as reading it.
     reads = set()
@@ -98,9 +94,8 @@ def test_a_full_scale_is_offered_where_it_is_read(ui):
         elif "fraction_of(ref, value, page, frame)" in body:
             reads.add(kind)
 
-    offered = ui_source[ui_source.index("const SCALED"):]
-    offered = set(re.findall(r'"([a-z]+)"', offered[:offered.index(")")]))
-    assert offered == reads, f"UI offers {sorted(offered)}, renderers read {sorted(reads)}"
+    offered = {kind for kind, shape in layout.KIND_SHAPE.items() if shape.get("scaled")}
+    assert offered == reads, f"marked {sorted(offered)}, renderers read {sorted(reads)}"
 
     def scaled(value):
         stored = layout.validate({**layout.DEFAULT_CONFIG,
@@ -199,31 +194,17 @@ def test_the_field_picker_offers_each_reading_once(ui):
 
 
 def test_every_kind_picks_from_a_pool_that_suits_it(ui):
-    """Every kind with a slot names the pool it picks from, and one with none has no fields."""
-    ui = ui.script
-    shape = ui[ui.index("const SHAPE = {"):ui.index("async function api(")]
-    pools = ui[ui.index("const POOLS = {"):]
-    pools = pools[:pools.index("}")]
-    named = {name for name in ("gauge", "series", "list", "notify", "any")
-             if name in pools}
-
-    for kind in layout.KINDS:
-        # An entry may be wrapped over two lines, so take it up to its closing brace.
-        start = shape.find(f"  {kind}: {{")
-        assert start != -1, f"{kind} has no shape"
-        entry = shape[start:shape.index("},", start)]
-        if 'one: "' not in entry and 'many: "' not in entry:
-            # The badge page reads the badge, so it has no field to offer.
-            assert "max: 0" in entry, f"{kind} has no slots but a field maximum"
+    """Every slot names a pool the UI has, and a kind with no slot takes no fields."""
+    pools = ui.script[ui.script.index("const POOLS = {"):]
+    named = set(re.findall(r"^  (\w+):", pools[:pools.index("\n}")], re.M))
+    for kind, shape in layout.KIND_SHAPE.items():
+        if not shape.get("one") and not shape.get("many"):
+            assert "max" not in shape, kind
             continue
-        for slot, key in (("one", "pool"), ("many", "manyPool")):
-            if f'{slot}: "' in entry:
-                assert f"{key}:" in entry, f"{kind} has a {slot} slot with no {key}"
-        for pool in named:
-            if f'"{pool}"' in entry:
-                break
-        else:
-            raise AssertionError(f"{kind} names no pool from {sorted(named)}: {entry}")
+        for slot, pool in (("one", "pool"), ("many", "many_pool")):
+            if shape.get(slot):
+                assert shape.get(pool) in named, (kind, slot, shape.get(pool), named)
+
 
 
 def test_the_ui_is_told_what_a_gauge_can_scale():

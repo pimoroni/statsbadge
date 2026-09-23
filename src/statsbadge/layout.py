@@ -7,26 +7,51 @@ import time
 
 from . import derive, state, themes
 
-# Every page the badge can draw, and what each needs.
-KINDS = {
-    "dial": "one field as a sweep gauge, plus up to three readouts beside it",
-    "dials": "up to four fields as gauges side by side, each named under its reading",
-    "bars": "a list of fields as horizontal bars, good for per-core",
-    "graph": "one or two fields over time, from the server's history ring",
-    "grid": "up to six fields as big numbers",
-    "text": "labelled lines, for names and versions",
-    "rings": "up to four fields as arcs nested inside one another",
-    "spark": "up to six fields as small plots, one to a row, each holding still",
-    "radar": "up to six fields as the axes of one polygon",
-    "trend": "one field over time, with how far it has moved called out",
-    "waterfall": "one list field as lanes of colour, a column a frame, scrolling left",
-    "notify": "up to six lines of messages and counts",
-    "badge": "the badge's own vitals, which need no field and come from no host",
+# Every page the badge can draw, in the order the UI offers them. `one` and `many` name
+# the page keys holding a single field and a list of up to `max`, `pool` and `many_pool`
+# what the UI offers in each, and `scaled` whether the renderer reads a page's `max`.
+KIND_SHAPE = {
+    "dial": {"title": "Dial", "group": "Gauges", "one": "field", "pool": "gauge",
+             "many": "readouts", "many_pool": "any", "max": 3, "slots": "Readouts",
+             "scaled": True,
+             "summary": "one field as a sweep gauge, plus up to three readouts beside it"},
+    "dials": {"title": "Gauges", "group": "Gauges", "many": "fields", "many_pool": "gauge",
+              "max": 4, "slots": "Gauges", "scaled": True,
+              "summary": "up to four fields as gauges side by side, each named under its "
+                         "reading"},
+    "rings": {"title": "Rings", "group": "Gauges", "many": "fields", "many_pool": "gauge",
+              "max": 4, "slots": "Rings", "scaled": True,
+              "summary": "up to four fields as arcs nested inside one another"},
+    "radar": {"title": "Radar", "group": "Gauges", "many": "fields", "many_pool": "gauge",
+              "max": 6, "slots": "Axes", "scaled": True,
+              "summary": "up to six fields as the axes of one polygon"},
+    "graph": {"title": "Graph", "group": "Plots", "many": "fields", "many_pool": "series",
+              "max": 2, "slots": "Series", "scaled": True,
+              "summary": "one or two fields over time, from the server's history ring"},
+    "trend": {"title": "Trend", "group": "Plots", "one": "field", "pool": "series",
+              "scaled": True,
+              "summary": "one field over time, with how far it has moved called out"},
+    "spark": {"title": "Sparklines", "group": "Plots", "many": "fields",
+              "many_pool": "series", "max": 6, "slots": "Rows",
+              "summary": "up to six fields as small plots, one to a row, each holding still"},
+    "waterfall": {"title": "Waterfall", "group": "Plots", "one": "field", "pool": "list",
+                  "scaled": True,
+                  "summary": "one list field as lanes of colour, a column a frame, "
+                             "scrolling left"},
+    "bars": {"title": "Bars", "group": "Readouts", "one": "field", "pool": "list",
+             "scaled": True,
+             "summary": "a list of fields as horizontal bars, good for per-core"},
+    "grid": {"title": "Grid", "group": "Readouts", "many": "fields", "many_pool": "any",
+             "max": 6, "slots": "Values", "summary": "up to six fields as big numbers"},
+    "text": {"title": "Text", "group": "Readouts", "many": "fields", "many_pool": "any",
+             "max": 7, "slots": "Lines", "summary": "labelled lines, for names and versions"},
+    "notify": {"title": "Notifications", "group": "Readouts", "many": "fields",
+               "many_pool": "notify", "max": 6, "slots": "Lines",
+               "summary": "up to six lines of messages and counts"},
+    "badge": {"title": "Badge", "group": "Readouts",
+              "summary": "the badge's own vitals, which need no field and come from no host"},
 }
-
-# How many fields a page can draw.
-_FIELD_MAX = {"dials": 4, "graph": 2, "grid": 6, "text": 7,
-              "rings": 4, "spark": 6, "radar": 6, "notify": 6}
+KINDS = tuple(KIND_SHAPE)
 
 # The widest a setting may be, as (low, high). validate() clamps rather than refusing,
 # so a config edited by hand still loads.
@@ -504,25 +529,18 @@ def _validate_page(page, seen, extra_kinds=(), page_settings_schema=None):
 
     clean = {"id": page_id, "kind": kind, "title": str(page.get("title") or page_id)}
 
-    if kind in ("dial",):
-        field = page.get("field")
-        if not _is_ref(field):
-            raise ValueError(f"page {page_id} needs a field like 'cpu.pct'")
-        clean["field"] = field
-        readouts = page.get("readouts") or []
-        clean["readouts"] = [r for r in readouts if _is_ref(r)][:3]
-    elif kind in ("bars", "trend", "waterfall"):
-        field = page.get("field")
-        if not _is_ref(field):
-            raise ValueError(f"page {page_id} needs a field")
-        clean["field"] = field
-    elif kind == "badge":
-        pass
-    elif kind in _FIELD_MAX:
-        fields = [f for f in (page.get("fields") or []) if _is_ref(f)]
-        if not fields:
-            raise ValueError(f"page {page_id} needs at least one field")
-        clean["fields"] = fields[:_FIELD_MAX[kind]]
+    shape = KIND_SHAPE.get(kind)
+    if shape is not None:
+        one, many = shape.get("one"), shape.get("many")
+        if one:
+            if not _is_ref(page.get(one)):
+                raise ValueError(f"page {page_id} needs a field like 'cpu.pct'")
+            clean[one] = page[one]
+        if many:
+            refs = [ref for ref in (page.get(many) or []) if _is_ref(ref)]
+            if not refs and not one:
+                raise ValueError(f"page {page_id} needs at least one field")
+            clean[many] = refs[:shape["max"]]
     else:
         # An extension's page. Keep its fields; the shape is the badge's business.
         clean["fields"] = [f for f in (page.get("fields") or []) if _is_ref(f)][:8]
@@ -565,10 +583,6 @@ def prune(pages, capabilities):
 
     kept = []
     for page in pages:
-        if page.get("kind") == "badge":
-            # The badge page draws the badge's vitals, whatever this host can measure.
-            kept.append(page)
-            continue
         if page.get("kind") not in KINDS:
             # An extension page declares its own group, absent from the model's field list.
             fields = [f for f in page.get("fields", []) if has(f)]
@@ -576,18 +590,14 @@ def prune(pages, capabilities):
                     or page.get("kind") in from_extensions):
                 kept.append(page)
             continue
-        if page.get("kind") in ("bars", "trend", "waterfall"):
-            if has(page["field"]):
-                kept.append(page)
-        elif page.get("kind") == "dial":
-            if has(page["field"]):
-                page = dict(page)
-                page["readouts"] = [r for r in page.get("readouts", []) if has(r)]
-                kept.append(page)
-        else:
-            fields = [f for f in page.get("fields", []) if has(f)]
-            if fields:
-                page = dict(page)
-                page["fields"] = fields
-                kept.append(page)
+        shape = KIND_SHAPE[page["kind"]]
+        one, many = shape.get("one"), shape.get("many")
+        if one and not (_is_ref(page.get(one)) and has(page[one])):
+            continue
+        if many:
+            page = dict(page)
+            page[many] = [ref for ref in page.get(many, []) if has(ref)]
+            if not one and not page[many]:
+                continue
+        kept.append(page)
     return kept or [p for p in pages if p.get("kind") == "text"] or pages[:1]

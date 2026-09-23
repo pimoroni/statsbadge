@@ -8,23 +8,9 @@ from statsbadge.collect import Collector
 # Every field the model defines, as a host that reports all of it would.
 EVERYTHING = {"available": {group: list(fields) for group, fields in model.GROUPS.items()}}
 
-# Which pool each slot of each kind draws from, mirroring SHAPE in web/app.js. A recipe
-# naming a field the picker would not have offered draws a page nobody can read.
-POOLS = {
-    "dial": ("gauge", "any"),
-    "dials": (None, "gauge"),
-    "rings": (None, "gauge"),
-    "radar": (None, "gauge"),
-    "graph": (None, "series"),
-    "spark": (None, "series"),
-    "trend": ("series", None),
-    "bars": ("list", None),
-    "waterfall": ("list", None),
-    "grid": (None, "any"),
-    "text": (None, "any"),
-    "notify": (None, "notify"),
-    "badge": (None, None),
-}
+# A recipe naming a field the picker would not have offered draws a page nobody can read.
+POOLS = {kind: (shape.get("pool"), shape.get("many_pool"))
+         for kind, shape in layout.KIND_SHAPE.items()}
 
 GRAPHED = {f"{group}.{field}" for group, field in collect._GRAPHED}
 

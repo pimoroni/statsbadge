@@ -25,25 +25,6 @@ let dirty = false
 let whose = null
 let badges = {}
 
-// Which field slots each page kind has, and how many.
-const SHAPE = {
-  dial: { one: "field", many: "readouts", max: 3, label: "Readouts",
-          pool: "gauge", manyPool: "any" },
-  dials: { one: null, many: "fields", max: 4, label: "Gauges", manyPool: "gauge" },
-  bars: { one: "field", many: null, max: 0, label: "", pool: "list" },
-  graph: { one: null, many: "fields", max: 2, label: "Series", manyPool: "series" },
-  grid: { one: null, many: "fields", max: 6, label: "Values", manyPool: "any" },
-  text: { one: null, many: "fields", max: 7, label: "Lines", manyPool: "any" },
-  rings: { one: null, many: "fields", max: 4, label: "Rings", manyPool: "gauge" },
-  spark: { one: null, many: "fields", max: 6, label: "Rows", manyPool: "series" },
-  radar: { one: null, many: "fields", max: 6, label: "Axes", manyPool: "gauge" },
-  trend: { one: "field", many: null, max: 0, label: "", pool: "series" },
-  waterfall: { one: "field", many: null, max: 0, label: "", pool: "list" },
-  // One slot list holding two sorts of thing, told apart by looking at the reading.
-  notify: { one: null, many: "fields", max: 6, label: "Lines", manyPool: "notify" },
-  badge: { one: null, many: null, max: 0, label: "" },
-}
-
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...options.headers }
   const response = await fetch(path, { ...options, headers })
@@ -286,21 +267,33 @@ function renderPages() {
   refreshPruned()
 }
 
-/** The field slots a kind has. An extension's page declares them, since only its
- * renderer reads `fields` at all. */
 /** What the picker calls a kind. */
 function kindLabel(kind) {
+  if (caps.kinds[kind]) return caps.kinds[kind].title
   const option = $("kind").querySelector(`option[value="${CSS.escape(kind)}"]`)
   return (option && option.textContent) || titleCase(kind)
 }
 
-
+/** The field slots a kind has. An extension's page declares them, since only its
+ * renderer reads `fields` at all. */
 function shapeFor(kind) {
-  if (SHAPE[kind]) return SHAPE[kind]
+  if (caps.kinds[kind]) return caps.kinds[kind]
   const declared = (caps.extension_pages || []).find((page) => page.kind === kind)
   const slots = (declared && declared.slots) || {}
   return { one: slots.one || null, many: slots.many || null,
-           max: slots.max || 0, label: slots.label || "Values" }
+           max: slots.max || 0, slots: slots.label || "Values" }
+}
+
+/** Offer every kind the host draws, grouped as the host lists them. */
+function renderKindPicker() {
+  const groups = new Map()
+  for (const [kind, shape] of Object.entries(caps.kinds)) {
+    if (!groups.has(shape.group)) groups.set(shape.group, [])
+    groups.get(shape.group).push(el("option", { value: kind, textContent: shape.title,
+                                                title: shape.summary }))
+  }
+  $("kind").replaceChildren(...[...groups].map(
+    ([label, options]) => el("optgroup", { label }, options)))
 }
 
 /** A slot label in the singular, for the button that adds one. */
@@ -309,10 +302,6 @@ function singular(label) {
   if (label === "Axes") return "Axis"
   return label.endsWith("s") ? label.slice(0, -1) : label
 }
-
-// Kinds whose renderer reads a page's full scale, held to the renderers by a test.
-const SCALED = new Set(["dial", "dials", "rings", "radar", "trend", "bars", "graph",
-                        "waterfall"])
 
 // Without it a reading is scaled by the busiest the host has seen: wrong for a count.
 const MAX_SETTING = { key: "max", label: "Full scale", type: "number", min: 0, step: "any",
@@ -367,14 +356,14 @@ function pageCard(page, index) {
   if (open) {
     item.append(el("label", { htmlFor: titleId, textContent: "Title" }), title,
                 slotList(page, shape),
-                ...(SCALED.has(page.kind) ? settingRow(page, MAX_SETTING) : []),
+                ...(shape.scaled ? settingRow(page, MAX_SETTING) : []),
                 ...settings.flatMap((setting) => settingRow(page, setting)),
                 el("footer", null, moveButtons(index), addSlot(page, shape)))
   } else {
     const refs = shape.one ? [page[shape.one]] : (page[shape.many] || [])
     const named = refs.filter(Boolean).map(fieldLabel)
     const extra = settings.map((setting) => page[setting.key]).filter(Boolean)
-    if (SCALED.has(page.kind) && page.max) extra.push(`full scale ${page.max}`)
+    if (shape.scaled && page.max) extra.push(`full scale ${page.max}`)
     item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
   }
 
@@ -458,7 +447,7 @@ function slotList(page, shape) {
     drop.onclick = () => { current.splice(slot, 1); markDirty(); renderPages() }
     const row = el("li", null,
                    el("span", { className: "grip", textContent: "⋮" }),
-                   refSelect(ref, poolFor(shape.manyPool), (value) => { current[slot] = value }),
+                   refSelect(ref, poolFor(shape.many_pool), (value) => { current[slot] = value }),
                    drop)
     reorderable(row, current, slot, { tag: "slot", along: "y" })
     rows.push(row)
@@ -472,9 +461,9 @@ function addSlot(page, shape) {
   const current = shape.many ? page[shape.many] || [] : []
   if (!shape.many || current.length >= shape.max) return null
   const add = el("button", { type: "button", className: "small add",
-                             textContent: `Add ${singular(shape.label).toLowerCase()}` })
+                             textContent: `Add ${singular(shape.slots).toLowerCase()}` })
   add.onclick = () => {
-    page[shape.many] = current.concat([poolFor(shape.manyPool)[0]])
+    page[shape.many] = current.concat([poolFor(shape.many_pool)[0]])
     markDirty()
     renderPages()
   }
@@ -519,7 +508,7 @@ function newPage(kind) {
     // An extension declares its page: take the fields and title it shipped with.
     return { ...offered, id: freshId(offered.id || kind, taken) }
   }
-  const shape = SHAPE[kind]
+  const shape = shapeFor(kind)
   const pool = numericRefs()
   const page = { id: freshId(kind, taken), kind, title: kind }
   if (shape.one) {
@@ -2565,6 +2554,7 @@ async function boot() {
       textContent: `Cannot reach the server: ${error.message}` }))
     return
   }
+  renderKindPicker()
   offerExtensionPages()
   offerRecipes()
   renderWhose()

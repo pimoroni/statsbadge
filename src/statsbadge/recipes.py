@@ -66,14 +66,14 @@ def _fitted(page, kinds, available):
         group, _dot, field = ref.partition(".")
         return field in available.get(group, ())
 
+    shape = layout.KIND_SHAPE.get(page["kind"], {"many": "fields"})
+    one, many = shape.get("one"), shape.get("many")
     fitted = dict(page)
-    if fitted.get("field") and not has(fitted["field"]):
+    if one and fitted.get(one) and not has(fitted[one]):
         return None
-    if fitted.get("readouts"):
-        fitted["readouts"] = [ref for ref in fitted["readouts"] if has(ref)]
-    if fitted.get("fields"):
-        kept = [ref for ref in fitted["fields"] if has(ref)]
-        if not kept:
+    if many and fitted.get(many):
+        kept = [ref for ref in fitted[many] if has(ref)]
+        if not kept and not one:
             return None
-        fitted["fields"] = kept
+        fitted[many] = kept
     return fitted

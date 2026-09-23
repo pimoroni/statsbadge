@@ -227,7 +227,7 @@ class Service:
                            for family in derive.ACCENT_FAMILIES}
         caps["accent_family"] = derive.DEFAULT_FAMILY
         caps["accent_b_rules"] = list(layout.ACCENT_B_RULES)
-        caps["kinds"] = list(layout.KINDS)
+        caps["kinds"] = layout.KIND_SHAPE
         # Every discovered extension, so one that failed to import is reported rather
         # than showing up as a page that never draws.
         caps["extensions"] = extensions.describe()
