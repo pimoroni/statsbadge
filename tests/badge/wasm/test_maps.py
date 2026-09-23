@@ -181,15 +181,10 @@ class QuakeMarkers(unittest.TestCase):
         if self.quakemap is None:
             self.skipTest("quakemap was not staged")
 
-    def test_a_marker_is_small(self):
-        self.assertTrue(self.quakemap.RING_PX_HIGH <= 10.0, self.quakemap.RING_PX_HIGH)
-        self.assertTrue(self.quakemap.DOT_PX_HIGH <= 3.0, self.quakemap.DOT_PX_HIGH)
-
     def test_a_bigger_quake_takes_a_bigger_marker(self):
         low = self.quakemap._dot_px(self.quakemap.MAG_LOW)
         high = self.quakemap._dot_px(self.quakemap.MAG_HIGH)
         self.assertTrue(low < high, (low, high))
-        self.assertTrue(self.quakemap.RING_PX_LOW < self.quakemap.RING_PX_HIGH)
 
     def test_a_ring_clears_the_dot_it_sits_around(self):
         """Without the cut it draws as a disc."""

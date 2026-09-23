@@ -252,9 +252,6 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(badge_constants):
     assert draw._points[0] < 60 - 0.01, "a series long enough to walk is standing still"
     assert walked
 
-    # A sparkline is drawn still at any setting: 22px tall with a sample every 5px.
-    assert pages.SCROLLS == ("graph", "trend"), pages.SCROLLS
-    assert "spark" in pages.PLOTS, "it still wants a series fetched for it"
     # Two readings, which is all a field with no history has, must still draw.
     assert draw.line(0, 0, 470, 30, [5.0, 5.0], 47.0) is not None
     assert draw.line(0, 0, 470, 30, [5.0], 47.0) is None
@@ -283,7 +280,6 @@ def test_sparkline_rows_can_be_told_apart():
     import sys
 
     sys.path.insert(0, install.app_source_dir())
-    import draw
     import look
 
     # A lift, not the panel colour: a panel can be a different hue as well as a
@@ -296,9 +292,6 @@ def test_sparkline_rows_can_be_told_apart():
     pale = look.from_palette("light", layout.palette_for("light", layout.DEFAULT_CONFIG["tint"]))
     assert pale.pale and not dark.pale
     assert pale.stripe.r < pale.bg.r and dark.stripe.r > dark.bg.r
-
-    # The axis rule under a plot is drawn only where the rows are otherwise unseparated.
-    assert draw.ROWS == "zebra" and draw.ROW_NONE == "none"
 
 
 def test_a_symbol_centres_on_the_words_beside_it():

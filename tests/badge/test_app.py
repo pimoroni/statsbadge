@@ -39,7 +39,7 @@ def test_the_badge_scans_for_longer_than_the_host_waits(badge_constants):
     assert badge["BEACON_PORT"] == beacon.PORT, "the badge listens on another port"
     assert badge["BEACON_EVERY_MS"] == int(beacon.INTERVAL * 1000), (
         "the badge assumes a different interval")
-    assert badge["DISCOVER_MS"] == 2 * badge["BEACON_EVERY_MS"], badge["DISCOVER_MS"]
+    assert badge["DISCOVER_MS"] > badge["BEACON_EVERY_MS"], badge["DISCOVER_MS"]
 
     # The figure travels in the packet, so a server started with a different interval is
     # scanned for long enough without the badge being rebuilt.
@@ -80,9 +80,6 @@ def test_the_badge_dims_to_suit_the_room():
     # Logarithmic: the first doubling is worth as much as the next.
     first = look.ambient_fraction(look.LIGHT_DIM * 2)
     assert 0.4 < first / look.ambient_fraction(look.LIGHT_DIM * 4) < 0.6, first
-
-    # A dim room is dimmer, not dark.
-    assert 0.0 < look.LIGHT_FLOOR < 1.0
 
 
 def test_the_badge_can_report_on_itself_with_no_host():

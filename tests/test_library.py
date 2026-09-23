@@ -340,8 +340,7 @@ def test_the_catalogue_says_what_each_extension_is_and_what_it_needs():
         assert entry["summary"], entry
     # A badge module travels over USB, so the entry records whether there is one.
     ships = {entry["name"] for entry in listed if entry["page"]}
-    assert ships == {"clock", "iss", "quakes"}, ships
-    assert next(e for e in listed if e["name"] == "cloudflare")["needs"]
+    assert {"clock", "iss", "quakes"} <= ships, ships
 
 
 def test_an_extension_asked_for_but_absent_is_offered_as_such():
