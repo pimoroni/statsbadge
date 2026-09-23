@@ -86,6 +86,26 @@ class PageKinds(unittest.TestCase):
                              f"{page['kind']} left a clip behind")
 
 
+class TrendMove(unittest.TestCase):
+    def test_the_move_is_written_as_its_reading_is(self):
+        written = []
+        blit_label = draw.blit_label
+
+        def recording(text, *args, **kwargs):
+            written.append(text)
+            return blit_label(text, *args, **kwargs)
+
+        draw.blit_label = recording
+        try:
+            draw.background(look.get(look.DEFAULT), "Down", 0, 1, None)
+            draw.trend(look.get(look.DEFAULT), "11.0", "MB/s", "Down", 1234567.0,
+                       [1.0, 2.0], 2.0, 0.5, field="down_bps")
+        finally:
+            draw.blit_label = blit_label
+        self.assertIn(draw.fmt(1234567.0, "down_bps"), written)
+        self.assertFalse("1234567.0" in written)
+
+
 class Lanes(unittest.TestCase):
     """A source can send names beside a list of readings, and the bars take them."""
 

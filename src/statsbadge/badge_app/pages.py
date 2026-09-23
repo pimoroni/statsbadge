@@ -597,7 +597,7 @@ def _trend(page, frame, history, theme):
     fraction = fraction_of(ref, value, page, frame)
     draw.trend(theme, draw.fmt(value, field), draw.short_unit(field), name_for(ref),
                delta, points, peak, fraction, hot=severity_of(ref, fraction),
-               shift=_walk((ref,)))
+               shift=_walk((ref,)), field=field)
 
 
 # How far between polls the waterfall has got, so it interpolates and does not step.
