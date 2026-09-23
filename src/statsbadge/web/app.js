@@ -1,17 +1,5 @@
-const $ = (id) => document.getElementById(id)
-const pick = (selector) => document.querySelector(selector)
-const all = (selector) => [...document.querySelectorAll(selector)]
-
-function el(tag, props, ...children) {
-  const node = document.createElement(tag)
-  for (const [key, value] of Object.entries(props || {})) {
-    if (value === null || value === undefined) continue
-    if (key.includes("-")) node.setAttribute(key, value)
-    else node[key] = value
-  }
-  node.append(...children.flat().filter((child) => child !== null && child !== undefined))
-  return node
-}
+import { $, all, el, pick, titleCase, toast } from "./js/dom.js"
+import { api, configPath } from "./js/api.js"
 
 let config = null
 let caps = null
@@ -19,31 +7,6 @@ let dirty = false
 let edits = 0
 let whose = null
 let badges = {}
-
-async function api(path, options = {}) {
-  const headers = { "Content-Type": "application/json", ...options.headers }
-  const response = await fetch(path, { ...options, headers })
-  const body = await response.json().catch(() => null)
-  if (!response.ok) throw new Error((body && body.error) || response.statusText)
-  return body
-}
-
-const MINOR = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "of", "on",
-                       "or", "the", "to", "with"])
-
-function titleCase(text) {
-  return String(text).replace(/[-_]+/g, " ").trim().split(/\s+/)
-    .map((word, index) => (index && MINOR.has(word.toLowerCase())
-      ? word.toLowerCase()
-      : word.charAt(0).toUpperCase() + word.slice(1)))
-    .join(" ")
-}
-
-function toast(message, bad) {
-  const node = el("div", { className: bad ? "toast bad" : "toast", textContent: message })
-  document.body.appendChild(node)
-  setTimeout(() => node.remove(), 2600)
-}
 
 function markDirty() {
   dirty = true
@@ -1565,11 +1528,6 @@ function rampAt(stops, at) {
 
 const REMEMBERED = "statsbadge.whose"
 
-function configPath(path) {
-  const base = path || "/api/config"
-  return whose ? `${base}?badge=${encodeURIComponent(whose)}` : base
-}
-
 function badgeName(id) {
   return (badges[id] && badges[id].name) || id
 }
@@ -1615,7 +1573,7 @@ async function switchTo(id) {
   }
   whose = id || null
   remember(whose)
-  config = await api(configPath())
+  config = await api(configPath(whose))
   dirty = false
   $("save").disabled = true
   renderWhose()
@@ -2227,7 +2185,7 @@ async function save() {
       config.pages = ownIds(config.pages, whose)
     }
     const sent = edits
-    const result = await api(configPath(), {
+    const result = await api(configPath(whose), {
       method: "PUT",
       body: JSON.stringify(config),
     })
@@ -2253,7 +2211,7 @@ async function boot() {
   try {
     [caps, badges] = await Promise.all([api("/api/capabilities"), api("/api/badges")])
     whose = pickBadge()
-    config = await api(configPath())
+    config = await api(configPath(whose))
   } catch (error) {
     document.body.replaceChildren(el("p", {
       textContent: `Cannot reach the server: ${error.message}` }))
