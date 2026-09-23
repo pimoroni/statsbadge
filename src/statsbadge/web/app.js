@@ -2309,7 +2309,7 @@ function macHelp(state) {
     return box
   }
   box.append(
-    el("p", { textContent: "Temperatures, fan speeds and package power need powermetrics, "
+    el("p", { textContent: "Package power, GPU power and GPU clock need powermetrics, "
                            + "which needs root. statsbadge asks for it at every start and "
                            + "carries on without it. To allow that one command and nothing "
                            + "else:" }),

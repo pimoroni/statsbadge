@@ -517,6 +517,26 @@ def test_a_location_typed_in_the_browser_reaches_every_source():
             service.stop()
 
 
+def test_powermetrics_is_read_in_the_units_it_reports():
+    from statsbadge.sources import macos
+
+    # Trimmed from a Mac17,4 on macOS 26 (25E253).
+    captured = {
+        "gpu": {"freq_hz": 338.0, "gpu_energy": 12, "idle_ratio": 0.966144},
+        "processor": {"ane_power": 0.0, "combined_power": 495.407, "cpu_energy": 488,
+                      "cpu_power": 483.517, "gpu_energy": 12, "gpu_power": 11.8898},
+        "thermal_pressure": "Nominal",
+    }
+    source = macos.MacPowermetrics({})
+    source._latest = captured
+    frame = model.empty_frame()
+    frame["gpu"] = [{"name": "Apple M5"}]
+    source.sample(frame, 1.0)
+    assert frame["power"]["package_w"] == 0.5, frame["power"]
+    assert frame["gpu"] == [{"name": "Apple M5", "clock": 338, "power": 0.0}], frame["gpu"]
+    assert "temp" not in frame["cpu"], frame["cpu"]
+
+
 def test_powermetrics_is_tried_and_says_nothing_when_refused():
     """powermetrics is tried under `sudo -n`, so a Mac without the rule declines silently."""
     from statsbadge.sources import macos

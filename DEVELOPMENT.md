@@ -40,7 +40,8 @@ pruned before the layout is sent.
 
 Sampling runs on a thread on an interval. Requests serve the last frame, and ten badges cost
 the same as one. macOS is the stingiest host. GPU and VRAM come from `ioreg` unprivileged, where
-temperatures, fan RPM and package power need root, leaving `--powermetrics` opt-in.
+package power, GPU power and GPU clock need root, leaving `--powermetrics` opt-in. Apple
+Silicon's powermetrics reports no temperatures at all.
 
 ## Transport and signing
 

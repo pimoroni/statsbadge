@@ -130,10 +130,10 @@ class MacIOKit(Source):
 
 
 class MacPowermetrics(Source):
-    """Package power, GPU power and die temperatures, via a root powermetrics."""
+    """Package power, GPU power and GPU clock, via a root powermetrics."""
 
     name = "macos-powermetrics"
-    provides = ("cpu", "gpu", "power", "fans")
+    provides = ("gpu", "power")
 
     @classmethod
     def available(cls, _config=None):
@@ -241,25 +241,20 @@ class MacPowermetrics(Source):
             latest = dict(self._latest)
         if not latest:
             return
-        watts = latest.get("package_W") or latest.get("Package_W")
-        if watts:
-            frame["power"]["package_w"] = round(float(watts), 1)
-        gpu_stats = latest.get("gpu") or {}
-        if gpu_stats:
+        processor = latest.get("processor") or {}
+        package_mw = processor.get("combined_power")
+        if package_mw is not None:
+            frame["power"]["package_w"] = round(float(package_mw) / 1000, 1)
+        # MHz, whatever the name says. A CPU cluster's freq_hz is in hertz.
+        gpu_mhz = (latest.get("gpu") or {}).get("freq_hz")
+        gpu_mw = processor.get("gpu_power")
+        if gpu_mhz is not None or gpu_mw is not None:
             gpus = frame["gpu"] or [{}]
-            if "freq_hz" in gpu_stats:
-                gpus[0]["clock"] = round(float(gpu_stats["freq_hz"]) / 1e6)
-            gpu_watts = gpu_stats.get("gpu_energy") or latest.get("GPU_W")
-            if gpu_watts:
-                gpus[0]["power"] = round(float(gpu_watts), 1)
+            if gpu_mhz is not None:
+                gpus[0]["clock"] = round(float(gpu_mhz))
+            if gpu_mw is not None:
+                gpus[0]["power"] = round(float(gpu_mw) / 1000, 1)
             frame["gpu"] = gpus
-        for entry in latest.get("thermal", {}).get("sensors", []) or []:
-            name = str(entry.get("name", "")).lower()
-            value = entry.get("value")
-            if value is None:
-                continue
-            if "cpu" in name and "cpu" not in frame:
-                frame["cpu"].setdefault("temp", round(float(value), 1))
 
 
 def _gpu_name(entry):
