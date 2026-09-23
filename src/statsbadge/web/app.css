@@ -522,6 +522,14 @@ main > section > ol {
     grid-column: 2 / -1;
   }
 
+  > li > input:has(+ small) {
+    grid-column: 2;
+  }
+
+  > li > input + small {
+    grid-column: 3;
+  }
+
   > li > p {
     margin: 0;
   }
