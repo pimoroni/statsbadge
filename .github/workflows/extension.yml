@@ -56,14 +56,15 @@ jobs:
           uvx --from "ruff==$RUFF_VERSION" ruff check \
             --config "$GITHUB_WORKSPACE/statsbadge/ci/ruff.toml" src $(test -d tests && echo tests)
 
-      - run: uv build --out-dir dist
+      # Outside the extension's directory: an artifact path may not hold a "." or "..".
+      - run: uv build --out-dir "$GITHUB_WORKSPACE/dist"
 
       # statsbadge first and from source: the extension's floor can be a release not made yet.
       - name: Install beside statsbadge
         run: |
           uv venv /tmp/extension
           uv pip install --python /tmp/extension/bin/python "$GITHUB_WORKSPACE/statsbadge"
-          uv pip install --python /tmp/extension/bin/python --no-deps dist/*.whl
+          uv pip install --python /tmp/extension/bin/python --no-deps "$GITHUB_WORKSPACE"/dist/*.whl
 
       - name: Check every entry point loads a source
         run: |
@@ -81,8 +82,9 @@ jobs:
       - name: Check every badge module compiles and ships
         run: |
           /tmp/extension/bin/python - <<'PY'
-          import glob, py_compile, zipfile
-          shipped = set(zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist())
+          import glob, os, py_compile, zipfile
+          wheel = glob.glob(os.path.join(os.environ["GITHUB_WORKSPACE"], "dist", "*.whl"))[0]
+          shipped = set(zipfile.ZipFile(wheel).namelist())
           for path in sorted(glob.glob("src/*/badge/*.py")):
               py_compile.compile(path, doraise=True)
               assert path.removeprefix("src/") in shipped, f"{path} is not in the wheel"
@@ -100,4 +102,4 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact }}
-          path: extension/${{ inputs.directory }}/dist/*
+          path: dist/*
