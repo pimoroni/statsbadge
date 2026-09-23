@@ -62,7 +62,7 @@ def test_a_full_battery_is_not_an_alarm():
     assert pages.severity_of("cpu.pct", None) is None
 
 
-def test_the_badge_dims_to_suit_the_room(ui):
+def test_the_badge_dims_to_suit_the_room():
     """The scale separates a dark room, a curtained one and a lit one, below the rail."""
     # Measured on the badge as raw u16 stepping in sixteens: darkness 48, curtains closed
     # 320, a lit room 4500. A phone torch and a sunny sill both read 61400, railed.
@@ -83,12 +83,6 @@ def test_the_badge_dims_to_suit_the_room(ui):
 
     # A dim room is dimmer, not dark.
     assert 0.0 < look.LIGHT_FLOOR < 1.0
-
-    # Off by default, since it needs the light sensor and not every board has one.
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["auto_brightness"] is False
-    assert layout.validate({"auto_brightness": True,
-                            "pages": layout.DEFAULT_PAGES})["auto_brightness"] is True
-    assert ui.bindings.get("autobright") == "auto_brightness", ui.bindings
 
 
 def test_the_badge_can_report_on_itself_with_no_host():

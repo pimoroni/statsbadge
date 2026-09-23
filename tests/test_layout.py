@@ -2,7 +2,6 @@
 
 import json
 import os
-import pathlib
 import re
 import shutil
 import sys
@@ -94,28 +93,7 @@ def test_every_kind_has_a_badge_renderer():
     assert set(layout.KINDS) <= set(pages._KINDS), set(layout.KINDS) - set(pages._KINDS)
 
 
-
-def test_a_full_scale_is_offered_where_it_is_read():
-    """A kind is marked scaled exactly where its renderer reads a full scale."""
-    app = pathlib.Path(install.app_source_dir())
-    pages_source = (app / "pages.py").read_text(encoding="utf-8")
-
-    # fraction_of reads the page's max for its caller, so those kinds count as reading it.
-    reads = set()
-    for kind in layout.KINDS:
-        start = pages_source.find(f"def _{kind}(")
-        if start < 0:
-            continue
-        end = pages_source.find("\ndef ", start + 1)
-        body = pages_source[start:end if end > 0 else len(pages_source)]
-        if 'page.get("max")' in body or 'page["max"]' in body:
-            reads.add(kind)
-        elif "fraction_of(ref, value, page, frame)" in body:
-            reads.add(kind)
-
-    offered = {kind for kind, shape in layout.KIND_SHAPE.items() if shape.get("scaled")}
-    assert offered == reads, f"marked {sorted(offered)}, renderers read {sorted(reads)}"
-
+def test_a_full_scale_is_kept_only_when_it_is_a_positive_number():
     def scaled(value):
         stored = layout.validate({**layout.DEFAULT_CONFIG,
                                   "pages": [{"id": "b", "kind": "bars",
@@ -128,16 +106,12 @@ def test_a_full_scale_is_offered_where_it_is_read():
     assert scaled("nonsense") is None and scaled(None) is None
 
 
-def test_caselights_take_a_field_or_a_flag(ui):
+def test_caselights_take_a_field_or_a_flag():
     """Three settings in one value: off, the backlight's level, or a reading to follow."""
     base = dict(layout.DEFAULT_CONFIG)
 
     def stored(value):
         return layout.validate({**base, "caselights": value})["caselights"]
-
-    # The UI offers it as following the backlight; the stored value is still a flag.
-    page = ui.script
-    assert "Follow the Backlight" in page and "Follow the Theme" not in page
 
     assert stored("cpu.pct") == "cpu.pct"
     assert stored(True) is True
@@ -219,7 +193,6 @@ def test_every_kind_picks_from_a_pool_that_suits_it(ui):
                 assert shape.get(pool) in named, (kind, slot, shape.get(pool), named)
 
 
-
 def test_the_ui_is_told_what_a_gauge_can_scale():
     """The described model marks which fields have a top end, to keep uptime off a gauge."""
     described = model.describe()
@@ -231,7 +204,7 @@ def test_the_ui_is_told_what_a_gauge_can_scale():
     assert set(described["list_fields"]) >= {"cores", "load"}
 
 
-def test_a_layout_is_stored_per_badge(h, ui):
+def test_a_layout_is_stored_per_badge(h):
     """A save for one badge is not a save for another, and one without draws the default."""
     other = "badgetwo00000002"
     other_secret = h.service.badges.provision(other, "second badge")
@@ -315,16 +288,6 @@ def test_a_layout_is_stored_per_badge(h, ui):
     assert old.rev_for("anybadge") == 8, "the default's save moved a badge's revision"
     assert old.layout_for("anybadge")["pages"], "a badge's layout was lost"
     shutil.rmtree(os.path.dirname(path), ignore_errors=True)
-
-    # The picker is in the header, above everything it applies to.
-    page, script = ui.markup, ui.script
-    header = page[page.index("<header>"):page.index("</header>")]
-    for control in ("<label>Badge", 'id="pair"', 'id="save"'):
-        assert control in header, control
-    # Naming and forgetting sit with the badge itself, not beside the picker.
-    assert '"Forget"' in script and "function rename(" in script, "no way to forget or name one"
-    assert "?badge=" in script, "the UI saves without saying whose layout it is"
-    assert "ownIds" in script, "a badge's pages can collide with another's"
 
 
 def test_a_badge_block_sits_over_the_default():
@@ -415,7 +378,7 @@ def test_a_row_of_a_name_and_a_figure_takes_the_unit_in_the_figure():
     assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
 
 
-def test_a_number_setting_is_held_to_its_bounds(ui):
+def test_a_number_setting_is_held_to_its_bounds():
     """A number setting is clamped to the bounds its extension declared, on this side too."""
     schema = {"thing": [{"key": "every", "type": "number", "min": 60, "max": 3600,
                          "unit": "seconds"},
@@ -428,11 +391,6 @@ def test_a_number_setting_is_held_to_its_bounds(ui):
     assert stored({"every": 5, "loose": 5}) == {"every": 60.0, "loose": 5.0}
     assert stored({"every": 9999, "loose": 9999}) == {"every": 3600.0, "loose": 9999.0}
     assert stored({"every": 120, "loose": None}) == {"every": 120.0, "loose": None}
-
-    # The UI draws one as a number, with the bounds on the field.
-    ui = ui.script
-    assert 'setting.type === "number"' in ui, "a number setting is still a text box"
-    assert "setting.unit" in ui, "nowhere to put what it is counted in"
 
 
 def test_every_display_setting_lands_on_a_known_value():

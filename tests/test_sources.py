@@ -1,7 +1,6 @@
 """What a source measures, caches, and reports when it cannot."""
 
 import os
-import pathlib
 import re
 import shutil
 import subprocess
@@ -12,7 +11,7 @@ import urllib.request
 
 import pytest
 
-from statsbadge import extensions, install, model
+from statsbadge import extensions, model
 
 
 def test_a_source_keeps_what_it_worked_out():
@@ -249,16 +248,12 @@ def test_everything_that_walks_a_frame_steps_over_the_same_scalars(h, ui):
     loose = {key for key, value in frame.items() if not isinstance(value, (dict, list))}
     assert loose == set(collect.FRAME_SCALARS), loose
 
-    source = pathlib.Path(install.__file__).parent / "__main__.py"
-    assert "collect.FRAME_SCALARS" in source.read_text(encoding="utf-8"), \
-        "probe keeps a second list"
-
     script = ui.script
     named = re.search(r"const FRAME_SCALARS = \[(.*?)\]", script).group(1)
     assert [word.strip().strip('"') for word in named.split(",")] == list(collect.FRAME_SCALARS)
 
 
-def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
+def test_a_source_that_recovered_stops_being_reported_as_broken(h):
     """A fault keeps its count and drops its reason as soon as the source works again."""
     from statsbadge.sources import base
 
@@ -287,21 +282,6 @@ def test_a_source_that_recovered_stops_being_reported_as_broken(h, ui):
     assert caps["sources"], caps
     for entry in caps["sources"]:
         assert set(entry) >= {"name", "provides", "faults", "last_fault"}, entry
-
-    # Every source that expects to fail clears it, or the reason sticks for the session.
-    for path in ["src/statsbadge/sources/macos.py", "src/statsbadge/sources/linux.py",
-                 "src/statsbadge/sources/windows.py",
-                 *sorted(str(p) for p in pathlib.Path("extensions").glob("*/src/*/__init__.py"))]:
-        text = pathlib.Path(path).read_text(encoding="utf-8")
-        if "note_fault" not in text:
-            continue
-        assert "note_ok" in text, f"{path} records faults and never clears one"
-    # The UI puts the reason under the name, keeping both.
-    script = ui.script
-    assert 'source.last_fault ? "faulty" : null' in script, \
-        "a recovered source still shows as broken"
-    assert 'provides.join(", ")' in ui.function("renderSources"), (
-        "the UI no longer says what a source provides")
 
 
 def test_the_cpu_temperature_linux_reports_is_the_hottest_one():

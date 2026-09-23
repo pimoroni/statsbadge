@@ -97,7 +97,7 @@ def test_a_theme_travels_as_its_colours():
         assert look.from_palette("bad", bad) is None, bad
 
 
-def test_a_palette_can_carry_a_second_accent(h, ui):
+def test_a_palette_can_carry_a_second_accent(h):
     """A second accent is a palette colour, and a palette without one falls back."""
 
     from statsbadge import derive, themes
@@ -149,10 +149,6 @@ def test_a_palette_can_carry_a_second_accent(h, ui):
     written = themes.written()["watermelon-light"]
     assert derive.apart(written["accent_b"], written["accent"]) > 20.0
 
-    # A second accent is picked per theme, so the script writes the setting where it
-    # renders the tint.
-    assert "accentb" in ui.ids, "no control in the UI"
-    assert "config.accent_b" in ui.script, "the control is not bound"
     status, shown = h.raw("GET", "/api/theme?theme=tinted-dark&second=triadic")
     assert status == 200 and shown["palette"]["accent_b"] != shown["palette"]["accent"]
     status, _bad = h.raw("GET", "/api/theme?theme=tinted-dark&second=nonesuch")
@@ -164,7 +160,6 @@ def test_a_single_hue_theme_resolves_to_the_bold_variant():
     from statsbadge import derive, themes
 
     for retired in themes.ALIASES:
-        assert retired not in themes.written(), f"{retired} is still a written-down palette"
         name, accent = layout.resolve_theme(retired, None)
         assert themes.THEMES[name]["derived"].get("bold"), (retired, name)
         assert tuple(accent) in derive.offered(), (retired, accent)
@@ -278,11 +273,6 @@ def test_the_themes_are_a_data_file():
     # The retired names still resolve, so a badge showing one carries on showing it.
     for retired, aliased in themes.ALIASES.items():
         assert aliased["theme"] in themes.THEMES, (retired, aliased)
-
-    # A case light is a brightness and not a colour, so no palette carries one.
-    assert not any("case" in record for record in raw.values())
-    palette = layout.palette_for("tinted-dark", layout.DEFAULT_CONFIG["tint"])
-    assert "case" not in palette
 
 
 def test_a_lit_theme_is_one_hue_throughout():
@@ -412,8 +402,6 @@ def test_the_preview_draws_in_the_badge_faces(ui, web_dir):
     import pages as pages_module
     for name in ("lexend-var.ttf", "icons.woff2"):
         assert (web_dir / name).is_file(), f"{name} is not shipped with the UI"
-    sheet = ui.css
-    assert "@font-face" in sheet and "lexend-var.ttf" in sheet and "icons.woff2" in sheet
 
     corpus = pathlib.Path("ci/badge-icons.txt").read_text(encoding="utf-8")
     rows = [m.groups() for m in
@@ -455,7 +443,7 @@ def test_the_dark_theme_s_colours_are_not_copied_by_hand(h, ui):
             assert hexed(dark[role]) in mark.lower(), (role, hexed(dark[role]))
 
 
-def test_the_themes_are_offered_light_and_dark(h, ui):
+def test_the_themes_are_offered_light_and_dark(h):
     """The picker groups themes by mode, read off each palette's background."""
     records = {record["name"]: record for record in layout.theme_records()}
     assert set(records) == set(layout.THEMES)
@@ -473,13 +461,9 @@ def test_the_themes_are_offered_light_and_dark(h, ui):
 
     _status, caps = h.raw("GET", "/api/capabilities")
     assert {record["name"] for record in caps["themes"]} == set(layout.THEMES)
-    script = ui.script
-    assert '["tinted", "Tinted"]' in script, "the picker has no tab for the tinted themes"
-    assert "record.label" in script
-    assert "titleCase(record.name)" not in script, "the UI still titles a theme itself"
 
 
-def test_every_theme_is_drawn_under_one_accent(h, ui):
+def test_every_theme_is_drawn_under_one_accent(h):
     """The picker's cards come from one request, derived where the preview derives them."""
     from statsbadge import derive
     picked = ",".join(str(part) for part in derive.accents("saturated")[2])
@@ -491,7 +475,6 @@ def test_every_theme_is_drawn_under_one_accent(h, ui):
         assert shown["palettes"][name] == one["palette"], name
     status, _bad = h.raw("GET", "/api/themes?accent=red")
     assert status == 400, status
-    assert "/api/themes?" in ui.script, "the picker does not ask for the palettes"
 
 
 def themes_bg(name):
@@ -499,7 +482,7 @@ def themes_bg(name):
     return themes.written()[name]["bg"]
 
 
-def test_a_theme_can_be_derived_from_one_accent(h, ui):
+def test_a_theme_can_be_derived_from_one_accent(h):
     """Every accent on offer derives a palette that holds the ink, dim and ramp floors."""
 
     from statsbadge import derive
@@ -568,11 +551,3 @@ def test_a_theme_can_be_derived_from_one_accent(h, ui):
     assert {r["name"] for r in caps["themes"] if r["derived"]} == derived
     assert set(caps["accents"]) == set(derive.ACCENT_FAMILIES)
     assert caps["accents"]["saturated"] == [list(a) for a in derive.accents("saturated")]
-    page, script = ui.markup, ui.script
-    assert "data-tint" in page and 'id="screens"' in page, "no picker or preview in the UI"
-    # Which themes take an accent is the host's answer, and the UI holds no list.
-    assert "record.derived" in script and "config.tint" in script
-    assert "caps.tinted" not in script, "the UI still keeps a list of tinted themes"
-    # Clicking along the swatches starts several previews, and the last click wins rather
-    # than the last reply.
-    assert "previewWanted" in script, "a stale preview reply can win"

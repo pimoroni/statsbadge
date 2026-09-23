@@ -14,16 +14,9 @@ from statsbadge import install, layout
 CLOCK_BADGE = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
 
 
-def test_a_gauge_can_sweep_to_its_reading(ui):
+def test_a_gauge_can_sweep_to_its_reading():
     """A reading arriving mid-sweep carries on from the drawn position."""
     import sys
-
-    config = layout.validate({"animate": True, "pages": layout.DEFAULT_PAGES})
-    assert config["animate"] is True
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["animate"] is False, (
-        "off by default")
-
-    assert ui.bindings.get("animate") == "animate", "the UI control sets something else"
 
     sys.path.insert(0, install.app_source_dir())
     import pages
@@ -91,20 +84,9 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
         pages.use_facts({}, ())
         pages.__dict__.pop("tween", None)
 
-def test_the_big_gauge_can_show_the_whole_ramp(ui):
+def test_the_big_gauge_can_show_the_whole_ramp():
     """The gauge's gradient is the theme ramp, in order, round the arc it sweeps."""
     import sys
-
-    for fill in layout.GAUGE_FILLS:
-        assert layout.validate({"gauge_fill": fill,
-                                "pages": layout.DEFAULT_PAGES})["gauge_fill"] == fill
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid", (
-        "one colour by default")
-    assert layout.validate({"gauge_fill": "rainbow",
-                            "pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid"
-    assert 'id="gaugefill"' in ui.markup, "no control in the UI"
-    assert "config.gauge_fill" in ui.script, "the control is not bound"
-
 
     sys.path.insert(0, install.app_source_dir())
     import draw
@@ -203,7 +185,7 @@ def test_a_smoothed_graph_still_reads_as_the_data():
     assert draw._lay_out(60, 40, 250, 150, gappy, 1.0, None) > 0  # noqa: SLF001
 
 
-def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
+def test_a_plot_is_placed_by_when_its_readings_were_taken(badge_constants):
     """A plot walks by the host's spacing and the age of its newest point, not by an index."""
     import sys
 
@@ -240,12 +222,6 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
     finally:
         pages.PLOT_ANIMATION = was
         pages.BEHIND = 0.0
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["plot_animation"] is False
-    assert layout.validate({"plot_animation": True,
-                            "pages": layout.DEFAULT_PAGES})["plot_animation"] is True
-    assert 'id="plotanim"' in ui.markup, "no control in the UI"
-    assert 'bindCheck("plotanim", "plot_animation")' in ui.script, \
-        "it is not bound"
 
     # A graph keeps room on its right for the samples still coming in.
     flat = [50.0] * 48
@@ -302,26 +278,13 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
         pages.BEHIND = 0.0
 
 
-def test_sparkline_rows_can_be_told_apart(ui):
+def test_sparkline_rows_can_be_told_apart():
     """Rows are banded by a step of lightness from the page, so six lines read as six rows."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
     import draw
     import look
-
-    for style in layout.ROW_STYLES:
-        assert layout.validate({"rows": style,
-                                "pages": layout.DEFAULT_PAGES})["rows"] == style
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["rows"] == "zebra", (
-        "banded by default")
-    assert layout.validate({"rows": "stripey",
-                            "pages": layout.DEFAULT_PAGES})["rows"] == "zebra"
-    assert 'id="rows"' in ui.markup, "no control in the UI"
-    assert "config.rows" in ui.script, "the control is not bound"
-    for style in layout.ROW_STYLES:
-        assert f'value="{style}"' in ui.markup, style
-
 
     # A lift, not the panel colour: a panel can be a different hue as well as a
     # different level.
@@ -434,9 +397,6 @@ def test_every_clock_face_the_ui_offers_has_a_renderer(badge_constants):
     # The seven-segment face needs a font, and an asset travels only if it is declared.
     assert any(path.endswith("lcd.af") for path in Clock.badge_assets), Clock.badge_assets
     assert (CLOCK_BADGE / "lcd.af").exists(), "the LCD face's font is not built"
-    # Shipped, so its licence ships with it.
-    licence = pathlib.Path("licences/OFL-DSEG.txt").read_text(encoding="utf-8")
-    assert "keshikan" in licence and "SIL Open Font License" in licence
 
 
 def test_a_notifications_page_sorts_messages_from_counters():

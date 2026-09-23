@@ -231,7 +231,6 @@ def test_the_installer_and_the_app_name_the_same_state_file(badge_constants):
     assert badge_constants("net.py")["STATE_FILE"] == install.STATE_FILE, install.STATE_FILE
 
 
-
 def test_a_badge_is_called_behind_from_what_it_was_last_seen_holding():
     """The comparison is local, so it can be made with no badge connected."""
     from statsbadge import pushed

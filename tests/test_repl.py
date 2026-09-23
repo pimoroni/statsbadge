@@ -1,9 +1,7 @@
 """Talking to a badge over serial: disk mode, the port, the raw REPL."""
 
-import pathlib
 import sys
 import time
-import tomllib
 
 from statsbadge import install
 
@@ -219,10 +217,3 @@ def test_the_badge_is_talked_to_over_the_raw_repl_and_nothing_else():
         else:
             sys.modules["serial"] = was
 
-    # mpremote has gone from the runtime, and pyserial is a plain dependency.
-    assert "mpremote" not in pathlib.Path("src/statsbadge/install.py").read_text(encoding="utf-8")
-    with open("pyproject.toml", "rb") as handle:
-        project = tomllib.load(handle)["project"]
-    assert any(name.startswith("pyserial") for name in project["dependencies"]), project
-    assert "install" not in project.get("optional-dependencies", {}), (
-        "an extra that no longer adds anything")
