@@ -1,5 +1,7 @@
 """macOS sources."""
 
+import ctypes
+import ctypes.util
 import getpass
 import plistlib
 import re
@@ -7,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 
 from .base import Source
 
@@ -48,8 +51,8 @@ def sudoers_advice():
     """Return what to do about it, ready to paste. One command allowed, not a blanket rule."""
     return (
         "statsbadge: --powermetrics was asked for, but sudo will not run powermetrics\n"
-        "  without a password, so there will be no temperatures, fan speeds or package\n"
-        "  power. Everything else works as it is. To allow that one command and nothing\n"
+        "  without a password, so there will be no package power, GPU power or GPU\n"
+        "  clock. Everything else works as it is. To allow that one command and nothing\n"
         "  else:\n\n"
         "    sudo visudo -f /etc/sudoers.d/statsbadge\n\n"
         "  and put this line in it:\n\n"
@@ -57,11 +60,122 @@ def sudoers_advice():
     )
 
 
+# Each sensor costs about 1.5ms to read, and a temperature moves slowly.
+THERMOMETERS_EVERY_S = 5.0
+
+
+class Thermometers:
+    """Apple Silicon's temperature sensors, read through the IOKit HID event system."""
+
+    TEMPERATURE = 15
+    UTF8 = 0x08000100
+
+    def __init__(self):
+        void = ctypes.c_void_p
+        iokit = ctypes.CDLL(ctypes.util.find_library("IOKit"))
+        cf = ctypes.CDLL(ctypes.util.find_library("CoreFoundation"))
+        cf.CFStringCreateWithCString.restype = void
+        cf.CFStringCreateWithCString.argtypes = [void, ctypes.c_char_p, ctypes.c_uint32]
+        cf.CFNumberCreate.restype = void
+        cf.CFNumberCreate.argtypes = [void, ctypes.c_int, void]
+        cf.CFDictionaryCreate.restype = void
+        cf.CFDictionaryCreate.argtypes = [void, ctypes.POINTER(void), ctypes.POINTER(void),
+                                          ctypes.c_long, void, void]
+        cf.CFArrayGetCount.restype = ctypes.c_long
+        cf.CFArrayGetCount.argtypes = [void]
+        cf.CFArrayGetValueAtIndex.restype = void
+        cf.CFArrayGetValueAtIndex.argtypes = [void, ctypes.c_long]
+        cf.CFStringGetCString.restype = ctypes.c_bool
+        cf.CFStringGetCString.argtypes = [void, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32]
+        cf.CFRelease.argtypes = [void]
+        iokit.IOHIDEventSystemClientCreate.restype = void
+        iokit.IOHIDEventSystemClientCreate.argtypes = [void]
+        iokit.IOHIDEventSystemClientSetMatching.argtypes = [void, void]
+        iokit.IOHIDEventSystemClientCopyServices.restype = void
+        iokit.IOHIDEventSystemClientCopyServices.argtypes = [void]
+        iokit.IOHIDServiceClientCopyProperty.restype = void
+        iokit.IOHIDServiceClientCopyProperty.argtypes = [void, void]
+        iokit.IOHIDServiceClientCopyEvent.restype = void
+        iokit.IOHIDServiceClientCopyEvent.argtypes = [void, ctypes.c_int64, ctypes.c_int32,
+                                                      ctypes.c_int64]
+        iokit.IOHIDEventGetFloatValue.restype = ctypes.c_double
+        iokit.IOHIDEventGetFloatValue.argtypes = [void, ctypes.c_int32]
+        self._cf, self._iokit = cf, iokit
+
+        keys = (void * 2)(self._string("PrimaryUsagePage"), self._string("PrimaryUsage"))
+        values = (void * 2)(self._number(0xFF00), self._number(5))
+        matching = cf.CFDictionaryCreate(
+            None, keys, values, 2,
+            ctypes.addressof(void.in_dll(cf, "kCFTypeDictionaryKeyCallBacks")),
+            ctypes.addressof(void.in_dll(cf, "kCFTypeDictionaryValueCallBacks")))
+        self._client = iokit.IOHIDEventSystemClientCreate(None)
+        iokit.IOHIDEventSystemClientSetMatching(self._client, matching)
+        self._services = iokit.IOHIDEventSystemClientCopyServices(self._client)
+        product = self._string("Product")
+        self.sensors = []
+        for index in range(cf.CFArrayGetCount(self._services) if self._services else 0):
+            service = cf.CFArrayGetValueAtIndex(self._services, index)
+            name = iokit.IOHIDServiceClientCopyProperty(service, product)
+            if not name:
+                continue
+            text = ctypes.create_string_buffer(128)
+            if cf.CFStringGetCString(name, text, 128, self.UTF8):
+                if kind_of(text.value.decode()):
+                    self.sensors.append((text.value.decode(), service))
+            cf.CFRelease(name)
+
+    def close(self):
+        for held in (self._services, self._client):
+            if held:
+                self._cf.CFRelease(held)
+        self._services = self._client = None
+        self.sensors = []
+
+    def _string(self, text):
+        return self._cf.CFStringCreateWithCString(None, text.encode(), self.UTF8)
+
+    def _number(self, value):
+        held = ctypes.c_int32(value)
+        return self._cf.CFNumberCreate(None, 3, ctypes.byref(held))
+
+    def read(self):
+        """Return degrees C by sensor name, leaving out any that did not answer."""
+        readings = {}
+        for name, service in self.sensors:
+            event = self._iokit.IOHIDServiceClientCopyEvent(service, self.TEMPERATURE, 0, 0)
+            if not event:
+                continue
+            readings[name] = self._iokit.IOHIDEventGetFloatValue(event, self.TEMPERATURE << 16)
+            self._cf.CFRelease(event)
+        return readings
+
+
+def kind_of(sensor):
+    """Return which reading a sensor feeds, or None for one nothing reads."""
+    if "tdie" in sensor:
+        return "die"
+    if sensor.startswith("NAND"):
+        return "drive"
+    if "battery" in sensor:
+        return "battery"
+    return None
+
+
+def hottest(readings):
+    """Return the hottest plausible reading of each kind, by kind."""
+    found = {}
+    for sensor, value in readings.items():
+        kind = kind_of(sensor)
+        if kind and 0 < value < 150:
+            found[kind] = max(found.get(kind, value), value)
+    return {kind: round(value, 1) for kind, value in found.items()}
+
+
 class MacIOKit(Source):
     """GPU and thermals that need no privileges."""
 
     name = "macos-iokit"
-    provides = ("gpu", "cpu")
+    provides = ("gpu", "cpu", "disk", "power")
 
     @classmethod
     def available(cls, _config=None):
@@ -70,6 +184,14 @@ class MacIOKit(Source):
     def __init__(self, config):
         super().__init__(config)
         self._names = {}
+        self._thermometers = None
+        self._temperatures = {}
+        self._read_at = None
+
+    def stop(self):
+        if self._thermometers is not None:
+            self._thermometers.close()
+            self._thermometers = None
 
     def sample(self, frame, dt):
         # Both readings are subprocesses, so either can time out on a machine busy enough
@@ -87,6 +209,22 @@ class MacIOKit(Source):
         except Exception as exc:
             self.note_fault(exc)
             worked = False
+        now = time.monotonic()
+        if self._read_at is None or now - self._read_at >= THERMOMETERS_EVERY_S:
+            self._read_at = now
+            try:
+                if self._thermometers is None:
+                    self._thermometers = Thermometers()
+                self._temperatures = hottest(self._thermometers.read())
+            except (OSError, AttributeError, ValueError) as exc:
+                self.note_fault(exc)
+                worked, self._temperatures = False, {}
+        if "die" in self._temperatures:
+            frame["cpu"].setdefault("temp", self._temperatures["die"])
+        if "drive" in self._temperatures:
+            frame["disk"]["temp"] = self._temperatures["drive"]
+        if "battery" in self._temperatures:
+            frame["power"]["temp"] = self._temperatures["battery"]
         if worked:
             self.note_ok()
 

@@ -113,9 +113,9 @@ NAMES = {
     "net.up_bps": "UP", "net.down_bps": "DOWN", "net.iface": "IFACE",
     "net.up_total_mb": "SENT", "net.down_total_mb": "RECV",
     "disk.pct": "FULL", "disk.read_bps": "READ", "disk.write_bps": "WRITE",
-    "disk.used_mb": "USED", "disk.total_mb": "TOTAL",
+    "disk.used_mb": "USED", "disk.total_mb": "TOTAL", "disk.temp": "SSD",
     "power.battery_pct": "BATTERY", "power.charging": "CHARGING",
-    "power.package_w": "PACKAGE", "power.secs_left": "LEFT",
+    "power.package_w": "PACKAGE", "power.secs_left": "LEFT", "power.temp": "BATT",
     "sys.host": "HOST", "sys.os": "OS", "sys.cpu_name": "CPU",
     "sys.uptime_s": "UPTIME", "sys.arch": "ARCH",
 }
