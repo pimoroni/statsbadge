@@ -163,16 +163,16 @@ export function drawThumb(ctx, palette, gaugeFill) {
   ctx.fillText("%", 86 + textW + 1, 65)
 }
 
-function drawDial(ctx, palette, _series, { frame, gaugeFill, caps }) {
+function drawDial(ctx, palette, _series, { frame, gaugeFill, capabilities }) {
   chrome(ctx, palette, "CPU", 0, frame)
 
   const value = readingOf(frame, DIAL.field)
-  const reading = fractionOf(DIAL.field, value, frame, caps) ?? 0.635
+  const reading = fractionOf(DIAL.field, value, frame, capabilities) ?? 0.635
   const [cx, cy] = DIAL_C
   gauge(ctx, palette, DIAL_C, DIAL_OUTER, DIAL_INNER, reading, gaugeFill)
 
   const text = fmt(value, "pct")
-  const unit = shortUnit("pct", caps)
+  const unit = shortUnit("pct", capabilities)
   const unitSize = Math.max(SIZE_SMALL, Math.trunc(SIZE_HUGE * 0.45))
   ctx.font = face(400, SIZE_HUGE)
   const readingW = ctx.measureText(text).width
@@ -198,9 +198,9 @@ function drawDial(ctx, palette, _series, { frame, gaugeFill, caps }) {
     ctx.fillText(nameFor(ref), READOUT_X, y)
     ctx.fillStyle = rgb(palette.ink)
     ctx.font = face(400, SIZE_VALUE)
-    ctx.fillText(fmt(held, field) + shortUnit(field, caps), READOUT_X, y + 10)
+    ctx.fillText(fmt(held, field) + shortUnit(field, capabilities), READOUT_X, y + 10)
 
-    const part = fractionOf(ref, held, frame, caps)
+    const part = fractionOf(ref, held, frame, capabilities)
     if (part === null) return
     const filled = Math.trunc(READOUT_W * part)
     ctx.fillStyle = rgb(palette.grid)
@@ -214,7 +214,7 @@ function drawDial(ctx, palette, _series, { frame, gaugeFill, caps }) {
 
 const CORES = [0.31, 0.882, 0.125, 0.741, 0.2, 0.955, 0.602, 0.05]
 
-function drawBars(ctx, palette, _series, { frame, caps }) {
+function drawBars(ctx, palette, _series, { frame, capabilities }) {
   chrome(ctx, palette, "CORES", 1, frame)
   const held = readingOf(frame, BARS)
   const values = (Array.isArray(held) ? held : CORES.map((v) => v * 100)).slice(0, 16)
@@ -224,7 +224,7 @@ function drawBars(ctx, palette, _series, { frame, caps }) {
   const height = Math.max(4, slot - 3)
 
   ctx.font = face(400, SIZE_SMALL)
-  const readings = values.map((value) => fmt(value, "cores") + shortUnit("cores", caps))
+  const readings = values.map((value) => fmt(value, "cores") + shortUnit("cores", capabilities))
   const labelW = Math.max(...values.map((_v, i) => ctx.measureText(String(i)).width))
   const valueW = Math.max(...readings.map((text) => ctx.measureText(text).width))
   const x = PAD + labelW + COLUMN_GAP
@@ -258,13 +258,13 @@ const DOWN = [0.12, 0.2, 0.55, 0.86, 0.7, 0.52, 0.62, 0.44, 0.2, 0.1, 0.08, 0.3,
               0.62, 0.5, 0.72, 0.9, 0.55, 0.2, 0.12, 0.1, 0.26, 0.42, 0.3, 0.18, 0.12]
 const UP = [0.05, 0.08, 0.14, 0.2, 0.16, 0.12, 0.18, 0.14, 0.08, 0.05, 0.04, 0.1, 0.16, 0.2,
             0.14, 0.1, 0.16, 0.22, 0.12, 0.06, 0.05, 0.04, 0.09, 0.13, 0.1, 0.07, 0.05]
-function drawGraph(ctx, palette, series, { frame, history, caps }) {
+function drawGraph(ctx, palette, series, { frame, history, capabilities }) {
   chrome(ctx, palette, "NETWORK", 4, frame)
 
   const plots = SERIES.map((ref) => history[ref] || [])
   const live = plots.some((ring) => ring.length > 1)
   const peak = live ? Math.max(...plots.flat().map((v) => v ?? 0), 1) * 1.15 : 9.8 * 1024 ** 2
-  const peakText = fmt(peak, "down_bps") + shortUnit("down_bps", caps)
+  const peakText = fmt(peak, "down_bps") + shortUnit("down_bps", capabilities)
 
   ctx.font = face(400, SIZE_SMALL)
   const left = PAD + Math.max(ctx.measureText(peakText).width, ctx.measureText("0").width) + 4
@@ -315,7 +315,7 @@ function drawGraph(ctx, palette, series, { frame, history, caps }) {
 const TILES = [["FULL", "74.2%", 0.742, "l"], ["READ", "50.0MB/s", 0.5, "u"],
                ["WRITE", "8.0MB/s", 0.08, "o"], ["USED", "687.3GB", 0.62, "a"]]
 
-function drawGrid(ctx, palette, _series, { frame, caps }) {
+function drawGrid(ctx, palette, _series, { frame, capabilities }) {
   chrome(ctx, palette, "DISK", 5, frame)
   const count = TILE_REFS.length
   const columns = count > 4 ? 3 : 2
@@ -327,7 +327,7 @@ function drawGrid(ctx, palette, _series, { frame, caps }) {
   TILE_REFS.forEach((ref, index) => {
     const field = ref.split(".").pop()
     const held = readingOf(frame, ref)
-    const part = fractionOf(ref, held, frame, caps) ?? TILES[index][2]
+    const part = fractionOf(ref, held, frame, capabilities) ?? TILES[index][2]
     const x = PAD + (index % columns) * (cellW + 6)
     const y = BODY_TOP + 6 + Math.floor(index / columns) * (cellH + 6)
 
@@ -350,7 +350,7 @@ function drawGrid(ctx, palette, _series, { frame, caps }) {
     ctx.textAlign = "left"
     ctx.fillStyle = rgb(palette.ink)
     ctx.font = face(400, size)
-    ctx.fillText(held === null ? TILES[index][1] : fmt(held, field) + shortUnit(field, caps),
+    ctx.fillText(held === null ? TILES[index][1] : fmt(held, field) + shortUnit(field, capabilities),
                  x + 7, y + Math.floor(cellH / 2) - Math.floor(size / 2) + 2)
   })
 }

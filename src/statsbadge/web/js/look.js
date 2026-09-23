@@ -4,7 +4,7 @@ import { numericRefs, refSelect } from "./refs.js"
 export function createLook({ controls, outputs, caseLights, caseLightRef, buttons, changed,
                              onGaugeFill }) {
   let config = null
-  let caps = null
+  let capabilities = null
 
   function bindRange(id, key, format, scale) {
     const input = controls[id]
@@ -39,7 +39,7 @@ export function createLook({ controls, outputs, caseLights, caseLightRef, button
   function renderCaseLights() {
     const stored = config.caselights
     const chosen = stored === true ? "theme" : stored ? "reading" : "off"
-    const refs = numericRefs(caps)
+    const refs = numericRefs(capabilities)
     const offered = [["off", "Off"], ["theme", "Follow the Backlight"]]
     if (refs.length || chosen === "reading") offered.push(["reading", "Follow a Reading"])
     caseLights.replaceChildren(...offered.map(([value, text]) =>
@@ -48,7 +48,7 @@ export function createLook({ controls, outputs, caseLights, caseLightRef, button
     let following = typeof stored === "string" ? stored : refs[0]
 
     caseLightRef.hidden = chosen !== "reading"
-    caseLightRef.replaceChildren(...refSelect(caps, following, refs, (ref) => {
+    caseLightRef.replaceChildren(...refSelect(capabilities, following, refs, (ref) => {
       following = ref
       config.caselights = ref
       changed()
@@ -68,10 +68,10 @@ export function createLook({ controls, outputs, caseLights, caseLightRef, button
       if (!groups.has(heading)) groups.set(heading, [])
       groups.get(heading).push(option)
     }
-    for (const local of caps.local_actions || []) {
+    for (const local of capabilities.local_actions || []) {
       offer("Badge", el("option", { value: local.action, textContent: titleCase(local.label) }))
     }
-    for (const command of caps.commands || []) {
+    for (const command of capabilities.commands || []) {
       const option = el("option", { value: command.name, textContent: titleCase(command.label) })
       offer(command.group, option)
     }
@@ -92,9 +92,9 @@ export function createLook({ controls, outputs, caseLights, caseLightRef, button
     }
   }
 
-  function render(currentConfig, currentCaps) {
+  function render(currentConfig, currentCapabilities) {
     config = currentConfig
-    caps = currentCaps
+    capabilities = currentCapabilities
     bindRange("interval", "interval_ms", (value) => `${value} ms`)
     bindRange("brightness", "brightness", (value) => `${value}%`, 100)
     bindRange("points", "graph_points", (value) => `${value}`)
@@ -120,9 +120,9 @@ export function createLook({ controls, outputs, caseLights, caseLightRef, button
     renderButtons()
   }
 
-  function refresh(currentConfig, currentCaps) {
+  function refresh(currentConfig, currentCapabilities) {
     config = currentConfig
-    caps = currentCaps
+    capabilities = currentCapabilities
     renderButtons()
     renderCaseLights()
   }

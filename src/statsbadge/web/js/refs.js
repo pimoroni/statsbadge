@@ -1,63 +1,63 @@
 import { el, titleCase } from "./dom.js"
 
-export function availableRefs(caps) {
+export function availableRefs(capabilities) {
   const refs = []
-  const available = (caps && caps.available) || {}
+  const available = (capabilities && capabilities.available) || {}
   for (const group of Object.keys(available).sort()) {
     for (const field of available[group]) refs.push(`${group}.${field}`)
   }
   return refs
 }
 
-function preferredRefs(caps) {
-  const printable = availableRefs(caps).filter(
-    (ref) => !listFields(caps).includes(ref.split(".")[1])
-             && !itemFields(caps).includes(ref.split(".")[1]))
-  return [...new Set(numericRefs(caps).concat(printable))]
+function preferredRefs(capabilities) {
+  const printable = availableRefs(capabilities).filter(
+    (ref) => !listFields(capabilities).includes(ref.split(".")[1])
+             && !itemFields(capabilities).includes(ref.split(".")[1]))
+  return [...new Set(numericRefs(capabilities).concat(printable))]
 }
 
-export function numericRefs(caps) {
-  return availableRefs(caps).filter((ref) => {
+export function numericRefs(capabilities) {
+  return availableRefs(capabilities).filter((ref) => {
     const field = ref.split(".")[1]
     return !["name", "host", "os", "arch", "cpu_name", "iface", "charging"]
-      .includes(field) && !listFields(caps).includes(field)
-      && !itemFields(caps).includes(field)
+      .includes(field) && !listFields(capabilities).includes(field)
+      && !itemFields(capabilities).includes(field)
   })
 }
 
-function listFields(caps) {
-  return caps.list_fields || ["cores", "load"]
+function listFields(capabilities) {
+  return capabilities.list_fields || ["cores", "load"]
 }
 
-function itemFields(caps) {
-  return caps.item_fields || []
+function itemFields(capabilities) {
+  return capabilities.item_fields || []
 }
 
-function itemRefs(caps) {
-  return availableRefs(caps).filter((ref) => itemFields(caps).includes(ref.split(".")[1]))
+function itemRefs(capabilities) {
+  return availableRefs(capabilities).filter((ref) => itemFields(capabilities).includes(ref.split(".")[1]))
 }
 
-function notifyRefs(caps) {
-  return [...new Set(itemRefs(caps).concat(numericRefs(caps)))]
+function notifyRefs(capabilities) {
+  return [...new Set(itemRefs(capabilities).concat(numericRefs(capabilities)))]
 }
 
-function gaugeRefs(caps) {
-  const percent = caps.percent_fields || []
-  const scaled = Object.keys(caps.full_scale || {})
-  return numericRefs(caps).filter((ref) => {
+function gaugeRefs(capabilities) {
+  const percent = capabilities.percent_fields || []
+  const scaled = Object.keys(capabilities.full_scale || {})
+  return numericRefs(capabilities).filter((ref) => {
     const field = ref.split(".")[1]
     return percent.includes(field) || scaled.includes(field)
   })
 }
 
-function seriesRefs(caps) {
-  const kept = caps.graphed || []
-  const withHistory = numericRefs(caps).filter((ref) => kept.includes(ref))
-  return withHistory.length ? withHistory : numericRefs(caps)
+function seriesRefs(capabilities) {
+  const kept = capabilities.graphed || []
+  const withHistory = numericRefs(capabilities).filter((ref) => kept.includes(ref))
+  return withHistory.length ? withHistory : numericRefs(capabilities)
 }
 
-function listRefs(caps) {
-  return availableRefs(caps).filter((ref) => listFields(caps).includes(ref.split(".")[1]))
+function listRefs(capabilities) {
+  return availableRefs(capabilities).filter((ref) => listFields(capabilities).includes(ref.split(".")[1]))
 }
 
 const POOLS = {
@@ -68,23 +68,23 @@ const POOLS = {
   any: preferredRefs,
 }
 
-function groupLabel(caps, group) {
-  return (caps.group_labels || {})[group] || group
+function groupLabel(capabilities, group) {
+  return (capabilities.group_labels || {})[group] || group
 }
 
 const HOST_SOURCE = "This host"
 
-function sourceLabel(caps, group) {
-  return (caps.group_source || {})[group] || HOST_SOURCE
+function sourceLabel(capabilities, group) {
+  return (capabilities.group_source || {})[group] || HOST_SOURCE
 }
 
-export function fieldLabel(caps, ref) {
+export function fieldLabel(capabilities, ref) {
   const [group, field] = ref.split(".")
-  const labels = (caps.field_labels || {})[group] || {}
+  const labels = (capabilities.field_labels || {})[group] || {}
   return labels[field] || titleCase(field)
 }
 
-export function refSelect(caps, value, refs, onChange) {
+export function refSelect(capabilities, value, refs, onChange) {
   const options = [...new Set(refs)]
   if (value && !options.includes(value)) options.unshift(value)
 
@@ -97,7 +97,7 @@ export function refSelect(caps, value, refs, onChange) {
 
   const byOwner = new Map()
   for (const group of byGroup.keys()) {
-    const owner = sourceLabel(caps, group)
+    const owner = sourceLabel(capabilities, group)
     if (!byOwner.has(owner)) byOwner.set(owner, [])
     byOwner.get(owner).push(group)
   }
@@ -107,13 +107,13 @@ export function refSelect(caps, value, refs, onChange) {
   const chosen = String(value || options[0] || "").split(".")[0]
   const source = el("select", { "aria-label": "Source" }, owners.map(
     (owner) => el("optgroup", { label: owner }, byOwner.get(owner).map(
-      (group) => el("option", { value: group, textContent: groupLabel(caps, group),
+      (group) => el("option", { value: group, textContent: groupLabel(capabilities, group),
                                 selected: group === chosen })))))
 
   const select = el("select", { "aria-label": "Reading" })
   const fill = (group, ref) => {
     select.replaceChildren(...(byGroup.get(group) || []).map(
-      (each) => el("option", { value: each, textContent: fieldLabel(caps, each),
+      (each) => el("option", { value: each, textContent: fieldLabel(capabilities, each),
                                selected: each === ref })))
   }
   fill(chosen, value)
@@ -126,7 +126,7 @@ export function refSelect(caps, value, refs, onChange) {
   return [source, select]
 }
 
-export function poolFor(caps, name) {
-  const refs = (POOLS[name] || POOLS.any)(caps)
-  return refs.length ? refs : availableRefs(caps)
+export function poolFor(capabilities, name) {
+  const refs = (POOLS[name] || POOLS.any)(capabilities)
+  return refs.length ? refs : availableRefs(capabilities)
 }

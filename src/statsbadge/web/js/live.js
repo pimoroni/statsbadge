@@ -7,10 +7,10 @@ export function frameShape(frame) {
   return Object.keys(frame).filter((key) => !FRAME_META.includes(key)).join(",")
 }
 
-function hostGroups(caps) {
-  const extensions = new Set((caps.extensions || []).map((extension) => extension.name))
+function hostGroups(capabilities) {
+  const extensions = new Set((capabilities.extensions || []).map((extension) => extension.name))
   const groups = new Set()
-  for (const source of caps.sources || []) {
+  for (const source of capabilities.sources || []) {
     if (extensions.has(source.name)) continue
     for (const group of source.provides || []) groups.add(group)
   }
@@ -40,17 +40,17 @@ function reading(value) {
   return text.length > SHOWN ? `${text.slice(0, SHOWN)}…` : text
 }
 
-function liveGroup(name, item, caps) {
-  return el("section", null, el("h3", { textContent: name }), readingList(item, caps))
+function liveGroup(name, item, capabilities) {
+  return el("section", null, el("h3", { textContent: name }), readingList(item, capabilities))
 }
 
-function readingList(item, caps) {
+function readingList(item, capabilities) {
   const rows = []
   for (const key of Object.keys(item)) {
     const value = item[key]
     const shown = el("dd", { textContent: reading(value) })
     if (value && typeof value === "object") shown.title = JSON.stringify(value)
-    if (caps.percent_fields.includes(key) && typeof value === "number") {
+    if (capabilities.percent_fields.includes(key) && typeof value === "number") {
       shown.style.setProperty("--at", `${Math.max(0, Math.min(100, value))}%`)
     }
     rows.push(el("dt", { textContent: key }), shown)
@@ -59,8 +59,8 @@ function readingList(item, caps) {
 }
 
 export function createLive({ live, fromExtensions, peaks, sources }) {
-  function render(frame, caps) {
-    const measured = hostGroups(caps)
+  function render(frame, capabilities) {
+    const measured = hostGroups(capabilities)
     const own = []
     const theirs = []
     for (const group of Object.keys(frame)) {
@@ -68,7 +68,7 @@ export function createLive({ live, fromExtensions, peaks, sources }) {
       const items = Array.isArray(frame[group]) ? frame[group] : [frame[group]]
       for (const [index, item] of items.entries()) {
         if (!item || !Object.keys(item).length) continue
-        const box = liveGroup(items.length > 1 ? `${group} ${index}` : group, item, caps)
+        const box = liveGroup(items.length > 1 ? `${group} ${index}` : group, item, capabilities)
         ;(measured.has(group) ? own : theirs).push(box)
       }
     }
@@ -76,12 +76,12 @@ export function createLive({ live, fromExtensions, peaks, sources }) {
     fillGroups(fromExtensions, theirs)
 
     const measurements = frame.peaks && Object.keys(frame.peaks).length
-    if (measurements) peaks.replaceChildren(peaks.querySelector("h3"), readingList(frame.peaks, caps))
+    if (measurements) peaks.replaceChildren(peaks.querySelector("h3"), readingList(frame.peaks, capabilities))
     peaks.hidden = !measurements
   }
 
-  function renderSources(caps) {
-    sources.querySelector("ul").replaceChildren(...caps.sources.map((source) => {
+  function renderSources(capabilities) {
+    sources.querySelector("ul").replaceChildren(...capabilities.sources.map((source) => {
       const row = el("li", { className: source.last_fault ? "faulty" : null,
                              textContent: `${source.name} → ${source.provides.join(", ") || "nothing"}` })
       if (source.last_fault) {

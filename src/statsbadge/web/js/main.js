@@ -12,20 +12,22 @@ import { createScreens } from "./screens.js"
 import { createThemes } from "./themes.js"
 
 let config = null
-let caps = null
+let capabilities = null
 let dirty = false
 let edits = 0
 let whose = null
 let badges = {}
 
+const pageKindSelect = $("kind")
+
 const screens = createScreens({ holder: $("screens"), chip: $("accentbchip") })
 const themes = createThemes({
-  picker: $("theme"),
+  holder: $("theme"),
   tintNodes: all("[data-tint]"),
   accents: pick("div.accents"),
   second: $("accentb"),
   changed: markDirty,
-  repaint: () => screens.show(config, caps),
+  repaint: () => screens.show(config, capabilities),
 })
 const look = createLook({
   controls: Object.fromEntries(["interval", "brightness", "points", "idle", "advance", "smooth",
@@ -37,25 +39,25 @@ const look = createLook({
   buttons: { a: $("btn-a"), b: $("btn-b"), c: $("btn-c") },
   changed: markDirty,
   onGaugeFill: () => {
-    screens.show(config, caps)
+    screens.show(config, capabilities)
     themes.paintThumbs()
   },
 })
 const pages = createPages({
   list: $("pages"),
   status: pick('section[aria-label="Pages"] p[role="status"]'),
-  kindPicker: $("kind"),
-  recipePicker: $("recipe"),
+  pageKindSelect,
+  recipeSelect: $("recipe"),
   quickAddButton: $("quickadd"),
   changed: markDirty,
 })
 const extensions = createExtensions({
   holder: $("extensions"),
   changed: markDirty,
-  onChanged: () => refreshCaps(),
+  onChanged: () => refreshCapabilities(),
 })
 const badgeView = createBadges({
-  picker: pick("header label select"),
+  badgeSelect: pick("header label select"),
   note: pick("header > small"),
   holder: $("badges"),
   stale: $("stale"),
@@ -79,8 +81,8 @@ const usbInstaller = createInstaller({
   panel: $("installer"),
   onFinished: async () => {
     badges = await api("/api/badges").catch(() => badges)
-    badgeView.renderPicker(badges, whose)
-    badgeView.render(badges, whose, caps)
+    badgeView.renderBadgeSelect(badges, whose)
+    badgeView.render(badges, whose, capabilities)
   },
 })
 
@@ -117,8 +119,8 @@ function bindTabs() {
 }
 
 function renderLook() {
-  themes.render(config, caps)
-  look.render(config, caps)
+  themes.render(config, capabilities)
+  look.render(config, capabilities)
 }
 
 const REMEMBERED = "statsbadge.whose"
@@ -141,7 +143,7 @@ function remember(id) {
 
 async function switchTo(id) {
   if (dirty && !window.confirm("Discard the unsaved changes to this badge?")) {
-    badgeView.renderPicker(badges, whose)
+    badgeView.renderBadgeSelect(badges, whose)
     return
   }
   whose = id || null
@@ -149,11 +151,11 @@ async function switchTo(id) {
   config = await api(configPath(whose))
   dirty = false
   $("save").disabled = true
-  badgeView.renderPicker(badges, whose)
-  pages.render(config, caps)
-  extensions.render(config, caps)
+  badgeView.renderBadgeSelect(badges, whose)
+  pages.render(config, capabilities)
+  extensions.render(config, capabilities)
   renderLook()
-  badgeView.render(badges, whose, caps)
+  badgeView.render(badges, whose, capabilities)
 }
 
 async function forgotten() {
@@ -167,8 +169,8 @@ async function paired(approved) {
   if (approved && !dirty) {
     await switchTo(approved)
   } else {
-    badgeView.renderPicker(badges, whose)
-    badgeView.render(badges, whose, caps)
+    badgeView.renderBadgeSelect(badges, whose)
+    badgeView.render(badges, whose, capabilities)
   }
 }
 
@@ -186,48 +188,48 @@ async function renderLive() {
     frame = await api("/api/stats")
   } catch (error) { return }
 
-  screens.push(frame, config, caps)
+  screens.push(frame, config, capabilities)
 
   const shape = frameShape(frame)
   if (shape !== liveGroups && !dirty) {
     liveGroups = shape
-    refreshCaps().catch(() => {})
+    refreshCapabilities().catch(() => {})
   }
 
   if (statsSheet.hidden) return
 
-  live.render(frame, caps)
+  live.render(frame, capabilities)
 }
 
-function capsSignature() {
-  const faults = (caps.sources || []).map((source) => [source.name, source.last_fault])
-  return JSON.stringify([caps.available, caps.extension_settings, caps.graphed,
-                         caps.group_source, caps.extension_pages, caps.recipes, faults,
-                         caps.commands, caps.local_actions, caps.themes])
+function capabilitiesSignature() {
+  const faults = (capabilities.sources || []).map((source) => [source.name, source.last_fault])
+  return JSON.stringify([capabilities.available, capabilities.extension_settings, capabilities.graphed,
+                         capabilities.group_source, capabilities.extension_pages, capabilities.recipes, faults,
+                         capabilities.commands, capabilities.local_actions, capabilities.themes])
 }
 
-async function refreshCaps() {
+async function refreshCapabilities() {
   if (dirty) return false
   let fresh
   try {
     fresh = await api("/api/capabilities")
   } catch (error) { return false }
-  const before = capsSignature()
-  caps = fresh
-  if (capsSignature() === before) return false
-  pages.offer(caps)
-  pages.render(config, caps)
-  extensions.render(config, caps)
-  live.renderSources(caps)
-  look.refresh(config, caps)
-  themes.refresh(config, caps)
+  const before = capabilitiesSignature()
+  capabilities = fresh
+  if (capabilitiesSignature() === before) return false
+  pages.offer(capabilities)
+  pages.render(config, capabilities)
+  extensions.render(config, capabilities)
+  live.renderSources(capabilities)
+  look.refresh(config, capabilities)
+  themes.refresh(config, capabilities)
   return true
 }
 
-async function refreshCapsSoon(delays = [400, 1200, 3000, 6000]) {
+async function refreshCapabilitiesSoon(delays = [400, 1200, 3000, 6000]) {
   for (const delay of delays) {
     await new Promise((wake) => setTimeout(wake, delay))
-    if (await refreshCaps()) return
+    if (await refreshCapabilities()) return
   }
 }
 
@@ -248,11 +250,11 @@ async function save() {
       $("save").disabled = true
     }
     toast(`Saved. ${whose ? badgeName(badges, whose) : "Badges using the default layout"} will update shortly.`)
-    refreshCapsSoon().catch(() => {})
+    refreshCapabilitiesSoon().catch(() => {})
     badges = await api("/api/badges").catch(() => badges)
-    badgeView.renderPicker(badges, whose)
-    pages.render(config, caps)
-    badgeView.render(badges, whose, caps)
+    badgeView.renderBadgeSelect(badges, whose)
+    pages.render(config, capabilities)
+    badgeView.render(badges, whose, capabilities)
   } catch (error) {
     toast(error.message, true)
   }
@@ -261,7 +263,7 @@ async function save() {
 async function boot() {
   bindTabs()
   try {
-    [caps, badges] = await Promise.all([api("/api/capabilities"), api("/api/badges")])
+    [capabilities, badges] = await Promise.all([api("/api/capabilities"), api("/api/badges")])
     whose = pickBadge()
     config = await api(configPath(whose))
   } catch (error) {
@@ -269,15 +271,15 @@ async function boot() {
       textContent: `Cannot reach the server: ${error.message}` }))
     return
   }
-  if (caps.statsbadge_version !== "unknown") $("version").textContent = `v${caps.statsbadge_version}`
-  pages.renderKinds(caps)
-  pages.offer(caps)
-  badgeView.renderPicker(badges, whose)
-  pages.render(config, caps)
-  extensions.render(config, caps)
+  if (capabilities.statsbadge_version !== "unknown") $("version").textContent = `v${capabilities.statsbadge_version}`
+  pages.renderKinds(capabilities)
+  pages.offer(capabilities)
+  badgeView.renderBadgeSelect(badges, whose)
+  pages.render(config, capabilities)
+  extensions.render(config, capabilities)
   renderLook()
-  live.renderSources(caps)
-  badgeView.render(badges, whose, caps)
+  live.renderSources(capabilities)
+  badgeView.render(badges, whose, capabilities)
   general.render().catch(() => {})
   renderLive()
   extensions.refreshCatalogue().then(extensions.refreshOutdated).catch(() => {})
@@ -287,7 +289,7 @@ async function boot() {
   const form = pick("main form")
   form.onsubmit = (event) => {
     event.preventDefault()
-    pages.add($("kind").value)
+    pages.add(pageKindSelect.value)
   }
   $("quickadd").onclick = () => pages.quickAdd($("recipe").value)
   badgeView.watchPairing().catch(() => {})

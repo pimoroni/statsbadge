@@ -20,9 +20,9 @@ function freshId(base, taken) {
   return id
 }
 
-export function createPages({ list, status, kindPicker, recipePicker, quickAddButton, changed }) {
+export function createPages({ list, status, pageKindSelect, recipeSelect, quickAddButton, changed }) {
   let config = null
-  let caps = null
+  let capabilities = null
   const expanded = new Set()
   let prunedWanted = 0
 
@@ -31,35 +31,35 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
     refreshPruned()
   }
 
-  function kindLabel(kind) {
-    if (caps.kinds[kind]) return caps.kinds[kind].title
-    const option = kindPicker.querySelector(`option[value="${CSS.escape(kind)}"]`)
-    return (option && option.textContent) || titleCase(kind)
+  function pageKindTitle(pageKind) {
+    if (capabilities.kinds[pageKind]) return capabilities.kinds[pageKind].title
+    const option = pageKindSelect.querySelector(`option[value="${CSS.escape(pageKind)}"]`)
+    return (option && option.textContent) || titleCase(pageKind)
   }
 
-  function shapeFor(kind) {
-    if (caps.kinds[kind]) return caps.kinds[kind]
-    const declared = (caps.extension_pages || []).find((page) => page.kind === kind)
+  function shapeFor(pageKind) {
+    if (capabilities.kinds[pageKind]) return capabilities.kinds[pageKind]
+    const declared = (capabilities.extension_pages || []).find((page) => page.kind === pageKind)
     const slots = (declared && declared.slots) || {}
     return { one: slots.one || null, many: slots.many || null,
              max: slots.max || 0, slots: slots.label || "Values" }
   }
 
-  function renderKindPicker() {
+  function renderPageKindSelect() {
     const groups = new Map()
-    for (const [kind, shape] of Object.entries(caps.kinds)) {
+    for (const [pageKind, shape] of Object.entries(capabilities.kinds)) {
       if (!groups.has(shape.group)) groups.set(shape.group, [])
-      groups.get(shape.group).push(el("option", { value: kind, textContent: shape.title,
+      groups.get(shape.group).push(el("option", { value: pageKind, textContent: shape.title,
                                                   title: shape.summary }))
     }
-    kindPicker.replaceChildren(...[...groups].map(
+    pageKindSelect.replaceChildren(...[...groups].map(
       ([label, options]) => el("optgroup", { label }, options)))
   }
 
   function pageCard(page, index) {
     const shape = shapeFor(page.kind)
     const open = expanded.has(page.id)
-    const settings = (caps.extension_page_settings || {})[page.kind] || []
+    const settings = (capabilities.extension_page_settings || {})[page.kind] || []
 
     const titled = el("span", { className: "given" })
     const showTitle = () => {
@@ -92,10 +92,10 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
       return renderPages()
     }
 
-    const kind = el("h3", { title: "Drag to reorder" },
-                    el("span", { className: "kind", textContent: kindLabel(page.kind) }),
-                    titled)
-    const item = el("li", null, el("header", null, kind, toggle, remove))
+    const heading = el("h3", { title: "Drag to reorder" },
+                       el("span", { className: "kind", textContent: pageKindTitle(page.kind) }),
+                       titled)
+    const item = el("li", null, el("header", null, heading, toggle, remove))
 
     if (open) {
       item.append(el("label", { htmlFor: titleId, textContent: "Title" }), title,
@@ -105,13 +105,13 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
                   el("footer", null, moveButtons(index), addSlot(page, shape)))
     } else {
       const refs = shape.one ? [page[shape.one]] : (page[shape.many] || [])
-      const named = refs.filter(Boolean).map((ref) => fieldLabel(caps, ref))
+      const named = refs.filter(Boolean).map((ref) => fieldLabel(capabilities, ref))
       const extra = settings.map((setting) => page[setting.key]).filter(Boolean)
       if (shape.scaled && page.max) extra.push(`full scale ${page.max}`)
       item.append(el("p", { textContent: named.concat(extra).join(", ") || "nothing chosen" }))
     }
 
-    reorderable(item, config.pages, index, { tag: "page", along: "x", handle: kind })
+    reorderable(item, config.pages, index, { tag: "page", along: "x", handle: heading })
     return item
   }
 
@@ -165,7 +165,7 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
     if (shape.one) {
       rows.push(el("li", null,
                    el("span", { textContent: page.kind === "bars" ? "List" : "Gauge" }),
-                   refSelect(caps, page[shape.one], poolFor(caps, shape.pool),
+                   refSelect(capabilities, page[shape.one], poolFor(capabilities, shape.pool),
                              (value) => { page[shape.one] = value; changed() })))
     }
 
@@ -176,7 +176,7 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
       drop.onclick = () => { current.splice(slot, 1); changed(); renderPages() }
       const row = el("li", null,
                      el("span", { className: "grip", textContent: "⋮" }),
-                     refSelect(caps, ref, poolFor(caps, shape.many_pool),
+                     refSelect(capabilities, ref, poolFor(capabilities, shape.many_pool),
                                (value) => { current[slot] = value; changed() }),
                      drop)
       reorderable(row, current, slot, { tag: "slot", along: "y" })
@@ -192,7 +192,7 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
     const add = el("button", { type: "button", className: "small add",
                                textContent: `Add ${singular(shape.slots).toLowerCase()}` })
     add.onclick = () => {
-      page[shape.many] = current.concat([poolFor(caps, shape.many_pool)[0]])
+      page[shape.many] = current.concat([poolFor(capabilities, shape.many_pool)[0]])
       changed()
       renderPages()
     }
@@ -218,17 +218,17 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
     return new Set(config.pages.map((page) => page.id))
   }
 
-  function newPage(kind) {
+  function newPage(pageKind) {
     const taken = pageIds()
-    const offered = (caps.extension_pages || []).find((page) => page.kind === kind)
+    const offered = (capabilities.extension_pages || []).find((page) => page.kind === pageKind)
     if (offered) {
-      return { ...offered, id: freshId(offered.id || kind, taken) }
+      return { ...offered, id: freshId(offered.id || pageKind, taken) }
     }
-    const shape = shapeFor(kind)
-    const pool = numericRefs(caps)
-    const page = { id: freshId(kind, taken), kind, title: kind }
+    const shape = shapeFor(pageKind)
+    const pool = numericRefs(capabilities)
+    const page = { id: freshId(pageKind, taken), kind: pageKind, title: pageKind }
     if (shape.one) {
-      page[shape.one] = kind === "bars" ? "cpu.cores" : (pool[0] || "cpu.pct")
+      page[shape.one] = pageKind === "bars" ? "cpu.cores" : (pool[0] || "cpu.pct")
     }
     if (shape.many) {
       page[shape.many] = pool.slice(0, Math.min(2, shape.max))
@@ -237,27 +237,27 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
   }
 
   function offerExtensionPages() {
-    const offered = (caps.extension_pages || []).filter(
-      (page) => ![...kindPicker.options].some((option) => option.value === page.kind))
+    const offered = (capabilities.extension_pages || []).filter(
+      (page) => ![...pageKindSelect.options].some((option) => option.value === page.kind))
     if (!offered.length) return
-    const group = kindPicker.querySelector("optgroup[label=\"Extensions\"]")
-      || kindPicker.appendChild(el("optgroup", { label: "Extensions" }))
+    const group = pageKindSelect.querySelector("optgroup[label=\"Extensions\"]")
+      || pageKindSelect.appendChild(el("optgroup", { label: "Extensions" }))
     group.append(...offered.map(
       (page) => el("option", { value: page.kind, textContent: page.title || page.kind })))
   }
 
   function offerRecipes() {
-    const listed = caps.recipes || []
-    const wanted = recipePicker.value
-    recipePicker.replaceChildren(...listed.map((recipe) => el("option", {
+    const listed = capabilities.recipes || []
+    const wanted = recipeSelect.value
+    recipeSelect.replaceChildren(...listed.map((recipe) => el("option", {
       value: recipe.name, textContent: recipe.title, title: recipe.summary || null })))
-    if (listed.some((recipe) => recipe.name === wanted)) recipePicker.value = wanted
-    recipePicker.hidden = !listed.length
+    if (listed.some((recipe) => recipe.name === wanted)) recipeSelect.value = wanted
+    recipeSelect.hidden = !listed.length
     quickAddButton.hidden = !listed.length
   }
 
   function quickAdd(name) {
-    const recipe = (caps.recipes || []).find((entry) => entry.name === name)
+    const recipe = (capabilities.recipes || []).find((entry) => entry.name === name)
     if (!recipe) return
     const taken = pageIds()
     const added = recipe.pages.map((page) => (
@@ -281,28 +281,28 @@ export function createPages({ list, status, kindPicker, recipePicker, quickAddBu
     } catch {}
   }
 
-  function add(kind) {
-    config.pages.unshift(newPage(kind))
+  function add(pageKind) {
+    config.pages.unshift(newPage(pageKind))
     expanded.add(config.pages[0].id)
     changed()
     renderPages()
   }
 
-  function render(currentConfig, currentCaps) {
+  function render(currentConfig, currentCapabilities) {
     config = currentConfig
-    caps = currentCaps
+    capabilities = currentCapabilities
     renderPages()
   }
 
-  function offer(currentCaps) {
-    caps = currentCaps
+  function offer(currentCapabilities) {
+    capabilities = currentCapabilities
     offerExtensionPages()
     offerRecipes()
   }
 
-  function renderKinds(currentCaps) {
-    caps = currentCaps
-    renderKindPicker()
+  function renderKinds(currentCapabilities) {
+    capabilities = currentCapabilities
+    renderPageKindSelect()
   }
 
   return { render, offer, renderKinds, add, quickAdd }

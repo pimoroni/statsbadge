@@ -13,11 +13,11 @@ function appLabel(state) {
   return `${changes} file${changes === 1 ? "" : "s"} behind`
 }
 
-export function createBadges({ picker, note, holder, stale, pairButton, pairingPanel, onSwitch,
+export function createBadges({ badgeSelect, note, holder, stale, pairButton, pairingPanel, onSwitch,
                                onForgotten, onPaired, onUpdate }) {
   let badges = {}
   let whose = null
-  let caps = null
+  let capabilities = null
 
   async function forgetBadge(id) {
     if (!window.confirm(`Forget ${badgeName(badges, id)}? Its layout goes with it.`)) return
@@ -28,14 +28,14 @@ export function createBadges({ picker, note, holder, stale, pairButton, pairingP
 
   function renderWhose() {
     const ids = Object.keys(badges)
-    picker.replaceChildren(
+    badgeSelect.replaceChildren(
       ...ids.map((id) => el("option", { value: id, textContent: badgeName(badges, id) })),
       el("option", { value: "",
                      textContent: ids.length
                        ? "Default, for any other badge"
                        : "No badge paired yet" }))
-    picker.value = whose || ""
-    picker.onchange = () => onSwitch(picker.value).catch((error) => toast(error.message, true))
+    badgeSelect.value = whose || ""
+    badgeSelect.onchange = () => onSwitch(badgeSelect.value).catch((error) => toast(error.message, true))
 
     const own = whose && badges[whose] && badges[whose].configured
     note.textContent = whose && !own
@@ -114,7 +114,7 @@ export function createBadges({ picker, note, holder, stale, pairButton, pairingP
   }
 
   function themeLabel(name) {
-    const record = (caps.themes || []).find((entry) => entry.name === name)
+    const record = (capabilities.themes || []).find((entry) => entry.name === name)
     return (record && record.label) || name || "unset"
   }
 
@@ -226,18 +226,18 @@ export function createBadges({ picker, note, holder, stale, pairButton, pairingP
       button)
   }
 
-  function renderPicker(currentBadges, currentWhose) {
+  function renderBadgeSelect(currentBadges, currentWhose) {
     badges = currentBadges
     whose = currentWhose
     renderWhose()
   }
 
-  function render(currentBadges, currentWhose, currentCaps) {
+  function render(currentBadges, currentWhose, currentCapabilities) {
     badges = currentBadges
     whose = currentWhose
-    caps = currentCaps
+    capabilities = currentCapabilities
     renderBadges()
   }
 
-  return { renderPicker, render, watchPairing }
+  return { renderBadgeSelect, render, watchPairing }
 }

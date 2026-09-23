@@ -23,7 +23,7 @@ function masked(value) {
 
 export function createExtensions({ holder, changed, onChanged }) {
   let config = null
-  let caps = null
+  let capabilities = null
   const openExtensions = new Set()
   const editingSecrets = new Set()
   const installing = new Set()
@@ -33,8 +33,8 @@ export function createExtensions({ holder, changed, onChanged }) {
   let checking = false
 
   function renderSettings() {
-    const schema = caps.extension_settings || {}
-    const installed = caps.extensions || []
+    const schema = capabilities.extension_settings || {}
+    const installed = capabilities.extensions || []
     config.settings = config.settings || {}
     const intro = holder.querySelector("p")
     holder.replaceChildren(
@@ -295,9 +295,9 @@ export function createExtensions({ holder, changed, onChanged }) {
     return block
   }
 
-  function render(currentConfig, currentCaps) {
+  function render(currentConfig, currentCapabilities) {
     config = currentConfig
-    caps = currentCaps
+    capabilities = currentCapabilities
     renderSettings()
   }
 

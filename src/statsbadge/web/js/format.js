@@ -1,4 +1,4 @@
-const isPercent = (field, caps) => caps.percent_fields.includes(field) || field.endsWith("_pct")
+const isPercent = (field, capabilities) => capabilities.percent_fields.includes(field) || field.endsWith("_pct")
 
 function rate(bps) {
   if (bps >= 1024 ** 3) return `${(bps / 1024 ** 3).toFixed(1)}G`
@@ -32,21 +32,21 @@ export function fmt(value, field) {
   return value >= 100 ? value.toFixed(0) : value.toFixed(1)
 }
 
-export function shortUnit(field, caps) {
+export function shortUnit(field, capabilities) {
   if (field.endsWith("_bps")) return "B/s"
   if (field === "cores" || field === "pct" || field.endsWith("_pct")) return "%"
   if (field.endsWith("_mb")) return "B"
   if (field === "uptime_s" || field === "secs_left") return ""
-  return caps.units[field] || ""
+  return capabilities.units[field] || ""
 }
 
-export function fractionOf(ref, value, frame, caps) {
+export function fractionOf(ref, value, frame, capabilities) {
   if (value === null || value === undefined || typeof value === "string"
       || typeof value === "boolean") return null
   const field = ref.split(".").pop()
   let top
-  if (isPercent(field, caps)) top = 100
-  else top = Number((frame?.peaks || {})[ref]) || caps.full_scale[field]
+  if (isPercent(field, capabilities)) top = 100
+  else top = Number((frame?.peaks || {})[ref]) || capabilities.full_scale[field]
   if (!top) return null
   return Math.max(0, Math.min(1, value / top))
 }

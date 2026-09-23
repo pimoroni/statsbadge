@@ -7,7 +7,7 @@ const GRAPH_POINTS = 48
 
 export function createScreens({ holder, chip }) {
   let config = null
-  let caps = null
+  let capabilities = null
   let previewWanted = 0
   let shown = null
   let frameNow = null
@@ -33,13 +33,13 @@ export function createScreens({ holder, chip }) {
       const ctx = holder.children[index].getContext("2d")
       ctx.setTransform(2, 0, 0, 2, 0, 0)
       paint(ctx, shown.palette, shown.palette.series,
-            { frame: frameNow, history: rings, gaugeFill: config.gauge_fill, caps })
+            { frame: frameNow, history: rings, gaugeFill: config.gauge_fill, capabilities })
     })
   }
 
-  function push(frame, currentConfig, currentCaps) {
+  function push(frame, currentConfig, currentCapabilities) {
     config = currentConfig
-    caps = currentCaps
+    capabilities = currentCapabilities
     frameNow = frame
     for (const ref of SERIES) {
       const value = readingOf(frame, ref)
@@ -51,11 +51,11 @@ export function createScreens({ holder, chip }) {
     paintScreens()
   }
 
-  async function show(currentConfig, currentCaps) {
+  async function show(currentConfig, currentCapabilities) {
     config = currentConfig
-    caps = currentCaps
+    capabilities = currentCapabilities
     const query = new URLSearchParams({ theme: config.theme || "dark" })
-    const record = (caps.themes || []).find((entry) => entry.name === config.theme)
+    const record = (capabilities.themes || []).find((entry) => entry.name === config.theme)
     if (record && record.derived) {
       query.set("accent", (config.tint || []).join(","))
       query.set("second", config.accent_b || "same")
