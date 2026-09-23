@@ -15,7 +15,7 @@ from . import NO_WINDOW, repl
 
 APP_NAME = "stats"
 STATE_FILE = "/state/stats.json"
-# Where an extension's badge modules go under the app directory.
+# Where an extension's badge modules go under the app directory, one directory each.
 EXT_DIR = "ext"
 
 
@@ -518,8 +518,17 @@ def app_files(source=None, extra_modules=()):
                 files.append((f"{name}/{inner}", os.path.join(path, inner)))
             continue
         files.append((name, path))
-    for _name, path in extra_modules:
-        files.append((f"{EXT_DIR}/{os.path.basename(path)}", path))
+    owners = {os.path.splitext(name)[0]: "the app" for name, _path in files
+              if name.endswith((".py", ".mpy"))}
+    for extension, path in extra_modules:
+        base = os.path.basename(path)
+        if base.endswith(".py"):
+            module = base[:-3]
+            if owners.get(module, extension) != extension:
+                raise InstallError(f"{extension} ships a badge module called {base}, "
+                                   f"which {owners[module]} already has")
+            owners[module] = extension
+        files.append((f"{EXT_DIR}/{extension}/{base}", path))
     return files
 
 
@@ -583,15 +592,15 @@ def prune_app(target, keep):
     return sorted(removed)
 
 
-def _existing_app_files(target):
+def _existing_app_files(target, prefix=""):
     """Return the names, relative to the app directory, of what is on the badge now."""
     found = []
     for name in sorted(os.listdir(target)):
         path = os.path.join(target, name)
         if os.path.isdir(path):
-            found.extend(f"{name}/{inner}" for inner in sorted(os.listdir(path)))
+            found.extend(_existing_app_files(path, f"{prefix}{name}/"))
             continue
-        found.append(name)
+        found.append(prefix + name)
     return found
 
 

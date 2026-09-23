@@ -190,8 +190,10 @@ The light sensor is a phototransistor a hand can shadow, read through the 12-bit
 
 A package advertising a `statsbadge.sources` entry point gets a group in the frame, which the
 built-in page kinds can draw with no badge-side code at all. Set `badge_module` to a `.py` and
-`statsbadge install` copies it into the app's `ext/` directory, where the app imports it at
-startup and it calls `pages.register(kind, render, api=N)`.
+`statsbadge install` copies it, with any `badge_assets`, into `ext/<entry point name>/`. The
+app puts that directory behind its own on `sys.path` and imports the module, which calls
+`pages.register(kind, render, api=N)` and finds its assets beside its own `__file__`. Two
+extensions shipping one module name, or one named like an app module, is refused at install.
 
 **The badge API is a list.** [`badge_api.py`](src/statsbadge/badge_api.py) names everything a
 badge module may use from `draw`, `look`, `pages` and `worldmap`, and what it may read off a

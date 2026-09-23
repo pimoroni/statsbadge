@@ -113,12 +113,15 @@ def test_an_update_prunes_the_files_it_owns_and_leaves_the_rest():
             handle.write("# a badge-side extension module")
 
         names = dict(install.app_files(source, [("clock", plugin)]))
-        assert sorted(names) == ["__init__.mpy", "ext/clockface.py", "icon.png",
+        assert sorted(names) == ["__init__.mpy", "ext/clock/clockface.py", "icon.png",
                                  "net.mpy"], names
 
         # A stale .py beside an .mpy wins the import and undoes the precompile.
         target = os.path.join(work, "stats")
-        os.makedirs(os.path.join(target, "ext"))
+        os.makedirs(os.path.join(target, "ext", "clock"))
+        with open(os.path.join(target, "ext", "clock", "clockface.py"), "w",
+                  encoding="utf-8") as handle:
+            handle.write("old")
         for name in ("__init__.mpy", "net.mpy", "net.py", "icon.png", "notes.txt"):
             with open(os.path.join(target, name), "w", encoding="utf-8") as handle:
                 handle.write("old")
@@ -126,8 +129,9 @@ def test_an_update_prunes_the_files_it_owns_and_leaves_the_rest():
             with open(os.path.join(target, "ext", name), "w", encoding="utf-8") as handle:
                 handle.write("old")
 
+        # What an install before per-extension directories left goes too.
         removed = install.prune_app(target, set(names))
-        assert removed == ["ext/gone.py", "net.py"], removed
+        assert removed == ["ext/clockface.py", "ext/gone.py", "net.py"], removed
         assert os.path.exists(os.path.join(target, "notes.txt")), \
             "pruning took a file the installer does not own"
         assert os.path.exists(os.path.join(target, "net.mpy"))
@@ -140,6 +144,33 @@ def test_an_update_prunes_the_files_it_owns_and_leaves_the_rest():
         assert added == ["ext/clockface.py"], added
         assert changed == ["net.mpy"], changed
         assert gone == ["net.py"], f"{gone}, and notes.txt must not force a reset"
+
+
+def test_two_extensions_cannot_ship_one_module_name():
+    import tempfile
+
+    import pytest
+
+    from statsbadge import install
+
+    with tempfile.TemporaryDirectory() as work:
+        for owner in ("one", "two"):
+            os.makedirs(os.path.join(work, owner))
+            for name in ("map.py", "icons.af"):
+                with open(os.path.join(work, owner, name), "w", encoding="utf-8") as handle:
+                    handle.write(owner)
+        assets = [(owner, os.path.join(work, owner, "icons.af")) for owner in ("one", "two")]
+        names = dict(install.app_files(None, assets))
+        assert {"ext/one/icons.af", "ext/two/icons.af"} <= set(names), names
+
+        with pytest.raises(install.InstallError, match="map.py"):
+            install.app_files(None, [(owner, os.path.join(work, owner, "map.py"))
+                                     for owner in ("one", "two")])
+        shadow = os.path.join(work, "one", "pages.py")
+        with open(shadow, "w", encoding="utf-8") as handle:
+            handle.write("")
+        with pytest.raises(install.InstallError, match="the app"):
+            install.app_files(None, [("one", shadow)])
 
 
 def test_a_file_that_did_not_write_is_not_left_on_the_badge():
@@ -192,12 +223,8 @@ def test_a_file_that_did_not_write_is_not_left_on_the_badge():
 
 
 def test_the_installer_and_the_app_name_the_same_extension_directory(badge_constants):
-    """The directory the installer writes badge modules into is the one the app adds to
-    sys.path.
-    """
+    """The directory the installer writes badge modules into is the one the app reads."""
     assert badge_constants("app.py")["EXT_DIR"] == install.EXT_DIR, install.EXT_DIR
-    # `pages` would be a directory shadowing the app's pages.py on sys.path.
-    assert install.EXT_DIR != "pages"
 
 
 def test_one_writer_owns_the_badge_state_file():

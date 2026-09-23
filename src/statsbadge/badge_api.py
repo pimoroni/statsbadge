@@ -14,7 +14,7 @@ NAMES = {
         "curve", "fit", "has_font", "icon_baseline", "readable", "text_width",
     }),
     "look": frozenset({
-        "APP_DIR", "BODY_H", "BODY_TOP", "DIAL_C", "DIAL_OUTER", "PAD", "READOUT_X",
+        "BODY_H", "BODY_TOP", "DIAL_C", "DIAL_OUTER", "PAD", "READOUT_X",
         "SIZE_BIG", "SIZE_LABEL", "SIZE_SMALL", "SIZE_VALUE", "W",
     }),
     "pages": frozenset({"register"}),

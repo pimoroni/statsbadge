@@ -6,7 +6,6 @@ import draw
 import look
 from pixels import body_pixels, chrome_pixels, differing
 
-EXT_DIR = "/system/apps/stats/ext"
 
 CLOCK_FRAME = {
     "v": 1, "seq": 7,
@@ -190,9 +189,6 @@ class ClockFaces(unittest.TestCase):
     def setUp(self):
         draw.prepare()
         self.theme = look.get(look.DEFAULT)
-        import sys
-        if EXT_DIR not in sys.path:
-            sys.path.insert(0, EXT_DIR)
 
     def clockface(self):
         try:
@@ -266,9 +262,6 @@ class StopToGo(unittest.TestCase):
     """A face with a `sweep` steps its second hand out early and waits short of twelve."""
 
     def setUp(self):
-        import sys
-        if EXT_DIR not in sys.path:
-            sys.path.insert(0, EXT_DIR)
         try:
             import clockface
         except ImportError:
