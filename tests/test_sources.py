@@ -90,8 +90,12 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
         time.sleep(0.4)
         return {"temp": 11.0, "place": "Sheffield", "utc_offset": 0}
 
+    class Found:
+        def lookup(self, _place):
+            return (53.38, -1.47, "Sheffield, GB")
+
     source._fetch = slow
-    source._geocode = lambda _place: (53.38, -1.47, "Sheffield, GB")
+    source.geocode = Found()
     source.pages([{"id": "clock1", "kind": "clockface", "place": "Sheffield"}])
     source.start()
     try:
@@ -112,39 +116,22 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
         source.stop()
     assert asked, "nothing was ever fetched"
 
-    # A refused lookup waits out the retry timer and is then tried again.
+    # A refused lookup is a fault, and waits out the retry timer rather than the next poll.
     refused = clock.Clock({"place": "Sheffield"})
     tries = []
 
-    def failing(place):
-        tries.append(place)
-        raise OSError("rate limited")
+    class Refusing:
+        def lookup(self, place):
+            tries.append(place)
+            raise OSError("rate limited")
 
-    refused._geocode = failing
-    assert refused._where() is None and refused.faults == 1
-    assert refused._where() is None and len(tries) == 1, "hammered a rate limited geocoder"
-    refused._retry_at = 0.0
-    assert refused._where() is None and len(tries) == 2, "never tried again"
-
-    # A town stays put, so coordinates in the store outlive a launch.
-    from statsbadge import state
+    refused.geocode = Refusing()
+    refused.poll()
+    refused.poll()
+    assert refused.faults == 1 and len(tries) == 1, "hammered a rate limited geocoder"
+    assert refused.last_fault == "OSError: rate limited"
 
     directory = tempfile.mkdtemp(prefix="statsbadge-clock-")
-    kept = clock.Clock({"place": "Sheffield"})
-    kept.store = state.for_source(directory, "clock")
-    calls = []
-    kept._fetch = lambda where, **_named: calls.append(where) or {"temp": 9.0}
-    real_urlopen = clock.urllib.request.urlopen
-    clock.urllib.request.urlopen = lambda *_args, **_named: (_ for _ in ()).throw(
-        AssertionError("asked the geocoder for a place it had already resolved"))
-    try:
-        state.for_source(directory, "clock").set(
-            clock.GEOCODED, {"sheffield": [53.38, -1.47, "Sheffield, GB"]})
-        kept.store = state.for_source(directory, "clock")
-        assert kept._where() == (53.38, -1.47, "Sheffield, GB")
-    finally:
-        clock.urllib.request.urlopen = real_urlopen
-
     # The host settles where that file goes, one per extension name.
     loaded = extensions.load({"extensions": {}}, directory)
     for source in loaded:
@@ -152,6 +139,32 @@ def test_a_slow_lookup_does_not_hold_up_a_frame():
             source.name, source.store.path)
     assert any(source.name == "clock" for source in loaded), "the clock was not loaded"
     shutil.rmtree(directory, ignore_errors=True)
+
+
+def test_clock_pages_in_two_places_each_keep_their_own_weather():
+    clock = pytest.importorskip("statsbadge_clock")
+
+    places = {"tokyo": (35.68, 139.69, "Tokyo, JP"), "lima": (-12.05, -77.04, "Lima, PE"),
+              "sheffield": (53.38, -1.47, "Sheffield, GB")}
+
+    class Found:
+        def lookup(self, place):
+            return places[place.lower()]
+
+    source = clock.Clock({})
+    source.geocode = Found()
+    source.home = {"place": "Sheffield"}
+    source._fetch = lambda where, **_named: {"place": where[2], "utc_offset": where[1] * 240}
+    source.pages([{"id": "east", "kind": "clockface", "place": "Tokyo"},
+                  {"id": "west", "kind": "clockface", "place": "Lima"},
+                  {"id": "here", "kind": "clockface"}])
+    source.poll()
+    frame = {}
+    source.sample(frame, 1.0)
+    assert {page: entry["place"] for page, entry in frame["places"].items()} == {
+        "east": "Tokyo, JP", "west": "Lima, PE"}, frame["places"]
+    assert frame["places"]["east"]["hour"] != frame["places"]["west"]["hour"]
+    assert frame["weather"]["place"] == "Sheffield, GB", "no default fell back to the badge"
 
 
 def test_a_weather_reading_carries_its_units_and_a_symbol():

@@ -53,7 +53,7 @@ def test_extension_settings_are_declared_stored_and_applied(h):
 
     # and handed to the running source, not left for the next restart
     clock = next(s for s in h.service.collector.extensions if s.name == "clock")
-    assert clock.latitude == 52.4, clock.latitude
+    assert clock.config["latitude"] == 52.4, clock.config
     assert clock.units == "fahrenheit", clock.units
 
     # Host-side only: the badge has no use for a location
