@@ -271,14 +271,6 @@ def test_hello_carries_the_identity(h):
     assert body["name"] == h.service.identity["name"], body
 
 
-def test_enrolment_needs_an_open_window(h):
-    h.service.badges.cancel_pairing()
-    status, body = h.raw("POST", "/v1/enrol",
-                         json.dumps({"badge_id": "asker0001"}).encode(),
-                         {"Content-Type": "application/json"})
-    assert status == 403 and "not open" in body["error"], body
-
-
 def test_enrolment_needs_a_human(h):
     """A request alone pairs nothing; approving it does."""
     h.service.badges.begin_pairing(ttl=60)

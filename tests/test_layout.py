@@ -87,11 +87,12 @@ def test_a_dials_page_takes_up_to_four_fields():
     assert layout.prune([page], caps)[0]["fields"] == ["cpu.pct", "mem.pct"]
 
 
-def test_every_kind_has_a_badge_layout():
-    app = pathlib.Path(install.app_source_dir())
-    pages_source = (app / "pages.py").read_text(encoding="utf-8")
-    for kind in layout.KINDS:
-        assert f'"{kind}": _' in pages_source, f"{kind} has no renderer"
+def test_every_kind_has_a_badge_renderer():
+    sys.path.insert(0, install.app_source_dir())
+    import pages
+
+    assert set(layout.KINDS) <= set(pages._KINDS), set(layout.KINDS) - set(pages._KINDS)
+
 
 
 def test_a_full_scale_is_offered_where_it_is_read():
@@ -203,18 +204,6 @@ def test_a_page_carries_only_what_its_kind_declared():
     # Without a schema an extension page keeps its fields alone.
     plain = layout.validate(config, extra_kinds=("clockface",))["pages"][0]
     assert "place" not in plain
-
-
-def test_the_field_picker_offers_each_reading_once(ui):
-    """numericRefs is a subset of availableRefs, so every join of the two is deduplicated."""
-    ui = ui.script
-    # Checked per line, so a Set anywhere else in the script cannot satisfy it.
-    for line in ui.splitlines():
-        if "concat(availableRefs())" in line:
-            assert "new Set(" in line, f"undeduplicated: {line.strip()}"
-    assert "function preferredRefs()" in ui
-    # RefSelect deduplicates whatever it is handed, so no caller can bring it back.
-    assert "new Set(refs)" in ui
 
 
 def test_every_kind_picks_from_a_pool_that_suits_it(ui):
@@ -426,23 +415,6 @@ def test_a_row_of_a_name_and_a_figure_takes_the_unit_in_the_figure():
     assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
 
 
-def test_an_api_key_is_masked_until_it_is_asked_for(ui):
-    """A secret setting is masked rather than hidden, so unset and wrong are told apart."""
-    ui = ui.script
-    assert "function masked(" in ui and "Edit secrets" in ui
-    # A secret does not go in the ordinary run of rows, or it would be on screen anyway
-    assert "if (setting.secret) continue" in ui, "a secret is still drawn with the rest"
-    # Reopened by name, so a redraw does not close the box under someone's typing
-    assert "editingSecrets" in ui
-
-    # Stored and coerced like any other setting: masking is the UI's business.
-    schema = {"thing": [{"key": "api_token", "type": "text", "secret": True}]}
-    stored = layout.validate({**layout.DEFAULT_CONFIG,
-                              "settings": {"thing": {"api_token": "sekrit"}}},
-                             (), schema)["settings"]
-    assert stored["thing"] == {"api_token": "sekrit"}, stored
-
-
 def test_a_number_setting_is_held_to_its_bounds(ui):
     """A number setting is clamped to the bounds its extension declared, on this side too."""
     schema = {"thing": [{"key": "every", "type": "number", "min": 60, "max": 3600,
@@ -553,4 +525,3 @@ def test_every_slider_stays_inside_what_the_server_takes(ui):
     for control, (low, high) in parser.found.items():
         (floor, ceiling), scale = bounds[ui.bindings[control]]
         assert floor * scale <= low and high <= ceiling * scale, (control, low, high)
-

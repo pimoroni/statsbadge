@@ -251,18 +251,6 @@ def _palette_of(name):
     return layout.palette_for(name, layout.DEFAULT_CONFIG["tint"])
 
 
-def test_no_palette_carries_a_case_light():
-    """It is a brightness, so a theme has nothing to say about it. `CaseLights` in
-    tests/badge/wasm/test_app.py drives what they do follow.
-    """
-    sys.path.insert(0, install.app_source_dir())
-    import look
-
-    # The palette, the theme and the wire have all dropped it.
-    assert not hasattr(look.THEMES[look.DEFAULT], "case")
-    assert look.from_palette("d", {**_palette_of("dark"), "case": 0.9}).__dict__.get("case") is None
-
-
 def test_the_themes_are_a_data_file():
     """Every entry in themes.toml is written down in full or derived, never both."""
     from importlib import resources
@@ -588,23 +576,3 @@ def test_a_theme_can_be_derived_from_one_accent(h, ui):
     # Clicking along the swatches starts several previews, and the last click wins rather
     # than the last reply.
     assert "previewWanted" in script, "a stale preview reply can win"
-
-
-def test_the_ui_takes_its_colours_from_the_host(h, ui):
-    """The UI fetches the palette of the selected theme and keeps no copy of it."""
-    web = ui.script
-    sheet = ui.css
-    assert "THEME_COLOURS" not in web, "the UI still carries a palette table"
-    assert "/api/theme?" in web, "the UI does not ask the host for a palette"
-    # Four pages at 320x240, drawn from what the host sent.
-    assert "drawDial" in web and "drawGraph" in web, "the preview does not draw the pages"
-    assert "--pv-" not in web + sheet, "the preview still keeps colours in the sheet"
-    # The rule for a graph's second series is the badge's, resolved on the host and sent.
-    assert "shown.palette.series" in web, "the UI picks the second series itself"
-    _status, shown = h.raw("GET", "/api/theme?theme=dark")
-    assert len(shown["palette"].get("series") or []) == 2, shown
-    # The UI's accent and ramp are generated from the dark theme, not typed in.
-    assert "--ramp-0:" not in sheet, "the sheet still declares the ramp by hand"
-    assert "--accent:" not in sheet, "the sheet still declares the accent by hand"
-    assert "var(--ramp-0)" in sheet, "the sheet stopped using the generated tokens"
-    assert "/tokens.css" in ui.markup

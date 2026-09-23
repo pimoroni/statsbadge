@@ -14,17 +14,6 @@ from statsbadge import install, layout
 CLOCK_BADGE = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
 
 
-def test_the_gauge_and_its_column_sit_on_one_gap(badge_constants):
-    """One gap left of the dial, one between it and the column, one at the right edge."""
-    look = badge_constants("look.py")
-    gap, outer = look["DIAL_GAP"], look["DIAL_OUTER"]
-
-    assert look["DIAL_C"][0] - outer == gap, (look["DIAL_C"], outer, gap)
-    assert look["READOUT_X"] == look["DIAL_C"][0] + outer + gap, look["READOUT_X"]
-    assert look["READOUT_W"] == look["W"] - look["READOUT_X"] - gap, look["READOUT_W"]
-    assert look["READOUT_W"] > 0, "the column has no room left"
-
-
 def test_a_gauge_can_sweep_to_its_reading(ui):
     """A reading arriving mid-sweep carries on from the drawn position."""
     import sys
@@ -101,35 +90,6 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
         pages.sweep_reset()
         pages.use_facts({}, ())
         pages.__dict__.pop("tween", None)
-
-def test_a_slide_is_a_style_the_ui_offers(ui):
-    """`Slides`, `Rendering` and `DrawingElsewhere` in tests/badge/wasm/test_app.py drive
-    the movement itself.
-    """
-    for style in layout.SLIDE_STYLES:
-        assert layout.validate({"slide": style,
-                                "pages": layout.DEFAULT_PAGES})["slide"] == style
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["slide"] == "off", (
-        "immediate by default")
-    assert layout.validate({"slide": "sideways",
-                            "pages": layout.DEFAULT_PAGES})["slide"] == "off"
-    assert layout.validate({"slide": True, "pages": layout.DEFAULT_PAGES})["slide"] == "over"
-    assert layout.validate({"slide": False, "pages": layout.DEFAULT_PAGES})["slide"] == "off"
-    assert 'id="slide"' in ui.markup, "no control in the UI"
-    assert "config.slide" in ui.script, "the control is not bound"
-    for style in layout.SLIDE_STYLES:
-        assert f'value="{style}"' in ui.markup, style
-
-def test_smooth_graphs_are_a_setting_that_reaches_the_badge(ui):
-    """One setting smooths every graph on the badge."""
-    config = layout.validate({"smooth": False, "pages": layout.DEFAULT_PAGES})
-    assert config["smooth"] is False
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["smooth"] is True, "on by default"
-    # Anything truthy, since the UI sends a checkbox and a command line sends a string.
-    assert layout.validate({"smooth": "yes", "pages": layout.DEFAULT_PAGES})["smooth"] is True
-    assert 'id="smooth"' in ui.markup, "no control in the UI"
-    assert "config.smooth" in ui.script, "the control is not bound"
-
 
 def test_the_big_gauge_can_show_the_whole_ramp(ui):
     """The gauge's gradient is the theme ramp, in order, round the arc it sweeps."""

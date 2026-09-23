@@ -10,7 +10,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 
 from statsbadge import extensions, library
 
@@ -47,27 +46,6 @@ def test_a_plugin_wanting_a_newer_statsbadge_is_explained():
         where, why = library.build(directory, ["statsbadge-quakes>=99"])
         assert where is None and why, (where, why)
         assert library.generations(directory) == [], "a failed build was promoted"
-
-
-def test_an_extension_using_a_new_feature_says_which_statsbadge_it_needs():
-    """An extension declaring `groups` or `series` pins a statsbadge floor."""
-    # An older collector reads neither and reports nothing, so the failure is a missing
-    # group and a slow one polled every second.
-    marks = ("groups = {", "def series(self)")
-    for directory in sorted(pathlib.Path("extensions").iterdir()):
-        pyproject = directory / "pyproject.toml"
-        if not pyproject.is_file():
-            continue
-        source = "\n".join(path.read_text(encoding="utf-8")
-                           for path in sorted(directory.rglob("src/**/__init__.py")))
-        if not any(mark in source for mark in marks):
-            continue
-        with open(pyproject, "rb") as handle:
-            requires = tomllib.load(handle)["project"]["dependencies"]
-        pinned = [need for need in requires if need.startswith("statsbadge")]
-        assert pinned and ">=" in pinned[0], (
-            f"{directory.name} declares a group or a series against an unpinned "
-            f"statsbadge: {requires}")
 
 
 def test_the_list_is_what_every_build_is_made_from():

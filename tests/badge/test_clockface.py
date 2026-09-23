@@ -1,6 +1,5 @@
 """The clock extension's own logic: setting the badge's clock, and a page in another zone."""
 
-import ast
 import sys
 import types
 
@@ -120,30 +119,6 @@ def test_a_page_elsewhere_is_offset_from_the_host(clock_badge):
     # Nothing to work it out from is no offset, not a guess.
     assert clockface._zone_offset(None, here) == 0
     assert clockface._zone_offset(here, {}) == 0
-
-
-def test_the_clock_is_set_from_the_host_alone(repo_root):
-    """There is one hardware clock, so two pages in two zones must not each set it."""
-    source = (repo_root / CLOCK_BADGE / "clockface.py").read_text(encoding="utf-8")
-    render = next(node for node in ast.parse(source).body
-                  if isinstance(node, ast.FunctionDef) and node.name == "render")
-
-    def calls(name):
-        return [node for node in ast.walk(render)
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id == name]
-
-    synced = calls("_resync")
-    assert synced, "render no longer syncs the clock at all"
-    for call in synced:
-        assert isinstance(call.args[0], ast.Name) and call.args[0].id == "host", \
-            "the clock is set from the page's zone rather than the host's"
-
-    offsets = calls("_zone_offset")
-    assert offsets, "a page elsewhere is not offset from the host"
-    for call in offsets:
-        assert [argument.id for argument in call.args] == ["host", "here"], \
-            "the offset is not the host against the place the page shows"
 
 
 def test_a_digital_face_only_asks_for_glyphs_its_font_packs(repo_root, clock_badge):

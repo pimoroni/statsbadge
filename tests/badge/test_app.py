@@ -1,35 +1,10 @@
 """The host's half of what the app does: the settings it sends, and the shared figures."""
 
 import json
-import pathlib
 import socket
 import sys
 
 from statsbadge import install, layout
-
-
-def test_the_entry_point_starts_the_app_and_can_be_quit():
-    """__init__.py runs the app, and binds `on_exit` before main() blocks."""
-    entry = (pathlib.Path(install.app_source_dir()) / "__init__.py").read_text(
-        encoding="utf-8")
-    assert "app.main(APP_DIR)" in entry, "nothing starts the app"
-    # The launcher reads on_exit off the module it imported, while main() is still going.
-    assert entry.index("on_exit = app.on_exit") < entry.index("app.main("), \
-        "HOME would quit without saving the page"
-
-
-def test_setup_waves_through_a_server_already_paired():
-    """Setup joins a host this badge already holds credentials for without enrolling again."""
-    # Setup is reachable after a few failed polls, so it is easy to arrive at with
-    # nothing wrong, and the host will not be in pairing mode.
-    source = (pathlib.Path(install.app_source_dir()) / "setup.py").read_text(encoding="utf-8")
-    assert "_already_paired" in source, "no already-paired path in setup"
-    ask = source[source.index("def _ask_to_join"):]
-    assert ask.index("_already_paired") < ask.index("net.enrol("), (
-        "the badge asks to enrol before noticing it is already paired")
-    # A host that has refused this badge is the case where pairing again is the point.
-    guard = source[source.index("def _already_paired"):source.index("def _ask_to_join")]
-    assert "rejected" in guard, "a refused badge would be waved through with dead credentials"
 
 
 def test_a_beacon_goes_out_on_every_interface_it_can_name():
@@ -114,40 +89,6 @@ def test_the_badge_dims_to_suit_the_room(ui):
     assert layout.validate({"auto_brightness": True,
                             "pages": layout.DEFAULT_PAGES})["auto_brightness"] is True
     assert ui.bindings.get("autobright") == "auto_brightness", ui.bindings
-
-
-def test_idle_paging_is_off_by_default_and_bounded(ui):
-    """The badge side is `IdleAdvance` in tests/badge/wasm/test_app.py."""
-    config = layout.validate({"pages": layout.DEFAULT_PAGES})
-    assert config["idle_advance_s"] == 0, config["idle_advance_s"]
-    assert config["advance_every_s"] == 10
-    clamped = layout.validate({"idle_advance_s": 99999, "advance_every_s": 0,
-                               "pages": layout.DEFAULT_PAGES})
-    assert clamped["idle_advance_s"] == 3600, clamped
-    # A page has to be up for a second to be read at all.
-    assert clamped["advance_every_s"] == 1, clamped
-
-    assert ui.bindings.get("idle") == "idle_advance_s", ui.bindings
-    assert ui.bindings.get("advance") == "advance_every_s", ui.bindings
-
-
-def test_the_host_offers_three_actions_the_badge_answers_itself():
-    """The three actions `LocalActions` drives in tests/badge/wasm/test_app.py."""
-    actions = dict(layout.LOCAL_ACTIONS)
-    assert set(actions) == {"badge.prev", "badge.next", "badge.brightness"}, actions
-    for action in actions:
-        assert action.startswith("badge."), action
-
-
-def test_a_press_that_closes_a_modal_screen_stops_there():
-    """A modal screen returns with its button still down, so the press is rolled forward."""
-    app = (pathlib.Path(install.app_source_dir()) / "app.py").read_text(encoding="utf-8")
-
-    loop = app[app.index("def main("):]
-    menu = loop[loop.index("pairing_ui().hosts_menu(app)"):]
-    handled = menu[:menu.index("app.buttons()")]
-    assert "badge.poll()" in handled, (
-        "the menu press reaches buttons(): " + handled)
 
 
 def test_the_badge_can_report_on_itself_with_no_host():

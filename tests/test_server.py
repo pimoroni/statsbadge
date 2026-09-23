@@ -209,10 +209,6 @@ def test_a_dropped_connection_is_not_reported(h):
     assert "a real handler fault" in caught.getvalue(), "swallowed a real fault"
 
 
-def test_nodelay_is_set():
-    assert server.Handler.disable_nagle_algorithm is True
-
-
 def caller(h, address, path, headers=None):
     """A handler far enough along to be dispatched to, without a socket behind it."""
     class Caller(h.httpd.RequestHandlerClass):

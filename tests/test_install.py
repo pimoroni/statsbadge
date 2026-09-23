@@ -227,23 +227,9 @@ def test_the_installer_and_the_app_name_the_same_extension_directory(badge_const
     assert badge_constants("app.py")["EXT_DIR"] == install.EXT_DIR, install.EXT_DIR
 
 
-def test_one_writer_owns_the_badge_state_file():
-    """net.Config is the only writer inside the app, and the installer merges."""
-    # Two processes write it, so the path is a literal at each end and only a check holds
-    # them together.
-    app_dir = pathlib.Path(install.app_source_dir())
-    net_source = (app_dir / "net.py").read_text(encoding="utf-8")
-    assert f'STATE_FILE = "{install.STATE_FILE}"' in net_source, (
-        f"the app does not write {install.STATE_FILE}")
+def test_the_installer_and_the_app_name_the_same_state_file(badge_constants):
+    assert badge_constants("net.py")["STATE_FILE"] == install.STATE_FILE, install.STATE_FILE
 
-    # Merged, so a page index and a pairing with another host both survive an install.
-    assert "data = json.load(open(path))" in (
-        pathlib.Path("src/statsbadge/install.py").read_text(encoding="utf-8"))
-
-    app = (app_dir / "app.py").read_text(encoding="utf-8")
-    assert "State." not in app, "the app is writing state behind Config's back"
-    for owned in ("self.config.page = self.page_index", "self.config.save()"):
-        assert owned in app, owned
 
 
 def test_a_badge_is_called_behind_from_what_it_was_last_seen_holding():

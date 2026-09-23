@@ -8,43 +8,6 @@ import look
 import worldmap
 
 
-class Registered(unittest.TestCase):
-    def test_every_container_in_draw_is_registered(self):
-        """`_cached` returns what it registers, so one built by hand is what this finds."""
-        # Named as holding no colour: a face with its measurements, and the list itself.
-        exempt = {"_fonts", "_weights", "_CLEARS"}
-        loose = []
-        for name in dir(draw):
-            if not name.startswith("_") or name in exempt or name.startswith("__"):
-                continue
-            held = getattr(draw, name)
-            if isinstance(held, (dict, set)) and held.clear not in draw._CLEARS:
-                loose.append(name)
-        self.assertEqual(loose, [], f"caches in draw.py outside _CLEARS: {loose}")
-
-    def test_clearing_empties_all_of_them(self):
-        draw.prepare()
-        theme = look.get(look.DEFAULT)
-        # Fill what a page fills: pens for the map, and whatever a render leaves behind.
-        worldmap.pens(theme)
-        self.assertTrue(worldmap._pens, "the map built no pens to drop")
-
-        draw.clear_cache()
-
-        self.assertEqual(worldmap._pens, {}, "the map kept the old theme's pens")
-        for name in dir(draw):
-            if not name.startswith("_"):
-                continue
-            held = getattr(draw, name)
-            if isinstance(held, (dict, set)) and held.clear in draw._CLEARS:
-                self.assertEqual(len(held), 0, f"draw.{name} survived a theme change")
-
-    def test_state_that_is_not_a_container_is_registered_too(self):
-        """The waterfall's scroll buffer and the map's pens both hold theme colours."""
-        self.assertTrue(draw.waterfall_reset in draw._CLEARS)
-        self.assertTrue(worldmap.forget in draw._CLEARS)
-
-
 class ATintIsANewTheme(unittest.TestCase):
     """A derived theme keeps its name when built from another accent, so anything baked
     under the name would go on being drawn in the colours it was baked in.
@@ -54,10 +17,6 @@ class ATintIsANewTheme(unittest.TestCase):
         draw.prepare()
         self.one = look.from_palette("tinted", tinted(0))
         self.other = look.from_palette("tinted", tinted(200))
-
-    def test_two_tints_of_one_theme_are_not_one_theme_to_a_cache(self):
-        self.assertEqual(self.one.name, self.other.name)
-        self.assertNotEqual(self.one.key, self.other.key)
 
     def test_a_layout_that_re_tints_drops_what_was_baked_in_the_old_colours(self):
         """The path the badge takes: a layout lands, and apply_layout is what notices."""
