@@ -9,9 +9,8 @@
 # versions together.
 
 # Overridable:
-#   BOARD_REPO   default pimoroni/tufty2350
-#   BOARD_REF    default main, which pins bw-1.27.0. A board on bw-1.28.0-3 needs
-#                BOARD_REF=feature/align-v3 until that lands on main
+#   BOARD_REPO   default from ci/board.env
+#   BOARD_REF    default from ci/board.env
 #   EXPECT_MPY   assert the emitted bytecode matches this sys.implementation._mpy
 #   ENTRY_SRC    leave __init__.py as source. For a launcher too old to recognise
 #                __init__.mpy, which costs about 40ms of the saving
@@ -24,8 +23,10 @@ APP_DIR=${1:-src/statsbadge/badge_app}
 # the wheel ships. build/mpy is for a release artefact, and CI passes that
 # explicitly.
 OUT_DIR=${2:-src/statsbadge/badge_app/mpy}
-BOARD_REPO=${BOARD_REPO:-pimoroni/tufty2350}
-BOARD_REF=${BOARD_REF:-main}
+PINNED_REPO=$(grep -E '^BOARD_REPO=' "$(dirname "$0")/board.env" | cut -d= -f2)
+PINNED_REF=$(grep -E '^BOARD_REF=' "$(dirname "$0")/board.env" | cut -d= -f2)
+BOARD_REPO=${BOARD_REPO:-$PINNED_REPO}
+BOARD_REF=${BOARD_REF:-$PINNED_REF}
 WORK_DIR=${WORK_DIR:-build/micropython}
 
 if [ ! -d "$APP_DIR" ]; then
