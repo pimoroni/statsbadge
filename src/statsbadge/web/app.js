@@ -1,9 +1,9 @@
 import { $, all, el, pick, titleCase, toast } from "./js/dom.js"
 import { api, configPath } from "./js/api.js"
 import { nextId, settingRow } from "./js/forms.js"
-import { readingOf } from "./js/format.js"
 import { fieldLabel, numericRefs, poolFor, refSelect } from "./js/refs.js"
-import { drawThumb, H, rgb, SCREENS, SERIES, THUMB_H, THUMB_W, W } from "./js/preview.js"
+import { drawThumb, THUMB_H, THUMB_W } from "./js/preview.js"
+import { createScreens } from "./js/screens.js"
 
 let config = null
 let caps = null
@@ -11,6 +11,8 @@ let dirty = false
 let edits = 0
 let whose = null
 let badges = {}
+
+const screens = createScreens({ holder: $("screens"), chip: $("accentbchip") })
 
 function markDirty() {
   dirty = true
@@ -636,7 +638,7 @@ function renderLook() {
   bindSelect("slide", turn, (value) => { config.slide = value })
   bindSelect("gaugefill", () => config.gauge_fill || "solid", (value) => {
     config.gauge_fill = value
-    preview()
+    screens.show(config, caps)
     paintThumbs()
   })
 
@@ -736,8 +738,6 @@ function renderButtons() {
   }
 }
 
-let previewWanted = 0
-
 let themeTab = null
 
 let palettes = {}
@@ -772,7 +772,7 @@ function renderThemes() {
       config.theme = record.name
       markDirty()
       renderThemes()
-      preview()
+      screens.show(config, caps)
     }
     return card
   }))
@@ -821,7 +821,7 @@ function renderTint() {
   }
 
   pick("div.accents").replaceChildren(swatches())
-  preview()
+  screens.show(config, caps)
 }
 
 function swatches() {
@@ -839,71 +839,6 @@ function swatches() {
     }
     return chip
   }))
-}
-
-let shown = null
-let frameNow = null
-let rings = {}
-
-async function seedHistory() {
-  try {
-    rings = await api(`/api/history?keys=${SERIES.join(",")}&points=${GRAPH_POINTS}`)
-  } catch (error) { rings = {} }
-}
-
-const GRAPH_POINTS = 48
-
-function pushFrame(frame) {
-  frameNow = frame
-  for (const ref of SERIES) {
-    const value = readingOf(frame, ref)
-    if (value === null) continue
-    const ring = rings[ref] || (rings[ref] = [])
-    ring.push(value)
-    if (ring.length > GRAPH_POINTS) ring.splice(0, ring.length - GRAPH_POINTS)
-  }
-  paintScreens()
-}
-
-function paintScreens() {
-  if (!shown) return
-  const holder = $("screens")
-  if (holder.childElementCount !== SCREENS.length) {
-    holder.replaceChildren(...SCREENS.map(() => {
-      const canvas = el("canvas")
-      canvas.width = W * 2
-      canvas.height = H * 2
-      return canvas
-    }))
-  }
-  SCREENS.forEach((paint, index) => {
-    const ctx = holder.children[index].getContext("2d")
-    ctx.setTransform(2, 0, 0, 2, 0, 0)
-    paint(ctx, shown.palette, shown.palette.series,
-          { frame: frameNow, history: rings, gaugeFill: config.gauge_fill, caps })
-  })
-}
-
-async function preview() {
-  const query = new URLSearchParams({ theme: config.theme || "dark" })
-  const record = (caps.themes || []).find((entry) => entry.name === config.theme)
-  if (record && record.derived) {
-    query.set("accent", (config.tint || []).join(","))
-    query.set("second", config.accent_b || "same")
-  }
-  const mine = ++previewWanted
-  let answer
-  try {
-    answer = await api(`/api/theme?${query}`)
-  } catch (error) {
-    return
-  }
-  if (mine !== previewWanted) return
-
-  shown = answer
-  $("accentbchip").style.background = rgb(answer.palette.accent_b || answer.palette.accent)
-  if (!Object.keys(rings).length) await seedHistory()
-  paintScreens()
 }
 
 const REMEMBERED = "statsbadge.whose"
@@ -1429,7 +1364,7 @@ async function renderLive() {
     frame = await api("/api/stats")
   } catch (error) { return }
 
-  pushFrame(frame)
+  screens.push(frame, config, caps)
 
   const shape = Object.keys(frame).filter((key) => !FRAME_META.includes(key)).join(",")
   if (shape !== liveGroups && !dirty) {
