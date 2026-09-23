@@ -19,27 +19,27 @@ WIND_UNITS = {"kmh": "km/h", "mph": "mph", "ms": "m/s", "kn": "kn"}
 
 # Open-Meteo's weather codes, collapsed to what fits on a badge.
 CONDITIONS = {
-    0: "clear", 1: "fair", 2: "cloudy", 3: "overcast",
-    45: "fog", 48: "fog",
-    51: "drizzle", 53: "drizzle", 55: "drizzle",
-    56: "sleet", 57: "sleet",
-    61: "rain", 63: "rain", 65: "heavy rain",
-    66: "sleet", 67: "sleet",
-    71: "snow", 73: "snow", 75: "heavy snow", 77: "snow",
-    80: "showers", 81: "showers", 82: "downpour",
-    85: "snow", 86: "snow",
-    95: "thunder", 96: "thunder", 99: "thunder",
+    0: "Clear", 1: "Fair", 2: "Cloudy", 3: "Overcast",
+    45: "Fog", 48: "Fog",
+    51: "Drizzle", 53: "Drizzle", 55: "Drizzle",
+    56: "Sleet", 57: "Sleet",
+    61: "Rain", 63: "Rain", 65: "Heavy rain",
+    66: "Sleet", 67: "Sleet",
+    71: "Snow", 73: "Snow", 75: "Heavy snow", 77: "Snow",
+    80: "Showers", 81: "Showers", 82: "Downpour",
+    85: "Snow", 86: "Snow",
+    95: "Thunder", 96: "Thunder", 99: "Thunder",
 }
 
 
 # The icon for each condition, a character in badge/icons.af.
 ICONS = {
-    "clear": "a", "fair": "c", "cloudy": "e", "overcast": "f", "fog": "g",
-    "drizzle": "h", "rain": "i", "heavy rain": "j", "downpour": "j", "sleet": "k",
-    "showers": "l", "snow": "m", "heavy snow": "n", "thunder": "o",
+    "Clear": "a", "Fair": "c", "Cloudy": "e", "Overcast": "f", "Fog": "g",
+    "Drizzle": "h", "Rain": "i", "Heavy rain": "j", "Downpour": "j", "Sleet": "k",
+    "Showers": "l", "Snow": "m", "Heavy snow": "n", "Thunder": "o",
 }
 # Night variants, also in badge/icons.af.
-NIGHT_ICONS = {"clear": "b", "fair": "d"}
+NIGHT_ICONS = {"Clear": "b", "Fair": "d"}
 
 
 def _page_target(page):

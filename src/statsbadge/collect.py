@@ -8,7 +8,7 @@ from . import extensions, geocode, model
 from .sources import discover
 
 # A frame's other values are groups of readings, so a walk over the groups skips these
-# four. app.js hardcodes the same list, and
+# four. web/js/live.js hardcodes the same list, and
 # test_a_frame_is_walked_past_its_own_scalars holds them equal.
 FRAME_SCALARS = ("v", "t", "seq", "slow_rev")
 

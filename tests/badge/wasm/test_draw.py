@@ -223,6 +223,11 @@ class ClockFaces(unittest.TestCase):
                     drawn[names[first]] != drawn[names[second]],
                     f"{names[first]} and {names[second]} draw the same face")
 
+    def test_the_readout_spells_out_the_range(self):
+        clockface = self.clockface()
+        weather = {"high": 21.6, "low": 13.2, "temp_unit": "C"}
+        self.assertEqual(clockface._high_low(weather), "High 22\u00b0C   Low 13\u00b0C")
+
     def test_a_face_with_its_own_livery_takes_the_theme_when_asked(self):
         """`themed` swaps a face's colours for the theme's, and the two dials are cached
         apart rather than one standing in for the other.

@@ -154,7 +154,9 @@ def outdated(config_dir, timeout=60):
     if found is None:
         return [], "neither uv nor pip is here to ask with"
     kind, argv = found
+    # Uncached: an index page is cached for minutes, and a release made since is missed.
     argv = [*argv, "list", "--outdated", "--format", "json",
+            "--no-cache" if kind == "uv" else "--no-cache-dir",
             "--target" if kind == "uv" else "--path", where]
     try:
         done = subprocess.run(argv, capture_output=True, text=True, check=False,

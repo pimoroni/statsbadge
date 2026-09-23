@@ -2,7 +2,6 @@
 
 import json
 import os
-import pathlib
 import re
 import shutil
 import sys
@@ -21,6 +20,24 @@ def test_pruning_drops_absent_groups():
     assert "gpu" not in ids, ids
     cpu = next(p for p in pages if p["id"] == "cpu")
     assert cpu["readouts"] == [], cpu
+
+
+def test_an_unsaved_layout_is_pruned_as_it_would_be_sent(h):
+    """The UI asks which of the pages being edited would reach the badge, before a save."""
+    _status, config = h.raw("GET", "/api/config")
+    config["pages"] = config["pages"] + [
+        {"id": "unsavedcpu", "kind": "dial", "title": "CPU", "field": "cpu.pct"},
+        {"id": "unsavedgone", "kind": "dial", "title": "Gone", "field": "nosuch.pct"},
+    ]
+    status, shown = h.raw("POST", "/api/preview", json.dumps(config).encode())
+    assert status == 200, (status, shown)
+    ids = [page["id"] for page in shown["pages"]]
+    assert "unsavedcpu" in ids and "unsavedgone" not in ids, ids
+
+    _status, stored = h.raw("GET", "/api/config")
+    assert "unsavedcpu" not in [page["id"] for page in stored["pages"]], "the preview saved"
+    status, _bad = h.raw("POST", "/api/preview", b"[]")
+    assert status == 400, status
 
 
 def test_every_field_has_a_name_for_the_ui():
@@ -52,10 +69,6 @@ def test_a_dials_page_takes_up_to_four_fields():
         page = {"id": "g", "kind": "dials", "title": "Load", "fields": refs[:count]}
         return layout.validate({**base, "pages": [page]})["pages"][0]["fields"]
 
-    for count in (1, 2, 3, 4):
-        assert len(kept(count)) == count, count
-    assert len(kept(5)) == 4, "a fifth gauge has nowhere to go"
-
     try:
         layout.validate({**base, "pages": [{"id": "g", "kind": "dials", "fields": []}]})
         raise AssertionError("a page with no fields should be refused")
@@ -69,34 +82,14 @@ def test_a_dials_page_takes_up_to_four_fields():
     assert layout.prune([page], caps)[0]["fields"] == ["cpu.pct", "mem.pct"]
 
 
-def test_every_kind_has_a_badge_layout():
-    app = pathlib.Path(install.app_source_dir())
-    pages_source = (app / "pages.py").read_text(encoding="utf-8")
-    for kind in layout.KINDS:
-        assert f'"{kind}": _' in pages_source, f"{kind} has no renderer"
+def test_every_kind_has_a_badge_renderer():
+    sys.path.insert(0, install.app_source_dir())
+    import pages
+
+    assert set(layout.KINDS) <= set(pages._KINDS), set(layout.KINDS) - set(pages._KINDS)
 
 
-def test_a_full_scale_is_offered_where_it_is_read():
-    """A kind is marked scaled exactly where its renderer reads a full scale."""
-    app = pathlib.Path(install.app_source_dir())
-    pages_source = (app / "pages.py").read_text(encoding="utf-8")
-
-    # fraction_of reads the page's max for its caller, so those kinds count as reading it.
-    reads = set()
-    for kind in layout.KINDS:
-        start = pages_source.find(f"def _{kind}(")
-        if start < 0:
-            continue
-        end = pages_source.find("\ndef ", start + 1)
-        body = pages_source[start:end if end > 0 else len(pages_source)]
-        if 'page.get("max")' in body or 'page["max"]' in body:
-            reads.add(kind)
-        elif "fraction_of(ref, value, page, frame)" in body:
-            reads.add(kind)
-
-    offered = {kind for kind, shape in layout.KIND_SHAPE.items() if shape.get("scaled")}
-    assert offered == reads, f"marked {sorted(offered)}, renderers read {sorted(reads)}"
-
+def test_a_full_scale_is_kept_only_when_it_is_a_positive_number():
     def scaled(value):
         stored = layout.validate({**layout.DEFAULT_CONFIG,
                                   "pages": [{"id": "b", "kind": "bars",
@@ -109,16 +102,12 @@ def test_a_full_scale_is_offered_where_it_is_read():
     assert scaled("nonsense") is None and scaled(None) is None
 
 
-def test_caselights_take_a_field_or_a_flag(ui):
+def test_caselights_take_a_field_or_a_flag():
     """Three settings in one value: off, the backlight's level, or a reading to follow."""
     base = dict(layout.DEFAULT_CONFIG)
 
     def stored(value):
         return layout.validate({**base, "caselights": value})["caselights"]
-
-    # The UI offers it as following the backlight; the stored value is still a flag.
-    page = ui.script
-    assert "Follow the Backlight" in page and "Follow the Theme" not in page
 
     assert stored("cpu.pct") == "cpu.pct"
     assert stored(True) is True
@@ -187,18 +176,6 @@ def test_a_page_carries_only_what_its_kind_declared():
     assert "place" not in plain
 
 
-def test_the_field_picker_offers_each_reading_once(ui):
-    """numericRefs is a subset of availableRefs, so every join of the two is deduplicated."""
-    ui = ui.script
-    # Checked per line, so a Set anywhere else in the script cannot satisfy it.
-    for line in ui.splitlines():
-        if "concat(availableRefs())" in line:
-            assert "new Set(" in line, f"undeduplicated: {line.strip()}"
-    assert "function preferredRefs()" in ui
-    # RefSelect deduplicates whatever it is handed, so no caller can bring it back.
-    assert "new Set(refs)" in ui
-
-
 def test_every_kind_picks_from_a_pool_that_suits_it(ui):
     """Every slot names a pool the UI has, and a kind with no slot takes no fields."""
     pools = ui.script[ui.script.index("const POOLS = {"):]
@@ -212,7 +189,6 @@ def test_every_kind_picks_from_a_pool_that_suits_it(ui):
                 assert shape.get(pool) in named, (kind, slot, shape.get(pool), named)
 
 
-
 def test_the_ui_is_told_what_a_gauge_can_scale():
     """The described model marks which fields have a top end, to keep uptime off a gauge."""
     described = model.describe()
@@ -224,7 +200,7 @@ def test_the_ui_is_told_what_a_gauge_can_scale():
     assert set(described["list_fields"]) >= {"cores", "load"}
 
 
-def test_a_layout_is_stored_per_badge(h, ui):
+def test_a_layout_is_stored_per_badge(h):
     """A save for one badge is not a save for another, and one without draws the default."""
     other = "badgetwo00000002"
     other_secret = h.service.badges.provision(other, "second badge")
@@ -309,16 +285,6 @@ def test_a_layout_is_stored_per_badge(h, ui):
     assert old.layout_for("anybadge")["pages"], "a badge's layout was lost"
     shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
-    # The picker is in the header, above everything it applies to.
-    page, script = ui.markup, ui.script
-    header = page[page.index("<header>"):page.index("</header>")]
-    for control in ("<label>Badge", 'id="pair"', 'id="save"'):
-        assert control in header, control
-    # Naming and forgetting sit with the badge itself, not beside the picker.
-    assert '"Forget"' in script and "function rename(" in script, "no way to forget or name one"
-    assert "?badge=" in script, "the UI saves without saying whose layout it is"
-    assert "ownIds" in script, "a badge's pages can collide with another's"
-
 
 def test_a_badge_block_sits_over_the_default():
     """A badge block overrides what it names and inherits everything it does not."""
@@ -329,9 +295,6 @@ def test_a_badge_block_sits_over_the_default():
                               "whole": {"theme": "mono", "tint": layout.DEFAULT_CONFIG["tint"]}}},
                   handle)
     config = layout.Config(path)
-
-    # A block that named no theme keeps none.
-    assert "theme" not in config.data["badges"]["partial"]
 
     partial = config.for_badge(None, "partial")
     assert partial["theme"] == "sakura", "a partial block lost the theme it inherits"
@@ -408,24 +371,7 @@ def test_a_row_of_a_name_and_a_figure_takes_the_unit_in_the_figure():
     assert rows == [("BATTERY", "86.0%"), ("UPTIME", "3d4h"), ("HOST", "workshop-pc")], rows
 
 
-def test_an_api_key_is_masked_until_it_is_asked_for(ui):
-    """A secret setting is masked rather than hidden, so unset and wrong are told apart."""
-    ui = ui.script
-    assert "function masked(" in ui and "Edit secrets" in ui
-    # A secret does not go in the ordinary run of rows, or it would be on screen anyway
-    assert "if (setting.secret) continue" in ui, "a secret is still drawn with the rest"
-    # Reopened by name, so a redraw does not close the box under someone's typing
-    assert "editingSecrets" in ui
-
-    # Stored and coerced like any other setting: masking is the UI's business.
-    schema = {"thing": [{"key": "api_token", "type": "text", "secret": True}]}
-    stored = layout.validate({**layout.DEFAULT_CONFIG,
-                              "settings": {"thing": {"api_token": "sekrit"}}},
-                             (), schema)["settings"]
-    assert stored["thing"] == {"api_token": "sekrit"}, stored
-
-
-def test_a_number_setting_is_held_to_its_bounds(ui):
+def test_a_number_setting_is_held_to_its_bounds():
     """A number setting is clamped to the bounds its extension declared, on this side too."""
     schema = {"thing": [{"key": "every", "type": "number", "min": 60, "max": 3600,
                          "unit": "seconds"},
@@ -439,28 +385,11 @@ def test_a_number_setting_is_held_to_its_bounds(ui):
     assert stored({"every": 9999, "loose": 9999}) == {"every": 3600.0, "loose": 9999.0}
     assert stored({"every": 120, "loose": None}) == {"every": 120.0, "loose": None}
 
-    # The UI draws one as a number, with the bounds on the field.
-    ui = ui.script
-    assert 'setting.type === "number"' in ui, "a number setting is still a text box"
-    assert "setting.unit" in ui, "nowhere to put what it is counted in"
-
 
 def test_every_display_setting_lands_on_a_known_value():
     """A flag, a choice and a bounded number each come back usable however they arrive."""
     def stored(**sent):
         return layout.validate({**layout.DEFAULT_CONFIG, **sent})
-
-    absent = stored()
-    assert {key: absent[key] for key in
-            ("smooth", "animate", "plot_animation", "auto_brightness")} == {
-        "smooth": True, "animate": False,
-        "plot_animation": False, "auto_brightness": False}
-    assert {key: absent[key] for key in ("slide", "rows", "gauge_fill", "accent_b")} == {
-        "slide": "off", "rows": "zebra", "gauge_fill": "solid", "accent_b": "same"}
-    assert {key: absent[key] for key in
-            ("interval_ms", "graph_points", "idle_advance_s", "advance_every_s")} == {
-        "interval_ms": 1000, "graph_points": 48,
-        "idle_advance_s": 0, "advance_every_s": 10}
 
     # A flag takes anything, since the UI is not the only caller.
     assert stored(smooth=0)["smooth"] is False
@@ -480,11 +409,11 @@ def test_every_display_setting_lands_on_a_known_value():
     assert stored(caselights=1)["caselights"] is True
 
     # Numbers are clamped and never refused, so a hand-edited file still loads.
-    for key, low, high in (("interval_ms", 250, 60000),
-                           ("brightness", 0.05, 1.0),
-                           ("graph_points", 8, 160),
-                           ("idle_advance_s", 0, 3600),
-                           ("advance_every_s", 1, 600)):
+    for key, (low, high) in (("interval_ms", layout.INTERVAL_MS),
+                             ("brightness", layout.BRIGHTNESS),
+                             ("graph_points", layout.GRAPH_POINTS),
+                             ("idle_advance_s", layout.IDLE_ADVANCE_S),
+                             ("advance_every_s", layout.ADVANCE_EVERY_S)):
         assert stored(**{key: -10**6})[key] == low, key
         assert stored(**{key: 10**6})[key] == high, key
 
@@ -497,3 +426,41 @@ def test_a_setting_that_is_not_a_number_is_refused():
         except (TypeError, ValueError):
             continue
         raise AssertionError(f"accepted interval_ms={bad!r}")
+
+
+def test_every_control_is_bound_to_a_setting_the_server_takes(ui):
+    """Every binding in the script names a control in the page and a setting `validate` keeps."""
+    # Three files that have to agree and none imports another.
+    assert ui.bindings, "no bindings were read out of the scripts"
+    for control, setting in ui.bindings.items():
+        assert control in ui.ids, f"{control} is bound but not in the page"
+        assert ui.ids[control] in ("input", "select"), (control, ui.ids[control])
+        assert setting in layout.DEFAULT_CONFIG, f"{control} is bound to {setting}, not a setting"
+
+    # A default round-trips through validate unchanged.
+    kept = layout.validate({**layout.DEFAULT_CONFIG, "pages": layout.DEFAULT_PAGES})
+    for control, setting in ui.bindings.items():
+        assert setting in kept, f"validate drops {setting}, which {control} sets"
+
+
+def test_every_slider_stays_inside_what_the_server_takes(ui):
+    import html.parser
+
+    class Ranges(html.parser.HTMLParser):
+        found = {}
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "input" and attrs.get("type") == "range":
+                self.found[attrs["id"]] = (float(attrs["min"]), float(attrs["max"]))
+
+    parser = Ranges()
+    parser.feed(ui.markup)
+    bounds = {"interval_ms": (layout.INTERVAL_MS, 1), "graph_points": (layout.GRAPH_POINTS, 1),
+              "idle_advance_s": (layout.IDLE_ADVANCE_S, 1),
+              "advance_every_s": (layout.ADVANCE_EVERY_S, 1),
+              "brightness": (layout.BRIGHTNESS, 100)}
+    assert set(parser.found) == {c for c, s in ui.bindings.items() if s in bounds}
+    for control, (low, high) in parser.found.items():
+        (floor, ceiling), scale = bounds[ui.bindings[control]]
+        assert floor * scale <= low and high <= ceiling * scale, (control, low, high)

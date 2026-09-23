@@ -229,7 +229,7 @@ jobs:
           app = install.app_source_dir()
           missing = set(WANTED) - set(os.listdir(app))
           assert not missing, f"missing from the wheel: {missing}"
-          for asset in ("index.html", "app.css", "app.js", "icon.svg", "icon.png"):
+          for asset in ("index.html", "app.css", "js/main.js", "icon.svg", "icon.png"):
               assert os.path.isfile(os.path.join(server.STATIC_DIR, asset)), asset
           from statsbadge.tray import icons
           for art in ("tray.png", "tray-template.png", "tray-attention.png",

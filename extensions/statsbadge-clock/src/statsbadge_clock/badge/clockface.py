@@ -10,17 +10,27 @@ import pages
 
 WEATHER_FONT = "weather"
 ICON_SIZE = 32
+TITLE_STEP = 35
+DETAIL_STEP = 19
 
 
 def _high_low(weather):
-    """Return the day's range as "H 24 L 12", or None."""
+    """Return the day's range as "High 24 Low 12", or None."""
     unit = weather.get("temp_unit") or ""
     parts = []
-    for mark, key in (("H", "high"), ("L", "low")):
+    for mark, key in (("High", "high"), ("Low", "low")):
         value = weather.get(key)
         if value is not None:
             parts.append(f"{mark} {value:.0f}\u00b0{unit}")
     return "   ".join(parts) or None
+
+
+def _details(lines, y):
+    for text_value, pen in lines:
+        if text_value:
+            draw.blit_label(text_value, look.SIZE_SMALL, pen, look.READOUT_X, y)
+            y += DETAIL_STEP
+    return y
 
 # Packed --wide --cap-from 8: DSEG7 has no H to measure a cap height from.
 LCD_FONT = "lcd"
@@ -409,14 +419,15 @@ def _digital(clock, weather, label, theme, spec):
         x += draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
                              look.SIZE_BIG, theme.ink, x, y) + 12
     span = _high_low(weather)
-    if weather.get("condition"):
-        draw.blit_label(weather["condition"], look.SIZE_SMALL, theme.dim, x,
+    condition = weather.get("condition")
+    if condition:
+        draw.blit_label(condition, look.SIZE_SMALL, theme.dim, x,
                         y + (2 if span else 10))
     if span:
         draw.blit_label(span, look.SIZE_SMALL, theme.dim, x,
-                        y + (look.SIZE_SMALL + 6 if weather.get("condition") else 10))
+                        y + (look.SIZE_SMALL + 6 if condition else 10))
     if weather.get("wind") is not None:
-        draw.blit_label("wind {:.0f} {}".format(weather["wind"],
+        draw.blit_label("Wind {:.0f} {}".format(weather["wind"],
                                                 weather.get("wind_unit") or ""),
                         look.SIZE_SMALL, theme.dim, right, y + 10, align=2)
     if not weather:
@@ -467,12 +478,12 @@ def render(page, frame, _history, theme):
 
     # The readout takes theme colours, down the app's column.
     x = look.READOUT_X
-    y = draw.column_lines((
-        (clock.get("time"), look.SIZE_BIG, theme.ink),
-        (label, look.SIZE_SMALL, theme.accent),
-        (clock.get("date"), look.SIZE_SMALL, theme.dim),
-    ))
-    y += 6
+    y = look.BODY_TOP + 12
+    if clock.get("time"):
+        draw.blit_label(clock["time"], look.SIZE_BIG, theme.ink, x, y)
+        y += TITLE_STEP
+    y = _details(((label, theme.accent), (clock.get("date"), theme.dim)), y)
+    y += 5
 
     icon = weather.get("icon")
     if weather.get("temp") is not None or icon:
@@ -484,20 +495,15 @@ def render(page, frame, _history, theme):
             draw.blit_label("{:.0f}\u00b0{}".format(weather["temp"], unit),
                             look.SIZE_BIG, theme.ink,
                             x + (drawn + 8 if drawn else 0), y)
-        y += ICON_SIZE + 4
-
-    span = _high_low(weather)
-    if span:
-        draw.blit_label(span, look.SIZE_SMALL, theme.dim, x, y)
-        y += look.SIZE_SMALL + 6
+        y += TITLE_STEP
 
     wind = None
     if weather.get("wind") is not None:
-        wind = "wind {:.0f} {}".format(weather["wind"], weather.get("wind_unit") or "")
+        wind = "Wind {:.0f} {}".format(weather["wind"], weather.get("wind_unit") or "")
     elif not weather:
         wind = "no location set"
-    draw.column_lines(((weather.get("condition"), look.SIZE_SMALL, theme.dim),
-                       (wind, look.SIZE_SMALL, theme.dim)), top=y)
+    _details(((_high_low(weather), theme.dim), (weather.get("condition"), theme.dim),
+              (wind, theme.dim)), y)
 
 
 # A PCF85063A drifts a second or two a day.

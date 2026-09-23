@@ -1,7 +1,7 @@
 {
   "name": "statsbadge-web",
   "private": true,
-  "description": "Linting for the config UI in src/statsbadge/web. Nothing is built or bundled: the server ships those three files as they are.",
+  "description": "Linting for the config UI in src/statsbadge/web. Nothing is built or bundled: the server ships those files as they are.",
   "type": "module",
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css && npm run lint:html",

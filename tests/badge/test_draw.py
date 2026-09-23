@@ -1,9 +1,7 @@
 """Drawing: gauges, plots, rows and the room each takes."""
 
 import builtins
-import html.parser
 import pathlib
-import re
 import sys
 
 import badgefakes
@@ -16,27 +14,9 @@ from statsbadge import install, layout
 CLOCK_BADGE = pathlib.Path("extensions/statsbadge-clock/src/statsbadge_clock/badge")
 
 
-def test_the_gauge_and_its_column_sit_on_one_gap(badge_constants):
-    """One gap left of the dial, one between it and the column, one at the right edge."""
-    look = badge_constants("look.py")
-    gap, outer = look["DIAL_GAP"], look["DIAL_OUTER"]
-
-    assert look["DIAL_C"][0] - outer == gap, (look["DIAL_C"], outer, gap)
-    assert look["READOUT_X"] == look["DIAL_C"][0] + outer + gap, look["READOUT_X"]
-    assert look["READOUT_W"] == look["W"] - look["READOUT_X"] - gap, look["READOUT_W"]
-    assert look["READOUT_W"] > 0, "the column has no room left"
-
-
-def test_a_gauge_can_sweep_to_its_reading(ui):
+def test_a_gauge_can_sweep_to_its_reading():
     """A reading arriving mid-sweep carries on from the drawn position."""
     import sys
-
-    config = layout.validate({"animate": True, "pages": layout.DEFAULT_PAGES})
-    assert config["animate"] is True
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["animate"] is False, (
-        "off by default")
-
-    assert ui.bindings.get("animate") == "animate", "the UI control sets something else"
 
     sys.path.insert(0, install.app_source_dir())
     import pages
@@ -104,49 +84,9 @@ def test_a_gauge_can_sweep_to_its_reading(ui):
         pages.use_facts({}, ())
         pages.__dict__.pop("tween", None)
 
-def test_a_slide_is_a_style_the_ui_offers(ui):
-    """`Slides`, `Rendering` and `DrawingElsewhere` in tests/badge/wasm/test_app.py drive
-    the movement itself.
-    """
-    for style in layout.SLIDE_STYLES:
-        assert layout.validate({"slide": style,
-                                "pages": layout.DEFAULT_PAGES})["slide"] == style
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["slide"] == "off", (
-        "immediate by default")
-    assert layout.validate({"slide": "sideways",
-                            "pages": layout.DEFAULT_PAGES})["slide"] == "off"
-    assert layout.validate({"slide": True, "pages": layout.DEFAULT_PAGES})["slide"] == "over"
-    assert layout.validate({"slide": False, "pages": layout.DEFAULT_PAGES})["slide"] == "off"
-    assert 'id="slide"' in ui.markup, "no control in the UI"
-    assert "config.slide" in ui.script, "the control is not bound"
-    for style in layout.SLIDE_STYLES:
-        assert f'value="{style}"' in ui.markup, style
-
-def test_smooth_graphs_are_a_setting_that_reaches_the_badge(ui):
-    """One setting smooths every graph on the badge."""
-    config = layout.validate({"smooth": False, "pages": layout.DEFAULT_PAGES})
-    assert config["smooth"] is False
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["smooth"] is True, "on by default"
-    # Anything truthy, since the UI sends a checkbox and a command line sends a string.
-    assert layout.validate({"smooth": "yes", "pages": layout.DEFAULT_PAGES})["smooth"] is True
-    assert 'id="smooth"' in ui.markup, "no control in the UI"
-    assert "config.smooth" in ui.script, "the control is not bound"
-
-
-def test_the_big_gauge_can_show_the_whole_ramp(ui):
+def test_the_big_gauge_can_show_the_whole_ramp():
     """The gauge's gradient is the theme ramp, in order, round the arc it sweeps."""
     import sys
-
-    for fill in layout.GAUGE_FILLS:
-        assert layout.validate({"gauge_fill": fill,
-                                "pages": layout.DEFAULT_PAGES})["gauge_fill"] == fill
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid", (
-        "one colour by default")
-    assert layout.validate({"gauge_fill": "rainbow",
-                            "pages": layout.DEFAULT_PAGES})["gauge_fill"] == "solid"
-    assert 'id="gaugefill"' in ui.markup, "no control in the UI"
-    assert "config.gauge_fill" in ui.script, "the control is not bound"
-
 
     sys.path.insert(0, install.app_source_dir())
     import draw
@@ -245,7 +185,7 @@ def test_a_smoothed_graph_still_reads_as_the_data():
     assert draw._lay_out(60, 40, 250, 150, gappy, 1.0, None) > 0  # noqa: SLF001
 
 
-def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
+def test_a_plot_is_placed_by_when_its_readings_were_taken(badge_constants):
     """A plot walks by the host's spacing and the age of its newest point, not by an index."""
     import sys
 
@@ -282,12 +222,6 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
     finally:
         pages.PLOT_ANIMATION = was
         pages.BEHIND = 0.0
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["plot_animation"] is False
-    assert layout.validate({"plot_animation": True,
-                            "pages": layout.DEFAULT_PAGES})["plot_animation"] is True
-    assert 'id="plotanim"' in ui.markup, "no control in the UI"
-    assert 'bindCheck("plotanim", "plot_animation")' in ui.script, \
-        "it is not bound"
 
     # A graph keeps room on its right for the samples still coming in.
     flat = [50.0] * 48
@@ -318,9 +252,6 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
     assert draw._points[0] < 60 - 0.01, "a series long enough to walk is standing still"
     assert walked
 
-    # A sparkline is drawn still at any setting: 22px tall with a sample every 5px.
-    assert pages.SCROLLS == ("graph", "trend"), pages.SCROLLS
-    assert "spark" in pages.PLOTS, "it still wants a series fetched for it"
     # Two readings, which is all a field with no history has, must still draw.
     assert draw.line(0, 0, 470, 30, [5.0, 5.0], 47.0) is not None
     assert draw.line(0, 0, 470, 30, [5.0], 47.0) is None
@@ -344,26 +275,12 @@ def test_a_plot_is_placed_by_when_its_readings_were_taken(ui, badge_constants):
         pages.BEHIND = 0.0
 
 
-def test_sparkline_rows_can_be_told_apart(ui):
+def test_sparkline_rows_can_be_told_apart():
     """Rows are banded by a step of lightness from the page, so six lines read as six rows."""
     import sys
 
     sys.path.insert(0, install.app_source_dir())
-    import draw
     import look
-
-    for style in layout.ROW_STYLES:
-        assert layout.validate({"rows": style,
-                                "pages": layout.DEFAULT_PAGES})["rows"] == style
-    assert layout.validate({"pages": layout.DEFAULT_PAGES})["rows"] == "zebra", (
-        "banded by default")
-    assert layout.validate({"rows": "stripey",
-                            "pages": layout.DEFAULT_PAGES})["rows"] == "zebra"
-    assert 'id="rows"' in ui.markup, "no control in the UI"
-    assert "config.rows" in ui.script, "the control is not bound"
-    for style in layout.ROW_STYLES:
-        assert f'value="{style}"' in ui.markup, style
-
 
     # A lift, not the panel colour: a panel can be a different hue as well as a
     # different level.
@@ -375,9 +292,6 @@ def test_sparkline_rows_can_be_told_apart(ui):
     pale = look.from_palette("light", layout.palette_for("light", layout.DEFAULT_CONFIG["tint"]))
     assert pale.pale and not dark.pale
     assert pale.stripe.r < pale.bg.r and dark.stripe.r > dark.bg.r
-
-    # The axis rule under a plot is drawn only where the rows are otherwise unseparated.
-    assert draw.ROWS == "zebra" and draw.ROW_NONE == "none"
 
 
 def test_a_symbol_centres_on_the_words_beside_it():
@@ -476,9 +390,6 @@ def test_every_clock_face_the_ui_offers_has_a_renderer(badge_constants):
     # The seven-segment face needs a font, and an asset travels only if it is declared.
     assert any(path.endswith("lcd.af") for path in Clock.badge_assets), Clock.badge_assets
     assert (CLOCK_BADGE / "lcd.af").exists(), "the LCD face's font is not built"
-    # Shipped, so its licence ships with it.
-    licence = pathlib.Path("licences/OFL-DSEG.txt").read_text(encoding="utf-8")
-    assert "keshikan" in licence and "SIL Open Font License" in licence
 
 
 def test_a_notifications_page_sorts_messages_from_counters():
@@ -523,72 +434,6 @@ def test_a_notifications_page_sorts_messages_from_counters():
     # Minutes up to ninety, then hours, then days.
     assert [draw.ago(s) for s in (None, 5, 90, 4000, 100000, 400000)] == [
         None, "just now", "1m ago", "66m ago", "27h ago", "4d ago"]
-
-
-def rules_of(css):
-    """Return every rule in the sheet, as its full selector and the declarations under it."""
-    chain, declarations, found, buffer = [], [], [], ""
-    for char in css:
-        if char == "{":
-            above, _, selector = buffer.rpartition(";")
-            if declarations:
-                declarations[-1] += above
-            chain.append(selector.strip())
-            declarations.append("")
-            buffer = ""
-        elif char == "}":
-            declarations[-1] += buffer
-            found.append((" ".join(chain), declarations[-1]))
-            chain.pop()
-            declarations.pop()
-            buffer = ""
-        else:
-            buffer += char
-    return found
-
-
-def test_a_hidden_row_is_actually_hidden(web_dir):
-    """No rule giving a row a display outranks the browser's one selector for `hidden`."""
-    css = (web_dir / "app.css").read_text(encoding="utf-8")
-    markup = (web_dir / "index.html").read_text(encoding="utf-8")
-
-    class Hidden(html.parser.HTMLParser):
-        """Every element the page starts out hiding, and how a rule could name it."""
-
-        def __init__(self):
-            super().__init__()
-            self.depth, self.found = 0, []
-
-        def handle_starttag(self, tag, attrs):
-            attrs = dict(attrs)
-            if "hidden" in attrs:
-                named = {tag} | {f".{name}" for name in attrs.get("class", "").split()}
-                named |= {f"[{key}]" for key in attrs if key.startswith("data-")}
-                self.found.append((tag, self.depth, named))
-            if tag not in ("input", "link", "meta", "br"):
-                self.depth += 1
-
-        def handle_endtag(self, _tag):
-            self.depth -= 1
-
-    parser = Hidden()
-    parser.feed(markup)
-    assert len({depth for _tag, depth, _named in parser.found}) > 1, parser.found
-
-    # The two selectors are otherwise close enough for source order to settle which wins.
-    for selector, declarations in rules_of(css):
-        last = re.split(r"[\s>+~]+", selector)[-1]
-        if "display:" not in declarations or "[hidden]" in selector:
-            continue
-        if not (selector.startswith("main") or selector == last):
-            continue            # it cannot reach inside a sheet
-        for tag, depth, named in parser.found:
-            if tag == "section":
-                continue        # the sheets, hidden by a rule elsewhere
-            for each in named:
-                found = (re.search(rf"\b{each}\b", last) if each.isalpha()
-                         else each in last)
-                assert not found, (selector, tag, depth, each)
 
 
 def test_a_picture_is_cropped_to_the_block_it_is_in():

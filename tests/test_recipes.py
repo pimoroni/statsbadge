@@ -65,12 +65,13 @@ def test_a_recipe_this_host_cannot_fill_is_not_offered():
     assert "gpu" not in offered, sorted(offered)
     assert "cpu" in offered, sorted(offered)
 
-    # The readouts beside a gauge are not the page: what this host has is kept.
-    cpu = offered["cpu"]["pages"][0]
-    assert cpu["readouts"] == ["cpu.temp", "cpu.freq", "cpu.procs"], cpu
-
-    # A graph of two temperatures where only one is measured is a graph of that one.
-    assert offered["thermals"]["pages"][0]["fields"] == ["cpu.temp"], offered["thermals"]
+    # A page is kept with only the readings this host has.
+    measured = {f"{group}.{field}" for group, fields in caps["available"].items()
+                for field in fields}
+    for recipe in offered.values():
+        for page in recipe["pages"]:
+            for slot in ("readouts", "fields"):
+                assert set(page.get(slot, [])) <= measured, (recipe["name"], page)
 
 
 def test_the_default_pages_are_offered_as_one_recipe():

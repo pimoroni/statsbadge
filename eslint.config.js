@@ -11,10 +11,10 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ["src/statsbadge/web/*.js"],
+    files: ["src/statsbadge/web/**/*.js"],
     languageOptions: {
       ecmaVersion: "latest",
-      sourceType: "script",
+      sourceType: "module",
       globals: globals.browser,
     },
     rules: {
@@ -35,6 +35,7 @@ export default [
         FunctionExpression: { parameters: "first" },
         VariableDeclarator: "first",
       }],
+      "no-empty": ["error", { allowEmptyCatch: true }],
       "no-var": "error",
       "prefer-const": "error",
       "prefer-template": "error",
@@ -45,6 +46,16 @@ export default [
       "no-else-return": "error",
       "no-unused-vars": ["error", { caughtErrors: "none" }],
       curly: ["error", "multi-line"],
+    },
+  },
+  {
+    files: ["src/statsbadge/web/js/*.js"],
+    ignores: ["src/statsbadge/web/js/main.js", "src/statsbadge/web/js/dom.js"],
+    rules: {
+      "no-restricted-globals": ["error", {
+        name: "document",
+        message: "Only main.js and dom.js read the page. Take the element as an argument.",
+      }],
     },
   },
 ]

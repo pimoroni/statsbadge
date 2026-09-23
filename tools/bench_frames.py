@@ -26,7 +26,7 @@ FRAME = {
     "sys": {"host": "workshop-pc"},
     "clock": {"time": "10:09", "date": "Fri 31 Jul", "hour": 10, "minute": 9,
               "seconds": 36},
-    "weather": {"temp": 16.0, "condition": "overcast", "wind": 14.0},
+    "weather": {"temp": 16.0, "condition": "Overcast", "wind": 14.0},
 }
 
 # What the host's rings look like: as many points as `graph_points` defaults to, and a

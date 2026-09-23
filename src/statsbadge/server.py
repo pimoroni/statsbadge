@@ -393,6 +393,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         from urllib.parse import parse_qs
         return {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1]).items()}
 
+    def _tint_query(self, query, aliased):
+        """Return the accent and second accent rule a query asks for, or an error."""
+        tint = aliased or layout.DEFAULT_CONFIG["tint"]
+        if query.get("accent"):
+            try:
+                wanted = [int(part) for part in query["accent"].split(",")[:3]]
+            except ValueError:
+                return None, None, "accent must be three numbers"
+            tint = layout.tint_accent(wanted, tint)
+        second = query.get("second") or "same"
+        if second not in layout.ACCENT_B_RULES:
+            return None, None, f"unknown second accent rule: {second!r}"
+        return tint, second, None
+
     def do_GET(self):
         self._dispatch("GET")
 
@@ -553,18 +567,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             theme, aliased = layout.resolve_theme(query.get("theme") or themes.DEFAULT, None)
             if theme not in layout.THEMES:
                 return self._fail(400, f"unknown theme: {theme!r}")
-            tint = aliased or layout.DEFAULT_CONFIG["tint"]
-            if query.get("accent"):
-                try:
-                    wanted = [int(part) for part in query["accent"].split(",")[:3]]
-                except ValueError:
-                    return self._fail(400, "accent must be three numbers")
-                tint = layout.tint_accent(wanted, tint)
-            second = query.get("second") or "same"
-            if second not in layout.ACCENT_B_RULES:
-                return self._fail(400, f"unknown second accent rule: {second!r}")
+            tint, second, error = self._tint_query(query, aliased)
+            if error:
+                return self._fail(400, error)
             return self._json(200, {"theme": theme, "tint": tint, "second": second,
                                     "palette": layout.palette_for(theme, tint, second)})
+
+        # Every theme under one accent, for a picker that shows each as it will look.
+        if path == "/api/themes" and method == "GET":
+            tint, second, error = self._tint_query(self._query(), None)
+            if error:
+                return self._fail(400, error)
+            return self._json(200, {"tint": tint, "second": second, "palettes": {
+                name: layout.palette_for(name, tint, second) for name in layout.THEMES}})
 
         # One layout per badge, and a default for a badge with nothing saved yet.
         # `?badge=` says whose.
@@ -595,6 +610,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # What the badge would be sent, for the UI to show pruning.
             return self._json(200, service.config.for_badge(
                 service.capabilities(), self._query().get("badge") or None))
+
+        if path == "/api/preview" and method == "POST":
+            try:
+                pages = layout.validate(json.loads(body or b"{}"), service.extension_kinds(),
+                                        service.settings_schema(),
+                                        service.extension_page_settings())["pages"]
+            except ValueError as exc:
+                return self._fail(400, str(exc))
+            return self._json(200, {"pages": layout.prune(pages, service.capabilities())})
 
         if path == "/api/pair" and method == "GET":
             state = service.badges.pairing_state()
