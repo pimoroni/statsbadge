@@ -324,3 +324,15 @@ def test_the_install_endpoint_runs_one_and_reports_what_it_did(h):
         time.sleep(0.1)
     assert body["result"]["ok"] is False, body
     assert body["result"]["error"], "a failed install said nothing about why"
+
+
+def test_the_badge_that_comes_back_is_the_one_that_left(monkeypatch):
+    uids = {"/dev/other": "b0b0b0b0", "/dev/ours": "a1a1a1a1"}
+    reset = []
+    monkeypatch.setattr(install, "find_ports", lambda: sorted(uids))
+    monkeypatch.setattr(install, "badge_id", uids.__getitem__)
+    monkeypatch.setattr(install, "hard_reset", lambda port, **_options: reset.append(port))
+    monkeypatch.setattr(install.time, "sleep", lambda _seconds: None)
+
+    assert install.wait_for_port("a1a1a1a1", previous="/dev/gone") == "/dev/ours"
+    assert reset == ["/dev/other"]

@@ -158,7 +158,7 @@ def _push(options, session, badges, identity, modules, say, confirm, password):
         install.eject(volume, port)
         say("  ejected; waiting for the badge to come back...")
         try:
-            port = install.wait_for_port(previous=port)
+            port = install.wait_for_port(info["uid"], previous=port)
         except install.InstallError as exc:
             return _answer(str(exc), badge=info["uid"], model=info["model"])
         session["port"] = port

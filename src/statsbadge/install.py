@@ -595,18 +595,22 @@ def _existing_app_files(target):
     return found
 
 
-def wait_for_port(timeout=40, previous=None):
-    """Wait for a badge's REPL to come back after a reset, and return its port."""
+def wait_for_port(uid, timeout=40, previous=None):
+    """Wait for the badge with this uid to come back after a reset, and return its port."""
     deadline = time.time() + timeout
+    others = set()
     while time.time() < deadline:
-        for port in find_ports():
-            if previous and port == previous:
-                # The port the badge was last on. Check it still answers before trusting it.
-                try:
-                    badge_id(port)
-                except InstallError:
-                    continue
-            return port
+        for port in sorted(find_ports(), key=lambda candidate: candidate != previous):
+            if port in others:
+                continue
+            try:
+                found = badge_id(port)
+            except InstallError:
+                continue
+            if found == uid:
+                return port
+            others.add(port)
+            hard_reset(port, settle=False)
         time.sleep(1.0)
     raise InstallError("the badge did not come back after resetting")
 
