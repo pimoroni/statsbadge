@@ -12,7 +12,7 @@ function singular(label) {
   return label.endsWith("s") ? label.slice(0, -1) : label
 }
 
-const REORDER = "application/x-statsbadge-reorder"
+const dragType = (list) => `application/x-statsbadge-${list}`.toLowerCase()
 
 function dragGrip() {
   return el("span", { className: "grip", title: "Drag to reorder", "aria-hidden": "true" })
@@ -123,11 +123,13 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
   }
 
   function reorderable(node, items, index, { list, along, handle }) {
+    const type = dragType(list)
+    const ours = (event) => event.dataTransfer.types.includes(type)
     handle.draggable = true
     handle.ondragstart = (event) => {
       event.stopPropagation()
       node.dataset.dragging = ""
-      event.dataTransfer.setData(REORDER, JSON.stringify({ list, index }))
+      event.dataTransfer.setData(type, JSON.stringify(index))
       const box = node.getBoundingClientRect()
       event.dataTransfer.setDragImage(node, event.clientX - box.left, event.clientY - box.top)
     }
@@ -136,6 +138,7 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
       delete node.dataset.over
     }
     node.ondragover = (event) => {
+      if (!ours(event)) return
       event.preventDefault()
       event.stopPropagation()
       const box = node.getBoundingClientRect()
@@ -147,14 +150,12 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
       if (!node.contains(event.relatedTarget)) delete node.dataset.over
     }
     node.ondrop = (event) => {
+      if (!ours(event)) return
       event.preventDefault()
       event.stopPropagation()
       const after = node.dataset.over === "after"
       delete node.dataset.over
-      const carried = event.dataTransfer.getData(REORDER)
-      if (!carried) return
-      const { list: from, index: moved } = JSON.parse(carried)
-      if (from !== list) return
+      const moved = JSON.parse(event.dataTransfer.getData(type))
       let target = after ? index + 1 : index
       if (moved < target) target -= 1
       if (target === moved) return
@@ -185,7 +186,7 @@ export function createPages({ list, status, pageKindSelect, recipeSelect, quickA
                      refSelect(capabilities, ref, poolFor(capabilities, shape.many_pool),
                                (value) => { current[slot] = value; changed() }),
                      drop)
-      reorderable(row, current, slot, { list: "slot", along: "y", handle: grip })
+      reorderable(row, current, slot, { list: `slot-${page.id}`, along: "y", handle: grip })
       rows.push(row)
     })
 
