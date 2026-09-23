@@ -90,7 +90,7 @@ class Source:
         self.config = layout.settle_settings(config, self.settings) if self.settings else config
         self.faults = 0
         # What stands in the way of each part of this source's work, oldest first.
-        self._standing = {}
+        self._faults_standing = {}
         # What this source worked out, as against what it was told. The persistent one
         # is in place by the time `start` runs.
         self.store = state.Store()
@@ -156,13 +156,21 @@ class Source:
     @property
     def last_fault(self):
         """The oldest fault still standing, for the config UI and `statsbadge probe`."""
-        return next(iter(self._standing.values()), None)
+        return next(iter(self._faults_standing.values()), None)
+
+    @last_fault.setter
+    def last_fault(self, text):
+        # For an extension that sets it itself. None clears every part's.
+        if text is None:
+            self._faults_standing.clear()
+        else:
+            self._faults_standing[None] = text
 
     def note_fault(self, exc, key=None):
         """Record that this source's work failed. `key` names which part of it, where a
         source does several things that fail apart."""
         self.faults += 1
-        self._standing[key] = readable(exc)
+        self._faults_standing[key] = readable(exc)
 
     def note_ok(self, key=None):
         """Record that the work `key` names succeeded, which clears its fault.
@@ -171,12 +179,12 @@ class Source:
         succeeded: `sample` handing over the last good reading is no evidence that the
         next fetch landed. The count is kept.
         """
-        self._standing.pop(key, None)
+        self._faults_standing.pop(key, None)
 
     def note_waiting(self, why, key=None):
         """Record why this source is doing nothing, such as a setting it has not been
         given, without counting it as a fault. `note_ok` clears it."""
-        self._standing[key] = why
+        self._faults_standing[key] = why
 
     def __repr__(self):
         return f"<{self.name}>"
