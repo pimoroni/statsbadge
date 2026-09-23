@@ -154,6 +154,29 @@ jobs:
       # server ships those files as they are.
       - run: npm run lint
 
+  # Every extension, those in repositories of their own included, against this commit:
+  # a change here that breaks one fails here and not after a release.
+  extensions:
+    name: Extension ${{ matrix.repository || matrix.directory }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - directory: extensions/statsbadge-clock
+          - directory: extensions/statsbadge-iss
+          - directory: extensions/statsbadge-quakes
+          - repository: pimoroni/statsbadge-bluesky
+          - repository: pimoroni/statsbadge-cloudflare
+          - repository: pimoroni/statsbadge-mastodon
+          - repository: pimoroni/statsbadge-octopus
+          - repository: pimoroni/statsbadge-wildfires
+    uses: ./.github/workflows/extension.yml
+    with:
+      repository: ${{ matrix.repository || '' }}
+      directory: ${{ matrix.directory || '.' }}
+      statsbadge-ref: ${{ github.sha }}
+      artifact: ""
+
   build:
     name: Build the wheel
     runs-on: ubuntu-latest
